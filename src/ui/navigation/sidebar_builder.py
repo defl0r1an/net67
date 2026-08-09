@@ -1,0 +1,1119 @@
+from __future__ import annotations
+
+from PyQt6.QtCore import QEvent, QObject, QTimer
+from PyQt6.QtWidgets import QWidget
+
+from log.log import log
+
+from ui.navigation.layout_plan import (
+    build_sidebar_group_plans,
+    iter_sidebar_entries_after_page,
+    iter_sidebar_layout_entries,
+)
+from ui.navigation.schema import (
+    get_eager_page_names_for_method,
+    is_page_allowed_for_method,
+    get_hidden_pages_for_method,
+    get_nav_visibility,
+    get_page_route_key,
+)
+from app.page_names import PageName
+from ui.startup_ui_metrics import pump_startup_ui
+from app.ui_texts import tr as tr_catalog
+from ui.window_ui_session import get_window_ui_session
+from ui.navigation.sidebar_state import peek_warmed_sidebar_expanded
+from ui.navigation.sidebar_intent import (
+    DEFAULT_EXPAND_THRESHOLD,
+    SidebarIntentController,
+    normalize_display_mode_name,
+)
+from ui.latest_value_worker_state import LatestValueWorkerState
+from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from ui.accessibility import set_control_accessibility, set_state_text
+
+
+SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS = 300
+SIDEBAR_HIDDEN_MODE_ITEMS_AFTER_INTERACTIVE_MS = 700
+SIDEBAR_SECONDARY_GROUPS_AFTER_INTERACTIVE_MS = 150
+SIDEBAR_SECONDARY_GROUP_STEP_MS = 6
+SIDEBAR_EXPANDED_UI_STATE_KEY = "sidebar_expanded"
+SIDEBAR_INTENT_RECHECK_AFTER_INIT_MS = 1500
+
+
+class _SidebarMenuButtonActivationFilter(QObject):
+    """Отмечает физический отпуск кнопки до clicked -> toggle библиотеки."""
+
+    def __init__(self, callback, parent=None):
+        super().__init__(parent if isinstance(parent, QObject) else None)
+        self._callback = callback
+
+    def eventFilter(self, watched, event):  # noqa: N802 (Qt API)
+        if event.type() == QEvent.Type.MouseButtonRelease:
+            self._callback()
+        return False
+
+
+def _get_page_host(window):
+    session = get_window_ui_session(window)
+    return None if session is None else session.page_host
+
+
+def _ensure_page(window, page_name: PageName):
+    page_host = _get_page_host(window)
+    if page_host is None:
+        return None
+    return page_host.ensure_page(page_name)
+
+
+def _get_loaded_or_ensure_page(window, page_name: PageName):
+    page = _get_loaded_pages(window).get(page_name)
+    if page is not None:
+        return page
+    return _ensure_page(window, page_name)
+
+
+def _get_loaded_pages(window) -> dict[PageName, QWidget]:
+    session = get_window_ui_session(window)
+    return {} if session is None else session.pages
+
+
+def _ensure_page_in_stack(window, page: QWidget | None) -> None:
+    page_host = _get_page_host(window)
+    if page_host is not None:
+        page_host.ensure_page_in_stacked_widget(page)
+
+
+def _read_saved_sidebar_expanded() -> bool:
+    saved = peek_warmed_sidebar_expanded()
+    if saved is None:
+        return True
+    return bool(saved)
+
+
+def _set_visible_if_changed(widget, visible: bool) -> bool:
+    target = bool(visible)
+    try:
+        is_visible = getattr(widget, "isVisible", None)
+        if callable(is_visible) and bool(is_visible()) == target:
+            return False
+    except Exception:
+        pass
+
+    try:
+        widget.setVisible(target)
+        return True
+    except Exception:
+        return False
+
+
+def _start_sidebar_expanded_save_worker(window, expanded: bool) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    state = _sidebar_expanded_save_state_obj(session)
+    runtime = state.runtime
+    if state.is_busy():
+        state.pending = bool(expanded)
+        return
+
+    create_worker = getattr(session, "sidebar_expanded_save_worker_factory", None)
+    if create_worker is None:
+        return
+
+    started = runtime.start_qthread_worker(
+        worker_factory=lambda _request_id: create_worker(
+            expanded=bool(expanded),
+            state_key=SIDEBAR_EXPANDED_UI_STATE_KEY,
+            parent=window,
+        ),
+        on_loaded=lambda _request_id, saved_expanded, current_window=window: _on_sidebar_expanded_saved(current_window, saved_expanded),
+        on_failed=lambda _request_id, error: log(f"Не удалось сохранить состояние сайдбара: {error}", "WARNING"),
+        on_finished=lambda worker, current_window=window: _on_sidebar_expanded_save_worker_finished(current_window, worker),
+        signal_includes_request_id=False,
+        loaded_signal_name="saved",
+    )
+    worker = started[1] if isinstance(started, tuple) and len(started) > 1 else getattr(runtime, "worker", None)
+    session.sidebar_expanded_save_runtime_worker = worker
+
+
+def _ensure_sidebar_expanded_save_runtime(session) -> OneShotWorkerRuntime:
+    runtime = getattr(session, "sidebar_expanded_save_runtime", None)
+    if runtime is None:
+        runtime = OneShotWorkerRuntime()
+        session.sidebar_expanded_save_runtime = runtime
+    return runtime
+
+
+def _sidebar_expanded_save_state_obj(session) -> LatestValueWorkerState:
+    runtime = _ensure_sidebar_expanded_save_runtime(session)
+    state = getattr(session, "sidebar_expanded_save_state", None)
+    if state is None:
+        state = LatestValueWorkerState(
+            runtime,
+            empty_value=None,
+        )
+        session.sidebar_expanded_save_state = state
+    elif getattr(state, "runtime", None) is None:
+        state.runtime = runtime
+    return state
+
+
+def _on_sidebar_expanded_saved(window, saved_expanded) -> None:
+    log(f"[SIDEBAR] состояние сохранено воркером: expanded={bool(saved_expanded)}", "INFO")
+    controller = get_sidebar_intent_controller(window)
+    if controller is not None:
+        controller.mark_saved(bool(saved_expanded))
+
+
+def _on_sidebar_expanded_save_worker_finished(window, worker=None) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    current_worker = getattr(session, "sidebar_expanded_save_runtime_worker", None)
+    if current_worker is not None and worker is not current_worker:
+        return
+    session.sidebar_expanded_save_runtime_worker = None
+    state = _sidebar_expanded_save_state_obj(session)
+    if not state.has_pending():
+        return
+    _schedule_sidebar_expanded_save_worker_start(window, bool(state.pending))
+
+
+def _schedule_sidebar_expanded_save_worker_start(window, expanded: bool) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    state = _sidebar_expanded_save_state_obj(session)
+    state.pending = bool(expanded)
+    state.schedule_start(
+        QTimer.singleShot,
+        lambda current_window=window: _run_scheduled_sidebar_expanded_save_worker_start(current_window),
+        pending_when_already_scheduled=bool(expanded),
+    )
+
+
+def _run_scheduled_sidebar_expanded_save_worker_start(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    state = _sidebar_expanded_save_state_obj(session)
+    pending = state.take_pending_for_scheduled_start()
+    if pending is None:
+        return
+    _start_sidebar_expanded_save_worker(window, bool(pending))
+
+
+def _ensure_sidebar_intent_controller(session) -> SidebarIntentController:
+    controller = getattr(session, "sidebar_intent_controller", None)
+    if controller is None:
+        controller = SidebarIntentController(
+            intent=_read_saved_sidebar_expanded(),
+            last_saved=peek_warmed_sidebar_expanded(),
+        )
+        session.sidebar_intent_controller = controller
+    return controller
+
+
+def get_sidebar_intent_controller(window) -> SidebarIntentController | None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return None
+    return _ensure_sidebar_intent_controller(session)
+
+
+def _sidebar_expand_threshold(window) -> int:
+    nav = getattr(window, "navigationInterface", None)
+    panel = getattr(nav, "panel", None)
+    threshold = getattr(panel, "minimumExpandWidth", None)
+    try:
+        return int(threshold)
+    except (TypeError, ValueError):
+        return DEFAULT_EXPAND_THRESHOLD
+
+
+def _window_width(window) -> int:
+    width = getattr(window, "width", None)
+    try:
+        return int(width()) if callable(width) else 0
+    except Exception:
+        return 0
+
+
+def _restore_sidebar_expanded_state(window) -> None:
+    nav = getattr(window, "navigationInterface", None)
+    if nav is None:
+        return
+
+    controller = get_sidebar_intent_controller(window)
+    saved = _read_saved_sidebar_expanded()
+    width = _window_width(window)
+    threshold = _sidebar_expand_threshold(window)
+
+    if controller is not None:
+        controller.applying = True
+    try:
+        if saved:
+            # На узком окне expand() открыл бы MENU-оверлей поверх контента.
+            # Намерение остаётся в контроллере: панель развернётся через
+            # reapply_sidebar_intent_on_resize, когда окно станет шире порога.
+            if width < threshold:
+                log(f"[SIDEBAR] restore: saved=True, окно уже порога ({width} < {threshold}) — жду ресайза", "INFO")
+                return
+            expand = getattr(nav, "expand", None)
+            if callable(expand):
+                expand(False)
+            log(f"[SIDEBAR] restore: панель развёрнута (width={width})", "INFO")
+            return
+
+        panel = getattr(nav, "panel", None)
+        collapse = getattr(panel, "collapse", None)
+        if callable(collapse):
+            collapse()
+        log(f"[SIDEBAR] restore: панель свёрнута по сохранённому состоянию (width={width})", "INFO")
+    finally:
+        if controller is not None:
+            controller.applying = False
+
+
+def _bind_sidebar_expanded_state(window) -> None:
+    import time as _time
+
+    nav = getattr(window, "navigationInterface", None)
+    signal = getattr(nav, "displayModeChanged", None)
+    connect = getattr(signal, "connect", None)
+    if not callable(connect):
+        return
+
+    def _on_menu_button_activated(*_args) -> None:
+        controller = get_sidebar_intent_controller(window)
+        if controller is not None:
+            controller.note_user_toggle(_time.monotonic())
+
+    # NavigationToolButton не имеет сигнала pressed. Его mouseReleaseEvent
+    # эмитит clicked, а фильтр получает MouseButtonRelease перед этим методом.
+    # Поэтому отметка уже существует, когда qfluentwidgets внутри clicked ->
+    # toggle() синхронно эмитит EXPAND.
+    menu_button = getattr(getattr(nav, "panel", None), "menuButton", None)
+    install_filter = getattr(menu_button, "installEventFilter", None)
+    if callable(install_filter):
+        activation_filter = _SidebarMenuButtonActivationFilter(
+            _on_menu_button_activated,
+            parent=menu_button,
+        )
+        install_filter(activation_filter)
+        session = get_window_ui_session(window)
+        if session is not None:
+            session.sidebar_menu_button_event_filter = activation_filter
+    else:
+        log("[SIDEBAR] кнопка-гамбургер не найдена — намерение пользователя отслеживаться не будет", "WARNING")
+
+    def _on_display_mode_changed(display_mode) -> None:
+        controller = get_sidebar_intent_controller(window)
+        if controller is None:
+            return
+        now = _time.monotonic()
+        user_toggle = controller.consume_user_toggle(now)
+        width = _window_width(window)
+        new_intent = controller.classify_display_mode_change(
+            display_mode,
+            window_width=width,
+            user_initiated=user_toggle,
+            threshold=_sidebar_expand_threshold(window),
+        )
+        log(
+            f"[SIDEBAR] displayMode={normalize_display_mode_name(display_mode)}, width={width}, "
+            f"user_toggle={user_toggle} → intent={'без изменений' if new_intent is None else new_intent}",
+            "INFO",
+        )
+        if new_intent is not None:
+            _start_sidebar_expanded_save_worker(window, new_intent)
+            return
+        if not controller.applying and not user_toggle:
+            # Программное сворачивание (maximize на старте и т.п.): вернуть
+            # панель к намерению пользователя сразу после завершения перехода.
+            QTimer.singleShot(
+                0,
+                lambda current_window=window: _reapply_sidebar_intent_if_diverged(
+                    current_window, reason="программная смена displayMode"
+                ),
+            )
+
+    connect(_on_display_mode_changed)
+
+
+def reapply_sidebar_intent_on_resize(window) -> bool:
+    """Разворачивает сайдбар обратно, когда окно снова стало шире порога.
+
+    qfluentwidgets сворачивает панель при сужении окна сам, а обратное
+    разворачивание при видимой кнопке-гамбургере у него отключено — без этого
+    вызова намерение «развёрнуто» терялось бы после любого сужения окна.
+    Возвращает True, если панель была развёрнута этим вызовом.
+    """
+    session = get_window_ui_session(window)
+    if session is None:
+        return False
+
+    nav = getattr(window, "navigationInterface", None)
+    panel = getattr(nav, "panel", None)
+    expand = getattr(nav, "expand", None)
+    if panel is None or not callable(expand):
+        return False
+
+    is_collapsed = getattr(panel, "isCollapsed", None)
+    try:
+        collapsed = bool(is_collapsed()) if callable(is_collapsed) else False
+    except Exception:
+        return False
+
+    controller = _ensure_sidebar_intent_controller(session)
+    if controller.should_reapply_expand(
+        window_width=_window_width(window),
+        is_collapsed=collapsed,
+        threshold=_sidebar_expand_threshold(window),
+    ):
+        controller.applying = True
+        try:
+            expand(False)
+        finally:
+            controller.applying = False
+        return True
+    return False
+
+
+def _reapply_sidebar_intent_if_diverged(window, *, reason: str) -> None:
+    """Страховка: если панель свёрнута вопреки намерению — разворачивает.
+
+    WARNING в логе здесь — диагностический сигнал: панель оказалась свёрнута
+    без действия пользователя (программный переход или сбой восстановления).
+    """
+    try:
+        if get_window_ui_session(window) is None:
+            return
+        if reapply_sidebar_intent_on_resize(window):
+            log(
+                f"[SIDEBAR] панель была свёрнута вопреки сохранённому намерению ({reason}) — развёрнута повторно",
+                "WARNING",
+            )
+    except Exception as e:
+        log(f"[SIDEBAR] перепроверка состояния панели не удалась ({reason}): {e}", "DEBUG")
+
+
+def _recheck_sidebar_intent_after_init(window) -> None:
+    _reapply_sidebar_intent_if_diverged(window, reason="перепроверка после старта")
+
+
+def _scroll_layout_index(window, widget) -> int:
+    nav = getattr(window, "navigationInterface", None)
+    panel = getattr(nav, "panel", None)
+    scroll_layout = getattr(panel, "scrollLayout", None)
+    if scroll_layout is None or widget is None:
+        return -1
+    try:
+        return int(scroll_layout.indexOf(widget))
+    except Exception:
+        return -1
+
+
+def _get_scroll_widget_for_layout_entry(window, entry) -> QWidget | None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return None
+    if getattr(entry, "kind", "") == "page":
+        return session.nav_items.get(entry.page_name)
+    if getattr(entry, "kind", "") == "header":
+        return session.nav_header_by_group.get(entry.group_name)
+    return None
+
+
+def _resolve_scroll_insert_index(
+    window,
+    page_name: PageName,
+    method: str | None,
+    *,
+    advanced: bool | None = None,
+) -> int | None:
+    for entry in iter_sidebar_entries_after_page(method, page_name, advanced=advanced):
+        next_widget = _get_scroll_widget_for_layout_entry(window, entry)
+        next_index = _scroll_layout_index(window, next_widget)
+        if next_index >= 0:
+            return next_index
+
+    return None
+
+
+def _reorder_sidebar_scroll_layout_for_method(
+    window,
+    method: str | None,
+    *,
+    advanced: bool | None = None,
+) -> None:
+    nav = getattr(window, "navigationInterface", None)
+    panel = getattr(nav, "panel", None)
+    scroll_layout = getattr(panel, "scrollLayout", None)
+    if scroll_layout is None or not hasattr(scroll_layout, "insertWidget"):
+        return
+
+    insert_index = 0
+    for entry in iter_sidebar_layout_entries(method, advanced=advanced):
+        widget = _get_scroll_widget_for_layout_entry(window, entry)
+        if widget is None or _scroll_layout_index(window, widget) < 0:
+            continue
+        try:
+            scroll_layout.insertWidget(insert_index, widget)
+        except Exception:
+            continue
+        insert_index += 1
+
+
+def add_nav_item(
+    window,
+    page_name: PageName,
+    position,
+    *,
+    initial_visible: bool | None = None,
+    insert_index: int | None = None,
+    pump_ui: bool = False,
+) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    if page_name in session.nav_items:
+        return
+
+    from ui.navigation.search import show_page
+    from ui.navigation.text_sync import get_nav_label
+
+    route_key = get_page_route_key(page_name)
+    if not route_key:
+        log(f"[NAV] _add {page_name.name}: route key is missing - skip", "DEBUG")
+        return
+
+    icon = session.nav_icons.get(page_name, session.default_nav_icon)
+    text = get_nav_label(window, page_name)
+    eager_pages = set(get_eager_page_names_for_method(window.get_launch_method()))
+
+    if insert_index is not None:
+        if page_name in eager_pages:
+            page = _get_loaded_or_ensure_page(window, page_name)
+            if page is None:
+                log(f"[NAV] insert eager {page_name.name}: page is None - skip", "DEBUG")
+                return
+
+            if page.objectName() != route_key:
+                page.setObjectName(route_key)
+
+        log(f"[NAV] insertItem {page_name.name} routeKey={route_key!r} index={insert_index}", "DEBUG")
+        item = window.navigationInterface.insertItem(
+            int(insert_index),
+            routeKey=route_key,
+            icon=icon,
+            text=text,
+            onClick=lambda checked=False, page_to_show=page_name, current_window=window: show_page(current_window, page_to_show),
+            selectable=True,
+            position=position,
+        )
+        log(f"[NAV] insertItem {page_name.name} item={item}", "DEBUG")
+    elif page_name in eager_pages:
+        page = _get_loaded_or_ensure_page(window, page_name)
+        if page is None:
+            log(f"[NAV] _add eager {page_name.name}: page is None - skip", "DEBUG")
+            return
+
+        if page.objectName() != route_key:
+            page.setObjectName(route_key)
+
+        log(f"[NAV] addSubInterface {page_name.name} objectName={page.objectName()!r}", "DEBUG")
+        item = window.addSubInterface(page, icon, text, position=position)
+        log(f"[NAV] addSubInterface {page_name.name} item={item}", "DEBUG")
+    else:
+        log(f"[NAV] addItem lazy {page_name.name} routeKey={route_key!r}", "DEBUG")
+        item = window.navigationInterface.addItem(
+            routeKey=route_key,
+            icon=icon,
+            text=text,
+            onClick=lambda checked=False, page_to_show=page_name, current_window=window: show_page(current_window, page_to_show),
+            selectable=True,
+            position=position,
+        )
+        log(f"[NAV] addItem lazy {page_name.name} item={item}", "DEBUG")
+
+    if item is not None:
+        _set_nav_item_accessibility(item, text)
+        session.nav_items[page_name] = item
+        if initial_visible is not None:
+            _set_visible_if_changed(item, bool(initial_visible))
+    else:
+        log(f"[NAV] addSubInterface returned None for {page_name.name} - not in nav_items!", "WARNING")
+
+    if pump_ui:
+        pump_startup_ui(window)
+
+
+def _set_nav_item_accessibility(item, text: str) -> None:
+    label = " ".join(str(text or "").strip().split())
+    if not label:
+        return
+    state_text = f"Открыть раздел: {label}"
+    set_control_accessibility(
+        item,
+        name=state_text,
+        description=f"Открывает раздел {label} в боковом меню.",
+    )
+    set_state_text(item, state_text)
+
+
+def _install_sidebar_search(window) -> None:
+    import time as _time
+
+    started_at = _time.perf_counter()
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    if session.sidebar_search_nav_widget is not None:
+        return
+
+    widget_cls = session.sidebar_search_widget_cls
+    if widget_cls is None:
+        return
+
+    from ui.navigation.search import (
+        attach_sidebar_search_to_titlebar,
+        on_sidebar_search_changed,
+        setup_sidebar_search_completer,
+        update_titlebar_search_width,
+    )
+
+    session.sidebar_search_nav_widget = widget_cls()
+    session.sidebar_search_nav_widget.textChanged.connect(
+        lambda text, current_window=window: on_sidebar_search_changed(current_window, text)
+    )
+    session.sidebar_search_nav_widget.set_placeholder_text(
+        tr_catalog("sidebar.search.placeholder", language=session.ui_language)
+    )
+    setup_sidebar_search_completer(window)
+    attach_sidebar_search_to_titlebar(window)
+    update_titlebar_search_width(window)
+    try:
+        window.log_startup_metric(
+            "StartupSidebarSearchReady",
+            f"{(_time.perf_counter() - started_at) * 1000:.0f}ms",
+        )
+    except Exception:
+        pass
+
+
+def _schedule_sidebar_search_after_interactive(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    if session.sidebar_search_widget_cls is None:
+        return
+
+    scheduled = False
+
+    def _schedule(*_args) -> None:
+        nonlocal scheduled
+        if scheduled:
+            return
+        scheduled = True
+        try:
+            window.log_startup_metric(
+                "StartupSidebarSearchQueued",
+                f"{SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS}ms after interactive",
+            )
+        except Exception:
+            pass
+        QTimer.singleShot(
+            SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS,
+            lambda: _install_sidebar_search(window),
+        )
+
+    try:
+        if bool(getattr(window.startup_state, "interactive_logged", False)):
+            _schedule()
+            return
+    except Exception:
+        _schedule()
+        return
+
+    try:
+        window.startup_interactive_ready.connect(_schedule)
+    except Exception:
+        _schedule()
+
+
+def _install_hidden_mode_nav_items(window) -> None:
+    import time as _time
+
+    started_at = _time.perf_counter()
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    try:
+        method = window.get_launch_method()
+    except Exception:
+        method = None
+    visibility_by_page = get_nav_visibility(method)
+    added_count = 0
+
+    for page_name, should_show in visibility_by_page.items():
+        if bool(should_show):
+            continue
+        if page_name in session.nav_items:
+            continue
+        # Страницы чужого движка сюда попадать не должны. Раскладка
+        # содержит и v1, и v2, у них одинаковые подписи «Мои пресеты» и
+        # «Профили пресета» — если такой пункт хоть раз окажется видимым,
+        # в панели появится дубль. Пункты нужного движка уже создал
+        # _add_sidebar_group, а при смене режима панель пересобирается.
+        if not is_page_allowed_for_method(page_name, method):
+            continue
+        add_nav_item(
+            window,
+            page_name,
+            session.nav_scroll_position,
+            initial_visible=False,
+            insert_index=_resolve_scroll_insert_index(window, page_name, method),
+            pump_ui=False,
+        )
+        if page_name in session.nav_items:
+            added_count += 1
+            session.nav_mode_visibility[page_name] = False
+
+    if added_count:
+        apply_nav_visibility_filter(window, method=method)
+    try:
+        window.log_startup_metric(
+            "StartupHiddenModeNavReady",
+            f"{added_count} items, {(_time.perf_counter() - started_at) * 1000:.0f}ms",
+        )
+    except Exception:
+        pass
+
+
+def _add_sidebar_group(window, group_plan, initial_visibility, method=None) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    nav = window.navigationInterface
+    pos_scroll = session.nav_scroll_position
+    if group_plan.header_key and group_plan.group_name not in session.nav_header_by_group:
+        header = nav.addItemHeader(
+            tr_catalog(group_plan.header_key, language=session.ui_language),
+            pos_scroll,
+            # Имя группы нужно вкладкам в полосе заголовка: они
+            # показывают по одному разделу за раз. Панель qfluentwidgets
+            # лишний ключ игнорирует, наша — запоминает.
+            group=group_plan.group_name,
+        )
+        session.nav_header_by_group[group_plan.group_name] = header
+        session.nav_headers.append((header, group_plan.page_names, group_plan.header_key))
+
+    # Раскладка группы содержит страницы обоих движков: и «Мои пресеты»
+    # режима v1, и одноимённую страницу v2. Показывать нужно только
+    # страницы текущего движка — иначе в панели появляются дубли с
+    # одинаковыми подписями.
+    #
+    # Различаем две причины невидимости:
+    #   чужой движок      — пункт не создаём вовсе;
+    #   простой вид       — создаём скрытым.
+    # Второе обязательно: переключатель режима меняет видимость уже
+    # существующих пунктов, и без них под заголовками групп было пусто.
+    # По той же причине пункт нужен _refresh_existing_nav_mode_visibility:
+    # кэш видимости строится обходом session.nav_items.
+    for page_name in group_plan.page_names:
+        # Фильтр строго по движку. get_nav_visibility(advanced=True) для
+        # этого не годится: главные страницы режимов она показывает
+        # всегда, и в панели появлялись «Управление net67 v1» и
+        # «Оркестратор» одновременно с v2.
+        if not is_page_allowed_for_method(page_name, method):
+            continue
+
+        add_nav_item(
+            window,
+            page_name,
+            pos_scroll,
+            initial_visible=bool(initial_visibility.get(page_name, True)),
+        )
+
+
+def _refresh_existing_nav_mode_visibility(
+    window,
+    method: str | None,
+    *,
+    advanced: bool | None = None,
+) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    visibility_by_page = get_nav_visibility(method, advanced=advanced)
+    session.nav_mode_visibility = {
+        page_name: bool(visibility_by_page.get(page_name, True))
+        for page_name in session.nav_items
+    }
+
+
+def _resolve_nav_visibility_method(window, method: str | None) -> str:
+    if method is not None:
+        resolved = str(method or "").strip()
+    else:
+        try:
+            resolved = str(window.get_launch_method() or "").strip()
+        except Exception:
+            resolved = ""
+        if not resolved:
+            try:
+                from ui.workflows.common import get_current_launch_method
+
+                resolved = get_current_launch_method(default="")
+            except Exception:
+                resolved = ""
+
+    if resolved:
+        return resolved
+
+    from settings.mode import DEFAULT_LAUNCH_METHOD
+
+    return DEFAULT_LAUNCH_METHOD
+
+
+def _install_secondary_sidebar_groups(window) -> None:
+    import time as _time
+
+    started_at = _time.perf_counter()
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    try:
+        method = window.get_launch_method()
+    except Exception:
+        method = ""
+    initial_visibility = get_nav_visibility(method)
+    group_plans = tuple(
+        group_plan
+        for group_plan in build_sidebar_group_plans(method)
+        if group_plan.group_name != "root"
+    )
+
+    def _finish() -> None:
+        _refresh_existing_nav_mode_visibility(window, method)
+        apply_nav_visibility_filter(window, method=method)
+        try:
+            window.log_startup_metric(
+                "StartupSecondarySidebarReady",
+                f"{(_time.perf_counter() - started_at) * 1000:.0f}ms",
+            )
+        except Exception:
+            pass
+
+    def _install_next_group(index: int = 0) -> None:
+        if get_window_ui_session(window) is None:
+            return
+        if index >= len(group_plans):
+            _finish()
+            return
+
+        _add_sidebar_group(window, group_plans[index], initial_visibility, method)
+        QTimer.singleShot(
+            SIDEBAR_SECONDARY_GROUP_STEP_MS,
+            lambda next_index=index + 1: _install_next_group(next_index),
+        )
+
+    _install_next_group()
+
+
+def _schedule_secondary_sidebar_groups_after_interactive(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    scheduled = False
+
+    def _schedule(*_args) -> None:
+        nonlocal scheduled
+        if scheduled:
+            return
+        scheduled = True
+        try:
+            window.log_startup_metric(
+                "StartupSecondarySidebarQueued",
+                f"{SIDEBAR_SECONDARY_GROUPS_AFTER_INTERACTIVE_MS}ms after interactive",
+            )
+        except Exception:
+            pass
+        QTimer.singleShot(
+            SIDEBAR_SECONDARY_GROUPS_AFTER_INTERACTIVE_MS,
+            lambda: _install_secondary_sidebar_groups(window),
+        )
+
+    try:
+        if bool(getattr(window.startup_state, "interactive_logged", False)):
+            _schedule()
+            return
+    except Exception:
+        _schedule()
+        return
+
+    try:
+        window.startup_interactive_ready.connect(_schedule)
+    except Exception:
+        _schedule()
+
+
+def _schedule_hidden_mode_nav_items_after_interactive(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    scheduled = False
+
+    def _schedule(*_args) -> None:
+        nonlocal scheduled
+        if scheduled:
+            return
+        scheduled = True
+        try:
+            window.log_startup_metric(
+                "StartupHiddenModeNavQueued",
+                f"{SIDEBAR_HIDDEN_MODE_ITEMS_AFTER_INTERACTIVE_MS}ms after interactive",
+            )
+        except Exception:
+            pass
+        QTimer.singleShot(
+            SIDEBAR_HIDDEN_MODE_ITEMS_AFTER_INTERACTIVE_MS,
+            lambda: _install_hidden_mode_nav_items(window),
+        )
+
+    try:
+        if bool(getattr(window.startup_state, "interactive_logged", False)):
+            _schedule()
+            return
+    except Exception:
+        _schedule()
+        return
+
+    try:
+        window.startup_interactive_ready.connect(_schedule)
+    except Exception:
+        _schedule()
+
+
+def init_navigation(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+
+    current_method = window.get_launch_method()
+
+    session.nav_items = {}
+    session.nav_search_query = ""
+    session.nav_mode_visibility = {}
+    session.nav_headers = []
+    session.nav_header_by_group = {}
+    session.sidebar_search_nav_widget = None
+    session.sidebar_search_model = None
+    session.sidebar_search_completer = None
+    session.sidebar_search_titlebar_attached = False
+    session.advanced_toggle_item = None
+    initial_visibility = get_nav_visibility(current_method)
+
+    _schedule_sidebar_search_after_interactive(window)
+    _schedule_secondary_sidebar_groups_after_interactive(window)
+    _schedule_hidden_mode_nav_items_after_interactive(window)
+
+    for group_plan in build_sidebar_group_plans(current_method):
+        if group_plan.group_name != "root":
+            continue
+        _add_sidebar_group(window, group_plan, initial_visibility, current_method)
+
+    # Ширина панели зависит от режима: в простом виде два пункта в
+    # развёрнутой панели оставляли половину её пустой.
+    try:
+        from ui.navigation.advanced_toggle import apply_sidebar_width_for_mode
+        from ui.navigation.schema import is_advanced_mode_enabled
+
+        apply_sidebar_width_for_mode(window, bool(is_advanced_mode_enabled()))
+    except Exception as exc:
+        log(f"[NAV] ширина панели при запуске: {exc}", "DEBUG")
+
+    for hidden in get_hidden_pages_for_method(current_method):
+        page = _get_loaded_pages(window).get(hidden)
+        if page is not None:
+            if not page.objectName():
+                page.setObjectName(page.__class__.__name__)
+            _ensure_page_in_stack(window, page)
+            pump_startup_ui(window)
+
+    # Кнопка переключения простой/расширенный вид. Добавляется после
+    # страниц, чтобы встать внизу сайдбара, и до применения фильтра
+    # видимости — сам фильтр её не трогает, это не страница.
+    from ui.navigation.advanced_toggle import add_advanced_mode_toggle
+
+    add_advanced_mode_toggle(window)
+
+    window.navigationInterface.setMinimumExpandWidth(700)
+    _ensure_sidebar_intent_controller(session)
+    _restore_sidebar_expanded_state(window)
+    _bind_sidebar_expanded_state(window)
+    QTimer.singleShot(
+        SIDEBAR_INTENT_RECHECK_AFTER_INIT_MS,
+        lambda current_window=window: _recheck_sidebar_intent_after_init(current_window),
+    )
+    _refresh_existing_nav_mode_visibility(window, current_method)
+    apply_nav_visibility_filter(window, method=current_method)
+
+
+def sync_nav_visibility(
+    window,
+    method: str | None = None,
+    *,
+    advanced: bool | None = None,
+) -> None:
+    """Пересобирает видимость пунктов после смены режима запуска.
+
+    advanced=None означает «взять сохранённый режим интерфейса».
+    """
+    session = get_window_ui_session(window)
+    if session is None or not session.nav_items:
+        return
+
+    from ui.navigation.search import update_sidebar_search_suggestions
+
+    method = _resolve_nav_visibility_method(window, method)
+
+    visibility_by_page = get_nav_visibility(method, advanced=advanced)
+
+    log(f"[NAV] _sync_nav_visibility method={method!r}, nav_items keys={[p.name for p in session.nav_items]}", "DEBUG")
+    for page_name, item in tuple(session.nav_items.items()):
+        if page_name in visibility_by_page and not bool(visibility_by_page.get(page_name, True)):
+            _set_visible_if_changed(item, False)
+
+    mode_visibility: dict[PageName, bool] = {
+        page_name: bool(visibility_by_page.get(page_name, True))
+        for page_name in session.nav_items
+    }
+    for page_name, should_show in visibility_by_page.items():
+        item = session.nav_items.get(page_name)
+        if item is None and bool(should_show):
+            add_nav_item(
+                window,
+                page_name,
+                session.nav_scroll_position,
+                initial_visible=False,
+                insert_index=_resolve_scroll_insert_index(
+                    window, page_name, method, advanced=advanced
+                ),
+                pump_ui=True,
+            )
+            item = session.nav_items.get(page_name)
+
+        if item is not None:
+            mode_visibility[page_name] = bool(should_show)
+            log(f"[NAV]   {page_name.name} → modeVisible({should_show})", "DEBUG")
+        elif bool(should_show):
+            log(f"[NAV]   {page_name.name} → NOT in nav_items!", "WARNING")
+
+    # advanced нужно донести до порядка и до фильтра. Раньше он терялся
+    # сразу после расчёта visibility_by_page, фильтр брал сохранённый
+    # режим интерфейса, и при явном advanced=True пункты нового движка
+    # оставались скрытыми: сайдбар после смены движка выглядел пустым.
+    _reorder_sidebar_scroll_layout_for_method(window, method, advanced=advanced)
+    session.nav_mode_visibility = mode_visibility
+    apply_nav_visibility_filter(window, method=method, advanced=advanced)
+    update_sidebar_search_suggestions(window)
+
+
+def sync_existing_nav_visibility(window, method: str | None = None) -> None:
+    session = get_window_ui_session(window)
+    if session is None or not session.nav_items:
+        return
+
+    method = _resolve_nav_visibility_method(window, method)
+    _refresh_existing_nav_mode_visibility(window, method)
+    apply_nav_visibility_filter(window, method=method)
+
+
+def refresh_nav_mode_visibility_cache(
+    window,
+    method: str | None = None,
+    *,
+    advanced: bool | None = None,
+) -> None:
+    """Пересчитывает кэш видимости пунктов под текущий режим.
+
+    Нужна переключателю простого и расширенного вида: сам фильтр
+    видимости использует этот кэш и без обновления оставит расширенные
+    пункты скрытыми.
+    """
+    if method is None:
+        try:
+            method = window.get_launch_method()
+        except Exception:
+            method = None
+    _refresh_existing_nav_mode_visibility(window, method, advanced=advanced)
+
+
+def apply_nav_visibility_filter(
+    window,
+    method: str | None = None,
+    *,
+    advanced: bool | None = None,
+) -> None:
+    """Пересчитывает видимость пунктов сайдбара.
+
+    advanced=None означает «взять сохранённый режим интерфейса». Явное
+    значение нужно тестам фильтрации по движку: без него сработает фильтр
+    простого вида и в сайдбаре останутся только главная и оформление.
+    """
+    session = get_window_ui_session(window)
+    if session is None or not session.nav_items:
+        return
+
+    from ui.navigation.text_sync import get_nav_label
+    from ui.navigation.schema import get_nav_visibility
+
+    search_query = (session.nav_search_query or "").casefold()
+    mode_visibility = session.nav_mode_visibility or {}
+    current_method = method
+    if current_method is None:
+        try:
+            current_method = window.get_launch_method()
+        except Exception:
+            current_method = None
+    fallback_mode_visibility = get_nav_visibility(current_method, advanced=advanced)
+    visible_by_page: dict[PageName, bool] = {}
+
+    for page_name, item in session.nav_items.items():
+        schema_visible = bool(fallback_mode_visibility.get(page_name, True))
+        stored_visible = bool(mode_visibility.get(page_name, schema_visible))
+        mode_visible = schema_visible and stored_visible
+        label = get_nav_label(window, page_name)
+        matches_query = not search_query or (search_query in label.casefold())
+        final_visible = mode_visible and matches_query
+        _set_visible_if_changed(item, final_visible)
+        visible_by_page[page_name] = final_visible
+
+    for header, grouped_pages, _header_key in session.nav_headers:
+        if header is None:
+            continue
+        _set_visible_if_changed(
+            header,
+            any(visible_by_page.get(page_name, False) for page_name in grouped_pages),
+        )
+
+
+__all__ = [
+    "add_nav_item",
+    "apply_nav_visibility_filter",
+    "refresh_nav_mode_visibility_cache",
+    "get_sidebar_intent_controller",
+    "init_navigation",
+    "reapply_sidebar_intent_on_resize",
+    "sync_existing_nav_visibility",
+    "sync_nav_visibility",
+]

@@ -1,0 +1,722 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from time import monotonic
+
+from PyQt6.QtCore import QModelIndex, Qt
+from PyQt6.QtGui import QStandardItem, QStandardItemModel
+from PyQt6.QtWidgets import QCompleter
+
+from ui.navigation.schema import (
+    PAGE_ROUTE_SPECS,
+    get_sidebar_search_pages_for_method,
+)
+from ui.page_actions import switch_page_tab
+from app.page_names import PageName
+from app.search_index import (
+    SearchEntry,
+    build_search_filter_text,
+    build_preset_search_entries,
+    build_profile_search_entries,
+    find_search_entries,
+    format_search_result,
+)
+from settings.mode import is_preset_launch_method
+from ui.accessibility import set_control_accessibility, set_state_text
+from ui.window_ui_session import get_window_ui_session
+
+
+_PAGE_ROLE = int(Qt.ItemDataRole.UserRole)
+_TAB_ROLE = _PAGE_ROLE + 1
+_QUERY_ROLE = _PAGE_ROLE + 2
+_SEARCH_TEXT_ROLE = _PAGE_ROLE + 3
+_RUNTIME_SEARCH_CACHE_SECONDS = 3.0
+
+
+class _SidebarSearchCompleter(QCompleter):
+    def pathFromIndex(self, index: QModelIndex) -> str:
+        display_text = index.data(int(Qt.ItemDataRole.DisplayRole))
+        if isinstance(display_text, str) and display_text:
+            return display_text
+        return super().pathFromIndex(index)
+
+
+def _update_sidebar_search_popup_accessibility(popup, index: QModelIndex) -> None:
+    if popup is None:
+        return
+    accessible_text = ""
+    try:
+        if index is not None and index.isValid():
+            accessible_text = str(index.data(int(Qt.ItemDataRole.AccessibleTextRole)) or "").strip()
+    except Exception:
+        accessible_text = ""
+    if accessible_text:
+        set_state_text(popup, accessible_text)
+    else:
+        set_state_text(popup, "Результаты глобального поиска")
+
+
+def _setup_sidebar_search_popup_accessibility(popup) -> None:
+    if popup is None:
+        return
+    set_control_accessibility(
+        popup,
+        name="Результаты глобального поиска",
+        description="Выберите результат стрелками вверх и вниз, затем нажмите Enter.",
+    )
+    _update_sidebar_search_popup_accessibility(popup, popup.currentIndex())
+    try:
+        popup.selectionModel().currentChanged.connect(
+            lambda current, _previous, current_popup=popup: _update_sidebar_search_popup_accessibility(
+                current_popup,
+                current,
+            )
+        )
+    except Exception:
+        pass
+
+
+@dataclass(frozen=True)
+class SidebarSearchTarget:
+    page_name: PageName
+    tab_key: str = ""
+    query_text: str = ""
+
+
+def _get_page_host(window):
+    session = get_window_ui_session(window)
+    return None if session is None else session.page_host
+
+
+def show_page(window, page_name: PageName) -> bool:
+    page_host = _get_page_host(window)
+    if page_host is None:
+        return False
+    return bool(page_host.show_page(page_name))
+
+
+#: Показывать ли строку поиска в полосе заголовка.
+#:
+#: Выключена по просьбе. Разделов на экране четыре, страниц в каждом не
+#: больше четырёх — искать не в чем, а место в заголовке она занимала
+#: больше всех остальных вместе взятых.
+#:
+#: Сам поиск оставлен рабочим, а не вырезан: на нём держатся подсказки,
+#: маршрутизация по результату и обход страниц. Вернуть — поменять этот
+#: флаг.
+SEARCH_IN_TITLEBAR = False
+
+
+def attach_sidebar_search_to_titlebar(window) -> None:
+    if not SEARCH_IN_TITLEBAR:
+        return
+
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    widget = session.sidebar_search_nav_widget
+    if widget is None:
+        return
+    title_bar = getattr(window, "titleBar", None)
+    if title_bar is None:
+        return
+    layout = getattr(title_bar, "hBoxLayout", None)
+    if layout is None:
+        return
+    if widget.parent() is not title_bar:
+        widget.setParent(title_bar)
+    if layout.indexOf(widget) < 0:
+        insert_index = max(0, layout.count() - 1)
+        layout.insertWidget(insert_index, widget, 0, Qt.AlignmentFlag.AlignVCenter)
+    _ensure_titlebar_search_right_stretch(layout, widget)
+    session.sidebar_search_titlebar_attached = True
+
+
+def _ensure_titlebar_search_right_stretch(layout, widget) -> None:
+    widget_index = layout.indexOf(widget)
+    if widget_index < 0:
+        return
+    next_item = layout.itemAt(widget_index + 1)
+    if next_item is not None and next_item.spacerItem() is not None:
+        return
+    layout.insertStretch(widget_index + 1, 1)
+
+
+def _layout_item_width_hint(item) -> int:
+    if item is None or item.spacerItem() is not None:
+        return 0
+    widget = item.widget()
+    if widget is not None:
+        try:
+            if not widget.isVisible():
+                return 0
+        except Exception:
+            pass
+        try:
+            return max(int(widget.minimumWidth()), int(widget.sizeHint().width()))
+        except Exception:
+            return int(widget.width())
+    try:
+        return int(item.sizeHint().width())
+    except Exception:
+        return 0
+
+
+def _sync_titlebar_search_stretches(window, layout, widget) -> None:
+    widget_index = layout.indexOf(widget)
+    if widget_index < 0:
+        return
+
+    left_spacer_index = widget_index - 1
+    right_spacer_index = widget_index + 1
+    if left_spacer_index < 0 or right_spacer_index >= layout.count():
+        return
+    if layout.itemAt(left_spacer_index).spacerItem() is None:
+        return
+    if layout.itemAt(right_spacer_index).spacerItem() is None:
+        return
+
+    title_bar = getattr(window, "titleBar", None)
+    if title_bar is None:
+        return
+
+    title_bar_width = int(title_bar.width())
+    if title_bar_width <= 0:
+        return
+
+    left_fixed_width = sum(
+        _layout_item_width_hint(layout.itemAt(index))
+        for index in range(0, left_spacer_index)
+    )
+    right_fixed_width = sum(
+        _layout_item_width_hint(layout.itemAt(index))
+        for index in range(right_spacer_index + 1, layout.count())
+    )
+
+    window_center_in_titlebar = (int(window.width()) / 2) - int(title_bar.x())
+    left_stretch = round(window_center_in_titlebar - (int(widget.width()) / 2) - left_fixed_width)
+    total_stretch = title_bar_width - left_fixed_width - int(widget.width()) - right_fixed_width
+    left_stretch = max(0, min(left_stretch, total_stretch))
+    right_stretch = max(0, total_stretch - left_stretch)
+
+    layout.setStretch(left_spacer_index, int(left_stretch))
+    layout.setStretch(right_spacer_index, int(right_stretch))
+
+
+def update_titlebar_search_width(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None or not session.sidebar_search_titlebar_attached:
+        return
+    widget = session.sidebar_search_nav_widget
+    if widget is None:
+        return
+    title_bar = getattr(window, "titleBar", None)
+    if title_bar is None:
+        return
+    title_bar_width = int(title_bar.width())
+    if title_bar_width <= 0:
+        title_bar_width = max(0, int(window.width()) - 46)
+    layout = getattr(title_bar, "hBoxLayout", None)
+    if layout is not None:
+        _ensure_titlebar_search_right_stretch(layout, widget)
+        widget_index = layout.indexOf(widget)
+        available_width = title_bar_width
+        if widget_index >= 0:
+            left_spacer_index = widget_index - 1
+            right_spacer_index = widget_index + 1
+            left_fixed_width = sum(
+                _layout_item_width_hint(layout.itemAt(index))
+                for index in range(0, left_spacer_index)
+            )
+            right_fixed_width = sum(
+                _layout_item_width_hint(layout.itemAt(index))
+                for index in range(right_spacer_index + 1, layout.count())
+            )
+            available_width = title_bar_width - left_fixed_width - right_fixed_width
+    else:
+        available_width = title_bar_width - 340
+
+    available_width = max(0, int(available_width))
+    target_width = max(280, min(560, int(title_bar_width * 0.42)))
+    target_width = min(target_width, available_width)
+    widget.setVisible(target_width >= 120)
+    widget.setFixedWidth(target_width)
+    if layout is not None:
+        _sync_titlebar_search_stretches(window, layout, widget)
+
+
+def on_sidebar_search_changed(window, text: str) -> None:
+    from ui.navigation.sidebar_builder import apply_nav_visibility_filter
+
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    session.nav_search_query = (text or "").strip()
+    if route_sidebar_search_by_text(window, session.nav_search_query, prefer_first=False):
+        return
+    apply_nav_visibility_filter(window)
+    update_sidebar_search_suggestions(window)
+
+
+def get_sidebar_search_pages(window) -> set[PageName]:
+    return get_sidebar_search_pages_for_method(
+        window.get_launch_method(),
+        set(PAGE_ROUTE_SPECS.keys()),
+    )
+
+
+def setup_sidebar_search_completer(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None or session.sidebar_search_nav_widget is None:
+        return
+
+    session.sidebar_search_model = QStandardItemModel(window)
+    completer = _SidebarSearchCompleter(session.sidebar_search_model, window)
+    completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+    completer.setFilterMode(Qt.MatchFlag.MatchContains)
+    completer.setCompletionRole(_SEARCH_TEXT_ROLE)
+    completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+    completer.setMaxVisibleItems(10)
+    completer.activated[QModelIndex].connect(
+        lambda index, current_window=window: on_sidebar_search_result_activated(current_window, index)
+    )
+    completer.activated[str].connect(
+        lambda text, current_window=window: on_sidebar_search_result_text_activated(current_window, text)
+    )
+    try:
+        popup = completer.popup()
+        if popup is not None:
+            _setup_sidebar_search_popup_accessibility(popup)
+            popup.clicked.connect(
+                lambda index, current_window=window: on_sidebar_search_result_activated(current_window, index)
+            )
+            popup.activated.connect(
+                lambda index, current_window=window: on_sidebar_search_result_activated(current_window, index)
+            )
+    except Exception:
+        pass
+
+    session.sidebar_search_completer = completer
+    session.sidebar_search_nav_widget.set_completer(completer)
+    if not bool(getattr(session.sidebar_search_nav_widget, "_keyboard_result_connections_installed", False)):
+        navigation_signal = getattr(session.sidebar_search_nav_widget, "completionNavigationRequested", None)
+        if navigation_signal is not None:
+            navigation_signal.connect(
+                lambda step, current_window=window: select_sidebar_search_result_by_keyboard(
+                    current_window,
+                    step,
+                )
+            )
+        activation_signal = getattr(session.sidebar_search_nav_widget, "completionActivationRequested", None)
+        if activation_signal is not None:
+            activation_signal.connect(
+                lambda current_window=window: activate_sidebar_search_result_from_keyboard(current_window)
+            )
+        session.sidebar_search_nav_widget._keyboard_result_connections_installed = True
+
+
+def update_sidebar_search_suggestions(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    model = session.sidebar_search_model
+    completer = session.sidebar_search_completer
+    if model is None or completer is None:
+        return
+
+    model.clear()
+    reset_sidebar_search_keyboard_selection(window)
+    query = (session.nav_search_query or "").strip()
+    if not query:
+        try:
+            completer.popup().hide()
+        except Exception:
+            pass
+        return
+
+    visible_pages = get_sidebar_search_pages(window)
+
+    matches = find_search_entries(
+        query,
+        language=session.ui_language,
+        visible_pages=visible_pages,
+        max_results=10,
+        extra_entries=_build_runtime_search_entries(window),
+    )
+    if not matches:
+        try:
+            completer.popup().hide()
+        except Exception:
+            pass
+        return
+
+    for match in matches:
+        title, location = format_search_result(match.entry, language=session.ui_language)
+        item = QStandardItem(f"{title} - {location}")
+        item.setData(
+            f"Результат поиска: {title}, место: {location}. Нажмите Enter, чтобы открыть.",
+            int(Qt.ItemDataRole.AccessibleTextRole),
+        )
+        item.setData(match.entry.page_name.name, _PAGE_ROLE)
+        item.setData(match.entry.tab_key or "", _TAB_ROLE)
+        item.setData(match.entry.query_text or "", _QUERY_ROLE)
+        item.setData(build_search_filter_text(match.entry, language=session.ui_language), _SEARCH_TEXT_ROLE)
+        model.appendRow(item)
+
+    if session.sidebar_search_nav_widget is not None and session.sidebar_search_nav_widget.isVisible():
+        session.sidebar_search_nav_widget.show_completions()
+
+
+def reset_sidebar_search_keyboard_selection(window) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    session.sidebar_search_selected_row = -1
+    widget = session.sidebar_search_nav_widget
+    set_text = getattr(widget, "set_keyboard_result_text", None)
+    if callable(set_text):
+        set_text("Глобальный поиск по net67")
+
+
+def _sidebar_search_model_row_count(model) -> int:
+    try:
+        return int(model.rowCount())
+    except Exception:
+        return 0
+
+
+def _sidebar_search_item_for_row(model, row: int) -> QStandardItem | None:
+    try:
+        item = model.item(int(row), 0)
+    except Exception:
+        return None
+    return item
+
+
+def _sidebar_search_item_accessible_text(item: QStandardItem | None) -> str:
+    if item is None:
+        return ""
+    text = str(item.data(int(Qt.ItemDataRole.AccessibleTextRole)) or "").strip()
+    if text:
+        return text
+    return str(item.text() or "").strip()
+
+
+def _set_sidebar_search_keyboard_state(window, row: int) -> None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return
+    model = session.sidebar_search_model
+    item = _sidebar_search_item_for_row(model, row) if model is not None else None
+    accessible_text = _sidebar_search_item_accessible_text(item)
+    if not accessible_text:
+        return
+    widget = session.sidebar_search_nav_widget
+    set_text = getattr(widget, "set_keyboard_result_text", None)
+    if callable(set_text):
+        set_text(accessible_text)
+
+
+def select_sidebar_search_result_by_keyboard(window, step: int) -> bool:
+    session = get_window_ui_session(window)
+    if session is None:
+        return False
+    model = session.sidebar_search_model
+    if model is None:
+        return False
+    count = _sidebar_search_model_row_count(model)
+    if count <= 0:
+        reset_sidebar_search_keyboard_selection(window)
+        return False
+
+    try:
+        current_row = int(getattr(session, "sidebar_search_selected_row", -1))
+    except Exception:
+        current_row = -1
+    step_value = 1 if int(step or 0) >= 0 else -1
+    if current_row < 0 or current_row >= count:
+        next_row = 0 if step_value > 0 else count - 1
+    else:
+        next_row = max(0, min(count - 1, current_row + step_value))
+
+    session.sidebar_search_selected_row = next_row
+    _set_sidebar_search_keyboard_state(window, next_row)
+    return True
+
+
+def activate_sidebar_search_result_from_keyboard(window) -> bool:
+    session = get_window_ui_session(window)
+    if session is None:
+        return False
+    model = session.sidebar_search_model
+    if model is None:
+        return False
+    try:
+        selected_row = int(getattr(session, "sidebar_search_selected_row", -1))
+    except Exception:
+        selected_row = -1
+
+    item = _sidebar_search_item_for_row(model, selected_row)
+    if item is not None:
+        target = _search_target_from_item(item)
+        if target is None:
+            return False
+        return _route_search_result_and_clear(window, target.page_name, target.tab_key, target.query_text)
+
+    widget = session.sidebar_search_nav_widget
+    text_getter = getattr(widget, "text", None)
+    text = text_getter() if callable(text_getter) else getattr(session, "nav_search_query", "")
+    return route_sidebar_search_by_text(window, str(text or ""), prefer_first=True)
+
+
+def _clear_sidebar_search(window) -> None:
+    session = get_window_ui_session(window)
+    if session is not None and session.sidebar_search_nav_widget is not None:
+        session.sidebar_search_nav_widget.clear()
+
+
+def _apply_current_page_search_query(window, text: str) -> bool:
+    page_host = _get_page_host(window)
+    if page_host is None:
+        return False
+    try:
+        current_page = page_host.current_page()
+    except Exception:
+        return False
+    handler = getattr(current_page, "apply_sidebar_search_query", None)
+    if not callable(handler):
+        return False
+    try:
+        return bool(handler(text))
+    except Exception:
+        return False
+
+
+def _route_search_result_and_clear(window, page_name: PageName, tab_key: str = "", query_text: str = "") -> bool:
+    if not route_search_result(window, page_name, tab_key):
+        return False
+    if query_text:
+        _apply_current_page_search_query(window, query_text)
+    _clear_sidebar_search(window)
+    return True
+
+
+def _build_sidebar_search_target(
+    raw_page_name,
+    tab_key: str | None = "",
+    query_text: str | None = "",
+) -> SidebarSearchTarget | None:
+    if not isinstance(raw_page_name, str) or not raw_page_name:
+        return None
+    try:
+        page_name = PageName[raw_page_name]
+    except Exception:
+        return None
+    return SidebarSearchTarget(
+        page_name=page_name,
+        tab_key=str(tab_key or ""),
+        query_text=str(query_text or ""),
+    )
+
+
+def _search_target_from_index(index: QModelIndex) -> SidebarSearchTarget | None:
+    if not index.isValid():
+        return None
+
+    return _build_sidebar_search_target(
+        index.data(_PAGE_ROLE),
+        index.data(_TAB_ROLE),
+        index.data(_QUERY_ROLE),
+    )
+
+
+def _search_target_from_item(item: QStandardItem | None) -> SidebarSearchTarget | None:
+    if item is None:
+        return None
+
+    return _build_sidebar_search_target(
+        item.data(_PAGE_ROLE),
+        item.data(_TAB_ROLE),
+        item.data(_QUERY_ROLE),
+    )
+
+
+def _find_search_item_in_model(model: QStandardItemModel, text_cf: str, *, prefer_first: bool) -> QStandardItem | None:
+    target_item = None
+    for row in range(model.rowCount()):
+        item = model.item(row, 0)
+        if item is None:
+            continue
+        if (item.text() or "").strip().casefold() == text_cf:
+            target_item = item
+            break
+
+    if target_item is None and prefer_first and model.rowCount() > 0:
+        target_item = model.item(0, 0)
+
+    return target_item
+
+
+def _resolve_search_target_from_query(window, text: str, *, prefer_first: bool) -> SidebarSearchTarget | None:
+    session = get_window_ui_session(window)
+    if session is None:
+        return None
+
+    text = (text or "").strip()
+    if not text:
+        return None
+
+    query = text
+    text_cf = text.casefold()
+    if " - " in query:
+        query = (query.split(" - ", 1)[0] or "").strip() or query
+
+    visible_pages = get_sidebar_search_pages(window)
+    matches = find_search_entries(
+        query,
+        language=session.ui_language,
+        visible_pages=visible_pages,
+        max_results=10,
+        extra_entries=_build_runtime_search_entries(window),
+    )
+    selected_match = None
+    for match in matches:
+        title, location = format_search_result(match.entry, language=session.ui_language)
+        display = f"{title} - {location}".strip().casefold()
+        title_cf = (title or "").strip().casefold()
+        if display == text_cf or title_cf == text_cf:
+            selected_match = match
+            break
+
+    if selected_match is None and prefer_first and matches:
+        selected_match = matches[0]
+
+    if selected_match is None:
+        return None
+
+    return SidebarSearchTarget(
+        page_name=selected_match.entry.page_name,
+        tab_key=str(selected_match.entry.tab_key or ""),
+        query_text=str(selected_match.entry.query_text or ""),
+    )
+
+
+def on_sidebar_search_result_activated(window, index: QModelIndex) -> None:
+    target = _search_target_from_index(index)
+    if target is None:
+        display_text = index.data(int(Qt.ItemDataRole.DisplayRole))
+        if isinstance(display_text, str):
+            route_sidebar_search_by_text(window, display_text, prefer_first=False)
+        return
+
+    _route_search_result_and_clear(window, target.page_name, target.tab_key, target.query_text)
+
+
+def on_sidebar_search_result_text_activated(window, text: str) -> None:
+    route_sidebar_search_by_text(window, text, prefer_first=False)
+
+
+def route_sidebar_search_by_text(window, text: str, prefer_first: bool = False) -> bool:
+    text = (text or "").strip()
+    if not text:
+        return False
+
+    session = get_window_ui_session(window)
+    if session is None:
+        return False
+
+    model = session.sidebar_search_model
+    if model is None:
+        return False
+
+    text_cf = text.casefold()
+    target_item = _find_search_item_in_model(model, text_cf, prefer_first=prefer_first)
+
+    if target_item is None:
+        target = _resolve_search_target_from_query(window, text, prefer_first=prefer_first)
+        if target is None:
+            return False
+
+        _route_search_result_and_clear(window, target.page_name, target.tab_key, target.query_text)
+        return True
+
+    target = _search_target_from_item(target_item)
+    if target is None:
+        return False
+
+    _route_search_result_and_clear(window, target.page_name, target.tab_key, target.query_text)
+    return True
+
+
+def _build_runtime_search_entries(window) -> tuple[SearchEntry, ...]:
+    session = get_window_ui_session(window)
+    if session is None:
+        return ()
+    try:
+        launch_method = str(window.get_launch_method() or "")
+    except Exception:
+        launch_method = ""
+    if not is_preset_launch_method(launch_method):
+        return ()
+    runtime_cache = getattr(session, "sidebar_search_runtime_cache", None)
+    if isinstance(runtime_cache, dict):
+        cached_item = runtime_cache.get(launch_method)
+        if cached_item is not None:
+            cached_at, cached_entries = cached_item
+            if monotonic() - float(cached_at) <= _RUNTIME_SEARCH_CACHE_SECONDS:
+                return cached_entries
+
+    entries: list[SearchEntry] = []
+    profile_loader = getattr(session, "sidebar_search_profile_loader", None)
+    if callable(profile_loader):
+        profiles = _load_sidebar_search_objects(profile_loader, launch_method)
+        entries.extend(build_profile_search_entries(launch_method, profiles))
+
+    preset_loader = getattr(session, "sidebar_search_preset_loader", None)
+    if callable(preset_loader):
+        manifests = _load_sidebar_search_objects(preset_loader, launch_method)
+        entries.extend(build_preset_search_entries(launch_method, manifests))
+
+    result = tuple(entries)
+    if isinstance(runtime_cache, dict):
+        runtime_cache[launch_method] = (monotonic(), result)
+    return result
+
+
+def _load_sidebar_search_objects(loader, launch_method: str) -> tuple[object, ...]:
+    try:
+        return tuple(loader(launch_method) or ())
+    except Exception:
+        return ()
+
+
+def route_search_result(window, page_name: PageName, tab_key: str = "") -> bool:
+    if not show_page(window, page_name):
+        return False
+
+    if not tab_key:
+        return True
+
+    try:
+        return bool(switch_page_tab(window, page_name, tab_key))
+    except Exception:
+        return False
+
+
+__all__ = [
+    "SidebarSearchTarget",
+    "activate_sidebar_search_result_from_keyboard",
+    "attach_sidebar_search_to_titlebar",
+    "get_sidebar_search_pages",
+    "on_sidebar_search_changed",
+    "on_sidebar_search_result_activated",
+    "on_sidebar_search_result_text_activated",
+    "reset_sidebar_search_keyboard_selection",
+    "route_search_result",
+    "route_sidebar_search_by_text",
+    "select_sidebar_search_result_by_keyboard",
+    "setup_sidebar_search_completer",
+    "show_page",
+    "update_sidebar_search_suggestions",
+    "update_titlebar_search_width",
+]

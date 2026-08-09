@@ -1,0 +1,31 @@
+{
+  "name": "Reve",
+  "domains": [
+    {
+      "host": "app.reve.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.111.111.30",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "preview.reve.art",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.102.145.198",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

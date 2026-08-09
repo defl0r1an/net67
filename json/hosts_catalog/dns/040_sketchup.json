@@ -1,0 +1,57 @@
+{
+  "name": "SketchUp",
+  "domains": [
+    {
+      "host": "id.trimble.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "65.9.62.63",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "sketchup.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "65.9.46.14",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "sketchup.trimble.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "3.33.186.135",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.sketchup.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "15.197.167.90",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

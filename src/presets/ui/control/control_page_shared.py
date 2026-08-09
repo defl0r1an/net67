@@ -1,0 +1,655 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from PyQt6.QtCore import QTimer
+from typing import TYPE_CHECKING, Callable
+
+from presets.ui.control.control_page_runtime_shared import set_toggle_checked
+from ui.queued_worker_state import QueuedWorkerState
+
+if TYPE_CHECKING:
+    from app.state_store import MainWindowStateStore
+    from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+
+
+RUNTIME_START_RETRY_MS = 250
+RUNTIME_START_MAX_RETRIES = 24
+RUNTIME_START_CONFLICT_STOP_MAX_RETRIES = 240
+
+
+@dataclass(frozen=True, slots=True)
+class ControlRuntimeActions:
+    start: Callable[[], object]
+    stop: Callable[[], object]
+    stop_and_exit: Callable[[], object]
+    is_available: Callable[[], object]
+    #: Нужна кнопке «Включить»: перед запуском она проверяет, не работает
+    #: ли уже другой процесс обхода DPI. Передаём именно узкий вызов, а не
+    #: весь RuntimeFeature — этого требует архитектурный контракт страниц.
+    is_any_running: Callable[..., object] | None = None
+
+
+class ControlPageActionMixin:
+    """Общие действия для страниц управления."""
+
+    def _start_dpi(self) -> None:
+        if self._request_runtime_conflicting_checks_stop():
+            self._queue_runtime_start_retry(
+                "Останавливаем подбор стратегии перед запуском net67...",
+                reason="conflict_stop",
+            )
+            return
+        if not self._runtime_start_available():
+            self._queue_runtime_start_retry()
+            return
+        self._runtime_actions.start()
+
+    def _runtime_start_available(self) -> bool:
+        available = getattr(self._runtime_actions, "is_available", None)
+        if callable(available):
+            try:
+                return bool(available())
+            except Exception:
+                return False
+        return False
+
+    def _request_runtime_conflicting_checks_stop(self) -> bool:
+        try:
+            window_getter = getattr(self, "window", None)
+            window = window_getter() if callable(window_getter) else None
+            if window is None:
+                return False
+            from app.page_names import PageName
+            from ui.window_adapter import send_page_command
+
+            return bool(
+                send_page_command(
+                    window,
+                    PageName.BLOCKCHECK,
+                    "stop_runtime_conflicting_checks",
+                    {"source": "dpi_start"},
+                    ensure=False,
+                )
+            )
+        except Exception:
+            return False
+
+    def _queue_runtime_start_retry(self, message: str = "Подготовка запуска...", *, reason: str = "runtime") -> None:
+        if bool(getattr(self, "_runtime_start_retry_pending", False)):
+            return
+        self._runtime_start_retry_pending = True
+        self._runtime_start_retry_count = 0
+        self._runtime_start_retry_reason = str(reason or "runtime")
+        self._show_runtime_preparing_state(message)
+        QTimer.singleShot(RUNTIME_START_RETRY_MS, self._retry_start_dpi_after_runtime_ready)
+
+    def _show_runtime_preparing_state(self, message: str = "Подготовка запуска...") -> None:
+        message = str(message or "").strip() or "Подготовка запуска..."
+        set_loading = getattr(self, "set_loading", None)
+        if callable(set_loading):
+            set_loading(True, message)
+        set_status = getattr(self, "_set_status", None)
+        if callable(set_status):
+            set_status(message)
+
+    def _retry_start_dpi_after_runtime_ready(self) -> None:
+        if bool(getattr(self, "_cleanup_in_progress", False)):
+            self._runtime_start_retry_pending = False
+            return
+
+        if self._request_runtime_conflicting_checks_stop():
+            retries = int(getattr(self, "_runtime_start_retry_count", 0)) + 1
+            self._runtime_start_retry_count = retries
+            if retries >= RUNTIME_START_CONFLICT_STOP_MAX_RETRIES:
+                self._runtime_start_retry_pending = False
+                set_loading = getattr(self, "set_loading", None)
+                if callable(set_loading):
+                    set_loading(False, "")
+                set_status = getattr(self, "_set_status", None)
+                if callable(set_status):
+                    set_status("Подбор стратегии ещё останавливается. Дождитесь остановки и запустите net67 снова.")
+                return
+            QTimer.singleShot(RUNTIME_START_RETRY_MS, self._retry_start_dpi_after_runtime_ready)
+            return
+
+        if self._runtime_start_available():
+            self._runtime_start_retry_pending = False
+            set_loading = getattr(self, "set_loading", None)
+            if callable(set_loading):
+                set_loading(False, "")
+            self._runtime_actions.start()
+            return
+
+        retries = int(getattr(self, "_runtime_start_retry_count", 0)) + 1
+        self._runtime_start_retry_count = retries
+        if retries >= RUNTIME_START_MAX_RETRIES:
+            self._runtime_start_retry_pending = False
+            set_loading = getattr(self, "set_loading", None)
+            if callable(set_loading):
+                set_loading(False, "")
+            set_status = getattr(self, "_set_status", None)
+            if callable(set_status):
+                set_status("Запуск ещё не готов. Попробуйте ещё раз через пару секунд.")
+            return
+
+        QTimer.singleShot(RUNTIME_START_RETRY_MS, self._retry_start_dpi_after_runtime_ready)
+
+    def _stop_dpi(self) -> None:
+        self._runtime_actions.stop()
+
+    def _stop_and_exit(self) -> None:
+        from log.log import log
+        from PyQt6.QtWidgets import QApplication
+
+        log("Остановка winws и закрытие программы...", "INFO")
+
+        request_exit = getattr(self, "_request_exit_callback", None)
+        if callable(request_exit):
+            request_exit(stop_dpi=True)
+            return
+
+        if self._runtime_actions.stop_and_exit():
+            return
+
+        QApplication.quit()
+
+    def _open_connection_test(self) -> None:
+        handler = getattr(self, "_open_connection_test_callback", None)
+        if callable(handler):
+            handler()
+
+    def _open_folder(self) -> None:
+        handler = getattr(self, "_open_folder_callback", None)
+        if callable(handler):
+            handler()
+
+    def create_external_open_url_worker(self, request_id: int, *, url: str):
+        return self._create_external_open_url_worker(request_id, url=url, parent=self)
+
+    def _ensure_external_open_url_runtime(self) -> OneShotWorkerRuntime:
+        runtime = self.__dict__.get("_external_open_url_runtime")
+        if runtime is None:
+            from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+
+            runtime = OneShotWorkerRuntime()
+            self._external_open_url_runtime = runtime
+        self._external_open_url_state_obj()
+        return runtime
+
+    def _request_external_open_url(self, url: str, *, error_title: str, error_default: str) -> None:
+        self._ensure_external_open_url_runtime()
+        request = (str(url or "").strip(), str(error_title), str(error_default))
+        self._external_open_url_state_obj().start_or_queue(
+            request,
+            lambda value: self._start_external_open_url_worker(*value),
+            self._queue_external_open_url_request,
+        )
+
+    def _queue_external_open_url_request(self, request: tuple[str, str, str]) -> bool:
+        return self._external_open_url_state_obj().append_unique(
+            tuple(request),
+            key=lambda queued: queued,
+        )
+
+    def _start_external_open_url_worker(self, url: str, error_title: str, error_default: str) -> None:
+        runtime = self._ensure_external_open_url_runtime()
+        runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self.create_external_open_url_worker(request_id, url=url),
+            on_loaded=lambda request_id, result: self._on_external_open_url_finished(
+                request_id,
+                result,
+                error_title=error_title,
+                error_default=error_default,
+            ),
+            on_failed=lambda request_id, error: self._on_external_open_url_failed(
+                request_id,
+                error,
+                error_title=error_title,
+                error_default=error_default,
+            ),
+            on_finished=self._on_external_open_url_worker_finished,
+        )
+
+    def _on_external_open_url_finished(
+        self,
+        request_id: int,
+        result,
+        *,
+        error_title: str,
+        error_default: str,
+    ) -> None:
+        runtime = self._ensure_external_open_url_runtime()
+        if not runtime.is_current(request_id, cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False))):
+            return
+        if self._external_open_url_state_obj().has_pending():
+            return
+        if getattr(result, "ok", False):
+            return
+        self._show_external_open_url_error(
+            error_title,
+            error_default,
+            str(getattr(result, "error", "") or ""),
+        )
+
+    def _on_external_open_url_failed(
+        self,
+        request_id: int,
+        error: str,
+        *,
+        error_title: str,
+        error_default: str,
+    ) -> None:
+        runtime = self._ensure_external_open_url_runtime()
+        if not runtime.is_current(request_id, cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False))):
+            return
+        if self._external_open_url_state_obj().has_pending():
+            return
+        self._show_external_open_url_error(error_title, error_default, str(error))
+
+    def _on_external_open_url_worker_finished(self, _worker) -> None:
+        next_request = self._external_open_url_state_obj().pop_next_after_finish(
+            _worker,
+            is_current_worker_finish=self._is_current_worker_finish,
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        )
+        if next_request is not None:
+            self._schedule_external_open_url_worker_start(next_request)
+
+    def _schedule_external_open_url_worker_start(self, request: tuple[str, str, str]) -> None:
+        pending = tuple(request)
+        state = self._external_open_url_state_obj()
+        if state.start_scheduled:
+            self._queue_external_open_url_request(pending)
+            return
+        state.start_scheduled = True
+        try:
+            QTimer.singleShot(0, lambda: self._run_scheduled_external_open_url_worker_start(pending))
+        except Exception:
+            self._run_scheduled_external_open_url_worker_start(pending)
+
+    def _run_scheduled_external_open_url_worker_start(self, request: tuple[str, str, str]) -> None:
+        self._external_open_url_state_obj().start_scheduled = False
+        if bool(getattr(self, "_cleanup_in_progress", False)):
+            return
+        self._start_external_open_url_worker(*request)
+
+    def _show_external_open_url_error(self, title: str, default: str, error: str) -> None:
+        from qfluentwidgets import InfoBar
+
+        InfoBar.warning(title=title, content=default.format(error=error), parent=self.window())
+
+    def _stop_external_open_url_worker(self) -> None:
+        self._external_open_url_state_obj().reset()
+        runtime = self.__dict__.get("_external_open_url_runtime")
+        if runtime is not None:
+            runtime.stop(blocking=False, warning_prefix="External open url worker")
+            runtime.cancel()
+
+    def _external_open_url_state_obj(self) -> QueuedWorkerState[tuple[str, str, str]]:
+        state = self.__dict__.get("_external_open_url_state")
+        runtime = self.__dict__.get("_external_open_url_runtime")
+        if state is None:
+            pending = self.__dict__.pop("_external_open_url_pending", None)
+            start_scheduled = bool(self.__dict__.pop("_external_open_url_start_scheduled", False))
+            state = QueuedWorkerState(
+                runtime,
+                pending=list(pending or []),
+                start_scheduled=start_scheduled,
+            )
+            self.__dict__["_external_open_url_state"] = state
+        elif getattr(state, "runtime", None) is None and runtime is not None:
+            state.runtime = runtime
+        return state
+
+    @property
+    def _external_open_url_pending(self):
+        return self._external_open_url_state_obj().pending
+
+    @_external_open_url_pending.setter
+    def _external_open_url_pending(self, value) -> None:
+        self._external_open_url_state_obj().pending = list(value or [])
+
+    @property
+    def _external_open_url_start_scheduled(self) -> bool:
+        return bool(self._external_open_url_state_obj().start_scheduled)
+
+    @_external_open_url_start_scheduled.setter
+    def _external_open_url_start_scheduled(self, value: bool) -> None:
+        self._external_open_url_state_obj().start_scheduled = bool(value)
+
+    def _set_toggle_checked(self, toggle, checked: bool) -> None:
+        set_toggle_checked(toggle, checked)
+
+    def _set_status(self, msg: str) -> None:
+        try:
+            status_setter = getattr(self, "_set_status_callback", None)
+            if callable(status_setter):
+                status_setter(msg)
+        except Exception:
+            pass
+
+    def create_program_settings_save_worker(self, request_id: int, *, action: str, value: object):
+        return self._create_program_settings_save_worker(
+            request_id,
+            action=action,
+            value=value,
+            parent=self,
+        )
+
+    def create_program_settings_load_worker(self, request_id: int):
+        return self._create_program_settings_load_worker(
+            request_id,
+            parent=self,
+        )
+
+    def _request_program_settings_load(self) -> None:
+        runtime = self._refresh_runtime
+        state = runtime.program_settings_load_state
+        if state.is_busy():
+            state.pending = True
+            return
+
+        runtime.program_settings_load_runtime.start_qthread_worker(
+            worker_factory=self.create_program_settings_load_worker,
+            on_loaded=self._on_program_settings_load_finished,
+            on_failed=self._on_program_settings_load_failed,
+            on_finished=self._on_program_settings_load_worker_finished,
+        )
+
+    def _on_program_settings_load_finished(self, request_id: int, snapshot) -> None:
+        runtime = self._refresh_runtime
+        if not runtime.program_settings_load_runtime.is_current(
+            request_id,
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        ):
+            return
+        if runtime.program_settings_load_state.has_pending():
+            return
+        try:
+            self._publish_program_settings_snapshot(snapshot)
+        except Exception:
+            pass
+        apply_snapshot = getattr(self, "_apply_program_settings_snapshot", None)
+        if callable(apply_snapshot):
+            apply_snapshot(snapshot)
+
+    def _on_program_settings_load_failed(self, request_id: int, error: str) -> None:
+        runtime = self._refresh_runtime
+        if not runtime.program_settings_load_runtime.is_current(
+            request_id,
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        ):
+            return
+        if runtime.program_settings_load_state.has_pending():
+            return
+        try:
+            from log.log import log
+
+            log(f"Не удалось загрузить настройки программы: {error}", "WARNING")
+        except Exception:
+            pass
+
+    def _on_program_settings_load_worker_finished(self, _worker) -> None:
+        runtime = self._refresh_runtime
+        if not self._is_current_worker_finish(runtime.program_settings_load_runtime, _worker):
+            return
+        state = runtime.program_settings_load_state
+        if state.has_pending() and not bool(getattr(self, "_cleanup_in_progress", False)):
+            state.schedule_pending_after_finish(
+                _worker,
+                is_current_worker_finish=self._is_current_worker_finish,
+                single_shot=QTimer.singleShot,
+                run_scheduled=self._run_scheduled_program_settings_load_start,
+                clear_pending_before_schedule=True,
+            )
+            return
+        state.pending = False
+
+    def _schedule_program_settings_load_start(self) -> None:
+        runtime = self._refresh_runtime
+        state = runtime.program_settings_load_state
+        if state.start_scheduled:
+            state.pending = True
+            return
+        state.pending = True
+        try:
+            state.schedule_start(QTimer.singleShot, self._run_scheduled_program_settings_load_start)
+        except Exception:
+            self._run_scheduled_program_settings_load_start()
+
+    def _run_scheduled_program_settings_load_start(self) -> None:
+        runtime = self._refresh_runtime
+        state = runtime.program_settings_load_state
+        was_scheduled = bool(state.start_scheduled)
+        pending = state.take_pending_for_scheduled_start(
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        )
+        if pending is False and not was_scheduled:
+            return
+        self._request_program_settings_load()
+
+    def _request_program_settings_save(self, action: str, value: object) -> None:
+        runtime = self._refresh_runtime
+        state = runtime.program_settings_save_state
+        if state.is_busy():
+            runtime.queue_program_settings_save(action, value)
+            return
+
+        runtime.program_settings_save_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self.create_program_settings_save_worker(
+                request_id,
+                action=action,
+                value=value,
+            ),
+            on_loaded=self._on_program_settings_save_finished,
+            on_failed=self._on_program_settings_save_failed,
+            on_finished=self._on_program_settings_save_worker_finished,
+            bind_worker=self._bind_program_settings_save_worker,
+            loaded_signal_name="saved",
+        )
+
+    def _bind_program_settings_save_worker(self, worker) -> None:
+        status_signal = getattr(worker, "status", None)
+        if status_signal is not None:
+            status_signal.connect(self._on_program_settings_save_status)
+
+    def _on_program_settings_save_status(self, request_id: int, _action: str, message: str) -> None:
+        runtime = self._refresh_runtime
+        if not runtime.program_settings_save_runtime.is_current(
+            request_id,
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        ):
+            return
+        if runtime.program_settings_save_state.has_pending():
+            return
+        self._set_status(str(message or ""))
+
+    def _on_program_settings_save_finished(self, request_id: int, action: str, result) -> None:
+        runtime = self._refresh_runtime
+        if not runtime.program_settings_save_runtime.is_current(
+            request_id,
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        ):
+            return
+        if runtime.program_settings_save_state.has_pending():
+            return
+        try:
+            if action == "auto_dpi":
+                self._set_status(str(getattr(result, "message", "") or ""))
+                from qfluentwidgets import InfoBar
+
+                InfoBar.success(
+                    title=str(getattr(result, "title", "Автозапуск DPI") or "Автозапуск DPI"),
+                    content=str(getattr(result, "message", "") or ""),
+                    parent=self.window(),
+                )
+            elif action == "gui_autostart":
+                self._show_windows_feature_action_result(
+                    result,
+                    getattr(self, "gui_autostart_toggle", None),
+                )
+            elif action == "defender_disabled":
+                self._show_windows_feature_action_result(result, self.defender_toggle)
+            elif action == "max_block":
+                self._show_windows_feature_action_result(result, self.max_block_toggle)
+            elif action == "state_media_block":
+                self._show_windows_feature_action_result(
+                    result,
+                    getattr(self, "state_media_block_toggle", None),
+                )
+            elif action == "tray_close_mode":
+                self._remember_tray_close_mode(str(result or "normal"))
+        finally:
+            sync_program_settings = getattr(self, "_sync_program_settings", None)
+            if callable(sync_program_settings):
+                sync_program_settings()
+
+    def _on_program_settings_save_failed(self, request_id: int, action: str, error: str) -> None:
+        runtime = self._refresh_runtime
+        if not runtime.program_settings_save_runtime.is_current(
+            request_id,
+            cleanup_in_progress=bool(getattr(self, "_cleanup_in_progress", False)),
+        ):
+            return
+        if runtime.program_settings_save_state.has_pending():
+            return
+        from qfluentwidgets import InfoBar
+
+        InfoBar.warning(title="Ошибка", content=f"Не удалось сохранить настройку: {error}", parent=self.window())
+        sync_program_settings = getattr(self, "_sync_program_settings", None)
+        if callable(sync_program_settings):
+            sync_program_settings()
+
+    def _on_program_settings_save_worker_finished(self, _worker) -> None:
+        runtime = self._refresh_runtime
+        state = runtime.program_settings_save_state
+        next_save = state.schedule_next_after_finish(
+            _worker,
+            is_current_worker_finish=self._is_current_worker_finish,
+            single_shot=QTimer.singleShot,
+            start=lambda item: self._run_scheduled_program_settings_save_start(
+                str(item[0]),
+                item[1],
+            ),
+            queue_item=lambda item: runtime.queue_program_settings_save(
+                str(item[0]),
+                item[1],
+                front=True,
+            ),
+            is_cleanup_in_progress=lambda: bool(getattr(self, "_cleanup_in_progress", False)),
+        )
+        if next_save is None:
+            return
+
+    def _schedule_program_settings_save_start(self, action: str, value: object) -> None:
+        runtime = self._refresh_runtime
+        state = runtime.program_settings_save_state
+        item = (str(action or ""), value)
+        try:
+            state.schedule_start(
+                item,
+                QTimer.singleShot,
+                lambda pending: self._run_scheduled_program_settings_save_start(
+                    str(pending[0]),
+                    pending[1],
+                ),
+                queue_item=lambda pending: runtime.queue_program_settings_save(
+                    str(pending[0]),
+                    pending[1],
+                    front=True,
+                ),
+                is_cleanup_in_progress=lambda: bool(getattr(self, "_cleanup_in_progress", False)),
+            )
+        except Exception:
+            self._run_scheduled_program_settings_save_start(str(action or ""), value)
+
+    def _run_scheduled_program_settings_save_start(self, action: str, value: object) -> None:
+        self._refresh_runtime.program_settings_save_state.start_scheduled = False
+        if bool(getattr(self, "_cleanup_in_progress", False)):
+            return
+        self._request_program_settings_save(str(action or ""), value)
+
+    def _is_current_worker_finish(self, runtime, worker) -> bool:
+        if self.__dict__.get("_cleanup_in_progress", False):
+            return False
+        request_id = getattr(worker, "_request_id", None)
+        if request_id is None:
+            current_worker = getattr(runtime, "worker", None)
+            if current_worker is not None:
+                return worker is current_worker
+            return True
+        try:
+            return int(request_id) == int(getattr(runtime, "request_id", -1))
+        except (TypeError, ValueError):
+            return False
+
+
+def bind_control_ui_state_store(
+    owner,
+    store: MainWindowStateStore,
+    *,
+    callback,
+    fields: set[str] | frozenset[str],
+    emit_initial: bool = True,
+) -> None:
+    if owner._ui_state_store is store:
+        return
+
+    unsubscribe = getattr(owner, "_ui_state_unsubscribe", None)
+    if callable(unsubscribe):
+        try:
+            unsubscribe()
+        except Exception:
+            pass
+
+    owner._ui_state_store = store
+    owner._ui_state_unsubscribe = store.subscribe(
+        callback,
+        fields=set(fields),
+        emit_initial=bool(emit_initial),
+    )
+
+
+def cleanup_control_page_subscriptions(owner) -> None:
+    unsubscribe = getattr(owner, "_ui_state_unsubscribe", None)
+    if callable(unsubscribe):
+        try:
+            unsubscribe()
+        except Exception:
+            pass
+    owner._ui_state_unsubscribe = None
+    owner._ui_state_store = None
+
+    unsubscribe_runtime = getattr(owner, "_program_settings_runtime_unsubscribe", None)
+    if callable(unsubscribe_runtime):
+        try:
+            unsubscribe_runtime()
+        except Exception:
+            pass
+    owner._program_settings_runtime_unsubscribe = None
+
+    runtime = getattr(owner, "_refresh_runtime", None)
+    if runtime is not None:
+        runtime.top_summary_pending = False
+        runtime.top_summary_start_scheduled = False
+        runtime.top_summary_runtime.stop(
+            blocking=False,
+            warning_prefix="Control top summary worker",
+        )
+        runtime.top_summary_runtime.cancel()
+
+        runtime.program_settings_load_pending = False
+        runtime.program_settings_load_start_scheduled = False
+        runtime.program_settings_load_runtime.stop(
+            blocking=False,
+            warning_prefix="Program settings load worker",
+        )
+        runtime.program_settings_load_runtime.cancel()
+
+        runtime.program_settings_save_pending.clear()
+        runtime.program_settings_save_start_scheduled = False
+        runtime.program_settings_save_runtime.stop(
+            blocking=False,
+            warning_prefix="Program settings save worker",
+        )
+        runtime.program_settings_save_runtime.cancel()

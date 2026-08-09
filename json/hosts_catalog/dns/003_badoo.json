@@ -1,0 +1,83 @@
+{
+  "name": "Badoo",
+  "domains": [
+    {
+      "host": "badoo.app",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "31.222.68.67",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "badoo.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "31.222.67.112",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "badoocdn.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "31.222.66.68",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "consent.badoo.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "13.249.8.36",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "eu1.ecdn2.badoocdn.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "146.75.117.91",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.badoo.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "31.222.67.112",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

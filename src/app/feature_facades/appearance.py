@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+
+class AppearanceFeature:
+    @staticmethod
+    def _appearance():
+        import settings.appearance as appearance_settings
+
+        return appearance_settings
+
+    def create_initial_state_load_worker(self, request_id: int, *, parent=None):
+        from settings.appearance_workers import AppearanceInitialStateLoadWorker
+
+        return AppearanceInitialStateLoadWorker(
+            request_id,
+            load_page_initial_state=lambda: self._appearance().load_page_initial_state(),
+            parent=parent,
+        )
+
+    def create_appearance_save_worker(
+        self,
+        request_id: int,
+        *,
+        action: str,
+        value=None,
+        context_extra: dict | None = None,
+        parent=None,
+    ):
+        from settings.appearance_workers import AppearanceSettingsSaveWorker
+
+        appearance = self._appearance()
+        return AppearanceSettingsSaveWorker(
+            request_id,
+            action=action,
+            value=value,
+            context_extra=context_extra,
+            save_display_mode=appearance.save_display_mode,
+            save_ui_language=appearance.save_ui_language,
+            save_background_preset=appearance.save_background_preset,
+            save_mica_enabled=appearance.save_mica_enabled,
+            save_window_opacity=appearance.save_window_opacity,
+            save_accent_color=appearance.save_accent_color,
+            save_follow_windows_accent=appearance.save_follow_windows_accent,
+            save_tinted_background=appearance.save_tinted_background,
+            save_tinted_background_intensity=appearance.save_tinted_background_intensity,
+            save_animations_enabled=appearance.save_animations_enabled,
+            save_smooth_scroll_enabled=appearance.save_smooth_scroll_enabled,
+            save_editor_smooth_scroll_enabled=appearance.save_editor_smooth_scroll_enabled,
+            save_sidebar_icon_style=appearance.save_sidebar_icon_style,
+            load_tinted_settings=appearance.load_tinted_settings,
+            load_editor_smooth_scroll_enabled=appearance.load_editor_smooth_scroll_enabled,
+            parent=parent,
+        )
+
+    # Загрузка списка фоновых картинок убрана вместе со страницей
+    # оформления. Картинки лежали в папке themes и в net67 её никто не
+    # наполняет: единственная подпапка была названа именем прежнего
+    # автора и оказалась пустой.
+
+    def create_windows_accent_load_worker(self, request_id: int, *, parent=None):
+        from settings.appearance_workers import AppearanceWindowsAccentLoadWorker
+
+        return AppearanceWindowsAccentLoadWorker(
+            request_id,
+            load_windows_system_accent=lambda: self._appearance().load_windows_system_accent(),
+            parent=parent,
+        )
+
+    def save_selected_theme(self, theme_name: str) -> bool:
+        return bool(self._appearance().save_selected_theme(theme_name))
+
+    def create_theme_persist_worker(self, theme_name: str, *, parent=None):
+        from settings.appearance_workers import ThemePersistWorker
+
+        return ThemePersistWorker(
+            theme_name,
+            save_selected_theme=self.save_selected_theme,
+            parent=parent,
+        )
+
+
+def build_appearance_feature() -> AppearanceFeature:
+    return AppearanceFeature()
+
+
+__all__ = ["AppearanceFeature", "build_appearance_feature"]

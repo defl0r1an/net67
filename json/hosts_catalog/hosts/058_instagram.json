@@ -1,0 +1,65 @@
+{
+  "name": "Instagram",
+  "hosts": [
+    {
+      "ip": "157.240.245.174",
+      "host": "b.i.instagram.com"
+    },
+    {
+      "ip": "157.240.245.174",
+      "host": "help.instagram.com"
+    },
+    {
+      "ip": "2a03:2880:f330:25:face:b00c:0:4420",
+      "host": "instagram.com"
+    },
+    {
+      "ip": "2a03:2880:f342:22:face:b00c:0:4420",
+      "host": "instagram.com"
+    },
+    {
+      "ip": "163.70.151.174",
+      "host": "instagram.com"
+    },
+    {
+      "ip": "2a03:2880:f330:25:face:b00c:0:4420",
+      "host": "www.instagram.com"
+    },
+    {
+      "ip": "2a03:2880:f342:22:face:b00c:0:4420",
+      "host": "www.instagram.com"
+    },
+    {
+      "ip": "163.70.151.174",
+      "host": "www.instagram.com"
+    },
+    {
+      "ip": "31.13.72.53",
+      "host": "static.instagram.com"
+    },
+    {
+      "ip": "2a03:2880:f330:c0:face:b00c:0:43fe",
+      "host": "scontent.cdninstagram.com"
+    },
+    {
+      "ip": "2a03:2880:f36f:c0:face:b00c:0:43fe",
+      "host": "scontent.cdninstagram.com"
+    },
+    {
+      "ip": "157.240.224.63",
+      "host": "scontent.cdninstagram.com"
+    },
+    {
+      "ip": "2a03:2880:f213:ca:face:b00c:0:43fe",
+      "host": "scontent-hel3-1.cdninstagram.com"
+    },
+    {
+      "ip": "157.240.224.63",
+      "host": "scontent-hel3-1.cdninstagram.com"
+    },
+    {
+      "ip": "157.240.245.174",
+      "host": "z-p42-chat-e2ee-ig.facebook.com"
+    }
+  ]
+}

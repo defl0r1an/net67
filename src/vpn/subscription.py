@@ -1,0 +1,127 @@
+"""Загрузка подписки по ссылке.
+
+Разбор содержимого уже есть в `vpn.links.parse_subscription`: он умеет и
+список ссылок построчно, и base64 от него. Не хватало одного — сходить
+за этим содержимым по адресу.
+
+Именно это и упиралось в лицо человеку: он вставлял
+`https://sub.example.org/XXXX`, а получал «неизвестный протокол
+"https". Поддерживаются: vless, vmess, trojan, ss». Формально верно —
+разборщик одной ссылки такого протокола не знает, — но по сути ответ не
+на тот вопрос: это не сервер, это адрес списка серверов.
+
+## Почему отдельный модуль
+
+Здесь единственное место в работе с VPN, которое ходит в сеть. Держать
+его отдельно от разбора значит: разбор можно проверять без сети, а сеть
+— без разбора. Плюс страница не должна знать про requests.
+
+## Про безопасность
+
+Ходим только по http и https. Адрес приходит от человека, но подписки
+раздают ссылками, и ограничиться https нельзя — часть сервисов до сих
+пор отдаёт список по http.
+"""
+
+from __future__ import annotations
+
+
+#: Сколько ждём ответа. Подписка — короткий текстовый файл; если сервер
+#: молчит десять секунд, он недоступен, а не задумался.
+TIMEOUT_S = 10
+
+#: Потолок на размер ответа. Подписка на сотню серверов — это десятки
+#: килобайт. Мегабайт означает, что по ссылке лежит не список, и читать
+#: его в память целиком незачем.
+MAX_BYTES = 1_000_000
+
+#: Заголовок клиента. Часть панелей отдаёт разный формат в зависимости
+#: от него и на пустой User-Agent отвечает страницей входа вместо
+#: списка.
+USER_AGENT = "net67"
+
+
+class SubscriptionError(RuntimeError):
+    """Не удалось получить содержимое подписки."""
+
+
+def looks_like_subscription_url(text: str) -> bool:
+    """Похоже ли на адрес подписки."""
+    lowered = str(text or "").strip().lower()
+    return lowered.startswith(("http://", "https://"))
+
+
+def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S) -> str:
+    """Скачивает содержимое подписки. Возвращает текст как есть.
+
+    Расшифровкой base64 занимается разборщик — здесь только доставка.
+    """
+    import requests
+
+    address = str(url or "").strip()
+    if not looks_like_subscription_url(address):
+        raise SubscriptionError("ссылка на подписку должна начинаться с http:// или https://")
+
+    try:
+        response = requests.get(
+            address,
+            timeout=timeout,
+            headers={"User-Agent": USER_AGENT},
+            stream=True,
+        )
+    except Exception as exc:
+        raise SubscriptionError(f"не удалось открыть ссылку: {exc}") from exc
+
+    try:
+        if response.status_code != 200:
+            raise SubscriptionError(f"сервер ответил {response.status_code}")
+
+        # Читаем с потолком: до этого места размер ответа неизвестен, а
+        # доверять чужому Content-Length незачем.
+        chunks: list[bytes] = []
+        size = 0
+        for chunk in response.iter_content(8192):
+            if not chunk:
+                continue
+            size += len(chunk)
+            if size > MAX_BYTES:
+                raise SubscriptionError("по ссылке слишком много данных — это не список серверов")
+            chunks.append(chunk)
+    finally:
+        try:
+            response.close()
+        except Exception:
+            pass
+
+    if not chunks:
+        raise SubscriptionError("по ссылке пусто")
+
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
+def load_subscription(url: str, *, timeout: int = TIMEOUT_S) -> tuple[list, list[str]]:
+    """Скачивает и разбирает подписку. Возвращает (профили, ошибки).
+
+    Ошибка загрузки — тоже ошибка в списке, а не исключение: страница
+    показывает их одинаково, и разделять два пути ради одного и того же
+    сообщения незачем.
+    """
+    from vpn.links import parse_subscription
+
+    try:
+        body = fetch_subscription(url, timeout=timeout)
+    except SubscriptionError as exc:
+        return ([], [str(exc)])
+
+    return parse_subscription(body)
+
+
+__all__ = [
+    "MAX_BYTES",
+    "SubscriptionError",
+    "TIMEOUT_S",
+    "USER_AGENT",
+    "fetch_subscription",
+    "load_subscription",
+    "looks_like_subscription_url",
+]

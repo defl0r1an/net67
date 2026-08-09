@@ -1,0 +1,9 @@
+# Полное окружение разработки и выпуска ZapretGUI.
+# Версии пакетов находятся только в профильных файлах ниже.
+#
+# Установка на Windows:
+#   py -3.14 -m pip install --upgrade --upgrade-strategy eager -r requirements.txt
+
+-r requirements-build.txt
+-r requirements-publish.txt
+-r requirements-dev.txt

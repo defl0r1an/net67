@@ -1,0 +1,102 @@
+"""
+updater/startup_update_check.py
+────────────────────────────────────────────────────────────────
+Синхронная проверка обновлений при запуске приложения.
+Не содержит Qt-импортов — безопасно вызывать из фонового потока.
+"""
+from __future__ import annotations
+
+from log.log import log
+
+
+
+def check_for_update_sync() -> dict:
+    """
+    Проверяет наличие обновлений синхронно.
+
+    Возвращает dict:
+        has_update   : bool      — найдено ли новое обновление
+        version      : str|None  — версия обновления (если has_update) или текущая
+        release_notes: str       — заметки к релизу
+        error        : str|None  — текст ошибки (если проверка не удалась)
+        release_info : dict|None — полные метаданные найденного выпуска
+    """
+    try:
+        from config.build_info import CHANNEL, APP_VERSION
+
+        from updater.release_manager import get_latest_release
+        from updater.github_release import normalize_version
+        from updater.update import compare_versions
+        from updater.rate_limiter import UpdateRateLimiter
+        from updater.update_cache import UpdateCache
+
+        log("Проверка обновлений при запуске...", "🔁 UPDATE")
+
+        try:
+            app_ver_norm = normalize_version(APP_VERSION)
+        except Exception:
+            app_ver_norm = APP_VERSION
+
+        release_info = UpdateCache.get_cached_release(CHANNEL)
+        if release_info:
+            log("Стартовая проверка обновлений использует кэш", "🔁 UPDATE")
+        else:
+            can_check, skip_reason = UpdateRateLimiter.can_check_update(is_auto=True)
+            if not can_check:
+                log(f"Автопроверка обновлений при запуске пропущена: {skip_reason}", "🔁 UPDATE")
+                return {
+                    'has_update': False,
+                    'version': app_ver_norm,
+                    'release_notes': '',
+                    'error': None,
+                    'release_info': None,
+                    'skipped': True,
+                    'skip_reason': skip_reason,
+                    'checked_at': UpdateRateLimiter.get_last_check_time(is_auto=True),
+                }
+
+            release_info = get_latest_release(CHANNEL, use_cache=True)
+            UpdateRateLimiter.record_check(is_auto=True)
+
+        if not release_info:
+            return {
+                'has_update': False,
+                'version': None,
+                'release_notes': '',
+                'error': 'Не удалось получить информацию о релизах',
+                'release_info': None,
+            }
+
+        new_ver = release_info.get('version', '')
+        release_notes = release_info.get('release_notes', '')
+
+        cmp = compare_versions(app_ver_norm, new_ver)
+
+        if cmp < 0:
+            log(f"Найдено обновление v{new_ver} (текущая v{app_ver_norm})", "🔁 UPDATE")
+            return {
+                'has_update': True,
+                'version': new_ver,
+                'release_notes': release_notes,
+                'error': None,
+                'release_info': release_info,
+            }
+        else:
+            log(f"Обновлений нет (v{app_ver_norm})", "🔁 UPDATE")
+            return {
+                'has_update': False,
+                'version': app_ver_norm,
+                'release_notes': '',
+                'error': None,
+                'release_info': None,
+            }
+
+    except Exception as e:
+        log(f"Ошибка проверки обновлений при запуске: {e}", "❌ ERROR")
+        return {
+            'has_update': False,
+            'version': None,
+            'release_notes': '',
+            'error': str(e),
+            'release_info': None,
+        }

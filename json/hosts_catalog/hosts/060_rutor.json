@@ -1,0 +1,25 @@
+{
+  "name": "Rutor",
+  "hosts": [
+    {
+      "ip": "173.245.59.219",
+      "host": "rutor.info"
+    },
+    {
+      "ip": "173.245.59.219",
+      "host": "rutor.is"
+    },
+    {
+      "ip": "172.64.33.155",
+      "host": "d.rutor.info"
+    },
+    {
+      "ip": "172.64.33.155",
+      "host": "d.rutor.is"
+    },
+    {
+      "ip": "52.223.13.41",
+      "host": "tracker.openbittorrent.com"
+    }
+  ]
+}

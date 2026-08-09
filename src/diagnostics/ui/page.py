@@ -1,0 +1,474 @@
+"""Новая вкладка диагностики соединений в стиле Windows 11."""
+
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+)
+from qfluentwidgets import (
+    IndeterminateProgressBar,
+    ComboBox,
+    StrongBodyLabel,
+    BodyLabel,
+    CaptionLabel,
+    PushButton,
+)
+
+from ui.pages.base_page import BasePage
+from ui.latest_value_worker_state import LatestValueWorkerState
+from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from diagnostics.ui.build import (
+    build_connection_controls,
+    build_connection_header,
+    build_connection_log_viewer,
+)
+from diagnostics.ui.components import clean_connection_status_text
+from diagnostics.ui.runtime_helpers import (
+    apply_connection_language,
+    apply_interaction_state,
+    apply_worker_update,
+    cleanup_connection_runtime,
+    finish_connection_test,
+    release_worker_resources,
+    refresh_test_combo_items,
+    set_connection_status,
+    start_connection_test,
+    stop_connection_test,
+)
+from app.ui_texts import tr as tr_catalog
+from ui.accessibility import set_state_text
+
+class ConnectionTestPage(BasePage):
+    """Страница теста соединений, заменяющая старое диалоговое окно."""
+
+    def __init__(self, parent=None, *, diagnostics_feature):
+        super().__init__(
+            "Диагностика соединения",
+            "Автотест Discord и YouTube, проверка DNS подмены и быстрая подготовка обращения в GitHub Discussions",
+            parent,
+            title_key="page.connection.title",
+            subtitle_key="page.connection.subtitle",
+        )
+        self._diagnostics = diagnostics_feature
+        self.is_testing = False
+        self.stop_check_timer = None
+        self._actions_title_label = None
+        self._actions_bar = None
+        self._controls_card = None
+        self._pending_start_focus = False
+        self._finish_mode = "completed"
+        self._cleanup_in_progress = False
+        self._connection_test_runtime = OneShotWorkerRuntime()
+        self._support_prepare_runtime = OneShotWorkerRuntime()
+        self._support_prepare_state = LatestValueWorkerState(self._support_prepare_runtime, empty_value=None)
+
+        # Контейнер с ограниченной шириной, чтобы не расползалось за края
+        self.container = QWidget(self.content)
+        self.container.setObjectName("connectionContainer")
+        self.container.setMaximumWidth(1080)
+        self.container_layout = QVBoxLayout(self.container)
+        self.container_layout.setContentsMargins(0, 0, 0, 0)
+        self.container_layout.setSpacing(14)
+        self.container_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+
+        self._build_page_ui()
+
+    def create_support_prepare_worker(self, request_id: int, *, selection: str):
+        return self._diagnostics.create_connection_support_prepare_worker(
+            request_id,
+            selection=selection,
+            parent=self,
+        )
+
+    def _apply_pending_start_focus_if_ready(self) -> None:
+        if not self._pending_start_focus:
+            return
+        if not self.is_page_ready():
+            return
+        self.run_when_page_ready(self._apply_pending_start_focus)
+
+    def request_start_focus(self) -> None:
+        self._pending_start_focus = True
+        self._apply_pending_start_focus_if_ready()
+
+    def _apply_pending_start_focus(self) -> None:
+        if not self._pending_start_focus:
+            return
+        button = getattr(self, "start_btn", None)
+        if button is None:
+            return
+        try:
+            button.setFocus()
+        except Exception:
+            return
+        self._pending_start_focus = False
+
+    def _apply_interaction_state(
+        self,
+        *,
+        start_enabled: bool,
+        stop_enabled: bool,
+        combo_enabled: bool,
+        send_log_enabled: bool,
+        progress_visible: bool,
+    ) -> None:
+        apply_interaction_state(
+            start_btn=self.start_btn,
+            stop_btn=self.stop_btn,
+            test_combo=self.test_combo,
+            send_log_btn=self.send_log_btn,
+            progress_bar=self.progress_bar,
+            start_enabled=start_enabled,
+            stop_enabled=stop_enabled,
+            combo_enabled=combo_enabled,
+            send_log_enabled=send_log_enabled,
+            progress_visible=progress_visible,
+        )
+
+    def _build_page_ui(self) -> None:
+        self._build_header()
+        self._build_controls()
+        self._build_log_viewer()
+        self.add_widget(self.container)
+        self.add_spacing(8)
+
+    # ──────────────────────────────────────────────────────────────
+    # UI
+    # ──────────────────────────────────────────────────────────────
+    def _build_header(self):
+        widgets = build_connection_header(
+            container_layout=self.container_layout,
+            tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
+            strong_body_label_cls=StrongBodyLabel,
+            body_label_cls=BodyLabel,
+        )
+        self.hero_title = widgets.hero_title
+        self.hero_subtitle = widgets.hero_subtitle
+        self.status_badge = widgets.status_badge
+        self.progress_badge = widgets.progress_badge
+
+    def _build_controls(self):
+        widgets = build_connection_controls(
+            container_layout=self.container_layout,
+            content_parent=self.content,
+            tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
+            combo_cls=ComboBox,
+            body_label_cls=BodyLabel,
+            caption_label_cls=CaptionLabel,
+            progress_bar_cls=IndeterminateProgressBar,
+            push_button_cls=PushButton,
+            on_start=self.start_test,
+            on_stop=self.stop_test,
+            on_support=self.open_support_with_log,
+        )
+        self._controls_card = widgets.controls_card
+        self.test_select_label = widgets.test_select_label
+        self.test_combo = widgets.test_combo
+        self._refresh_test_combo_items()
+        self.status_label = widgets.status_label
+        self.progress_bar = widgets.progress_bar
+        self._actions_title_label = widgets.actions_title_label
+        self._actions_bar = widgets.actions_bar
+        self.start_btn = widgets.start_btn
+        self.stop_btn = widgets.stop_btn
+        self.send_log_btn = widgets.send_log_btn
+
+    def _build_log_viewer(self):
+        widgets = build_connection_log_viewer(
+            container_layout=self.container_layout,
+            tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
+        )
+        self.result_text = widgets.result_text
+
+    # ──────────────────────────────────────────────────────────────
+    # Логика теста
+    # ──────────────────────────────────────────────────────────────
+    def start_test(self):
+        state = start_connection_test(
+            is_testing=self.is_testing,
+            ui_language=self._ui_language,
+            test_combo=self.test_combo,
+            result_text=self.result_text,
+            apply_interaction_state_callback=self._apply_interaction_state,
+            set_status_callback=self._set_status,
+            status_badge=self.status_badge,
+            progress_badge=self.progress_badge,
+        )
+        if state is None:
+            return
+        self._cleanup_in_progress = state["cleanup_in_progress"]
+        self._finish_mode = state["finish_mode"]
+        self.is_testing = state["is_testing"]
+        self._connection_test_runtime.start_qobject_worker(
+            parent=self,
+            worker_factory=lambda _request_id: self._diagnostics.create_connection_test_worker(
+                state["test_type"],
+            ),
+            on_finished=self._on_connection_test_worker_finished,
+            bind_worker=self._bind_connection_test_worker,
+        )
+
+    def _bind_connection_test_worker(self, worker) -> None:
+        worker.update_signal.connect(self._on_worker_update)
+        worker.finished_signal.connect(self._on_worker_finished)
+        worker.finished.connect(lambda _worker=worker: release_worker_resources(_worker))
+
+    def _on_connection_test_worker_finished(self, _request_id: int, _thread) -> None:
+        pass
+
+    def stop_test(self):
+        state, timer = stop_connection_test(
+            page=self,
+            runtime=self._connection_test_runtime,
+            stop_check_timer=self.stop_check_timer,
+            append_callback=self._append,
+            set_status_callback=self._set_status,
+            stop_btn=self.stop_btn,
+            worker_finished_handler=self._on_worker_finished,
+        )
+        if state is None:
+            return
+        self._finish_mode = state["finish_mode"]
+        self.stop_check_timer = timer
+
+    def _finalize_stop(self):
+        if self._cleanup_in_progress:
+            return
+        self._on_worker_finished()
+
+    def _on_worker_update(self, message: str):
+        if self._cleanup_in_progress:
+            return
+        apply_worker_update(
+            message=message,
+            append_callback=self._append,
+            result_text=self.result_text,
+        )
+
+    def _on_worker_finished(self):
+        state = finish_connection_test(
+            cleanup_in_progress=self._cleanup_in_progress,
+            is_testing=self.is_testing,
+            runtime=self._connection_test_runtime,
+            stop_check_timer=self.stop_check_timer,
+            finish_mode=self._finish_mode,
+            apply_interaction_state_callback=self._apply_interaction_state,
+            set_status_callback=self._set_status,
+            status_badge=self.status_badge,
+            progress_badge=self.progress_badge,
+            append_callback=self._append,
+        )
+        if state is None:
+            return
+        self._finish_mode = state["finish_mode"]
+        self.is_testing = state["is_testing"]
+        self.stop_check_timer = state["stop_check_timer"]
+
+    # ──────────────────────────────────────────────────────────────
+    # DNS и поддержка
+    # ──────────────────────────────────────────────────────────────
+    def open_support_with_log(self):
+        self._request_support_prepare(selection=self.test_combo.currentText())
+
+    def _request_support_prepare(self, *, selection: str) -> None:
+        payload = {"selection": str(selection or "")}
+        state = self._support_prepare_state_obj()
+        if state.is_busy():
+            state.pending = dict(payload)
+            self._set_status("Подготовка обращения уже идёт...", "info")
+            return
+        state.pending = None
+        self._set_status("Подготовка обращения...", "info")
+        if self.send_log_btn is not None:
+            self.send_log_btn.setEnabled(False)
+        self._start_support_prepare_worker(payload)
+
+    def _start_support_prepare_worker(self, payload: dict) -> None:
+        self._support_prepare_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self.create_support_prepare_worker(
+                request_id,
+                selection=str(payload.get("selection") or ""),
+            ),
+            on_failed=self._on_support_prepare_failed,
+            on_finished=self._on_support_prepare_worker_finished,
+            bind_worker=self._bind_support_prepare_worker,
+        )
+
+    def _bind_support_prepare_worker(self, worker) -> None:
+        worker.completed.connect(self._on_support_prepare_finished)
+
+    def _on_support_prepare_finished(self, request_id: int, plan) -> None:
+        if not self._support_prepare_runtime.is_current(
+            request_id,
+            cleanup_in_progress=self._cleanup_in_progress,
+        ):
+            return
+        if self._support_prepare_state_obj().has_pending():
+            return
+        for line in plan.log_lines:
+            self._append(line)
+        self._set_status(plan.status_text, plan.status_tone)
+
+    def _on_support_prepare_failed(self, request_id: int, error: str) -> None:
+        if not self._support_prepare_runtime.is_current(
+            request_id,
+            cleanup_in_progress=self._cleanup_in_progress,
+        ):
+            return
+        if self._support_prepare_state_obj().has_pending():
+            return
+        self._append(f"❌ Не удалось подготовить обращение: {error}")
+        self._set_status("Ошибка подготовки обращения", "error")
+
+    def _on_support_prepare_worker_finished(self, _worker) -> None:
+        if not self._is_current_worker_finish(self.__dict__.get("_support_prepare_runtime"), _worker):
+            return
+        state = self._support_prepare_state_obj()
+        had_pending = state.has_pending()
+        state.schedule_pending_after_finish(
+            _worker,
+            is_current_worker_finish=self._is_current_worker_finish,
+            single_shot=QTimer.singleShot,
+            run_scheduled=self._run_scheduled_support_prepare_worker_start,
+            cleanup_in_progress=self._cleanup_in_progress,
+        )
+        if had_pending and state.start_scheduled:
+            return
+        if not self._cleanup_in_progress and self.send_log_btn is not None:
+            self.send_log_btn.setEnabled(True)
+
+    def _schedule_support_prepare_worker_start(self, payload: dict) -> None:
+        if self.__dict__.get("_cleanup_in_progress", False):
+            return
+        state = self._support_prepare_state_obj()
+        state.pending = dict(payload or {})
+        state.schedule_start(
+            QTimer.singleShot,
+            self._run_scheduled_support_prepare_worker_start,
+            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
+            pending_when_already_scheduled=dict(payload or {}),
+        )
+
+    def _run_scheduled_support_prepare_worker_start(self) -> None:
+        pending = self._support_prepare_state_obj().take_pending_for_scheduled_start(
+            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False)
+        )
+        if pending is None or self.__dict__.get("_cleanup_in_progress", False):
+            return
+        self._set_status("Подготовка обращения...", "info")
+        if self.send_log_btn is not None:
+            self.send_log_btn.setEnabled(False)
+        self._start_support_prepare_worker(dict(pending or {}))
+
+    def _is_current_worker_finish(self, runtime, worker) -> bool:
+        if self.__dict__.get("_cleanup_in_progress", False):
+            return False
+        request_id = getattr(worker, "_request_id", None)
+        if request_id is None:
+            current_worker = getattr(runtime, "worker", None)
+            if current_worker is not None:
+                return worker is current_worker
+            return True
+        try:
+            return int(request_id) == int(getattr(runtime, "request_id", -1))
+        except (TypeError, ValueError):
+            return False
+
+    def _support_prepare_state_obj(self) -> LatestValueWorkerState:
+        state = self.__dict__.get("_support_prepare_state")
+        runtime = self.__dict__.get("_support_prepare_runtime")
+        if state is None:
+            pending = self.__dict__.pop("_support_prepare_pending", None)
+            start_scheduled = bool(self.__dict__.pop("_support_prepare_start_scheduled", False))
+            state = LatestValueWorkerState(
+                runtime,
+                empty_value=None,
+                pending=pending,
+                start_scheduled=start_scheduled,
+            )
+            self.__dict__["_support_prepare_state"] = state
+        elif getattr(state, "runtime", None) is None and runtime is not None:
+            state.runtime = runtime
+        return state
+
+    @property
+    def _support_prepare_pending(self):
+        return self._support_prepare_state_obj().pending
+
+    @_support_prepare_pending.setter
+    def _support_prepare_pending(self, value) -> None:
+        self._support_prepare_state_obj().pending = value
+
+    @property
+    def _support_prepare_start_scheduled(self) -> bool:
+        return bool(self._support_prepare_state_obj().start_scheduled)
+
+    @_support_prepare_start_scheduled.setter
+    def _support_prepare_start_scheduled(self, value: bool) -> None:
+        self._support_prepare_state_obj().start_scheduled = bool(value)
+
+    # ──────────────────────────────────────────────────────────────
+    # Вспомогательное
+    # ──────────────────────────────────────────────────────────────
+    def _append(self, text: str):
+        self.result_text.append(text)
+        value = clean_connection_status_text(text)
+        if value and set(value) != {"="}:
+            set_state_text(self.result_text, f"Результат диагностики соединений: {value}")
+
+    def _set_status(self, text: str, status: str = "muted"):
+        set_connection_status(
+            status_label=self.status_label,
+            status_badge=self.status_badge,
+            text=text,
+            status=status,
+        )
+
+    def _refresh_test_combo_items(self) -> None:
+        refresh_test_combo_items(
+            combo=self.test_combo,
+            language=self._ui_language,
+        )
+
+    def set_ui_language(self, language: str) -> None:
+        super().set_ui_language(language)
+        apply_connection_language(
+            language=self._ui_language,
+            controls_card=self._controls_card,
+            actions_title_label=self._actions_title_label,
+            hero_title=self.hero_title,
+            hero_subtitle=self.hero_subtitle,
+            test_select_label=self.test_select_label,
+            refresh_test_combo_items_callback=self._refresh_test_combo_items,
+            start_btn=self.start_btn,
+            stop_btn=self.stop_btn,
+            send_log_btn=self.send_log_btn,
+        )
+    
+    def cleanup(self):
+        """Очистка потоков при закрытии"""
+        from log.log import log
+
+        try:
+            state = cleanup_connection_runtime(
+                cleanup_in_progress=self._cleanup_in_progress,
+                finish_mode=self._finish_mode,
+                stop_check_timer=self.stop_check_timer,
+                runtime=self._connection_test_runtime,
+                log_debug=lambda text: log(text, "DEBUG"),
+                log_warning=lambda text: log(text, "WARNING"),
+            )
+            self._cleanup_in_progress = state["cleanup_in_progress"]
+            self._finish_mode = state["finish_mode"]
+            self.is_testing = state["is_testing"]
+            self.stop_check_timer = state["stop_check_timer"]
+            self._support_prepare_runtime.stop(
+                blocking=False,
+                log_fn=lambda text, level="DEBUG": log(text, level),
+                warning_prefix="connection_support_prepare_worker",
+            )
+            self._support_prepare_runtime.cancel()
+            self._support_prepare_state_obj().reset()
+
+        except Exception as e:
+            log(f"Ошибка при очистке connection_page: {e}", "DEBUG")

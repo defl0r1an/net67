@@ -1,0 +1,29 @@
+{
+  "name": "Discord",
+  "hosts": [
+    {
+      "ip": "23.227.38.74",
+      "host": "discord.com"
+    },
+    {
+      "ip": "23.227.38.74",
+      "host": "gateway.discord.gg"
+    },
+    {
+      "ip": "23.227.38.74",
+      "host": "updates.discord.com"
+    },
+    {
+      "ip": "23.227.38.74",
+      "host": "cdn.discordapp.com"
+    },
+    {
+      "ip": "23.227.38.74",
+      "host": "cdn.prod.website-files.com"
+    },
+    {
+      "ip": "23.227.38.74",
+      "host": "status.discord.com"
+    }
+  ]
+}

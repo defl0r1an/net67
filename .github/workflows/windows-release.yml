@@ -1,0 +1,243 @@
+name: Build net67 runtime
+
+on:
+  push:
+    branches: [main]
+    # Выпуск делает тег. Без этой строки шаг публикации не запустился бы
+    # никогда: по push в ветку github.ref начинается с refs/heads/.
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      builder:
+        description: Сборщик runtime
+        required: true
+        default: nuitka
+        type: choice
+        options:
+          - nuitka
+          - pyinstaller
+
+jobs:
+  build:
+    runs-on: windows-2022
+    # Создание выпуска — запись в репозиторий. По умолчанию у задачи
+    # только чтение, и шаг публикации упал бы с «Resource not accessible
+    # by integration» уже после часа сборки.
+    permissions:
+      contents: write
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+      ZAPRET_BUILD_METHOD: ${{ github.event.inputs.builder || 'nuitka' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          architecture: x64
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade --upgrade-strategy eager -r requirements-build.txt
+
+      - name: Generate build files
+        shell: python
+        run: |
+          import os, pathlib, re
+
+          FALLBACK_VERSION = "0.2.67"
+
+          # Версия берётся из тега релиза: v0.2.67 -> 0.2.67. Так номер
+          # в «О программе» и номер выпуска на GitHub не разъезжаются —
+          # а разъехавшись, они превращают отчёт об ошибке в загадку.
+          #
+          # Сборка по push в main тега не имеет, и туда идёт запасное
+          # значение. Ноль вместо номера, как было раньше, читался бы
+          # как «версия не определилась» у каждого, кто открыл окно.
+          # Буква v перед номером необязательна: тег пишет человек, и он
+          # бывает и v0.2.67, и 0.2.67. Первая попытка срезала первый
+          # символ у всего подходящего подряд — тег 0.2.67 превращался в
+          # .2.67, и такой номер уехал бы в выпуск незамеченным.
+          tag = os.environ.get("GITHUB_REF_NAME", "")
+          match = re.fullmatch(r"v?(\d+(?:\.\d+){1,3})", tag)
+          version = match.group(1) if match else FALLBACK_VERSION
+
+          cfg = pathlib.Path("src/config")
+          cfg.mkdir(parents=True, exist_ok=True)
+          (cfg / "build_info.py").write_text(
+              f"CHANNEL='stable'\nAPP_VERSION='{version}'\n",
+              encoding="utf-8-sig")
+
+          # Пустая заглушка секретов: публичная сборка идёт без токенов,
+          # и механизмы, которым они нужны, сами отключаются на пустом
+          # значении.
+          #
+          # Состав полей повторяет src/config/_build_secrets.py. Раньше
+          # здесь были поля из прежнего проекта — логи в чужого бота и
+          # платный доступ, — а нужных PROXY_PRESETS и MTPROXY_LINK не
+          # было вовсе: собранное приложение падало бы при первом заходе
+          # на страницу прокси.
+          (cfg / "_build_secrets.py").write_text(
+              "UPDATE_SERVERS: list[str] = []\n"
+              "GITHUB_UPDATE_TOKEN = ''\n"
+              "TG_UPDATE_BOT_TOKEN = ''\n"
+              "PROXY_PRESETS: list = []\n"
+              "MTPROXY_LINK = ''\n",
+              encoding="utf-8-sig")
+
+      - name: Build canonical runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:PYTHONPATH = (Resolve-Path "src").Path
+          $modules = @(
+            python -c "from app.feature_facades import iter_lazy_feature_facade_modules; from ui.page_registry import iter_lazy_page_modules; print(*sorted(set(iter_lazy_feature_facade_modules()) | set(iter_lazy_page_modules())), sep='\n')"
+          )
+          if ($LASTEXITCODE -ne 0) {
+            throw "Не удалось получить список динамически загружаемых модулей"
+          }
+
+          $buildRoot = Join-Path $PWD "ci-build"
+          $artifactRoot = Join-Path $PWD "artifact"
+          $runtimeTarget = Join-Path $artifactRoot "_internal"
+          New-Item -ItemType Directory -Path $runtimeTarget -Force | Out-Null
+
+          if ($env:ZAPRET_BUILD_METHOD -eq "nuitka") {
+            $nuitkaArgs = @(
+              "-m", "nuitka",
+              "--standalone",
+              "--assume-yes-for-downloads",
+              "--windows-console-mode=disable",
+              "--windows-uac-admin",
+              "--follow-imports",
+              "--enable-plugin=pyqt6",
+              "--nofollow-import-to=numpy",
+              "--nofollow-import-to=PIL",
+              "--noinclude-dlls=opengl32sw.dll",
+              "--output-filename=net67.exe",
+              "--output-dir=$buildRoot\nuitka"
+            )
+            $nuitkaArgs += @($modules | ForEach-Object { "--include-module=$_" })
+            $nuitkaArgs += "src\main.py"
+            & python @nuitkaArgs
+            if ($LASTEXITCODE -ne 0) { throw "Nuitka завершилась с кодом $LASTEXITCODE" }
+            $runtimeSource = Join-Path $buildRoot "nuitka\main.dist"
+          }
+          elseif ($env:ZAPRET_BUILD_METHOD -eq "pyinstaller") {
+            $pyinstallerArgs = @(
+              "-m", "PyInstaller",
+              "--noconfirm",
+              "--clean",
+              "--name", "net67",
+              "--windowed",
+              "--uac-admin",
+              "--onedir",
+              "--contents-directory", ".",
+              "--paths", "src",
+              "--workpath", "$buildRoot\pyinstaller-work",
+              "--distpath", "$buildRoot\pyinstaller-dist"
+            )
+            $pyinstallerArgs += @($modules | ForEach-Object { "--hidden-import=$_" })
+            $pyinstallerArgs += "src\main.py"
+            & python @pyinstallerArgs
+            if ($LASTEXITCODE -ne 0) { throw "PyInstaller завершился с кодом $LASTEXITCODE" }
+            $runtimeSource = Join-Path $buildRoot "pyinstaller-dist\net67"
+          }
+          else {
+            throw "Неизвестный сборщик: $env:ZAPRET_BUILD_METHOD"
+          }
+
+          $builtExe = Join-Path $runtimeSource "net67.exe"
+          if (-not (Test-Path -LiteralPath $builtExe -PathType Leaf)) {
+            throw "Сборщик не создал ожидаемый файл: $builtExe"
+          }
+          Copy-Item -Path (Join-Path $runtimeSource "*") -Destination $runtimeTarget -Recurse -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeTarget "net67.exe") -PathType Leaf)) {
+            throw "Не удалось подготовить artifact\_internal\net67.exe"
+          }
+          Write-Host "Готово: artifact\_internal\net67.exe ($env:ZAPRET_BUILD_METHOD)"
+
+      - name: Copy runtime resources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $artifact = Join-Path $PWD "artifact"
+
+          # Список повторяет scripts\build_local.ps1. Без этих папок
+          # интерфейс запускается, но «Включить» нечего запускать:
+          # winws.exe лежит в exe, стратегии ссылаются на lists, lua,
+          # bin и windivert.filter.
+          $pairs = @(
+            @("exe",                            "exe"),
+            @("ico",                            "ico"),
+            @("src\ico",                        "ico"),
+            @("src\presets\builtin\winws1",     "presets\winws1_builtin"),
+            @("src\presets\builtin\winws2",     "presets\winws2_builtin"),
+            @("src\profile\strategy_catalogs",  "profile\strategy_catalogs"),
+            @("src\profile\templates",          "profile\templates"),
+            @("lists",                          "lists"),
+            @("lua",                            "lua"),
+            @("json",                           "json"),
+            @("windivert.filter",               "windivert.filter"),
+            @("bin",                            "bin")
+          )
+          foreach ($pair in $pairs) {
+            $source = Join-Path $PWD $pair[0]
+            if (-not (Test-Path $source)) {
+              Write-Host "пропущено (нет в репозитории): $($pair[0])"
+              continue
+            }
+            $target = Join-Path $artifact $pair[1]
+            New-Item -ItemType Directory -Path $target -Force | Out-Null
+            Copy-Item -Path (Join-Path $source "*") -Destination $target -Recurse -Force
+            Write-Host "  $($pair[0]) -> $($pair[1])"
+          }
+
+          foreach ($dir in @("presets\winws1", "presets\winws2", "lists\user", "logs", "settings", "tmp")) {
+            New-Item -ItemType Directory -Path (Join-Path $artifact $dir) -Force | Out-Null
+          }
+
+          $engine = Join-Path $artifact "exe\winws.exe"
+          if (-not (Test-Path -LiteralPath $engine -PathType Leaf)) {
+            throw "В артефакте нет движка ($engine). Выпуск был бы нерабочим."
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = (Select-String -Path "src\config\build_info.py" -Pattern "APP_VERSION\s*=\s*'([^']+)'").Matches[0].Groups[1].Value
+          Write-Host "Версия установщика: $version"
+
+          # Inno Setup на образе windows-2022 не предустановлен.
+          choco install innosetup --no-progress -y
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe не найден после установки" }
+
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$PWD\artifact" "installer\net67.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup завершился с кодом $LASTEXITCODE" }
+
+          $setup = Get-ChildItem "installer\output\*.exe" | Select-Object -First 1
+          if (-not $setup) { throw "Установщик не создан" }
+          Write-Host "Готово: $($setup.FullName)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: net67-${{ github.sha }}
+          path: |
+            artifact/
+            installer/output/*.exe
+          retention-days: 30
+
+      # Выпуск создаётся только по тегу. Сборка по push в main остаётся
+      # проверкой: она собирает и установщик, но никуда его не публикует.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/output/*.exe
+          generate_release_notes: true

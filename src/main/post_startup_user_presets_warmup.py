@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import time
+
+from log.log import log
+from main.post_startup_gate import bind_startup_gate, is_startup_host_alive
+from main.post_startup_threading import enqueue_subsystem_task, schedule_after
+from settings.mode import ZAPRET1_MODE, ZAPRET2_MODE, is_preset_launch_method, normalize_launch_method
+from ui.performance_metrics import log_ui_timing_since
+
+
+DEFAULT_USER_PRESETS_WARMUP_METHODS: tuple[str, ...] = (ZAPRET2_MODE, ZAPRET1_MODE)
+USER_PRESETS_WARMUP_DELAY_MS = 8_000
+USER_PRESETS_SECONDARY_WARMUP_DELAY_MS = 15_000
+
+
+def user_presets_warmup_methods(current_method: str) -> tuple[str, ...]:
+    current = normalize_launch_method(current_method)
+    if not is_preset_launch_method(current):
+        return DEFAULT_USER_PRESETS_WARMUP_METHODS
+    return (current, *(method for method in DEFAULT_USER_PRESETS_WARMUP_METHODS if method != current))
+
+
+def install_user_presets_warmup(
+    startup_host,
+    *,
+    presets_feature,
+    log_startup_metric,
+    current_launch_method: str = ZAPRET2_MODE,
+    delay_ms: int = USER_PRESETS_WARMUP_DELAY_MS,
+    secondary_delay_ms: int = USER_PRESETS_SECONDARY_WARMUP_DELAY_MS,
+) -> None:
+    def _run_user_presets_warmup_method(method: str) -> None:
+        if not is_startup_host_alive(startup_host):
+            return
+        started_at = time.perf_counter()
+        try:
+            metadata = presets_feature.warm_preset_list_metadata_cache(method)
+        except Exception as exc:
+            log(f"Фоновый прогрев списка preset-ов {method} не выполнен: {exc}", "DEBUG")
+            return
+        log_ui_timing_since(
+            "warmup",
+            method,
+            "user_presets.metadata",
+            started_at,
+            extra=f"{len(metadata or {})} presets",
+            important=True,
+        )
+
+    def _start_user_presets_warmup(methods: tuple[str, ...]) -> None:
+        log_startup_metric("StartupUserPresetsWarmupStarted", ", ".join(methods))
+        for method in methods:
+            enqueue_subsystem_task(
+                "presets",
+                f"UserPresetsWarmup-{method}",
+                lambda method=method: _run_user_presets_warmup_method(method),
+            )
+
+    def _schedule_user_presets_warmup() -> None:
+        if not is_startup_host_alive(startup_host):
+            return
+        delay = max(0, int(delay_ms))
+        methods = user_presets_warmup_methods(current_launch_method)
+        current_methods = methods[:1]
+        secondary_methods = methods[1:]
+        secondary_delay = max(delay, int(secondary_delay_ms))
+        detail = f"{delay}ms current after interactive"
+        if secondary_methods:
+            detail = f"{detail}; {secondary_delay}ms secondary after interactive"
+        log_startup_metric("StartupUserPresetsWarmupQueued", detail)
+        log(f"Фоновый прогрев списка preset-ов отложен на {delay}ms", "DEBUG")
+        schedule_after(
+            delay,
+            lambda: is_startup_host_alive(startup_host) and _start_user_presets_warmup(current_methods),
+        )
+        if secondary_methods:
+            schedule_after(
+                secondary_delay,
+                lambda: is_startup_host_alive(startup_host) and _start_user_presets_warmup(secondary_methods),
+            )
+
+    bind_startup_gate(
+        startup_host.startup_interactive_ready,
+        _schedule_user_presets_warmup,
+        is_ready=lambda: bool(startup_host.startup_state.interactive_logged),
+    )
+
+
+__all__ = [
+    "DEFAULT_USER_PRESETS_WARMUP_METHODS",
+    "USER_PRESETS_SECONDARY_WARMUP_DELAY_MS",
+    "USER_PRESETS_WARMUP_DELAY_MS",
+    "install_user_presets_warmup",
+    "user_presets_warmup_methods",
+]

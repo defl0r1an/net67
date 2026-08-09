@@ -1,0 +1,289 @@
+"""Runtime/language helper слой для Orchestra page."""
+
+from __future__ import annotations
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QTextCursor
+from PyQt6.QtWidgets import QListWidgetItem
+
+import orchestra.page_runtime as orchestra_page_runtime
+from orchestra.orchestra_runner import MAX_ORCHESTRA_LOGS
+from ui.accessibility import set_control_accessibility, set_item_accessible_text, set_state_text
+from ui.combo_accessibility import set_combo_items_accessibility
+from ui.fluent_widgets import set_tooltip
+
+
+def protocol_filter_items(*, tr_fn) -> list[tuple[str, str]]:
+    return [
+        ("all", tr_fn("page.orchestra.filter.protocol.all", "Все")),
+        ("tls", tr_fn("page.orchestra.filter.protocol.tls", "TLS")),
+        ("http", tr_fn("page.orchestra.filter.protocol.http", "HTTP")),
+        ("udp", tr_fn("page.orchestra.filter.protocol.udp", "UDP")),
+        ("success", tr_fn("page.orchestra.filter.protocol.success", "SUCCESS")),
+        ("fail", tr_fn("page.orchestra.filter.protocol.fail", "FAIL")),
+    ]
+
+
+def set_protocol_filter_items(*, combo, items: list[tuple[str, str]]) -> None:
+    if combo is None:
+        return
+
+    selected = None
+    try:
+        selected = combo.currentData()
+    except Exception:
+        selected = None
+
+    combo.blockSignals(True)
+    combo.clear()
+    for code, label in items:
+        try:
+            combo.addItem(label, userData=code)
+        except TypeError:
+            combo.addItem(label)
+    combo.blockSignals(False)
+
+    if selected is not None:
+        for idx, (code, _) in enumerate(items):
+            if code == selected:
+                combo.setCurrentIndex(idx)
+                break
+    _update_protocol_filter_accessibility(combo)
+    _ensure_protocol_filter_accessibility_signal(combo)
+
+
+def _update_protocol_filter_accessibility(combo) -> None:
+    selected = " ".join(str(combo.currentText() or "").strip().split())
+    name = "Фильтр лога Оркестратора по протоколу"
+    if selected:
+        name = f"{name}, выбрано: {selected}"
+    set_state_text(combo, name)
+    set_control_accessibility(
+        combo,
+        name=name,
+        description="Выберите, какие строки показывать в логе Оркестратора: все, TLS, HTTP, UDP, успешные или ошибочные.",
+    )
+    set_combo_items_accessibility(combo, name="Фильтр лога Оркестратора по протоколу")
+
+
+def _ensure_protocol_filter_accessibility_signal(combo) -> None:
+    if bool(getattr(combo, "_orchestra_protocol_filter_accessibility_connected", False)):
+        return
+    try:
+        combo.currentIndexChanged.connect(lambda _index: _update_protocol_filter_accessibility(combo))
+        setattr(combo, "_orchestra_protocol_filter_accessibility_connected", True)
+    except Exception:
+        pass
+
+
+def current_protocol_filter_code(*, combo) -> str:
+    try:
+        code = combo.currentData()
+        if isinstance(code, str) and code:
+            return code
+    except Exception:
+        pass
+
+    value = combo.currentText().strip().lower()
+    mapping = {
+        "все": "all",
+        "all": "all",
+        "tls": "tls",
+        "http": "http",
+        "udp": "udp",
+        "success": "success",
+        "fail": "fail",
+    }
+    return mapping.get(value, "all")
+
+
+def apply_orchestra_language(
+    *,
+    tr_fn,
+    current_state: str,
+    update_status,
+    update_log_history,
+    apply_log_filter,
+    status_card_title,
+    log_card_title,
+    log_history_card_title,
+    info_label,
+    log_text,
+    filter_label,
+    log_filter_input,
+    log_protocol_filter,
+    clear_filter_btn,
+    clear_log_btn,
+    clear_learned_btn,
+    clear_learned_pending: bool,
+    log_history_desc,
+    view_log_btn,
+    delete_log_btn,
+    clear_all_logs_btn,
+) -> None:
+    if status_card_title is not None:
+        status_card_title.setText(tr_fn("page.orchestra.training_status", "Статус обучения"))
+    if log_card_title is not None:
+        log_card_title.setText(tr_fn("page.orchestra.log", "Лог обучения"))
+    if log_history_card_title is not None:
+        log_history_card_title.setText(
+            tr_fn(
+                "page.orchestra.log_history.title",
+                "История логов (макс. {max_logs})",
+                max_logs=MAX_ORCHESTRA_LOGS,
+            )
+        )
+
+    if info_label is not None:
+        info_label.setText(
+            tr_fn(
+                "page.orchestra.status.modes",
+                "• IDLE - ожидание соединений\n"
+                "• LEARNING - перебирает стратегии\n"
+                "• RUNNING - работает на лучших стратегиях\n"
+                "• UNLOCKED - переобучение (RST блокировка)",
+            )
+        )
+    if log_text is not None:
+        log_text.setPlaceholderText(
+            tr_fn("page.orchestra.log.placeholder", "Логи обучения будут отображаться здесь...")
+        )
+    if filter_label is not None:
+        filter_label.setText(tr_fn("page.orchestra.filter.label", "Фильтр:"))
+
+    if log_filter_input is not None:
+        log_filter_input.setPlaceholderText(
+            tr_fn("page.orchestra.filter.domain.placeholder", "Домен (например: youtube.com)")
+        )
+
+    set_protocol_filter_items(combo=log_protocol_filter, items=protocol_filter_items(tr_fn=tr_fn))
+
+    if clear_filter_btn is not None:
+        set_tooltip(clear_filter_btn, tr_fn("page.orchestra.filter.clear.tooltip", "Сбросить фильтр"))
+
+    if clear_log_btn is not None:
+        clear_log_btn.setText(tr_fn("page.orchestra.button.clear_log", "Очистить лог"))
+
+    if clear_learned_btn is not None:
+        done_ru = "✓ Сброшено"
+        done_en = "✓ Reset"
+        current = clear_learned_btn.text()
+        if clear_learned_pending:
+            clear_learned_btn.setText(
+                tr_fn("page.orchestra.button.clear_learning.pending", "Это всё сотрёт!")
+            )
+        elif current in (done_ru, done_en):
+            clear_learned_btn.setText(
+                tr_fn("page.orchestra.button.clear_learning.done", "✓ Сброшено")
+            )
+        else:
+            clear_learned_btn.setText(
+                tr_fn("page.orchestra.button.clear_learning", "Сбросить обучение")
+            )
+
+    if log_history_desc is not None:
+        log_history_desc.setText(
+            tr_fn(
+                "page.orchestra.log_history.desc",
+                "Каждый запуск оркестратора создаёт новый лог с уникальным ID. Старые логи автоматически удаляются.",
+            )
+        )
+    if view_log_btn is not None:
+        view_log_btn.setText(tr_fn("page.orchestra.button.view_log", "Просмотреть"))
+    if delete_log_btn is not None:
+        delete_log_btn.setText(tr_fn("page.orchestra.button.delete_log", "Удалить"))
+    if clear_all_logs_btn is not None:
+        clear_all_logs_btn.setText(tr_fn("page.orchestra.button.clear_all_logs", "Очистить все"))
+
+    update_status(current_state)
+    update_log_history()
+    apply_log_filter()
+
+
+def append_log_line(*, text: str, full_log_lines: list[str], max_log_lines: int, matches_filter, log_text) -> list[str]:
+    full_log_lines.append(text)
+    if len(full_log_lines) > max_log_lines:
+        full_log_lines = full_log_lines[-max_log_lines:]
+
+    if matches_filter(text):
+        log_text.append(text)
+        cursor = log_text.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        log_text.setTextCursor(cursor)
+    return full_log_lines
+
+
+def update_log_history_view(*, logs, tr_fn, log_history_list) -> None:
+    _ensure_log_history_accessibility_signal(log_history_list)
+    log_history_list.clear()
+
+    plan = orchestra_page_runtime.build_log_history_plan(
+        logs=list(logs or []),
+        current_suffix_text=tr_fn("page.orchestra.log_history.current_suffix", " (текущий)"),
+        none_text=tr_fn("page.orchestra.log_history.none", "  Нет сохранённых логов"),
+    )
+
+    for entry in plan.entries:
+        item = QListWidgetItem(entry.text)
+        item.setData(Qt.ItemDataRole.UserRole, entry.log_id)
+        set_item_accessible_text(item, _log_history_accessible_text(entry))
+
+        if entry.is_current:
+            item.setForeground(Qt.GlobalColor.green)
+        elif entry.is_placeholder:
+            item.setForeground(Qt.GlobalColor.gray)
+
+        log_history_list.addItem(item)
+
+    _update_log_history_current_accessibility(log_history_list, log_history_list.currentItem())
+
+
+def _ensure_log_history_accessibility_signal(log_history_list) -> None:
+    if log_history_list is None:
+        return
+    if bool(getattr(log_history_list, "_orchestra_log_history_accessibility_connected", False)):
+        return
+    try:
+        log_history_list.currentItemChanged.connect(
+            lambda item, _previous, current_list=log_history_list: (
+                _update_log_history_current_accessibility(current_list, item)
+            )
+        )
+        setattr(log_history_list, "_orchestra_log_history_accessibility_connected", True)
+    except Exception:
+        pass
+
+
+def _update_log_history_current_accessibility(log_history_list, item) -> None:
+    if log_history_list is None:
+        return
+    if item is None:
+        try:
+            item = log_history_list.item(0)
+        except Exception:
+            item = None
+    text = str(item.data(Qt.ItemDataRole.AccessibleTextRole) or "").strip() if item is not None else ""
+    if text:
+        prefix = "История логов Оркестратора"
+        if text.startswith(f"{prefix}:"):
+            set_state_text(log_history_list, text)
+        else:
+            set_state_text(log_history_list, f"{prefix}: {text}")
+    else:
+        set_state_text(log_history_list, "История логов Оркестратора: список пока не загружен")
+
+
+def _log_history_accessible_text(entry) -> str:
+    text = " ".join(str(getattr(entry, "text", "") or "").replace("▶", "").split())
+    if bool(getattr(entry, "is_placeholder", False)):
+        return f"История логов Оркестратора: {text}"
+
+    created, separator, size_text = text.partition("|")
+    parts = [f"Лог Оркестратора: {created.strip()}"]
+    if separator:
+        size_text = size_text.replace("(текущий)", "").strip()
+        if size_text:
+            parts.append(f"размер {size_text}")
+    if bool(getattr(entry, "is_current", False)):
+        parts.append("текущий")
+    return ", ".join(part for part in parts if part)
