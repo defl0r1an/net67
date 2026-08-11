@@ -35,11 +35,27 @@ def run_startup_update_check() -> dict:
 
 
 def open_update_channel(channel: str) -> UpdateChannelActionResult:
+    """Открывает телеграм-канал выпусков. Пока открывать нечего.
+
+    Здесь были вписаны каналы автора исходного проекта: кнопка в разделе
+    обновлений уводила человека в чужой телеграм, где лежит другая
+    программа. Для внутреннего приложения это ещё и утечка — двадцать
+    менеджеров ушли бы читать не наши объявления.
+
+    Своего канала у net67 нет, поэтому имя берётся из общего списка
+    (`updater.telegram_updater.TELEGRAM_CHANNELS`) и там пусто. Появится
+    канал — впишите его туда, кнопка заработает без правок здесь.
+    """
     from config.telegram_links import open_telegram_link
     from updater.channel_utils import is_dev_update_channel
+    from updater.telegram_updater import TELEGRAM_CHANNELS
+
+    key = "dev" if is_dev_update_channel(channel) else "stable"
+    domain = str(TELEGRAM_CHANNELS.get(key) or "").strip()
+    if not domain:
+        return UpdateChannelActionResult(False, "Канал обновлений не настроен")
 
     try:
-        domain = "zapretguidev" if is_dev_update_channel(channel) else "zapretnetdiscordyoutube"
         open_telegram_link(domain)
         return UpdateChannelActionResult(True, domain)
     except Exception as exc:

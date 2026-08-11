@@ -19,6 +19,112 @@ def fail_start_preparation(runtime_owner, message: str) -> None:
     runtime_owner._mark_runtime_failed(text)
 
 
+#: Сколько ждём завершения остановки, прежде чем начинать запуск.
+#:
+#: Остановка снимает winws и выгружает драйвер; на это уходят единицы
+#: секунд. Ждать дольше незачем: если за это время она не закончилась,
+#: значит застряла, и запуск всё равно надо пробовать — иначе кнопка
+#: замолчит навсегда.
+STOP_WAIT_TIMEOUT_MS = 12_000
+
+#: Как часто перепроверяем, закончилась ли остановка.
+STOP_WAIT_RETRY_MS = 200
+
+
+def _schedule_in_main_thread(delay_ms: int, callback) -> None:
+    """Откладывает вызов, привязав таймер к главному потоку.
+
+    Голый `QTimer.singleShot(ms, cb)` заводит таймер в том потоке, откуда
+    его позвали. Запуск обхода приходит и из окна, и из рабочего потока
+    оркестратора — а у рабочего потока цикла событий нет, и таймер там
+    не сработал бы никогда. Отложенный запуск тихо потерялся бы, что
+    ровно та беда, которую эта отсрочка и лечит.
+
+    Поэтому таймер привязываем к объекту приложения: он живёт в главном
+    потоке, и вызов приходит туда же.
+    """
+    from PyQt6.QtCore import QCoreApplication, QTimer
+
+    app = QCoreApplication.instance()
+    if app is None:
+        # Приложения нет — значит и откладывать некуда. Зовём сразу:
+        # хуже молчания не будет.
+        callback()
+        return
+
+    QTimer.singleShot(int(delay_ms), app, callback)
+
+
+def _stop_in_progress(runtime_owner) -> bool:
+    try:
+        thread = getattr(runtime_owner, "_dpi_stop_thread", None)
+        return bool(thread is not None and thread.isRunning())
+    except RuntimeError:
+        # Поток уже удалён на стороне C++ — значит не выполняется.
+        runtime_owner._dpi_stop_thread = None
+        return False
+    except Exception:
+        return False
+
+
+def _defer_start_until_stop_finishes(
+    runtime_owner,
+    *,
+    selected_mode,
+    launch_method,
+    skip_conflict_prompt: bool,
+    startup_autostart: bool,
+    waited_ms: int = 0,
+) -> None:
+    """Откладывает запуск, пока не закончится остановка.
+
+    ## Зачем
+
+    Выключить обход и тут же включить обратно — самое обычное действие,
+    и оно не работало: появлялось «Обход не запустился за 40 секунд».
+
+    Причина в том, что проверки перед стартом и перед остановкой
+    смотрели каждая только на свой поток. Старт не знал про идущую
+    остановку и уходил работать рядом с ней. Дальше как повезёт:
+    остановка снимала winws, который старт только что поднял, и ждущий
+    оркестратор сорок секунд не видел ни одного процесса. Формально
+    запуск «прошёл» — фактически его убили свои же.
+
+    ## Почему откладываем, а не отказываем
+
+    Отказ вернул бы ту же ошибку, только быстрее. Человек нажал
+    «включить» — значит включить и надо, вопрос лишь в том, чтобы
+    дождаться конца уборки. Ровно так уже сделан перезапуск
+    (`_schedule_pending_restart_retry`), здесь тот же приём.
+    """
+    if waited_ms >= STOP_WAIT_TIMEOUT_MS:
+        log(
+            f"Остановка не завершилась за {STOP_WAIT_TIMEOUT_MS} мс — запускаем как есть",
+            "⚠ WARNING",
+        )
+        start_dpi_async(
+            runtime_owner,
+            selected_mode,
+            launch_method,
+            skip_conflict_prompt=skip_conflict_prompt,
+            startup_autostart=startup_autostart,
+            _force_after_stop_wait=True,
+        )
+        return
+
+    def _retry() -> None:
+        start_dpi_async(
+            runtime_owner,
+            selected_mode,
+            launch_method,
+            skip_conflict_prompt=skip_conflict_prompt,
+            startup_autostart=startup_autostart,
+            _stop_wait_elapsed_ms=waited_ms + STOP_WAIT_RETRY_MS,
+        )
+
+    _schedule_in_main_thread(STOP_WAIT_RETRY_MS, _retry)
+
+
 def prepare_start_preflight(
     runtime_owner,
     *,
@@ -63,20 +169,48 @@ def start_dpi_async(
     *,
     skip_conflict_prompt: bool = False,
     startup_autostart: bool = False,
-) -> None:
-    """Запускает DPI через общий асинхронный pipeline."""
+    _stop_wait_elapsed_ms: int = 0,
+    _force_after_stop_wait: bool = False,
+) -> bool:
+    """Запускает DPI через общий асинхронный pipeline.
+
+    Возвращает True, если запуск принят — начат сейчас или отложен до
+    конца остановки. False означает отказ: запускать никто не будет.
+
+    Раньше функция ничего не возвращала, а вызывающий код всё равно
+    считал запуск принятым. Отказ поэтому выглядел как молчание: кнопка
+    гасла, оркестратор сорок секунд ждал процесс, которого никто не
+    собирался поднимать, и писал «Обход не запустился за 40 секунд».
+    """
+    # Сначала дожидаемся конца остановки, если она идёт.
+    #
+    # Проверка стоит до всего остального: и до разбора конфликтов, и до
+    # set_busy. Иначе состояние окна успевало смениться на «запускаем»
+    # раньше, чем запуск действительно начинался.
+    if not _force_after_stop_wait and _stop_in_progress(runtime_owner):
+        log("Идёт остановка DPI — запуск подождёт её конца", "DEBUG")
+        _defer_start_until_stop_finishes(
+            runtime_owner,
+            selected_mode=selected_mode,
+            launch_method=launch_method,
+            skip_conflict_prompt=skip_conflict_prompt,
+            startup_autostart=startup_autostart,
+            waited_ms=_stop_wait_elapsed_ms,
+        )
+        return True
+
     if not prepare_start_preflight(
         runtime_owner,
         selected_mode=selected_mode,
         launch_method=launch_method,
         skip_conflict_prompt=skip_conflict_prompt,
     ):
-        return
+        return False
 
     requested_method = _requested_launch_method(runtime_owner, launch_method)
     if not requested_method:
         fail_start_preparation(runtime_owner, "Не выбран способ запуска DPI")
-        return
+        return False
 
     mode_name = resolve_mode_name(selected_mode)
     if selected_mode is None or selected_mode == "default":
@@ -116,3 +250,4 @@ def start_dpi_async(
     )
 
     log(f"Запуск асинхронного старта DPI: {mode_name} (метод: {method_name})", "INFO")
+    return True

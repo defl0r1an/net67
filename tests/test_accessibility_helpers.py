@@ -639,8 +639,8 @@ class AccessibilityHelpersTests(unittest.TestCase):
 
         menu.addAction(Action("Пункт", menu))
 
-        self.assertIn("zapretgui-round-menu-hairline-begin", menu.styleSheet())
-        self.assertEqual(menu.styleSheet().count("zapretgui-round-menu-hairline-begin"), 1)
+        self.assertIn("net67-round-menu-hairline-begin", menu.styleSheet())
+        self.assertEqual(menu.styleSheet().count("net67-round-menu-hairline-begin"), 1)
         self.assertEqual(menu.styleSheet().count("rgba(1, 2, 3, 0.40)"), 1)
         self.assertIn("border-radius", menu.styleSheet())
         menu.deleteLater()
@@ -667,7 +667,7 @@ class AccessibilityHelpersTests(unittest.TestCase):
         import qfluentwidgets.common.style_sheet as fluent_style_sheet
 
         self.assertTrue(
-            bool(getattr(fluent_style_sheet.setStyleSheet, "_zapretgui_round_menu_hairline_patch_installed", False))
+            bool(getattr(fluent_style_sheet.setStyleSheet, "_net67_round_menu_hairline_patch_installed", False))
         )
 
         with (
@@ -681,7 +681,7 @@ class AccessibilityHelpersTests(unittest.TestCase):
 
         self.assertNotIn("rgba(1, 2, 3, 0.40)", menu.styleSheet())
         self.assertIn("rgba(4, 5, 6, 0.50)", menu.styleSheet())
-        self.assertEqual(menu.styleSheet().count("zapretgui-round-menu-hairline-begin"), 1)
+        self.assertEqual(menu.styleSheet().count("net67-round-menu-hairline-begin"), 1)
         menu.deleteLater()
         self._app.processEvents()
 
@@ -724,7 +724,7 @@ class AccessibilityHelpersTests(unittest.TestCase):
 
         self.assertIn("MenuActionListWidget", menu.styleSheet())
         self.assertIn("border-color", menu.styleSheet())
-        self.assertIn("zapretgui-round-menu-hairline-begin", menu.styleSheet())
+        self.assertIn("net67-round-menu-hairline-begin", menu.styleSheet())
         self.assertNotIn("border-left", menu.styleSheet())
         menu.deleteLater()
         self._app.processEvents()

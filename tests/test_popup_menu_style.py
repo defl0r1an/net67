@@ -120,7 +120,7 @@ class ShowFilterTests(unittest.TestCase):
         with patch.object(pms, "_is_windows_11_or_newer", return_value=False):
             pms._install_native_border_removal(widget)
 
-        self.assertFalse(getattr(widget, "_zapretgui_menu_border_filter_installed", False))
+        self.assertFalse(getattr(widget, "_net67_menu_border_filter_installed", False))
         widget.deleteLater()
 
 

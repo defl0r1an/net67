@@ -32,9 +32,18 @@ from config._build_secrets import TG_UPDATE_BOT_TOKEN as _BUILD_TOKEN
 _TOKEN_CACHE = ""
 
 # Каналы для разных веток (username без @)
-TELEGRAM_CHANNELS = {
-    'stable': 'zapretnetdiscordyoutube',
-    'dev': 'zapretguidev',
+#
+# Пусто — и это осознанно. Здесь стояли телеграм-каналы автора
+# исходного проекта, и приложение ходило туда за версиями. Для
+# внутреннего net67 это чужая инфраструктура: обновления мы берём из
+# своего репозитория выпусков, а не из чьего-то канала.
+#
+# Механизм не выпилен, а обесточен: пустое имя канала все функции ниже
+# понимают как «источник не настроен» и молча возвращают None. Понадобится
+# свой канал — впишите его сюда, остальное заработает само.
+TELEGRAM_CHANNELS: dict[str, str] = {
+    'stable': '',
+    'dev': '',
 }
 
 # Таймаут для Telegram запросов (секунды)
@@ -100,6 +109,12 @@ def _parse_telegram_web(channel: str) -> Optional[Dict[str, Any]]:
     Приоритет: версия из имени файла (Zapret2Setup*.exe) > текст постов.
     """
     channel_name = TELEGRAM_CHANNELS.get(channel, TELEGRAM_CHANNELS['stable'])
+    if not channel_name:
+        # Источник не настроен. Без этой проверки ушёл бы запрос на
+        # https://t.me/s/ — то есть в никуда, но с таймаутом и записью
+        # в лог, будто что-то сломалось.
+        return None
+
     url = f"https://t.me/s/{channel_name}"
     
     try:
@@ -177,7 +192,10 @@ def get_telegram_version_info(channel: str = 'stable') -> Optional[Dict[str, Any
         return None
     
     channel_name = TELEGRAM_CHANNELS.get(channel, TELEGRAM_CHANNELS['stable'])
-    
+    if not channel_name:
+        log("Telegram-канал обновлений не настроен — пропускаем", "📱 TG")
+        return None
+
     # Метод 1: Bot API - getChat (получаем закрепленное сообщение)
     key = get_inline_value()
     if key:

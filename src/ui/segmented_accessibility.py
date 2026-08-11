@@ -5,12 +5,12 @@ from PyQt6.QtCore import QEvent, QObject, Qt
 from ui.accessibility import set_control_accessibility, set_state_text
 
 
-_FILTER_ATTR = "_zapretgui_segmented_keyboard_filter"
-_TITLE_ATTR = "_zapretgui_segmented_accessible_title"
-_LABELS_ATTR = "_zapretgui_segmented_accessible_labels"
-_SELECTED_WORD_ATTR = "_zapretgui_segmented_selected_word"
-_UNSELECTED_WORD_ATTR = "_zapretgui_segmented_unselected_word"
-_ITEM_TAB_FOCUS_ATTR = "_zapretgui_segmented_item_tab_focus"
+_FILTER_ATTR = "_net67_segmented_keyboard_filter"
+_TITLE_ATTR = "_net67_segmented_accessible_title"
+_LABELS_ATTR = "_net67_segmented_accessible_labels"
+_SELECTED_WORD_ATTR = "_net67_segmented_selected_word"
+_UNSELECTED_WORD_ATTR = "_net67_segmented_unselected_word"
+_ITEM_TAB_FOCUS_ATTR = "_net67_segmented_item_tab_focus"
 
 
 def _clean_text(text: object) -> str:

@@ -150,19 +150,25 @@ class PresetLaunchRuntime(QObject):
         *,
         _skip_conflict_prompt: bool = False,
         _startup_autostart: bool = False,
-    ):
+    ) -> bool:
         """Асинхронно запускает DPI без блокировки UI
 
         Args:
             selected_mode: Стратегия для запуска
             launch_method: Метод запуска из settings.mode. Если None - читается из settings.json.
+
+        Returns:
+            True, если запуск принят: начат сейчас или отложен до конца
+            остановки. False — отказ, поднимать DPI никто не будет.
         """
-        start_dpi_async_impl(
-            self,
-            selected_mode=selected_mode,
-            launch_method=launch_method,
-            skip_conflict_prompt=_skip_conflict_prompt,
-            startup_autostart=_startup_autostart,
+        return bool(
+            start_dpi_async_impl(
+                self,
+                selected_mode=selected_mode,
+                launch_method=launch_method,
+                skip_conflict_prompt=_skip_conflict_prompt,
+                startup_autostart=_startup_autostart,
+            )
         )
 
     def stop_dpi_async(

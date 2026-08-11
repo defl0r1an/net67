@@ -1,5 +1,5 @@
 name: "Баг-репорт"
-description: "Сообщить об ошибке в работе Zapret GUI"
+description: "Сообщить об ошибке в работе net67"
 title: "[Баг]: "
 labels: ["bug"]
 type: "bug"
@@ -14,7 +14,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Версия Zapret GUI
+      label: Версия net67
       description: "Указана в заголовке окна или в разделе «О программе»"
       placeholder: "Например: 1.2.3"
     validations:

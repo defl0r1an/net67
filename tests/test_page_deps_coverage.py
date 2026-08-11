@@ -86,7 +86,7 @@ class BrandingCoverageTests(unittest.TestCase):
             "Zapret 2",
             "Zapret2Setup",
             "zapret-win-bundle",
-            "zapretgui",  # только в комментариях о старых маркерах hosts
+            "net67",  # только в комментариях о старых маркерах hosts
         )
 
         for path in (

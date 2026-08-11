@@ -1171,7 +1171,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         self.assertEqual(written, [])
         self.assertEqual(manager.last_status, "Нет подходящих hosts-записей для применения")
 
-    def test_apply_domain_rows_replaces_only_zapretgui_managed_block(self) -> None:
+    def test_apply_domain_rows_replaces_only_our_managed_block(self) -> None:
         from hosts import hosts as hosts_module
 
         original = "\n".join(
@@ -1350,7 +1350,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         self.assertEqual(written, [])
         self.assertEqual(manager.last_status, "Не найдено записей hosts для выбранных сервисов")
 
-    def test_active_domains_are_read_from_zapretgui_managed_block(self) -> None:
+    def test_active_domains_are_read_from_our_managed_block(self) -> None:
         from hosts import hosts as hosts_module
 
         content = "\n".join(
@@ -1427,7 +1427,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
 
         self.assertEqual(result, {"chatgpt.com": ["2.2.2.2", "3.3.3.3"]})
 
-    def test_clear_hosts_file_removes_only_zapretgui_managed_block(self) -> None:
+    def test_clear_hosts_file_removes_only_our_managed_block(self) -> None:
         from hosts import hosts as hosts_module
 
         original = "\n".join(

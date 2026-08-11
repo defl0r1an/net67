@@ -61,13 +61,19 @@ def start_dpi_async(
     runtime_owner = runtime_feature.objects.launch_runtime
     if runtime_owner is None:
         return False
-    runtime_owner.start_dpi_async(
-        selected_mode=selected_mode,
-        launch_method=launch_method,
-        _skip_conflict_prompt=bool(skip_conflict_prompt),
-        _startup_autostart=bool(startup_autostart),
+    # Возвращаем то, что ответил runtime, а не безусловное True.
+    #
+    # Прежде отказ терялся здесь: запуск мог не начаться вовсе, а
+    # вызывающий код всё равно шёл ждать процесс — и ждал сорок секунд,
+    # прежде чем сообщить о неудаче.
+    return bool(
+        runtime_owner.start_dpi_async(
+            selected_mode=selected_mode,
+            launch_method=launch_method,
+            _skip_conflict_prompt=bool(skip_conflict_prompt),
+            _startup_autostart=bool(startup_autostart),
+        )
     )
-    return True
 
 
 def stop_dpi_async(

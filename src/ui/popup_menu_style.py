@@ -3,8 +3,8 @@ from __future__ import annotations
 import sys
 
 
-_ROUND_MENU_HAIRLINE_BEGIN = "/* zapretgui-round-menu-hairline-begin */"
-_ROUND_MENU_HAIRLINE_END = "/* zapretgui-round-menu-hairline-end */"
+_ROUND_MENU_HAIRLINE_BEGIN = "/* net67-round-menu-hairline-begin */"
+_ROUND_MENU_HAIRLINE_END = "/* net67-round-menu-hairline-end */"
 
 # DWM на Windows 11 рисует нативную 1px-рамку вокруг popup-окон, у которых
 # включён non-client rendering (addMenuShadowEffect в qframelesswindow).
@@ -110,7 +110,7 @@ def _install_native_border_removal(widget) -> None:
     """Ставит Show-фильтр, снимающий DWM-рамку при каждом показе меню."""
     if widget is None or not _is_windows_11_or_newer():
         return
-    if bool(getattr(widget, "_zapretgui_menu_border_filter_installed", False)):
+    if bool(getattr(widget, "_net67_menu_border_filter_installed", False)):
         return
 
     try:
@@ -127,7 +127,7 @@ def _install_native_border_removal(widget) -> None:
 
         border_filter = _MenuBorderFilter(widget)
         widget.installEventFilter(border_filter)
-        widget._zapretgui_menu_border_filter_installed = True
+        widget._net67_menu_border_filter_installed = True
     except Exception:
         pass
 
@@ -160,21 +160,21 @@ def install_global_round_menu_hairline_fix(app=None) -> None:
     _ = app
 
     current_set_style_sheet = fluent_style_sheet.setStyleSheet
-    if bool(getattr(current_set_style_sheet, "_zapretgui_round_menu_hairline_patch_installed", False)):
+    if bool(getattr(current_set_style_sheet, "_net67_round_menu_hairline_patch_installed", False)):
         return
 
     original_set_style_sheet = current_set_style_sheet
 
-    def _zapretgui_set_style_sheet(widget, source, *args, **kwargs):
+    def _net67_set_style_sheet(widget, source, *args, **kwargs):
         result = original_set_style_sheet(widget, source, *args, **kwargs)
         if _source_contains_round_menu_style(source):
             _apply_round_menu_hairline_qss(widget)
             _install_native_border_removal(widget)
         return result
 
-    setattr(_zapretgui_set_style_sheet, "_zapretgui_round_menu_hairline_patch_installed", True)
-    setattr(_zapretgui_set_style_sheet, "_zapretgui_round_menu_hairline_original", original_set_style_sheet)
-    fluent_style_sheet.setStyleSheet = _zapretgui_set_style_sheet
+    setattr(_net67_set_style_sheet, "_net67_round_menu_hairline_patch_installed", True)
+    setattr(_net67_set_style_sheet, "_net67_round_menu_hairline_original", original_set_style_sheet)
+    fluent_style_sheet.setStyleSheet = _net67_set_style_sheet
 
 
 def suppress_round_menu_hairline(menu) -> None:

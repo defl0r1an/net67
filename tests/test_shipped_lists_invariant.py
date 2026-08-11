@@ -1,10 +1,23 @@
 """Инвариант поставки списков.
 
 Каждый lists/<file>.txt, на который ссылаются all_profiles.txt и builtin
-preset-ы, обязан присутствовать в build source (private_zapretgui/dist/lists)
-либо генерироваться приложением из встроенных баз. Иначе после установки
-пресет падает с «Preset содержит ссылки на отсутствующие файлы»
-(история: netrogat.txt удалялся сборкой как generated, но не регенерировался).
+preset-ы, обязан лежать в репозитории либо генерироваться приложением из
+встроенных баз. Иначе после установки пресет падает с «Preset содержит
+ссылки на отсутствующие файлы» (история: netrogat.txt удалялся сборкой
+как generated, но не регенерировался).
+
+## Проверка была мёртвой
+
+Она смотрела в приватный репозиторий исходного проекта, папку рядом с
+этой. Его здесь нет и не будет, так что `setUp` молча пропускал оба
+теста, а инвариант не проверялся никогда.
+
+Между тем ровно эта беда случилась: списки один раз уже пропали из
+поставки, потому что их исключало правило `/lists/` в .gitignore.
+Приложение запускалось и выглядело рабочим, а обход не работал.
+
+Теперь проверка смотрит туда, где списки лежат на самом деле, —
+в `lists/` этого репозитория, откуда их и забирает сборка.
 """
 
 from __future__ import annotations
@@ -14,10 +27,9 @@ import unittest
 from pathlib import Path
 
 PUBLIC_ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_ROOT = PUBLIC_ROOT.parent / "private_zapretgui"
-ALL_PROFILES_PATH = PRIVATE_ROOT / "resources" / "profile" / "templates" / "all_profiles.txt"
+ALL_PROFILES_PATH = PUBLIC_ROOT / "src" / "profile" / "templates" / "all_profiles.txt"
 BUILTIN_PRESETS_ROOT = PUBLIC_ROOT / "src" / "presets" / "builtin"
-SHIPPED_LISTS_DIR = PRIVATE_ROOT / "dist" / "lists"
+SHIPPED_LISTS_DIR = PUBLIC_ROOT / "lists"
 
 # Эти итоговые файлы приложение собирает само из встроенных баз
 # (lists/core/embedded_defaults.py), в поставке их быть не должно.
@@ -56,10 +68,10 @@ def _collect_required_list_names() -> dict[str, set[str]]:
 
 class ShippedListsInvariantTest(unittest.TestCase):
     def setUp(self) -> None:
-        if not ALL_PROFILES_PATH.is_file():
-            self.skipTest(f"Нет private-репозитория: {ALL_PROFILES_PATH}")
-        if not SHIPPED_LISTS_DIR.is_dir():
-            self.skipTest(f"Нет build source списков: {SHIPPED_LISTS_DIR}")
+        # Пропусков здесь быть не должно: оба пути — внутри репозитория.
+        # Пропуск означал бы, что пропал сам предмет проверки.
+        self.assertTrue(ALL_PROFILES_PATH.is_file(), f"нет {ALL_PROFILES_PATH}")
+        self.assertTrue(SHIPPED_LISTS_DIR.is_dir(), f"нет {SHIPPED_LISTS_DIR}")
 
     def test_every_referenced_list_file_is_shipped_or_runtime_generated(self) -> None:
         shipped = {path.name.lower() for path in SHIPPED_LISTS_DIR.glob("*.txt")}
@@ -78,12 +90,26 @@ class ShippedListsInvariantTest(unittest.TestCase):
             f"({SHIPPED_LISTS_DIR}): {missing}",
         )
 
-    def test_runtime_generated_lists_are_not_shipped_as_plain_files(self) -> None:
-        """Generated-файлы не должны попадать в build source: сборка их чистит,
-        а приложение собирает заново из embedded-баз."""
-        shipped = {path.name.lower() for path in SHIPPED_LISTS_DIR.glob("*.txt")}
-        overlap = sorted(shipped & {name.lower() for name in RUNTIME_GENERATED_LIST_NAMES})
-        self.assertEqual(overlap, [])
+    def test_runtime_generated_lists_can_be_rebuilt(self) -> None:
+        """Приложение обязано уметь собрать эти списки само.
+
+        Прежняя проверка требовала обратного — чтобы их не было в
+        поставке: сборка исходного проекта их чистила. Здесь они лежат
+        в репозитории как обычные файлы, и требование потеряло смысл.
+
+        Смысл сохранился у другой половины правила. Эти списки приложение
+        пересобирает из встроенных баз — при обновлении, при сбросе, при
+        первом запуске на чистой машине. Пропадёт встроенная база —
+        пересобирать станет нечем, и пресеты снова начнут падать на
+        отсутствующем файле.
+        """
+        from lists.core import embedded_defaults
+
+        for name in ("get_ipset_all_base_text", "get_ipset_ru_base_text"):
+            with self.subTest(source=name):
+                builder = getattr(embedded_defaults, name, None)
+                self.assertTrue(callable(builder), f"нет источника {name}")
+                self.assertTrue(str(builder() or "").strip(), f"{name} пуст")
 
 
 if __name__ == "__main__":

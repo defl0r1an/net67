@@ -330,3 +330,39 @@ def _push_setting_button_accessible_name(button_text: str, title_text: str) -> s
     if title.casefold().startswith(button.casefold()):
         return title
     return f"{button} {title[:1].lower()}{title[1:]}"
+
+
+def build_updates_card(*, push_setting_card_cls, tr_fn, parent):
+    """Карточка «Обновления» в «Дополнительных действиях».
+
+    Раздел обновлений в приложении был, а попасть в него было некуда: в
+    навигации он скрыт, а единственный вход — через «О программе» — исчез
+    вместе с самой страницей, когда её убирали вместе со ссылками
+    прежнего автора.
+
+    Проверка при запуске при этом работает, но не чаще раза в шесть
+    часов. Для человека, который хочет посмотреть версию сейчас, это то
+    же самое, что её нет: кнопки не найти, а перезапуск ничего не даёт.
+
+    Карточка одинакова для обоих режимов, поэтому собирается здесь, а не
+    дважды в соседних сборщиках секций.
+    """
+    from updater.open_page import open_updates_page
+
+    return build_deferred_themed_push_setting_card_common(
+        push_setting_card_cls=push_setting_card_cls,
+        button_text=tr_fn("page.control.updates.button", "Открыть"),
+        icon_name="fa5s.sync-alt",
+        icon_color="#7ee2b8",
+        title_text=tr_fn("page.control.updates.title", "Обновления"),
+        content_text=tr_fn(
+            "page.control.updates.desc",
+            "Проверить версию и установить обновление",
+        ),
+        on_click=lambda: open_updates_page(),
+        button_accessible_name=tr_fn(
+            "page.control.updates.accessible_name",
+            "Открыть раздел обновлений",
+        ),
+        parent=parent,
+    )

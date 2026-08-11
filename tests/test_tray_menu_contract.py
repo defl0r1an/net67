@@ -68,7 +68,7 @@ class TrayMenuContractTests(unittest.TestCase):
         self.assertEqual(menu.styleSheet(), before)
         self.assertIn("MenuActionListWidget", menu.styleSheet())
         self.assertIn("border-color", menu.styleSheet())
-        self.assertIn("zapretgui-round-menu-hairline-begin", menu.styleSheet())
+        self.assertIn("net67-round-menu-hairline-begin", menu.styleSheet())
         self.assertNotIn("border-left", menu.styleSheet())
 
     def test_native_tray_winapi_calls_have_pointer_safe_ctypes_signatures(self) -> None:

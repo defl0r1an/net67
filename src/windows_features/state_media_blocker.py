@@ -8,8 +8,26 @@ from dataclasses import dataclass
 from log.log import log
 
 
-_BLOCK_BEGIN = "# >>> zapretgui:russian-state-media-block begin >>>"
-_BLOCK_END = "# <<< zapretgui:russian-state-media-block end <<<"
+_BLOCK_BEGIN = "# >>> net67:russian-state-media-block begin >>>"
+_BLOCK_END = "# <<< net67:russian-state-media-block end <<<"
+
+#: Метки прежней версии. Читаем и убираем, но больше не пишем.
+#:
+#: Метки уходят в системный hosts — файл, который человек открывает
+#: блокнотом, — и там оставалось имя исходного проекта. Просто
+#: переименовать было нельзя: у тех, кто уже включал блокировку, в hosts
+#: лежит блок со старой меткой, и снятие его бы не нашло. Записи остались
+#: бы навсегда, а это домены, отправленные в никуда.
+_LEGACY_BLOCK_BEGIN = ("# >>> zapretgui:russian-state-media-block begin >>>",)
+_LEGACY_BLOCK_END = ("# <<< zapretgui:russian-state-media-block end <<<",)
+
+
+def _is_block_begin(line: str) -> bool:
+    return _BLOCK_BEGIN in line or any(marker in line for marker in _LEGACY_BLOCK_BEGIN)
+
+
+def _is_block_end(line: str) -> bool:
+    return _BLOCK_END in line or any(marker in line for marker in _LEGACY_BLOCK_END)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,11 +67,11 @@ def _remove_block(lines: list[str]) -> tuple[list[str], bool]:
     inside_block = False
     removed = False
     for line in lines:
-        if _BLOCK_BEGIN in line:
+        if _is_block_begin(line):
             inside_block = True
             removed = True
             continue
-        if _BLOCK_END in line:
+        if _is_block_end(line):
             inside_block = False
             removed = True
             continue

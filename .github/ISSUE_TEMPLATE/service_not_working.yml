@@ -1,12 +1,12 @@
 name: "Сервис не работает"
-description: "Сообщить что конкретный сервис не работает через Zapret GUI"
+description: "Сообщить что конкретный сервис не работает через net67"
 title: "[Не работает]: "
 labels: ["сервис не работает"]
 body:
   - type: markdown
     attributes:
       value: |
-        Если какой-то сервис не работает через Zapret GUI, заполните эту форму.
+        Если какой-то сервис не работает через net67, заполните эту форму.
         Чем подробнее вы опишете проблему, тем быстрее мы сможем помочь.
 
   - type: dropdown
@@ -44,7 +44,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Версия Zapret GUI
+      label: Версия net67
       description: "Указана в заголовке окна или в разделе «О программе»"
       placeholder: "Например: 1.2.3"
     validations:

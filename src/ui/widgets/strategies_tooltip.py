@@ -370,7 +370,7 @@ class StrategiesTooltipManager:
         # If interactive RMB preview is open, avoid showing hover tooltips at all.
         try:
             app = QApplication.instance()
-            if app and bool(app.property("zapretgui_args_preview_open")):
+            if app and bool(app.property("net67_args_preview_open")):
                 self.hide_immediately()
                 return
         except Exception:

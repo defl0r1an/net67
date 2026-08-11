@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from presets.ui.control.shared_builders import build_deferred_themed_push_setting_card_common
+from presets.ui.control.shared_builders import (
+    build_deferred_themed_push_setting_card_common,
+    build_updates_card,
+)
 from presets.ui.control.windows_features.build import build_state_media_block_toggle, build_windows_feature_toggles
 from ui.fluent_widgets import build_additional_settings_section, enable_setting_card_group_auto_height
 
@@ -198,6 +201,11 @@ def build_winws1_pages_settings_sections(
         button_accessible_name=tr_fn("page.winws1_control.button.documentation.accessible_name", "Открыть документацию"),
         parent=content_parent,
     )
+    updates_card = build_updates_card(
+        push_setting_card_cls=push_setting_card_cls,
+        tr_fn=tr_fn,
+        parent=content_parent,
+    )
     state_media_block_toggle = build_state_media_block_toggle(
         tr_fn=tr_fn,
         win11_toggle_row_cls=win11_toggle_row_cls,
@@ -207,6 +215,7 @@ def build_winws1_pages_settings_sections(
     extra_card.addSettingCard(internet_cleanup_card)
     extra_card.addSettingCard(folder_card)
     extra_card.addSettingCard(docs_card)
+    extra_card.addSettingCard(updates_card)
     extra_card.addSettingCard(state_media_block_toggle)
     enable_setting_card_group_auto_height(extra_card)
 

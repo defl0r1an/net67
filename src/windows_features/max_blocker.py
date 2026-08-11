@@ -17,6 +17,33 @@ from log.log import log
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
+#: Метка блока в файле hosts.
+#:
+#: Пишется в системный файл, который человек открывает блокнотом, — и
+#: там до последнего оставалось имя прежнего проекта. Заметил это
+#: владелец приложения, открыв hosts.
+HOSTS_MARKER_BEGIN = "# MAX BLOCKED BY net67"
+HOSTS_MARKER_END = "# END MAX BLOCK"
+
+#: Метки прежней версии. Читаем и убираем, но больше не пишем.
+#:
+#: Просто переименовать метку было нельзя: у всех, кто уже включал
+#: блокировку, в hosts лежит старый блок. С новой меткой снятие
+#: блокировки его бы не нашло, и записи остались бы навсегда — а это
+#: домены, перенаправленные в никуда.
+LEGACY_HOSTS_MARKERS = ("# MAX BLOCKED BY ZAPRET GUI",)
+
+#: Содержимое файла-заглушки, которым занимается папка установки MAX.
+BLOCKING_FILE_CONTENT = "BLOCKED BY net67\n"
+
+
+def _hosts_block_starts(line: str) -> bool:
+    """Начинается ли с этой строки наш блок — нынешний или прежний."""
+    return HOSTS_MARKER_BEGIN in line or any(
+        marker in line for marker in LEGACY_HOSTS_MARKERS
+    )
+
+
 # Путь к политикам Explorer для блокировки запуска
 EXPLORER_POLICIES_PATH = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
 DISALLOW_RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\DisallowRun"
@@ -273,7 +300,7 @@ class MaxBlockerManager:
                 
                 # Создаем пустой файл
                 with open(path, 'w') as f:
-                    f.write("BLOCKED BY ZAPRET GUI\n")
+                    f.write(BLOCKING_FILE_CONTENT)
                 
                 # Делаем файл только для чтения
                 os.chmod(path, 0o444)
@@ -405,19 +432,20 @@ class MaxBlockerManager:
             with open(hosts_path, 'r', encoding='utf-8-sig') as f:
                 content = f.read()
             
-            # Маркер для наших записей
-            marker = "# MAX BLOCKED BY ZAPRET GUI"
-            
-            # Проверяем, есть ли уже наши записи
-            if marker in content:
+            # Уже заблокировано — в том числе блоком прежней версии.
+            # Иначе поверх старого блока лёг бы второй, с теми же
+            # доменами и другой меткой.
+            if HOSTS_MARKER_BEGIN in content or any(
+                marker in content for marker in LEGACY_HOSTS_MARKERS
+            ):
                 return True
-            
+
             # Добавляем блокировки
-            new_entries = [f"\n{marker}"]
+            new_entries = [f"\n{HOSTS_MARKER_BEGIN}"]
             for domain in blocked_domains:
                 new_entries.append(f"127.0.0.1 {domain}")
                 new_entries.append(f"::1 {domain}")
-            new_entries.append(f"# END MAX BLOCK\n")
+            new_entries.append(f"{HOSTS_MARKER_END}\n")
             
             # Записываем обратно
             with open(hosts_path, 'a', encoding='utf-8-sig') as f:
@@ -440,17 +468,15 @@ class MaxBlockerManager:
             with open(hosts_path, 'r', encoding='utf-8-sig') as f:
                 lines = f.readlines()
             
-            # Фильтруем строки, удаляя наши блокировки
-            marker_start = "# MAX BLOCKED BY ZAPRET GUI"
-            marker_end = "# END MAX BLOCK"
-            
+            # Фильтруем строки, удаляя наши блокировки — и нынешние, и
+            # оставшиеся от прежней версии под старой меткой.
             new_lines = []
             skip = False
-            
+
             for line in lines:
-                if marker_start in line:
+                if _hosts_block_starts(line):
                     skip = True
-                elif marker_end in line:
+                elif HOSTS_MARKER_END in line:
                     skip = False
                     continue
                 elif not skip:
