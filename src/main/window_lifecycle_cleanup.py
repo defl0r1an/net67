@@ -150,6 +150,18 @@ def cleanup_visual_and_proxy_resources_for_close(window, *, telegram_proxy_featu
 
     telegram_proxy_feature.cleanup()
 
+    # Ядро Xray и системный прокси гасим при закрытии обязательно.
+    #
+    # Иначе выход из программы оставляет Windows настроенной на порт,
+    # которого больше нет: браузер ходит в пустоту, и со стороны это
+    # выглядит как «net67 сломал интернет».
+    try:
+        from vpn.link_runtime import disconnect as disconnect_link
+
+        disconnect_link()
+    except Exception as exc:
+        log(f"Ошибка остановки ядра Xray при закрытии: {exc}", "DEBUG")
+
 
 def cleanup_runtime_threads_for_close(runtime_feature) -> None:
     try:

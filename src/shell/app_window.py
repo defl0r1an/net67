@@ -59,6 +59,74 @@ from shell.theme import palette, shell_qss
 from shell.window import TitleBar
 
 
+FULLSCREEN_SLACK_PX = 24
+
+#: Размер, к которому возвращаемся, если возвращаться некуда — окно ни
+#: разу не было в обычном состоянии, и Qt не запомнил прежнюю рамку.
+RESTORED_SIZE = (1120, 780)
+
+
+def _looks_maximized(window) -> bool:
+    """Занимает ли окно весь экран — по любому признаку.
+
+    Одного `isMaximized()` мало. Приложение открывает окно, задавая ему
+    размер рабочей области, а не вызывая showMaximized: с точки зрения
+    Qt оно при этом обычное. Кнопка разворота попадала в ветку «развернуть»
+    и разворачивала уже растянутое окно — то есть не делала ничего
+    видимого. Нажатие второй раз повторяло то же самое.
+    """
+    try:
+        if window.isMaximized() or window.isFullScreen():
+            return True
+    except Exception:
+        return False
+
+    try:
+        screen = window.screen()
+        if screen is None:
+            return False
+        available = screen.availableGeometry()
+        frame = window.frameGeometry()
+    except Exception:
+        return False
+
+    return (
+        frame.width() >= available.width() - FULLSCREEN_SLACK_PX
+        and frame.height() >= available.height() - FULLSCREEN_SLACK_PX
+    )
+
+
+def _restore_window(window) -> None:
+    """Возвращает окно к обычному размеру.
+
+    showNormal у растянутого, но не развёрнутого окна не делает ничего:
+    оно и так «обычное». Поэтому размер задаём сами и ставим окно по
+    центру экрана — иначе оно останется прижатым к левому верхнему углу.
+    """
+    window.showNormal()
+
+    try:
+        screen = window.screen()
+        available = screen.availableGeometry()
+    except Exception:
+        return
+
+    # Не больше четырёх пятых экрана. Иначе на маленьком мониторе
+    # «обычный» размер упирается в тот же порог, по которому мы считаем
+    # окно развёрнутым, и кнопка перестаёт переключать: замер на экране
+    # 800x800 давал 776x776 — то есть снова «развёрнуто».
+    width = min(RESTORED_SIZE[0], int(available.width() * 0.8))
+    height = min(RESTORED_SIZE[1], int(available.height() * 0.8))
+    if window.width() >= available.width() - FULLSCREEN_SLACK_PX or (
+        window.height() >= available.height() - FULLSCREEN_SLACK_PX
+    ):
+        window.resize(width, height)
+        window.move(
+            available.x() + (available.width() - width) // 2,
+            available.y() + (available.height() - height) // 2,
+        )
+
+
 class AppShellWindow(FramelessWindow):
     """Окно приложения: свой заголовок, своя навигация, стопка страниц."""
 
@@ -126,8 +194,44 @@ class AppShellWindow(FramelessWindow):
         except Exception:
             pass
 
+        self._apply_window_border_colour()
         self._subscribe_to_theme_changes()
         self.apply_shell_theme(dark=self._current_theme_is_dark())
+
+    def _apply_window_border_colour(self) -> None:
+        """Гасит светлую рамку, которую Windows 11 рисует вокруг окна.
+
+        Обводку рисует не приложение, а сама система: DWM обводит каждое
+        окно линией в цвет акцента, а при выключенном акценте — светлой.
+        На тёмном окне она читается как чужая белая рамка.
+
+        Задаём цвет сами — тот же, что у фона окна. Отменить обводку
+        нельзя, но слить её с окном можно.
+
+        Работает только на Windows 11 и только через DWM: на десятке и
+        на других системах вызов молча ничего не делает, и это правильно
+        — там этой рамки и нет.
+        """
+        try:
+            from qframelesswindow.utils.win32_utils import isGreaterEqualWin11
+        except Exception:
+            return
+
+        try:
+            if not isGreaterEqualWin11():
+                return
+
+            effect = getattr(self, "windowEffect", None)
+            if effect is None:
+                return
+
+            from shell.theme import palette
+
+            colours = palette(self._current_theme_is_dark())
+            effect.setBorderAccentColor(self.winId(), QColor(colours.window))
+        except Exception:
+            # Рамка — мелочь оформления. Ронять из-за неё запуск нельзя.
+            pass
 
     # ── вкладки разделов ──────────────────────────────────────────────
 
@@ -549,6 +653,10 @@ class AppShellWindow(FramelessWindow):
             qss += f"\n#net67Window {{ background: {self._custom_background.name()}; }}"
         self.setStyleSheet(qss)
 
+        # Рамка окна красится вслед за темой: в светлой она должна
+        # оставаться светлой, иначе окно получит тёмный кант.
+        self._apply_window_border_colour()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Полоса заголовка лежит поверх раскладки, ширину ей задаём сами.
@@ -557,11 +665,13 @@ class AppShellWindow(FramelessWindow):
         if ambient is not None:
             ambient.setGeometry(self.rect())
 
+#: Насколько окно может не дотягивать до краёв экрана и всё ещё
+#: считаться развёрнутым. Запас на тень и на округление при масштабе
+#: интерфейса, отличном от ста процентов.
     def _toggle_maximized(self) -> None:
-        if self.isMaximized():
-            self.showNormal()
+        if _looks_maximized(self):
+            _restore_window(self)
         else:
             self.showMaximized()
-
 
 __all__ = ["AppShellWindow"]

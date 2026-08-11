@@ -98,18 +98,18 @@ class PageWiringTests(unittest.TestCase):
 
         self.assertNotIn("setEnabled(False)", source)
 
-    def test_state_resets_on_restart(self) -> None:
-        """Признак открытия живёт в окне, а не в настройках.
+    def test_the_lock_is_currently_off(self) -> None:
+        """Замок снят: раздел открыт сразу.
 
-        Раздел не доделан, и оставлять его открытым навсегда после
-        случайных десяти нажатий не стоит.
+        Пока он стоял, вкладка не переключалась — и со стороны это
+        неотличимо от поломки. Правило и его проверки выше остались:
+        понадобится закрыть снова, достаточно вернуть False.
         """
         from vpn.ui import page
 
         source = inspect.getsource(page.VpnPage.__init__)
 
-        self.assertIn("self._links_unlocked = False", source)
-        self.assertIn("self._links_clicks = 0", source)
+        self.assertIn("self._links_unlocked = True", source)
 
 
 if __name__ == "__main__":

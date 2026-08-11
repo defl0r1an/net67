@@ -32,9 +32,24 @@ if str(PROJECT_SRC) not in sys.path:
 
 
 class _Profile:
-    def __init__(self, scheme: str = "vless", raw: str = "vless://uuid@example.org:443"):
+    """Подделка LinkProfile. Поля те же, что у настоящего.
+
+    Адрес и порт добавлены не для удобства: конфиг ядра берёт их
+    оттуда, и без них подделка перестала бы изображать то, что
+    изображает.
+    """
+
+    def __init__(
+        self,
+        scheme: str = "vless",
+        raw: str = "vless://uuid@example.org:443",
+        host: str = "example.org",
+        port: int = 443,
+    ):
         self.scheme = scheme
         self.raw = raw
+        self.host = host
+        self.port = port
 
 
 class ConfigTests(unittest.TestCase):
@@ -59,12 +74,32 @@ class ConfigTests(unittest.TestCase):
 
         self.assertNotIn(LOCAL_PORT, {1080, 8080, 8888, 9050})
 
-    def test_link_is_carried_over_untouched(self) -> None:
-        """Пересобирать ссылку из частей — потерять неизвестный параметр."""
-        link = "vless://uuid@example.org:443?security=reality&sni=a.b&flow=xtls-rprx-vision"
-        outbound = self._config(_Profile(raw=link))["outbounds"][0]
+    def test_link_parameters_reach_the_core(self) -> None:
+        """Раньше ссылка уходила в конфиг целиком, полем _link.
 
-        self.assertEqual(outbound["_link"], link)
+        Так и было задумано — «пересобирать из частей значит потерять
+        неизвестный параметр», — но ядро такого поля не знает и просто
+        его игнорирует. Конфиг без адреса и идентификатора не поднимает
+        соединение вообще, а на странице это выглядит как «ядро
+        запустилось и тут же умерло».
+
+        Поэтому параметры теперь разбираются: reality с именем сервера,
+        flow для vless, адрес и порт узла.
+        """
+        link = "vless://uuid@example.org:443?security=reality&sni=a.b&flow=xtls-rprx-vision"
+        outbound = self._config(_Profile(raw=link, scheme="vless", host="example.org", port=443))["outbounds"][0]
+
+        self.assertEqual(outbound["protocol"], "vless")
+
+        server = outbound["settings"]["vnext"][0]
+        self.assertEqual(server["address"], "example.org")
+        self.assertEqual(server["port"], 443)
+        self.assertEqual(server["users"][0]["id"], "uuid")
+        self.assertEqual(server["users"][0]["flow"], "xtls-rprx-vision")
+
+        stream = outbound["streamSettings"]
+        self.assertEqual(stream["security"], "reality")
+        self.assertEqual(stream["realitySettings"]["serverName"], "a.b")
 
     def test_udp_is_allowed(self) -> None:
         """Без него не работают ни звонки, ни игры."""

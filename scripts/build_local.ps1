@@ -24,7 +24,7 @@ Write-Host "[1/6] Checking generated files" -ForegroundColor Cyan
 
 $buildInfo = Join-Path $Root "src\config\build_info.py"
 if (-not (Test-Path $buildInfo)) {
-    $lines = @('APP_VERSION = "0.2.67"', 'CHANNEL = "stable"')
+    $lines = @('APP_VERSION = "0.3.67"', 'CHANNEL = "stable"')
     Set-Content -Path $buildInfo -Value $lines -Encoding UTF8
     Write-Host "      created build_info.py" -ForegroundColor Yellow
 }
@@ -80,7 +80,11 @@ function Stop-Net67Engine {
         }
     }
 
-    foreach ($name in @("net67", "winws", "winws2", "amneziawg", "awg")) {
+    # xray в списке не просто так: ядро подключения по ссылке живёт
+    # своим процессом и держит artifact\bin\xray\xray.exe. Один сеанс
+    # подключения - и сборка падает на "Artifact folder is locked",
+    # причём про xray в сообщении нет ни слова.
+    foreach ($name in @("net67", "winws", "winws2", "amneziawg", "awg", "xray")) {
         Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host ("      stopping process " + $_.ProcessName)
             Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
@@ -121,7 +125,7 @@ if (Test-Path $Artifact) {
         $locked | Select-Object -First 5 | ForEach-Object { Write-Host ("  " + $_.FullName) }
         Write-Host ""
         Write-Host "Something still holds them. From an elevated prompt:" -ForegroundColor Yellow
-        Write-Host "  taskkill /F /IM net67.exe /IM winws.exe /IM winws2.exe /IM amneziawg.exe"
+        Write-Host "  taskkill /F /IM net67.exe /IM winws.exe /IM winws2.exe /IM amneziawg.exe /IM xray.exe"
         Write-Host "  sc stop Monkey"
         Write-Host "  sc delete Monkey"
         Write-Host "  Get-Service AmneziaWG* | ForEach-Object { sc.exe delete `$_.Name }"

@@ -137,9 +137,26 @@ def _reveal_main_window(startup_host) -> None:
     try:
         if bool(getattr(window, "start_in_tray", False)) or window.isVisible():
             return
+
+        # Раскладку и стили считаем до показа, а не после.
+        #
+        # Прежде здесь было показать прозрачным и проявить следующим
+        # оборотом цикла. Не помогало: Windows создаёт и закрашивает окно
+        # раньше, чем Qt применит прозрачность, и на экран успевал
+        # выскочить чёрный прямоугольник размера по умолчанию.
+        from main.window_startup_signal_setup import prepare_window_for_show
+
+        prepare_window_for_show(window)
+        # Прозрачность — оформление; если её не выставить, окно всё равно
+        # должно открыться. Раньше похожая мелочь роняла весь показ.
+        try:
+            window.setWindowOpacity(1.0)
+        except Exception:
+            pass
         window.show()
         window.raise_()
         window.activateWindow()
+
         log("Основное окно показано после мастера первого запуска", "DEBUG")
     except Exception as exc:
         log(f"Не удалось показать окно после мастера: {exc}", "⚠ WARNING")

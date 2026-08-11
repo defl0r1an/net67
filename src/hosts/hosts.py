@@ -23,7 +23,25 @@ def _get_hosts_path_from_env() -> Path:
     return Path(r"C:\Windows\System32\drivers\etc\hosts")
 
 
-HOSTS_PATH = _get_hosts_path_from_env() if os.name == "nt" else Path(r"C:\Windows\System32\drivers\etc\hosts")
+def _hosts_path() -> Path:
+    """Путь к файлу hosts. Вне Windows — временный, а не выдуманный.
+
+    Раньше здесь на любой не-Windows стоял тот же литерал
+    ``C:\\Windows\\System32\\drivers\\etc\\hosts``. На Linux это не путь,
+    а имя файла из одного куска с обратными слэшами: каждый прогон
+    тестов, который трогает hosts, создавал такой файл в текущей папке.
+    В корне репозитория он и обнаружился — прямо перед выкладкой, среди
+    неотслеживаемых файлов.
+    """
+    if os.name == "nt":
+        return _get_hosts_path_from_env()
+
+    import tempfile
+
+    return Path(tempfile.gettempdir()) / "net67-hosts-not-windows"
+
+
+HOSTS_PATH = _hosts_path()
 
 _GITHUB_API_DOMAIN = "api.github.com"
 _HOSTS_BOOTSTRAP_SIGNATURE_VERSION = "v3"

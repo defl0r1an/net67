@@ -88,12 +88,35 @@ class TitleBar(FramelessTitleBar):
         self.setObjectName("net67TitleBar")
         self.setFixedHeight(TITLE_BAR_HEIGHT)
 
-        # Кнопки библиотеки убираем: у неё свои, в чужом оформлении.
+        # Кнопки библиотеки убираем с глаз, но оставляем в живых.
+        #
+        # Три попытки, две неверные — записываю, чтобы не повторить.
+        #
+        # setParent(None) не «убирает виджет», а делает его окном
+        # верхнего уровня со своей рамкой от Windows. Замер при запуске
+        # показывал четыре окна вместо одного: наше и три кнопки по
+        # 46x32 — спрятанные, но живые, и при старте они успевали
+        # мигнуть на экране чужим окошком.
+        #
+        # deleteLater убрал мигание, но сломал окно: библиотека сама
+        # обращается к maxBtn при каждой смене состояния окна, и после
+        # удаления это падало прямо в обработчике события —
+        #
+        #     RuntimeError: wrapped C/C++ object of type MaximizeButton
+        #     has been deleted
+        #
+        # Верное решение простое: спрятать и вынуть из раскладки. Тогда
+        # кнопки не видны, не занимают места и не становятся окнами, а
+        # библиотека продолжает их находить.
         for name in ("minBtn", "maxBtn", "closeBtn"):
             button = getattr(self, name, None)
-            if button is not None:
-                button.hide()
-                button.setParent(None)
+            if button is None:
+                continue
+            layout = getattr(self, "hBoxLayout", None)
+            if layout is not None:
+                layout.removeWidget(button)
+            button.hide()
+            button.setFixedSize(0, 0)
 
         # Берём раскладку библиотеки, а не заводим свою: у TitleBar она
         # уже есть, вторая вызывает предупреждение Qt и не применяется.

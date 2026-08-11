@@ -10,7 +10,7 @@
 номером на GitHub нет.
 
 Отдельно проверяется разбор тега. Тег пишет человек, и пишет он то
-`v0.2.67`, то `0.2.67`. Первый вариант разбора срезал первый символ у
+`v0.3.67`, то `0.3.67`. Первый вариант разбора срезал первый символ у
 всего подходящего подряд, и тег без буквы превращался в `.2.67` —
 номер, который уехал бы в выпуск незамеченным.
 """
@@ -28,7 +28,7 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 #: Ожидаемая версия. Меняя её, поменяйте и в трёх местах ниже — тест
 #: для того и написан, чтобы не дать поменять в одном.
-EXPECTED_VERSION = "0.2.67"
+EXPECTED_VERSION = "0.3.67"
 
 WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "windows-release.yml"
 
@@ -102,18 +102,18 @@ class SourcesOfTheVersionAgreeTests(unittest.TestCase):
 
 class TagParsingTests(unittest.TestCase):
     def test_tag_with_the_letter_v(self) -> None:
-        self.assertEqual(_version_for_tag("v0.2.67"), "0.2.67")
+        self.assertEqual(_version_for_tag("v0.3.67"), "0.3.67")
 
     def test_tag_without_the_letter_v(self) -> None:
         """Тот самый случай, где номер терял первую цифру."""
-        self.assertEqual(_version_for_tag("0.2.67"), "0.2.67")
+        self.assertEqual(_version_for_tag("0.3.67"), "0.3.67")
 
     def test_four_part_number(self) -> None:
         """Прежний проект нумеровался четырьмя частями."""
         self.assertEqual(_version_for_tag("v1.4.0.2"), "1.4.0.2")
 
     def test_a_branch_name_is_not_a_version(self) -> None:
-        for tag in ("main", "v", "release-0.2.67", ""):
+        for tag in ("main", "v", "release-0.3.67", ""):
             with self.subTest(tag=tag):
                 self.assertEqual(_version_for_tag(tag), EXPECTED_VERSION)
 

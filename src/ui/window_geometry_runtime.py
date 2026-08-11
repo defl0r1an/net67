@@ -337,6 +337,44 @@ class WindowGeometryRuntime:
         self._last_non_minimized_zoomed = current_mode == "maximized"
         self._schedule_geometry_save()
 
+    def apply_pending_maximized_before_show(self) -> bool:
+        """Ставит развёрнутое состояние скрытому окну, до показа.
+
+        Иначе разворот происходит в showEvent — то есть уже на экране, и
+        окно видно дважды: сначала в сохранённом размере, следом рывком
+        на весь экран. Заметно это стало ровно тогда, когда окно
+        перестали показывать прозрачным: прозрачность прятала весь этот
+        промежуток заодно с ошибкой.
+
+        setWindowState скрытому окну Qt запоминает и применяет одним
+        ShowWindow(SW_SHOWMAXIMIZED) при показе — без промежуточного
+        кадра. showMaximized() здесь звать нельзя: он сам показывает
+        окно, а показывать ещё рано.
+
+        Возвращает True, если состояние выставлено.
+        """
+        if self._applied_saved_maximize_state:
+            return False
+        if not bool(self._pending_restore_maximized):
+            return False
+
+        try:
+            if self.host.isVisible():
+                # Окно уже на экране — обычный путь через showEvent.
+                return False
+            self.host.setWindowState(
+                (self.host.windowState() & ~Qt.WindowState.WindowMinimized)
+                | Qt.WindowState.WindowMaximized
+            )
+        except Exception as exc:
+            log(f"Не удалось развернуть окно до показа: {exc}", "DEBUG")
+            return False
+
+        self._pending_restore_maximized = False
+        self._applied_saved_maximize_state = True
+        self._last_non_minimized_zoomed = True
+        return True
+
     def apply_saved_maximized_state_if_needed(self) -> None:
         if self._applied_saved_maximize_state:
             return

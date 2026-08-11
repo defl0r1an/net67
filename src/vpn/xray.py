@@ -58,12 +58,23 @@ class XrayError(RuntimeError):
 
 
 def core_path(root: Path | None = None) -> Path:
-    """Где лежит ядро."""
+    """Где лежит ядро: `bin/xray/xray.exe`.
+
+    Здесь стояло `APPLICATION_PATHS.application_dir` — свойства с таким
+    именем у путей приложения нет вовсе. Любое обращение падало с
+    AttributeError ещё до проверки, есть ли файл, так что не работала
+    даже вежливая проверка «ядро на месте?».
+
+    Саму папку менять не надо: ядро уже лежит в bin/xray, и одну мою
+    правку пришлось откатить — я перенёс путь в exe, не посмотрев, что
+    файл на месте.
+    """
     if root is not None:
         return Path(root) / "bin" / "xray" / "xray.exe"
+
     from config.runtime_layout import APPLICATION_PATHS
 
-    return Path(APPLICATION_PATHS.application_dir) / "bin" / "xray" / "xray.exe"
+    return Path(APPLICATION_PATHS.bin_dir) / "xray" / "xray.exe"
 
 
 def is_core_available(root: Path | None = None) -> bool:
@@ -73,12 +84,123 @@ def is_core_available(root: Path | None = None) -> bool:
         return False
 
 
-def build_config(profile, *, port: int = LOCAL_PORT) -> dict:
-    """Конфигурация ядра под один сервер.
+def _stream_settings(query: dict) -> dict:
+    """Как ядро оборачивает соединение: транспорт и маскировка.
 
-    Ссылка уходит в исходном виде: пересобирать её из разобранных частей
-    — верный способ потерять параметр, о котором мы не знали.
+    Разбирается из параметров ссылки. Неизвестные не выдумываем: чего
+    нет — того нет, ядро подставит своё умолчание.
     """
+    network = (query.get("type") or ["tcp"])[0]
+    security = (query.get("security") or ["none"])[0]
+
+    stream: dict = {"network": network, "security": security}
+
+    if security == "tls":
+        tls: dict = {}
+        sni = (query.get("sni") or query.get("host") or [""])[0]
+        if sni:
+            tls["serverName"] = sni
+        fingerprint = (query.get("fp") or [""])[0]
+        if fingerprint:
+            tls["fingerprint"] = fingerprint
+        alpn = (query.get("alpn") or [""])[0]
+        if alpn:
+            tls["alpn"] = [part for part in alpn.split(",") if part]
+        stream["tlsSettings"] = tls
+    elif security == "reality":
+        reality = {}
+        for key, name in (("sni", "serverName"), ("pbk", "publicKey"), ("sid", "shortId"), ("fp", "fingerprint")):
+            value = (query.get(key) or [""])[0]
+            if value:
+                reality[name] = value
+        stream["realitySettings"] = reality
+
+    if network == "ws":
+        ws: dict = {}
+        path = (query.get("path") or [""])[0]
+        if path:
+            ws["path"] = path
+        host = (query.get("host") or [""])[0]
+        if host:
+            ws["headers"] = {"Host": host}
+        stream["wsSettings"] = ws
+    elif network == "grpc":
+        service = (query.get("serviceName") or [""])[0]
+        if service:
+            stream["grpcSettings"] = {"serviceName": service}
+
+    return stream
+
+
+def _outbound(profile) -> dict:
+    """Исходящее соединение под протокол профиля.
+
+    Раньше здесь стояла заглушка: протокол и сама ссылка полем `_link`,
+    без адреса, идентификатора и транспорта. Ядро с такой настройкой не
+    поднялось бы никогда — а на странице это выглядело бы как «ядро
+    запустилось и тут же умерло».
+    """
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    scheme = str(getattr(profile, "scheme", "") or "").lower()
+    raw = str(getattr(profile, "raw", "") or "")
+    host = str(getattr(profile, "host", "") or "")
+    port = int(getattr(profile, "port", 0) or 0)
+
+    parsed = urlparse(raw)
+    query = parse_qs(parsed.query)
+    user = unquote(parsed.username or "")
+
+    stream = _stream_settings(query)
+
+    if scheme == "vless":
+        user_entry: dict = {"id": user, "encryption": "none"}
+        flow = (query.get("flow") or [""])[0]
+        if flow:
+            user_entry["flow"] = flow
+        settings = {"vnext": [{"address": host, "port": port, "users": [user_entry]}]}
+    elif scheme == "vmess":
+        # У vmess разобранные поля лежат в самом профиле: ссылка это
+        # base64 от JSON, и парсер уже её раскрыл.
+        settings = {
+            "vnext": [
+                {
+                    "address": host,
+                    "port": port,
+                    "users": [{"id": user or str(getattr(profile, "user_id", "") or ""), "alterId": 0, "security": "auto"}],
+                }
+            ]
+        }
+    elif scheme == "trojan":
+        settings = {"servers": [{"address": host, "port": port, "password": user}]}
+    else:
+        # shadowsocks: метод и пароль лежат в имени пользователя, часто
+        # закодированные base64.
+        method, _, password = user.partition(":")
+        if not password:
+            try:
+                from vpn.links import _b64_decode
+
+                decoded = _b64_decode(user).decode("utf-8", errors="replace")
+                method, _, password = decoded.partition(":")
+            except Exception:
+                method, password = "", user
+        settings = {
+            "servers": [
+                {"address": host, "port": port, "method": method or "aes-256-gcm", "password": password}
+            ]
+        }
+
+    return {
+        "tag": "proxy",
+        "protocol": scheme,
+        "settings": settings,
+        "streamSettings": stream,
+    }
+
+
+def build_config(profile, *, port: int = LOCAL_PORT) -> dict:
+    """Конфигурация ядра под один сервер."""
     return {
         # Лог ядра гасим: он пишет каждое соединение, и на активном
         # браузере это десятки строк в секунду в чужом формате.
@@ -92,14 +214,7 @@ def build_config(profile, *, port: int = LOCAL_PORT) -> dict:
                 "settings": {"udp": True},
             }
         ],
-        "outbounds": [
-            {
-                "tag": "proxy",
-                "protocol": str(getattr(profile, "scheme", "") or ""),
-                "streamSettings": {},
-                "_link": str(getattr(profile, "raw", "") or ""),
-            }
-        ],
+        "outbounds": [_outbound(profile), {"tag": "direct", "protocol": "freedom"}],
     }
 
 

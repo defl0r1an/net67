@@ -62,14 +62,23 @@ class ConnectionTestPage(BasePage):
         self._support_prepare_runtime = OneShotWorkerRuntime()
         self._support_prepare_state = LatestValueWorkerState(self._support_prepare_runtime, empty_value=None)
 
-        # Контейнер с ограниченной шириной, чтобы не расползалось за края
+        # Содержимое занимает всю ширину, как на остальных страницах.
+        #
+        # Здесь стоял потолок в 1080 пикселей «чтобы не расползалось за
+        # края». На широком окне это давало пустую колонну справа: сама
+        # страница 1440, содержимое 1080, и разница в три с половиной
+        # сотни пикселей висела пустотой. Соседние страницы при этом
+        # тянулись во всю ширину, и раздел выглядел съехавшим.
+        #
+        # Выравнивание по центру убрано вместе с потолком: без него оно
+        # ничего не двигает, а с ним прижимало блок к середине, отчего
+        # заголовок раздела начинался не там, где на других страницах.
         self.container = QWidget(self.content)
         self.container.setObjectName("connectionContainer")
-        self.container.setMaximumWidth(1080)
         self.container_layout = QVBoxLayout(self.container)
         self.container_layout.setContentsMargins(0, 0, 0, 0)
         self.container_layout.setSpacing(14)
-        self.container_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        self.container_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self._build_page_ui()
 

@@ -58,9 +58,21 @@ from vpn.profiles import (
 )
 
 
-#: Высота списка серверов. Шесть строк: дальше начинается прокрутка, а
-#: не растущая во весь экран страница.
-SERVER_LIST_HEIGHT = 190
+#: Высота списка серверов.
+#:
+#: Было 190 — шесть строк, и в подписке из двадцати пяти серверов
+#: приходилось скроллить крошечное окошко. Стало вдвое больше: видно
+#: десяток, и выбор перестал быть вознёй с полосой прокрутки.
+SERVER_LIST_HEIGHT = 380
+
+#: Подписи кнопки сохранения — по одной на род профиля.
+#:
+#: Профиль AmneziaWG сохраняется настоящим файлом `.conf` формата
+#: WireGuard. У сервера из ссылки такого файла нет: сохраняется
+#: настройка ядра Xray, то есть JSON. Одна подпись на оба случая
+#: обязательно врёт в одном из них.
+EXPORT_CONF_TITLE = "Сохранить как .conf"
+EXPORT_LINK_TITLE = "Сохранить настройки сервера"
 
 
 def _profiles_root():
@@ -109,10 +121,14 @@ class VpnPage(BasePage):
         #: способ показа, поэтому фильтруем на лету, а не режем файл.
         self._visible_profiles = []
         self._tab = TAB_ORDER[0]
-        #: Раздел подключения по ссылке закрыт, пока его дорабатывают.
-        #: Счёт нажатий и признак открытия живут в окне: перезапуск
-        #: закрывает раздел обратно, и это намеренно.
-        self._links_unlocked = False
+        #: Замок на разделе подключения по ссылке снят.
+        #:
+        #: Его ставили, пока раздел дорабатывался: вкладка писала «Раздел
+        #: в разработке» и открывалась десятью нажатиями. Со стороны это
+        #: неотличимо от поломки — вкладка не переключается, и всё.
+        #: Правило и его проверки остались в vpn/tabs.py: понадобится
+        #: закрыть снова — достаточно поставить здесь False.
+        self._links_unlocked = True
         self._links_clicks = 0
         self._tunnel_state = TunnelState.DISCONNECTED
         # По одному воркеру на операцию: параллельно запускать их незачем,
@@ -134,7 +150,25 @@ class VpnPage(BasePage):
         self._stats_timer.timeout.connect(self._refresh_connection_state)
 
         self._build_ui()
+        self._clear_stale_system_proxy()
         self._reload_profiles()
+
+    def _clear_stale_system_proxy(self) -> None:
+        """Снимает прокси, оставшийся от прошлого запуска.
+
+        Приложение можно закрыть не по-людски — снять задачу, обесточить
+        машину. Тогда в реестре остаётся указание ходить через порт,
+        которого больше нет, и Windows слушается: сайты перестают
+        открываться у всей системы, а виноватым выглядит net67.
+        """
+        try:
+            from vpn import system_proxy
+            from vpn.link_runtime import local_proxy_address
+
+            if system_proxy.clear_stale(local_proxy_address()):
+                log("Снят системный прокси, оставшийся от прошлого запуска", "INFO")
+        except Exception as exc:
+            log(f"Проверка системного прокси при запуске: {exc}", "DEBUG")
 
     # ──────────────────────────────────────────────────────────────────
     # Фоновые вызовы
@@ -178,8 +212,21 @@ class VpnPage(BasePage):
         # программа экранного доступа не скажет, какая из них открыта.
         self._announce_tabs()
         for key in TAB_ORDER:
-            self.tabs.addItem(key, TAB_TITLES[key], lambda k=key: self._on_tab_changed(k))
+            self.tabs.addItem(key, TAB_TITLES[key])
         self.tabs.setCurrentItem(self._tab)
+
+        # Слушаем смену выбранной вкладки, а не нажатие по элементу.
+        #
+        # Третьим доводом addItem принимает обработчик нажатия, и он тут
+        # стоял. Замер показал, что он не вызывается: подсветка на
+        # вкладке VPN менялась, currentRouteKey становился links, а наш
+        # _tab оставался прежним. Отсюда и «переключение не работает» —
+        # полоса переключалась, страница нет.
+        #
+        # currentItemChanged срабатывает на любой смене выбора, включая
+        # программную. Рекурсии нет: обработчик первым делом выходит,
+        # если вкладка не изменилась.
+        self.tabs.currentItemChanged.connect(self._on_tab_changed)
         self.add_widget(self.tabs)
 
         self.input_title_label = StrongBodyLabel(TAB_INPUT_TITLES[self._tab])
@@ -272,7 +319,7 @@ class VpnPage(BasePage):
         self.ping_btn.clicked.connect(self._on_check_server)
         actions.addWidget(self.ping_btn)
 
-        self.export_btn = PushButton("Сохранить как .conf")
+        self.export_btn = PushButton(EXPORT_CONF_TITLE)
         self.export_btn.clicked.connect(self._on_export)
         actions.addWidget(self.export_btn)
 
@@ -339,9 +386,30 @@ class VpnPage(BasePage):
         self.profile_list.blockSignals(True)
         self.profile_combo.clear()
         self.profile_list.clear()
+        # В списке — с флагом вместо двухбуквенного сокращения: «GB» надо
+        # вспоминать, флаг узнаётся сразу. В выпадающем оставляем как
+        # есть: его не видно, он живёт ради старых обработчиков.
+        #
+        # Картинка предпочтительнее символов: пара символов-индикаторов
+        # рисуется флагом не везде, Windows их не поддерживает и рисует
+        # две буквы в рамочках. Есть картинка — берём её, нет — остаётся
+        # символьный вариант.
+        from PyQt6.QtWidgets import QListWidgetItem
+
+        from vpn.flags import decorate, flag_icon, strip_country_prefix
+
         for profile in self._visible_profiles:
-            self.profile_combo.addItem(display_name(profile))
-            self.profile_list.addItem(display_name(profile))
+            name = display_name(profile)
+            self.profile_combo.addItem(name)
+
+            icon = flag_icon(name)
+            if icon is None:
+                self.profile_list.addItem(decorate(name))
+                continue
+
+            item = QListWidgetItem(strip_country_prefix(name))
+            item.setIcon(icon)
+            self.profile_list.addItem(item)
 
         index = 0
         if select_endpoint:
@@ -555,12 +623,36 @@ class VpnPage(BasePage):
 
         self.state_label.setText(text)
 
+    def _apply_export_button_label(self, profile) -> None:
+        """Подписывает кнопку сохранения под выбранный сервер.
+
+        Кнопка одна, а сохраняет она разное. У профиля AmneziaWG это
+        настоящий файл `.conf` — формат WireGuard, его понимает любой
+        клиент. У сервера из ссылки такого файла не бывает вовсе: там нет
+        ни приватного ключа, ни адреса в туннеле, всё это задаёт ядро
+        Xray само. Сохраняется настройка ядра, то есть JSON.
+
+        Подпись «Сохранить как .conf» на вкладке со ссылками поэтому
+        просто врала: нажимаешь — получаешь .json. Сначала я поправил то,
+        что кнопка делает, и забыл про то, что она обещает.
+        """
+        from vpn.link_runtime import is_link_profile
+
+        try:
+            link = profile is not None and is_link_profile(profile)
+        except Exception:
+            link = False
+
+        self.export_btn.setText(EXPORT_LINK_TITLE if link else EXPORT_CONF_TITLE)
+
     def _update_details(self) -> None:
         profile = self._current_profile()
         has_profile = profile is not None
 
         for button in (self.ping_btn, self.export_btn, self.delete_btn, self.connect_btn):
             button.setEnabled(has_profile)
+
+        self._apply_export_button_label(profile)
 
         self._refresh_connection_state()
 
@@ -571,12 +663,20 @@ class VpnPage(BasePage):
             self.ping_label.setText("")
             return
 
+        # Поля тут разные у двух родов профилей, и у сервера из ссылки
+        # половины из них нет вовсе: ни адреса в туннеле, ни DNS — их
+        # задаёт ядро Xray само. Обращение напрямую роняло страницу на
+        # каждом выборе сервера и на каждой проверке.
         protocol = getattr(profile, "protocol", "") or getattr(profile, "protocol_title", "")
         parts = [f"Протокол: {protocol}", f"Сервер: {profile.endpoint or 'не указан'}"]
-        if profile.address:
-            parts.append(f"Адрес в туннеле: {profile.address}")
-        if profile.dns:
-            parts.append(f"DNS: {profile.dns}")
+
+        address = getattr(profile, "address", "")
+        if address:
+            parts.append(f"Адрес в туннеле: {address}")
+
+        dns = getattr(profile, "dns", "")
+        if dns:
+            parts.append(f"DNS: {dns}")
         self.details_label.setText("\n".join(parts))
         self.ping_label.setText("")
 
@@ -722,15 +822,82 @@ class VpnPage(BasePage):
             message = f"{message}. Открыта вкладка {TAB_TITLES[target_tab]}"
         self._success(message)
 
+    def _export_link_config(self, profile) -> None:
+        """Сохраняет конфигурацию ядра Xray для выбранного сервера."""
+        import json
+
+        from vpn.xray import build_config
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Сохранить конфигурацию сервера",
+            f"{_profile_name(profile) or 'server'}.json",
+            "Конфигурация Xray (*.json)",
+        )
+        if not path:
+            return
+
+        try:
+            text = json.dumps(build_config(profile), ensure_ascii=False, indent=2)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text + "\n")
+        except Exception as exc:
+            self._error(f"Не удалось сохранить файл: {exc}")
+            return
+
+        self._success(f"Конфигурация сохранена: {path}")
+
     def _on_profile_changed(self, _index: int) -> None:
         self._update_details()
 
+        # Щелчок по другому серверу при поднятом ядре — это смена
+        # сервера, а не выбор на будущее.
+        #
+        # Кнопка «Подключить» раньше значила «подключиться вот к этому»,
+        # и чтобы сменить страну, приходилось отключаться и включаться
+        # заново. Теперь она значит «включить VPN», а выбор в списке
+        # переключает сервер на лету, как в любом клиенте.
+        from vpn.link_runtime import is_connected, is_link_profile
+
+        profile = self._current_profile()
+        if profile is None or not is_link_profile(profile):
+            return
+        if not is_connected():
+            return
+
+        self._switch_link_server(profile)
+
+    def _switch_link_server(self, profile) -> None:
+        """Переподнимает ядро на другом сервере, не разрывая VPN."""
+        from vpn.link_runtime import connect
+
+        started = self._start_worker(
+            "_tunnel_worker",
+            lambda item=profile: connect(item),
+            self._on_link_result,
+            self._on_tunnel_failed,
+        )
+        if started is None:
+            return
+
+        self.state_label.setText(f"Переключаем на {_profile_name(profile)}...")
+
     def _on_toggle_connection(self) -> None:
         from vpn.tunnel import TunnelState
+        from vpn.link_runtime import is_link_profile
         from vpn.tunnel_runtime import check_client_files
 
         profile = self._current_profile()
         if profile is None:
+            return
+
+        # Два рода профилей поднимают разные клиенты.
+        #
+        # Ссылку отдавали клиенту AmneziaWG, и он отвечал «В профиле нет
+        # приватного ключа» — верно по сути, но не тот клиент: ключей у
+        # ссылки и не бывает, её поднимает ядро Xray.
+        if is_link_profile(profile):
+            self._toggle_link_connection(profile)
             return
 
         available, files_message = check_client_files()
@@ -760,6 +927,54 @@ class VpnPage(BasePage):
         self.connect_btn.setEnabled(False)
         self.state_label.setText("Отключение..." if disconnecting else "Подключение...")
 
+    def _toggle_link_connection(self, profile) -> None:
+        """Подключение по ссылке: поднимает или гасит ядро Xray.
+
+        Ядро не заворачивает трафик системы, а поднимает локальный
+        прокси. Поэтому и подпись после успеха другая: она говорит
+        адрес, который надо вписать в программу, — иначе человек решит,
+        что всё уже идёт через сервер.
+        """
+        from vpn.link_runtime import check_core_available, connect, disconnect, is_connected
+
+        available, message = check_core_available()
+        if not available:
+            self._error(message)
+            return
+
+        disconnecting = is_connected()
+
+        def _run():
+            return disconnect() if disconnecting else connect(profile)
+
+        started = self._start_worker(
+            "_tunnel_worker",
+            _run,
+            self._on_link_result,
+            self._on_tunnel_failed,
+        )
+        if started is None:
+            return
+
+        self.connect_btn.setEnabled(False)
+        self.state_label.setText("Отключение..." if disconnecting else "Подключение...")
+
+    def _on_link_result(self, result) -> None:
+        from vpn.link_runtime import is_connected
+
+        self.connect_btn.setEnabled(True)
+
+        ok, message = result if isinstance(result, tuple) else (False, str(result))
+        connected = is_connected()
+
+        self.connect_btn.setText("Отключить" if connected else "Подключить")
+        self.state_label.setText("Подключено" if connected else "Отключено")
+
+        if ok:
+            self._success(message)
+        else:
+            self._error(message)
+
     def _on_tunnel_result(self, status, profile) -> None:
         from vpn.tunnel import TunnelState, describe_state
 
@@ -788,12 +1003,26 @@ class VpnPage(BasePage):
             return
 
         host = getattr(profile, "endpoint_host", "") or getattr(profile, "host", "")
-        port = profile.endpoint_port
+        port = getattr(profile, "endpoint_port", 0) or getattr(profile, "port", 0)
 
-        stats = self._last_stats
+        # Сервер из ссылки проверяем по TCP.
+        #
+        # Общая проверка идёт через ICMP и UDP-пробу — так устроен
+        # WireGuard, у него и порт UDP. У vless и trojan порт говорит по
+        # TCP, и UDP-проба отвечала «хост принял датаграмму и промолчал»:
+        # верно и совершенно бесполезно.
+        from vpn.link_runtime import is_link_profile
+        from vpn.ping import tcp_probe
+
+        if is_link_profile(profile):
+            probe = lambda h=host, p=port: tcp_probe(h, int(p or 0))
+        else:
+            stats = self._last_stats
+            probe = lambda: check_server(host, port, stats=stats)
+
         started = self._start_worker(
             "_ping_worker",
-            lambda: check_server(host, port, stats=stats),
+            probe,
             self._on_check_server_ready,
             self._on_check_server_failed,
         )
@@ -823,6 +1052,19 @@ class VpnPage(BasePage):
     def _on_export(self) -> None:
         profile = self._current_profile()
         if profile is None:
+            return
+
+        # У сервера из ссылки никакого .conf не бывает: это формат
+        # WireGuard, с приватным ключом и адресом в туннеле. Сохранять
+        # его для ссылки было нечем, и кнопка стояла просто так.
+        #
+        # Для ссылки сохраняем то, что имеет смысл, — конфигурацию ядра
+        # Xray. Её можно скормить xray напрямую, показать в поддержку
+        # или сравнить с рабочей.
+        from vpn.link_runtime import is_link_profile
+
+        if is_link_profile(profile):
+            self._export_link_config(profile)
             return
 
         path, _ = QFileDialog.getSaveFileName(

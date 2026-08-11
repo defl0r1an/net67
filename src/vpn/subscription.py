@@ -68,6 +68,20 @@ def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S) -> str:
             timeout=timeout,
             headers={"User-Agent": USER_AGENT},
             stream=True,
+            # Мимо системного прокси, всегда.
+            #
+            # requests по умолчанию читает настройки прокси Windows — те
+            # самые, которые мы сами и выставляем при подключении. Выходил
+            # круг: чтобы скачать подписку, приложение шло в наше же ядро
+            # Xray. А если ядро не поднято, а настройка осталась (скажем,
+            # приложение закрыли не по-людски), получалось
+            #
+            #     SOCKSHTTPSConnectionPool(host=..., port=443):
+            #     [WinError 10061] конечный компьютер отверг запрос
+            #
+            # Подписка — это адрес, который должен открываться напрямую:
+            # серверов у нас ещё нет, ходить через них некуда.
+            proxies={"http": None, "https": None},
         )
     except Exception as exc:
         raise SubscriptionError(f"не удалось открыть ссылку: {exc}") from exc

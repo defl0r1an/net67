@@ -224,6 +224,44 @@ def check_server(
     return udp
 
 
+#: Сколько ждём отклика TCP-порта. Больше секунды ждать незачем: живой
+#: сервер за океаном отвечает за две-три сотни миллисекунд.
+TCP_PROBE_TIMEOUT = 2.0
+
+
+def tcp_probe(host: str, port: int, *, timeout: float = TCP_PROBE_TIMEOUT) -> PingResult:
+    """Открывает соединение и меряет время до отклика.
+
+    Для серверов из ссылки это единственная честная проверка. ICMP на
+    них обычно закрыт, а UDP-проба на порт 443 отвечала «хост принял
+    датаграмму и промолчал» — верно и бесполезно: на этом порту говорят
+    по TCP, датаграмму там никто и не ждал.
+
+    Успешное соединение означает: адрес верный, порт открыт, сервер
+    отвечает. Это ровно то, что человек хочет знать, нажимая «Проверить
+    сервер».
+    """
+    import socket
+    import time
+
+    address = str(host or "").strip()
+    if not address:
+        return PingResult(False, None, "tcp", "Адрес сервера не указан")
+    if not port:
+        return PingResult(False, None, "tcp", "Порт сервера не указан")
+
+    started = time.perf_counter()
+    try:
+        with socket.create_connection((address, int(port)), timeout=timeout):
+            latency = (time.perf_counter() - started) * 1000.0
+    except socket.timeout:
+        return PingResult(False, None, "tcp", f"Сервер не ответил за {timeout:.0f} с")
+    except OSError as exc:
+        return PingResult(False, None, "tcp", f"Соединение не открылось: {exc}")
+
+    return PingResult(True, latency, "tcp", "Сервер отвечает")
+
+
 def format_latency(result: PingResult) -> str:
     """Короткая подпись для интерфейса."""
     if result.latency_ms is not None:
@@ -234,7 +272,9 @@ def format_latency(result: PingResult) -> str:
 
 
 __all__ = [
+    "TCP_PROBE_TIMEOUT",
     "UDP_PROBE_TIMEOUT",
+    "tcp_probe",
     "PingResult",
     "check_server",
     "check_tunnel_stats",

@@ -58,13 +58,52 @@ class WindowStartupMixin:
         except Exception as e:
             log(f"Startup: build_ui failed: {e}", "ERROR")
             log(traceback.format_exc(), "DEBUG")
+            # Окно всё равно надо показать: без него человек видит только
+            # значок в трее и не понимает, запустилась программа или нет.
+            # Пустое окно с сообщением в логе честнее пустого экрана.
+            self._reveal_when_ready()
             return
+
+        # Показываем окно только теперь, когда содержимое собрано.
+        #
+        # До этого момента окна не существует вовсе — ни прозрачного, ни
+        # какого-либо ещё. Прозрачное окно всё равно успевало мелькнуть
+        # чёрным прямоугольником: Windows создаёт и закрашивает окно
+        # раньше, чем Qt применяет прозрачность.
+        self._reveal_when_ready()
 
         self.mark_startup_interactive("ui_ready")
         log(f"⏱ Startup: build_ui {(_time.perf_counter() - build_started_at) * 1000:.0f}ms", "DEBUG")
         log(f"⏱ Startup: deferred init total {(_time.perf_counter() - total_started_at) * 1000:.0f}ms", "DEBUG")
         emit_startup_metric("StartupContinueAfterUiReadyQueued", f"{STARTUP_CONTINUE_AFTER_UI_READY_MS}ms")
         QTimer.singleShot(STARTUP_CONTINUE_AFTER_UI_READY_MS, self._continue_startup_after_ui_ready)
+
+    def _reveal_when_ready(self) -> None:
+        """Выводит окно на экран. Единственное место, где это происходит.
+
+        До этого вызова окна не существует ни в каком виде. Так и надо:
+        Windows создаёт окно и закрашивает его фоном оконного класса
+        раньше, чем Qt успевает нарисовать первый кадр, а до сборки
+        интерфейса у окна ещё и размер по умолчанию — отсюда и брался
+        маленький чёрный прямоугольник, мелькавший при запуске.
+
+        Прозрачностью это не чинится: setWindowOpacity применяется к уже
+        созданному окну. Чинится только тем, что окна нет.
+        """
+        try:
+            from main.window_startup_signal_setup import show_initial_window_if_needed
+
+            show_initial_window_if_needed(self)
+        except Exception as exc:
+            log(f"Startup: не удалось показать окно: {exc}", "ERROR")
+            # Последняя попытка: без окна и без трея человек остался бы
+            # с запущенным процессом и пустым экраном.
+            try:
+                if not self.start_in_tray and not self.isVisible():
+                    self.setWindowOpacity(1.0)
+                    self.show()
+            except Exception:
+                pass
 
     def _continue_startup_after_ui_ready(self) -> None:
         emit_startup_metric("StartupContinueAfterUiReadyDispatch", "continue_startup_requested")

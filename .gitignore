@@ -92,6 +92,15 @@ nuitka-crash-report.xml
 *probe-remove-me*
 /lists/.probe
 
+# Windows-путь, случайно ставший именем файла.
+#
+# hosts.HOSTS_PATH вне Windows брал тот же литерал
+# C:\Windows\System32\drivers\etc\hosts, а на Linux это не путь, а имя
+# файла из одного куска. Прогон тестов создавал такой файл прямо в корне
+# репозитория, и он нашёлся среди неотслеживаемых перед самой выкладкой.
+# Причина устранена, строка остаётся сторожем.
+/C:*
+
 # AI/Dev config (private)
 CLAUDE.md
 AGENTS.md
@@ -116,6 +125,8 @@ www_youtube_com.txt
 !/ico/net67.ico
 !/src/ico/net67.ico
 !/src/ico/net67_1024.png
+!/ico/flags/
+!/ico/flags/*
 
 # Тестовый прогон
 .pytest_cache/

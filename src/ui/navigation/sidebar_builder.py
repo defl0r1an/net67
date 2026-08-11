@@ -585,7 +585,16 @@ def _install_sidebar_search(window) -> None:
         update_titlebar_search_width,
     )
 
-    session.sidebar_search_nav_widget = widget_cls()
+    # Родителем — окно, а не пустота.
+    #
+    # Виджет без родителя в Qt становится окном верхнего уровня со своей
+    # системной рамкой. Поиск из полосы заголовка убран, в раскладку он
+    # не попадает, и такой сирота висел отдельным окном 640x40: скрытым,
+    # но живым — при запуске оно успевало мигнуть на экране.
+    #
+    # Замер при старте показывал три окна вместо одного: наше, этот
+    # виджет и выпадающий список подсказок к нему.
+    session.sidebar_search_nav_widget = widget_cls(window)
     session.sidebar_search_nav_widget.textChanged.connect(
         lambda text, current_window=window: on_sidebar_search_changed(current_window, text)
     )

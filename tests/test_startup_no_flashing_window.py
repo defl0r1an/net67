@@ -45,6 +45,14 @@ class _Window:
         self.show = Mock(side_effect=self._on_show)
         self.raise_ = Mock()
         self.activateWindow = Mock()
+        # Двойник обязан уметь то же, что настоящее окно.
+        #
+        # Этих трёх методов здесь не было, и двойник молча ронял показ на
+        # AttributeError — то есть проверял сам себя, а не приложение.
+        self.setWindowOpacity = Mock()
+        self.ensurePolished = Mock()
+        self.layout = Mock(return_value=None)
+        self.window_geometry_runtime = None
 
     def _on_show(self) -> None:
         self._visible = True

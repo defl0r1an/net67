@@ -9,7 +9,6 @@ from main.window_page_deps_setup import attach_window_ui_root
 from main.window_startup_setup import attach_startup_deps_to_window
 from main.window_startup_signal_setup import (
     connect_window_startup_signals,
-    show_initial_window_if_needed,
     start_window_deferred_init,
 )
 
@@ -50,7 +49,13 @@ def attach_app_runtime_to_window(window, app_runtime, *, page_actions_factory) -
         window,
         continue_startup=startup_runtime.continue_deferred_init,
     )
-    show_initial_window_if_needed(window)
+    # Окно здесь НЕ показывается.
+    #
+    # Показ переехал в _deferred_init, сразу за сборкой интерфейса.
+    # Здесь окно ещё пустое: раскладки нет, размер по умолчанию, и
+    # Windows успевала вывести на экран маленький чёрный прямоугольник
+    # раньше, чем Qt что-либо рисовал. Подробности — в
+    # window_startup_signal_setup.show_initial_window_if_needed.
     start_window_deferred_init(window)
 
 
