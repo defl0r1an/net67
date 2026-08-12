@@ -24,7 +24,7 @@ Write-Host "[1/6] Checking generated files" -ForegroundColor Cyan
 
 $buildInfo = Join-Path $Root "src\config\build_info.py"
 if (-not (Test-Path $buildInfo)) {
-    $lines = @('APP_VERSION = "0.4.67"', 'CHANNEL = "stable"')
+    $lines = @('APP_VERSION = "0.5.67"', 'CHANNEL = "stable"')
     Set-Content -Path $buildInfo -Value $lines -Encoding UTF8
     Write-Host "      created build_info.py" -ForegroundColor Yellow
 }

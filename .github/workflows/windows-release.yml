@@ -48,7 +48,7 @@ jobs:
         run: |
           import os, pathlib, re
 
-          FALLBACK_VERSION = "0.4.67"
+          FALLBACK_VERSION = "0.5.67"
 
           # Версия берётся из тега релиза: v0.4.67 -> 0.4.67. Так номер
           # в «О программе» и номер выпуска на GitHub не разъезжаются —
