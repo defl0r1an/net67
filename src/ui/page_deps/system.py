@@ -137,10 +137,30 @@ def build_servers_page_kwargs(
     runtime_feature,
     updater_feature,
     external_actions_feature,
+    dpi_settings_feature,
     show_page,
     request_exit,
 ) -> dict:
     _ = page_name
+
+    def _open_parent_page() -> None:
+        """Возврат из «Серверов» — в «Обход», а не в «О программе».
+
+        Крошка вела на AboutPage, а та убрана из интерфейса
+        (`is_hidden=True` в схеме навигации): человек уходил на
+        страницу, которой нет в панели, и возвращался только через
+        боковое меню. Точка входа зависит от режима запуска, поэтому
+        берётся из `MODE_ENTRY_PAGES`, а не задаётся одной страницей:
+        для winws1 это своя страница управления, для оркестра — своя.
+        """
+        from ui.navigation.schema import get_mode_entry_page
+
+        try:
+            method = dpi_settings_feature.get_launch_method()
+        except Exception:
+            method = None
+
+        show_page(get_mode_entry_page(method))
 
     def _mark_runtime_stopped_after_update() -> None:
         runtime_service = runtime_feature.objects.runtime_service
@@ -164,7 +184,7 @@ def build_servers_page_kwargs(
             request_exit=request_exit,
         ),
         "updater_feature": updater_feature,
-        "open_about": lambda: show_page(PageName.ABOUT),
+        "open_about": _open_parent_page,
         "create_changelog_link_open_worker": _create_changelog_link_open_worker,
     }
 

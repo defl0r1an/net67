@@ -42,7 +42,7 @@ class UpdaterServersBreadcrumbTests(unittest.TestCase):
         rebuild_servers_breadcrumb(breadcrumb, tr_fn=_tr)
         self.assertEqual(
             breadcrumb.items,
-            [("about", "О программе"), ("servers", "Серверы")],
+            [("about", "Обход"), ("servers", "Серверы")],
         )
 
         breadcrumb.items = breadcrumb.items[:1]
@@ -61,12 +61,12 @@ class UpdaterServersBreadcrumbTests(unittest.TestCase):
         self.assertEqual(breadcrumb.unblocked_add_item_calls, 0)
         self.assertFalse(breadcrumb.signals_blocked)
 
-    def test_about_click_restores_crumbs_and_navigates(self) -> None:
+    def test_parent_click_restores_crumbs_and_navigates(self) -> None:
         breadcrumb = _FakeBreadcrumb()
         rebuild_servers_breadcrumb(breadcrumb, tr_fn=_tr)
         on_about_clicked = Mock()
 
-        # Симулируем клик по "О программе": бар уже обрезан до первой крошки.
+        # Симулируем клик по «Обходу»: бар уже обрезан до первой крошки.
         breadcrumb.items = breadcrumb.items[:1]
         handle_servers_breadcrumb_item_changed(
             "about",

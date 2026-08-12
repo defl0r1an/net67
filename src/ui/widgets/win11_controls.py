@@ -200,7 +200,24 @@ class Win11ToggleRow(FluentSettingCard):
         self._freeze_switch_width(toggle)
 
     @staticmethod
-    def _freeze_switch_width(toggle) -> None:
+    def _sync_switch_text(toggle) -> None:
+        """Приводит подпись переключателя к его настоящему состоянию.
+
+        `SwitchButton.setChecked` в qfluentwidgets зовёт `_updateText()`
+        до того, как обновит индикатор, а `_updateText` читает состояние
+        именно у индикатора. Подпись отстаёт на одно переключение.
+        Обычно это незаметно, но `_freeze_switch_width` переключает
+        состояние трижды подряд, и после замера рядом с выключенным
+        переключателем оставалось «Вкл.» — замерено на странице
+        «Серверы»: индикатор выключен, подпись «Вкл.».
+        """
+        try:
+            toggle.setText(_TOGGLE_ON_TEXT if toggle.isChecked() else _TOGGLE_OFF_TEXT)
+        except Exception:
+            pass
+
+    @classmethod
+    def _freeze_switch_width(cls, toggle) -> None:
         """Закрепляет ширину переключателя по более длинному состоянию.
 
         SwitchButton при каждой смене состояния зовёт adjustSize(), а
@@ -220,6 +237,7 @@ class Win11ToggleRow(FluentSettingCard):
             toggle.blockSignals(True)
             toggle.setChecked(was_checked)
             toggle.blockSignals(False)
+            cls._sync_switch_text(toggle)
             toggle.setFixedWidth(max(widths))
         except Exception:
             pass
@@ -231,6 +249,9 @@ class Win11ToggleRow(FluentSettingCard):
         next_checked = bool(checked)
         try:
             if bool(toggle.isChecked()) == next_checked:
+                # Состояние уже верное, но подпись могла отстать после
+                # замера ширины — сверяем её и здесь тоже.
+                self._sync_switch_text(toggle)
                 return
         except Exception:
             pass
@@ -245,6 +266,7 @@ class Win11ToggleRow(FluentSettingCard):
                     toggle.blockSignals(False)
         finally:
             self._programmatic_set_checked = False
+        self._sync_switch_text(toggle)
         self._update_toggle_accessibility()
 
     def isChecked(self) -> bool:
@@ -279,6 +301,7 @@ class Win11ToggleRow(FluentSettingCard):
             pass
 
     def _on_switch_toggled(self, checked: bool) -> None:
+        self._sync_switch_text(getattr(self, "_switch_button", None))
         self._update_toggle_accessibility()
         if bool(getattr(self, "_programmatic_set_checked", False)):
             return

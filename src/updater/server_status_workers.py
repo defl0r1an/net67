@@ -316,6 +316,29 @@ class VersionCheckWorker(QThread):
         return self._stop_requested
 
     def run(self):
+        """Обёртка над проверкой версий, гасящая любое исключение.
+
+        `run()` исполняется в отдельном потоке Qt: исключение отсюда
+        не ловится обработчиком главного потока и всплывает как
+        «[CRITICAL] UNCAUGHT EXCEPTION» поверх окна. Человеку нужен
+        текст ошибки в карточке проверки, а не трассировка, поэтому
+        любое падение превращается в обычный результат с ошибкой.
+        """
+        try:
+            self._run()
+        except Exception as e:  # noqa: BLE001 — поток не должен ронять приложение
+            message = str(e) or e.__class__.__name__
+            for channel in (CHANNEL_STABLE, CHANNEL_DEV):
+                try:
+                    self.version_found.emit(channel, {"error": message})
+                except Exception:
+                    pass
+            try:
+                self.complete.emit()
+            except Exception:
+                pass
+
+    def _run(self):
         from updater.release_manager import get_latest_release
         from updater.server_pool import get_server_pool
         from updater.update_cache import (
@@ -331,10 +354,18 @@ class VersionCheckWorker(QThread):
         if not all_versions:
             pool = get_server_pool()
             current_server = pool.get_current_server()
-            server_urls = pool.get_server_urls(current_server)
+            # VPS-пул необязателен: без UPDATE_SERVERS сервера нет и
+            # URL'ов не будет — тогда сразу уходим на GitHub ниже.
+            server_urls = pool.get_server_urls(current_server) if current_server else {}
             monitor_timeout = (min(CONNECT_TIMEOUT, 3), min(READ_TIMEOUT, 5))
 
-            for protocol, base_url in [("HTTPS", server_urls["https"]), ("HTTP", server_urls["http"])]:
+            protocol_urls = [
+                (protocol, server_urls[key])
+                for protocol, key in (("HTTPS", "https"), ("HTTP", "http"))
+                if server_urls.get(key)
+            ]
+
+            for protocol, base_url in protocol_urls:
                 if self.is_stop_requested():
                     self.complete.emit()
                     return

@@ -169,11 +169,9 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.test_card = None
         self.internet_cleanup_card = None
         self.folder_card = None
-        self.docs_card = None
         self.test_btn = None
         self.internet_cleanup_btn = None
         self.folder_btn = None
-        self.docs_btn = None
         self._build_ui()
         self.bind_ui_state_store(ui_state_store)
         self._after_ui_built()
@@ -522,7 +520,6 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             on_open_connection_test=self._open_connection_test,
             on_open_internet_cleanup=self._on_internet_cleanup_clicked,
             on_open_folder=self._open_folder,
-            on_open_docs=self._open_docs,
         )
         _log_startup_winws2_control_metric(
             "_build_ui.settings_sections_build", (_time.perf_counter() - _t_sections_build) * 1000
@@ -567,12 +564,10 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.test_card = section_widgets.test_card
         self.internet_cleanup_card = section_widgets.internet_cleanup_card
         self.folder_card = section_widgets.folder_card
-        self.docs_card = section_widgets.docs_card
         self.state_media_block_toggle = section_widgets.state_media_block_toggle
         self.test_btn = self.test_card.button
         self.internet_cleanup_btn = self.internet_cleanup_card.button
         self.folder_btn = self.folder_card.button
-        self.docs_btn = self.docs_card.button
         self.add_widget(self.extra_card)
 
         # В простом виде на странице остаются только кнопка «Включить»,
@@ -1027,7 +1022,6 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             test_card=self.test_card,
             internet_cleanup_card=self.internet_cleanup_card,
             folder_card=self.folder_card,
-            docs_card=self.docs_card,
             additional_settings_notice=self.additional_settings_notice,
             program_settings_card=self.program_settings_card,
             auto_dpi_toggle=self.auto_dpi_toggle,
@@ -1041,15 +1035,6 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             wssize_toggle=self.wssize_toggle,
             debug_log_toggle=self.debug_log_toggle,
             update_stop_button_text=self._update_stop_winws_button_text,
-        )
-
-    def _open_docs(self) -> None:
-        from config.urls import DOCS_URL
-
-        self._request_external_open_url(
-            DOCS_URL,
-            error_title="Документация",
-            error_default="Не удалось открыть документацию: {error}",
         )
 
     def cleanup(self) -> None:

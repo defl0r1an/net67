@@ -142,7 +142,6 @@ class WiringTests(unittest.TestCase):
             "test_card",
             "internet_cleanup_card",
             "folder_card",
-            "docs_card",
             "state_media_block_toggle",
         ):
             with self.subTest(step=name):

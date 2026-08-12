@@ -132,23 +132,12 @@ class Zapret1ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.test_btn = None
         self.internet_cleanup_btn = None
         self.folder_btn = None
-        self.docs_btn = None
         self.test_card = None
         self.internet_cleanup_card = None
         self.folder_card = None
-        self.docs_card = None
         self._build_ui()
         self.bind_ui_state_store(ui_state_store)
         self._refresh_preset_name()
-
-    def _open_docs(self) -> None:
-        from config.urls import DOCS_URL
-
-        self._request_external_open_url(
-            DOCS_URL,
-            error_title="Документация",
-            error_default="Не удалось открыть документацию: {error}",
-        )
 
     def _apply_pending_preset_name_refresh(self) -> None:
         if self._cleanup_in_progress:
@@ -236,7 +225,6 @@ class Zapret1ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             on_open_connection_test=self._open_connection_test,
             on_open_internet_cleanup=self._on_internet_cleanup_clicked,
             on_open_folder=self._open_folder,
-            on_open_docs=self._open_docs,
         )
         self.program_settings_section_label = section_widgets.program_settings_section_label
         self.program_settings_card = section_widgets.program_settings_card
@@ -273,12 +261,10 @@ class Zapret1ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.test_card = section_widgets.test_card
         self.internet_cleanup_card = section_widgets.internet_cleanup_card
         self.folder_card = section_widgets.folder_card
-        self.docs_card = section_widgets.docs_card
         self.state_media_block_toggle = section_widgets.state_media_block_toggle
         self.test_btn = self.test_card.button
         self.internet_cleanup_btn = self.internet_cleanup_card.button
         self.folder_btn = self.folder_card.button
-        self.docs_btn = self.docs_card.button
         self.add_widget(self.extra_card)
 
         # В простом виде на странице остаются только кнопка «Включить»,
@@ -931,7 +917,6 @@ class Zapret1ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             test_card=self.test_card,
             internet_cleanup_card=self.internet_cleanup_card,
             folder_card=self.folder_card,
-            docs_card=self.docs_card,
             additional_settings_card=self.additional_settings_card,
             additional_settings_notice=self.additional_settings_notice,
             discord_restart_toggle=self.discord_restart_toggle,

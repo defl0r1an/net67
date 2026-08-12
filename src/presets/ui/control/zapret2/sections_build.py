@@ -32,7 +32,6 @@ class Zapret2SettingsBuildWidgets:
     test_card: object
     internet_cleanup_card: object
     folder_card: object
-    docs_card: object
     state_media_block_toggle: object
 
 
@@ -57,7 +56,6 @@ def build_winws2_pages_settings_sections(
     on_open_connection_test,
     on_open_internet_cleanup,
     on_open_folder,
-    on_open_docs,
 ) -> Zapret2SettingsBuildWidgets:
     # Пошаговый замер: на машине пользователя эта сборка идёт 9,4 с, а на
     # машине разработчика — 91 мс. Угадывать виноватый виджет нельзя,
@@ -212,18 +210,6 @@ def build_winws2_pages_settings_sections(
         button_accessible_name=tr_fn("page.winws2_control.button.open_folder.accessible_name", "Открыть папку программы"),
         parent=content_parent,
     )
-    with timer.step("docs_card"):
-        docs_card = build_deferred_themed_push_setting_card_common(
-        push_setting_card_cls=push_setting_card_cls,
-        button_text=tr_fn("page.winws2_control.button.open", "Открыть"),
-        icon_name="fa5s.book",
-        icon_color="#8ab4f8",
-        title_text=tr_fn("page.winws2_control.button.documentation", "Документация"),
-        content_text=tr_fn("page.winws2_control.button.documentation.desc", "Открыть справку и описание возможностей"),
-        on_click=on_open_docs,
-        button_accessible_name=tr_fn("page.winws2_control.button.documentation.accessible_name", "Открыть документацию"),
-        parent=content_parent,
-    )
     with timer.step("updates_card"):
         updates_card = build_updates_card(
             push_setting_card_cls=push_setting_card_cls,
@@ -239,7 +225,6 @@ def build_winws2_pages_settings_sections(
     extra_card.addSettingCard(test_card)
     extra_card.addSettingCard(internet_cleanup_card)
     extra_card.addSettingCard(folder_card)
-    extra_card.addSettingCard(docs_card)
     extra_card.addSettingCard(updates_card)
     extra_card.addSettingCard(state_media_block_toggle)
     with timer.step("extra_card_auto_height"):
@@ -265,6 +250,5 @@ def build_winws2_pages_settings_sections(
         test_card=test_card,
         internet_cleanup_card=internet_cleanup_card,
         folder_card=folder_card,
-        docs_card=docs_card,
         state_media_block_toggle=state_media_block_toggle,
     )

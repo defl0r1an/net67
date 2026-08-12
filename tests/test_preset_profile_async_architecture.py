@@ -3449,26 +3449,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("_is_auto_update_enabled", worker_source)
         self.assertNotIn("updater_commands", worker_source)
 
-    def test_updater_open_channel_runs_through_worker(self) -> None:
-        settings_workers = importlib.import_module("updater.settings_workers")
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-        updater_feature_cls = __import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature
-
-        page_handler_source = inspect.getsource(ServersPage._open_telegram_channel)
-        runtime_source = inspect.getsource(update_runtime_cls)
-        feature_source = inspect.getsource(updater_feature_cls)
-
-        self.assertTrue(hasattr(settings_workers, "UpdaterChannelOpenWorker"))
-        worker_source = inspect.getsource(settings_workers.UpdaterChannelOpenWorker.run)
-
-        self.assertIn("request_open_update_channel", page_handler_source)
-        self.assertNotIn("self._update_runtime.open_update_channel", page_handler_source)
-        self.assertIn("_update_channel_open_runtime", runtime_source)
-        self.assertIn("create_update_channel_open_worker", feature_source)
-        self.assertIn("open_update_channel=self.open_update_channel", feature_source)
-        self.assertIn("_open_update_channel", worker_source)
-        self.assertNotIn("updater_commands", worker_source)
-
     def test_updater_changelog_links_open_through_worker(self) -> None:
         from app.page_names import PageName
         from ui.page_deps.system import build_servers_page_kwargs
@@ -3681,14 +3661,20 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertNotIn("presets_feature", factory_source)
         self.assertNotIn("profile_feature", factory_source)
 
-    def test_control_page_docs_open_through_worker(self) -> None:
+    def test_control_page_external_urls_open_through_worker(self) -> None:
+        """Внешние ссылки на control-страницах открываются воркером.
+
+        Раньше проверка опиралась на `_open_docs` — карточку
+        «Документация» убрали из обоих режимов, и метода больше нет.
+        Проверка не ослаблена, а перевёрнута: стережём сам механизм
+        (миксин, воркер, остановка в cleanup), а не конкретную кнопку,
+        которая им пользовалась.
+        """
         spec = importlib.util.find_spec("app.external_workers")
         self.assertIsNotNone(spec)
         external_workers = importlib.import_module("app.external_workers")
         external_feature_cls = __import__("app.feature_facades.external", fromlist=["ExternalActionsFeature"]).ExternalActionsFeature
         shared_source = inspect.getsource(control_page_shared.ControlPageActionMixin)
-        zapret1_open_source = inspect.getsource(Zapret1ModeControlPage._open_docs)
-        zapret2_open_source = inspect.getsource(Zapret2ModeControlPage._open_docs)
         zapret1_cleanup_source = inspect.getsource(Zapret1ModeControlPage.cleanup)
         zapret2_cleanup_source = inspect.getsource(Zapret2ModeControlPage.cleanup)
 
@@ -3696,9 +3682,8 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         worker_source = inspect.getsource(external_workers.ExternalOpenUrlWorker.run)
         feature_source = inspect.getsource(external_feature_cls)
 
-        for source in (zapret1_open_source, zapret2_open_source):
-            self.assertIn("_request_external_open_url", source)
-            self.assertNotIn(".open_url(", source)
+        self.assertFalse(hasattr(Zapret1ModeControlPage, "_open_docs"))
+        self.assertFalse(hasattr(Zapret2ModeControlPage, "_open_docs"))
 
         self.assertIn("create_open_url_worker", feature_source)
         self.assertIn("create_external_open_url_worker", shared_source)

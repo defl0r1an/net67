@@ -13,7 +13,7 @@ from updater.ui.main_build import (
 )
 from updater.ui.settings_build import set_auto_check_accessibility
 from updater.ui.table_view import apply_server_table_headers
-from ui.accessibility import set_control_accessibility, set_state_text
+from ui.accessibility import set_state_text
 
 
 def _label_text(label) -> str:
@@ -39,9 +39,6 @@ def apply_servers_page_language(
     toggle_label,
     auto_check_card,
     version_info_label,
-    telegram_card,
-    telegram_info_label,
-    telegram_button,
     refresh_server_rows,
 ) -> None:
     update_card.set_ui_language(ui_language)
@@ -90,42 +87,5 @@ def apply_servers_page_language(
         )
     )
     set_state_text(version_info_label, f"Версия net67: {_label_text(version_info_label)}")
-
-    telegram_title = tr_fn("page.servers.telegram.title", "Проблемы с обновлением?")
-    telegram_info = tr_fn(
-        "page.servers.telegram.info",
-        "Если возникают трудности с автоматическим обновлением, все версии программы выкладываются в Telegram канале.",
-    )
-    telegram_card.set_title(telegram_title)
-    if telegram_info_label is not None:
-        telegram_info_label.setText(telegram_info)
-    else:
-        try:
-            telegram_card.setContent(telegram_info)
-        except Exception:
-            pass
-    telegram_button.setText(
-        tr_fn("page.servers.telegram.button.open_channel", "Открыть Telegram канал")
-    )
-    telegram_action_name = tr_fn(
-        "page.servers.telegram.accessible_name",
-        "Открыть Telegram канал обновлений",
-    )
-    telegram_action_description = tr_fn(
-        "page.servers.telegram.accessible_description",
-        "Открывает Telegram канал, где публикуются версии программы и новости обновлений.",
-    )
-    set_control_accessibility(
-        telegram_card,
-        name=telegram_action_name,
-        description=telegram_action_description,
-    )
-    set_state_text(telegram_card, telegram_action_name)
-    set_control_accessibility(
-        telegram_button,
-        name=telegram_action_name,
-        description=telegram_action_description,
-    )
-    set_state_text(telegram_button, telegram_action_name)
 
     refresh_server_rows()

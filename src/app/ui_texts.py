@@ -2189,6 +2189,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Серверы",
         "en": "Servers",
     },
+    # Первая крошка на странице «Серверы». Ведёт в раздел «Обход» —
+    # заголовок совпадает с GROUP_TITLES["root"] в shell/tabs.py.
+    "page.servers.breadcrumb.parent": {
+        "ru": "Обход",
+        "en": "Bypass",
+    },
     "page.servers.subtitle": {
         "ru": "Мониторинг серверов обновлений",
         "en": "Update servers monitoring",

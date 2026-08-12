@@ -162,10 +162,22 @@ class ServerPool:
         return self.selected_server
     
     def get_server_urls(self, server: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-        """Возвращает URL'ы для сервера"""
+        """Возвращает URL'ы для сервера.
+
+        Пустой словарь, когда сервера нет. VPS-пул в этой сборке
+        необязателен: `UPDATE_SERVERS` может быть не задан, тогда
+        `selected_server` остаётся None и обновления идут только через
+        GitHub. Раньше здесь безусловно читалось `server['host']` —
+        падало на `NoneType' object is not subscriptable` прямо в
+        рабочем потоке проверки версий, и окно показывало
+        UNCAUGHT EXCEPTION вместо результата.
+        """
         if server is None:
             server = self.selected_server
-        
+
+        if not server:
+            return {}
+
         return {
             'https': f"https://{server['host']}:{server['https_port']}",
             'http': f"http://{server['host']}:{server['http_port']}",

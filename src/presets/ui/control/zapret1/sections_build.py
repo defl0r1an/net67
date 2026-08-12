@@ -30,7 +30,6 @@ class Zapret1SettingsBuildWidgets:
     test_card: object
     internet_cleanup_card: object
     folder_card: object
-    docs_card: object
     state_media_block_toggle: object
 
 
@@ -55,7 +54,6 @@ def build_winws1_pages_settings_sections(
     on_open_connection_test,
     on_open_internet_cleanup,
     on_open_folder,
-    on_open_docs,
 ) -> Zapret1SettingsBuildWidgets:
     program_settings_title = tr_fn("page.winws1_control.section.program_settings", "Настройки программы")
     program_settings_section_label = None
@@ -190,17 +188,6 @@ def build_winws1_pages_settings_sections(
         button_accessible_name=tr_fn("page.winws1_control.button.open_folder.accessible_name", "Открыть папку программы"),
         parent=content_parent,
     )
-    docs_card = build_deferred_themed_push_setting_card_common(
-        push_setting_card_cls=push_setting_card_cls,
-        button_text=tr_fn("page.winws1_control.button.open", "Открыть"),
-        icon_name="fa5s.book",
-        icon_color="#8ab4f8",
-        title_text=tr_fn("page.winws1_control.button.documentation", "Документация"),
-        content_text=tr_fn("page.winws1_control.button.documentation.desc", "Открыть справку и описание возможностей"),
-        on_click=on_open_docs,
-        button_accessible_name=tr_fn("page.winws1_control.button.documentation.accessible_name", "Открыть документацию"),
-        parent=content_parent,
-    )
     updates_card = build_updates_card(
         push_setting_card_cls=push_setting_card_cls,
         tr_fn=tr_fn,
@@ -214,7 +201,6 @@ def build_winws1_pages_settings_sections(
     extra_card.addSettingCard(test_card)
     extra_card.addSettingCard(internet_cleanup_card)
     extra_card.addSettingCard(folder_card)
-    extra_card.addSettingCard(docs_card)
     extra_card.addSettingCard(updates_card)
     extra_card.addSettingCard(state_media_block_toggle)
     enable_setting_card_group_auto_height(extra_card)
@@ -236,6 +222,5 @@ def build_winws1_pages_settings_sections(
         test_card=test_card,
         internet_cleanup_card=internet_cleanup_card,
         folder_card=folder_card,
-        docs_card=docs_card,
         state_media_block_toggle=state_media_block_toggle,
     )

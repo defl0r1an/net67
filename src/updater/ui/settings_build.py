@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ui.accessibility import enable_keyboard_click, set_control_accessibility, set_state_text
-from ui.theme import get_themed_qta_icon
+from ui.accessibility import set_control_accessibility, set_state_text
 
 
 @dataclass(slots=True)
@@ -15,13 +14,6 @@ class ServersSettingsWidgets:
     auto_check_toggle: object
     toggle_label: object | None
     version_info_label: object
-
-
-@dataclass(slots=True)
-class ServersTelegramWidgets:
-    card: object
-    info_label: object | None
-    button: object
 
 
 def _label_text(label) -> str:
@@ -109,44 +101,4 @@ def build_servers_settings_section(
         auto_check_toggle=auto_check_toggle,
         toggle_label=toggle_label,
         version_info_label=version_info_label,
-    )
-
-
-def build_servers_telegram_section(
-    *,
-    tr_fn,
-    accent_hex: str,
-    push_setting_card_cls,
-    on_open_channel,
-) -> ServersTelegramWidgets:
-    tg_info_label = None
-    tg_card = push_setting_card_cls(
-        tr_fn("page.servers.telegram.button.open_channel", "Открыть Telegram канал"),
-        get_themed_qta_icon("fa5b.telegram-plane", color=accent_hex),
-        tr_fn("page.servers.telegram.title", "Проблемы с обновлением?"),
-        tr_fn(
-            "page.servers.telegram.info",
-            "Если возникают трудности с автоматическим обновлением, все версии программы выкладываются в Telegram канале.",
-        ),
-    )
-    tg_card.clicked.connect(on_open_channel)
-    tg_btn = tg_card.button
-    telegram_action_name = tr_fn(
-        "page.servers.telegram.accessible_name",
-        "Открыть Telegram канал обновлений",
-    )
-    telegram_action_description = tr_fn(
-        "page.servers.telegram.accessible_description",
-        "Открывает Telegram канал, где публикуются версии программы и новости обновлений.",
-    )
-    set_control_accessibility(tg_card, name=telegram_action_name, description=telegram_action_description)
-    set_state_text(tg_card, telegram_action_name)
-    enable_keyboard_click(tg_card)
-    set_control_accessibility(tg_btn, name=telegram_action_name, description=telegram_action_description)
-    set_state_text(tg_btn, telegram_action_name)
-
-    return ServersTelegramWidgets(
-        card=tg_card,
-        info_label=tg_info_label,
-        button=tg_btn,
     )

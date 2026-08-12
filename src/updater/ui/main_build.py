@@ -41,10 +41,15 @@ def set_servers_section_title_accessibility(label) -> None:
 
 
 def rebuild_servers_breadcrumb(breadcrumb, *, tr_fn) -> None:
+    # Первая крошка ведёт в «Обход», а не в «О программе»: страница
+    # About скрыта из навигации, и возврат уводил в тупик — раздела
+    # нет в панели, вернуться можно было только через боковое меню.
+    # Ключ элемента оставлен прежним ("about"): на него завязан
+    # обработчик клика, а сам переход решается в page_deps.
     breadcrumb.blockSignals(True)
     try:
         breadcrumb.clear()
-        breadcrumb.addItem("about", tr_fn("page.servers.breadcrumb.about", "О программе"))
+        breadcrumb.addItem("about", tr_fn("page.servers.breadcrumb.parent", "Обход"))
         breadcrumb.addItem("servers", tr_fn("page.servers.title", "Серверы"))
     finally:
         breadcrumb.blockSignals(False)

@@ -62,7 +62,6 @@ def apply_profile_language(
     test_card,
     internet_cleanup_card,
     folder_card,
-    docs_card,
     additional_settings_notice,
     program_settings_card,
     auto_dpi_toggle,
@@ -170,16 +169,6 @@ def apply_profile_language(
         description=folder_desc,
     )
 
-    docs_title = tr_catalog("page.winws2_control.button.documentation", language=language, default="Документация")
-    docs_desc = tr_catalog("page.winws2_control.button.documentation.desc", language=language, default="Открыть справку и описание возможностей")
-    docs_card.setTitle(docs_title)
-    docs_card.setContent(docs_desc)
-    set_button_text_accessibility(
-        docs_card.button,
-        tr_catalog("page.winws2_control.button.open", language=language, default="Открыть"),
-        accessible_name=tr_catalog("page.winws2_control.button.documentation.accessible_name", language=language, default="Открыть документацию"),
-        description=docs_desc,
-    )
 
     update_stop_button_text()
 

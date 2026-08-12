@@ -25,15 +25,12 @@ from updater.ui.table_view import (
     reset_server_rows as reset_servers_table_rows,
     upsert_server_status as upsert_server_table_status,
 )
-from updater.ui.settings_build import (
-    build_servers_settings_section,
-    build_servers_telegram_section,
-)
+from updater.ui.settings_build import build_servers_settings_section
 from ui.latest_value_worker_state import LatestValueWorkerState
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 from ui.widgets.win11_controls import Win11ToggleRow
 from qfluentwidgets import (
-    CaptionLabel, PushSettingCard, SettingCardGroup, InfoBar,
+    CaptionLabel, SettingCardGroup, InfoBar,
 )
 
 from config.build_info import APP_VERSION, CHANNEL
@@ -162,9 +159,6 @@ class ServersPage(BasePage):
             toggle_label=self._toggle_label,
             auto_check_card=getattr(self, "_auto_check_card", None),
             version_info_label=self._version_info_label,
-            telegram_card=self._tg_card,
-            telegram_info_label=self._tg_info_label,
-            telegram_button=self._tg_btn,
             refresh_server_rows=self._refresh_server_rows,
         )
 
@@ -236,18 +230,6 @@ class ServersPage(BasePage):
         self._version_info_label = settings_widgets.version_info_label
         self.add_widget(self._settings_card)
         self.add_widget(self._version_info_label)
-
-        # Telegram card
-        telegram_widgets = build_servers_telegram_section(
-            tr_fn=self._tr,
-            accent_hex=self._tokens.accent_hex,
-            push_setting_card_cls=PushSettingCard,
-            on_open_channel=self._open_telegram_channel,
-        )
-        self._tg_card = telegram_widgets.card
-        self._tg_info_label = telegram_widgets.info_label
-        self._tg_btn = telegram_widgets.button
-        self.add_widget(self._tg_card)
 
         self._apply_page_theme(force=True)
 
@@ -494,9 +476,6 @@ class ServersPage(BasePage):
             warning_prefix="Changelog link open worker",
         )
         self._changelog_link_open_runtime.cancel()
-
-    def _open_telegram_channel(self):
-        self._update_runtime.request_open_update_channel(CHANNEL)
 
     def show_update_channel_open_error(self, error: str) -> None:
         InfoBar.warning(

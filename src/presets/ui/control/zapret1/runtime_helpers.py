@@ -70,7 +70,6 @@ def apply_winws1_pages_language(
     test_card,
     internet_cleanup_card,
     folder_card,
-    docs_card,
     additional_settings_card,
     additional_settings_notice,
     discord_restart_toggle,
@@ -175,16 +174,6 @@ def apply_winws1_pages_language(
         description=folder_desc,
     )
 
-    docs_title = tr_catalog("page.winws1_control.button.documentation", language=language, default="Документация")
-    docs_desc = tr_catalog("page.winws1_control.button.documentation.desc", language=language, default="Открыть справку и описание возможностей")
-    docs_card.setTitle(docs_title)
-    docs_card.setContent(docs_desc)
-    set_button_text_accessibility(
-        docs_card.button,
-        tr_catalog("page.winws1_control.button.open", language=language, default="Открыть"),
-        accessible_name=tr_catalog("page.winws1_control.button.documentation.accessible_name", language=language, default="Открыть документацию"),
-        description=docs_desc,
-    )
 
     additional_settings_card.titleLabel.setText(
         tr_catalog("page.winws1_control.card.advanced", language=language, default="Дополнительные настройки")
