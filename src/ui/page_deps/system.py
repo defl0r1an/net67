@@ -3,31 +3,9 @@ from __future__ import annotations
 from app.page_names import PageName
 from ui.page_deps.types import (
     DnsPageDeps,
-    DpiRuntimeActions,
     HostsPageDeps,
     UpdateRuntimeActions,
 )
-
-
-def build_dpi_settings_page_kwargs(
-    *,
-    page_name: PageName,
-    dpi_settings_feature,
-    orchestra_feature,
-    runtime_feature,
-    set_status,
-    after_launch_method_changed,
-) -> dict:
-    _ = page_name
-    return {
-        "dpi_settings_feature": dpi_settings_feature,
-        "orchestra_feature": orchestra_feature,
-        "runtime_actions": DpiRuntimeActions(
-            handle_launch_method_changed=runtime_feature.handle_launch_method_changed,
-        ),
-        "set_status": set_status,
-        "after_launch_method_changed": after_launch_method_changed,
-    }
 
 
 def build_network_page_kwargs(*, page_name: PageName, dns_feature) -> dict:
@@ -92,7 +70,6 @@ def build_autostart_page_kwargs(*, page_name: PageName, autostart_feature, show_
     _ = page_name
     return {
         "autostart_feature": autostart_feature,
-        "open_dpi_settings": lambda: show_page(PageName.DPI_SETTINGS),
         "notify": notify,
         "ui_state_store": ui_state_store,
     }
@@ -137,7 +114,6 @@ def build_servers_page_kwargs(
     runtime_feature,
     updater_feature,
     external_actions_feature,
-    dpi_settings_feature,
     show_page,
     request_exit,
 ) -> dict:
@@ -149,18 +125,17 @@ def build_servers_page_kwargs(
         Крошка вела на AboutPage, а та убрана из интерфейса
         (`is_hidden=True` в схеме навигации): человек уходил на
         страницу, которой нет в панели, и возвращался только через
-        боковое меню. Точка входа зависит от режима запуска, поэтому
-        берётся из `MODE_ENTRY_PAGES`, а не задаётся одной страницей:
-        для winws1 это своя страница управления, для оркестра — своя.
+        боковое меню.
+
+        Точку входа по-прежнему берём из `MODE_ENTRY_PAGES`, а не
+        подставляем страницу напрямую: способ запуска остался один, но
+        карта входа — то место, где это записано, и дублировать её
+        здесь значило бы завести второй источник правды.
         """
+        from settings.mode import DEFAULT_LAUNCH_METHOD
         from ui.navigation.schema import get_mode_entry_page
 
-        try:
-            method = dpi_settings_feature.get_launch_method()
-        except Exception:
-            method = None
-
-        show_page(get_mode_entry_page(method))
+        show_page(get_mode_entry_page(DEFAULT_LAUNCH_METHOD))
 
     def _mark_runtime_stopped_after_update() -> None:
         runtime_service = runtime_feature.objects.runtime_service
@@ -213,11 +188,10 @@ def build_blockcheck_page_kwargs(
     }
 
 
-def build_logs_page_kwargs(*, page_name: PageName, logs_feature, orchestra_feature) -> dict:
+def build_logs_page_kwargs(*, page_name: PageName, logs_feature) -> dict:
     _ = page_name
     return {
         "logs_feature": logs_feature,
-        "orchestra_feature": orchestra_feature,
     }
 
 
@@ -233,36 +207,13 @@ def build_telegram_proxy_page_kwargs(*, page_name: PageName, runtime_feature, te
     }
 
 
-def build_orchestra_page_kwargs(*, page_name: PageName, orchestra_feature, runtime_feature) -> dict:
-    _ = page_name
-
-    def _is_runtime_running() -> bool:
-        return bool(runtime_feature.is_running())
-
-    return {
-        "orchestra_feature": orchestra_feature,
-        "is_runtime_running": _is_runtime_running,
-    }
-
-
-def build_orchestra_settings_page_kwargs(*, page_name: PageName, orchestra_feature) -> dict:
-    _ = page_name
-
-    return {
-        "orchestra_feature": orchestra_feature,
-    }
-
-
 __all__ = [
     "build_about_page_kwargs",
     "build_autostart_page_kwargs",
     "build_blockcheck_page_kwargs",
-    "build_dpi_settings_page_kwargs",
     "build_hosts_page_kwargs",
     "build_logs_page_kwargs",
     "build_network_page_kwargs",
-    "build_orchestra_page_kwargs",
-    "build_orchestra_settings_page_kwargs",
     "build_premium_page_kwargs",
     "build_servers_page_kwargs",
     "build_winws_log_analyzer_page_kwargs",

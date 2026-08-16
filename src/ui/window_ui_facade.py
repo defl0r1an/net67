@@ -23,17 +23,11 @@ def _get_nav_labels():
         PageName.BLOCKCHECK: "BlockCheck",
         PageName.LOGS: "Логи",
         PageName.ABOUT: "О программе",
-        PageName.DPI_SETTINGS: "Сменить режим DPI",
         PageName.SERVERS: "Обновления",
         PageName.SUPPORT: "Поддержка",
-        PageName.ORCHESTRA: "Оркестратор",
-        PageName.ORCHESTRA_SETTINGS: "Настройки оркестратора",
         PageName.ZAPRET2_MODE_CONTROL: "Управление net67 v2",
         PageName.ZAPRET2_PRESET_SETUP: "Настройка preset-а",
         PageName.ZAPRET2_USER_PRESETS: "Мои пресеты",
-        PageName.ZAPRET1_MODE_CONTROL: "Управление net67 v1",
-        PageName.ZAPRET1_PRESET_SETUP: "Настройка preset-а",
-        PageName.ZAPRET1_USER_PRESETS: "Мои пресеты",
         PageName.TELEGRAM_PROXY: "Telegram Proxy",
     }
 

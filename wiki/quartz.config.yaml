@@ -1,0 +1,336 @@
+# yaml-language-server: $schema=./quartz/plugins/quartz-plugins.schema.json
+configuration:
+  pageTitle: net67
+  pageTitleSuffix: " — документация"
+  enableSPA: true
+  enablePopovers: true
+  analytics:
+    provider: null
+  locale: ru-RU
+  baseUrl: localhost:8080
+  ignorePatterns:
+    - private
+    - templates
+    - .obsidian
+  theme:
+    fontOrigin: googleFonts
+    cdnCaching: true
+    # Golos Text и в заголовках, и в тексте.
+    #
+    # Шрифт русский — сделан в Paratype под кириллицу, а не приспособлен
+    # под неё задним числом. Отсюда ровный ритм строки: у русского набора
+    # много вертикальных штрихов, и латинские шрифты на нём часто
+    # рассыпаются.
+    #
+    # Одна гарнитура на заголовки и текст выбрана намеренно. Разные
+    # гарнитуры надо подбирать друг к другу, и ошибка в подборе заметнее
+    # любого «скучного» решения; иерархия здесь держится начертанием и
+    # размером, а не сменой шрифта.
+    #
+    # Прежние Schibsted Grotesk и Source Sans Pro были латинскими —
+    # русских букв в них нет вовсе, и браузер молча подставлял свой
+    # шрифт с засечками. Отсюда и брался вид школьного реферата.
+    typography:
+      header: Golos Text
+      body: Golos Text
+      code: JetBrains Mono
+    colors:
+      lightMode:
+        light: "#fbfbfc"
+        lightgray: "#e6e6e9"
+        gray: "#b0b0b8"
+        darkgray: "#4a4a52"
+        dark: "#1c1c1f"
+        secondary: "#3a3a42"
+        tertiary: "#7a7a86"
+        highlight: rgba(120, 120, 132, 0.12)
+        textHighlight: "#1c1c1f22"
+      darkMode:
+        light: "#111113"
+        lightgray: "#2a2a2e"
+        gray: "#6b6b73"
+        darkgray: "#d6d6da"
+        dark: "#f2f2f4"
+        secondary: "#c8c8cf"
+        tertiary: "#8a8a94"
+        highlight: rgba(200, 200, 207, 0.10)
+        textHighlight: "#c8c8cf33"
+plugins:
+  - source: "@quartz-community/created-modified-date"
+    enabled: true
+    options:
+      defaultDateType: modified
+      priority:
+        - frontmatter
+        - git
+        - filesystem
+    order: 10
+  - source: "@quartz-community/syntax-highlighting"
+    enabled: true
+    options:
+      theme:
+        light: github-light
+        dark: github-dark
+      keepBackground: false
+    order: 20
+  - source: "@quartz-community/obsidian-flavored-markdown"
+    enabled: true
+    options:
+      enableInHtmlEmbed: false
+      enableCheckbox: true
+    order: 30
+  - source: "@quartz-community/github-flavored-markdown"
+    enabled: true
+    order: 40
+  - source: "@quartz-community/table-of-contents"
+    enabled: true
+    order: 50
+    layout:
+      position: right
+      priority: 30
+  - source: "@quartz-community/crawl-links"
+    enabled: true
+    options:
+      markdownLinkResolution: shortest
+    order: 60
+  - source: "@quartz-community/description"
+    enabled: true
+    order: 70
+  - source: "@quartz-community/latex"
+    enabled: true
+    options:
+      renderEngine: katex
+    order: 80
+  - source: "@quartz-community/citations"
+    enabled: false
+    order: 85
+  - source: "@quartz-community/hard-line-breaks"
+    enabled: false
+    order: 90
+  - source: "@quartz-community/ox-hugo"
+    enabled: false
+    order: 91
+  - source: "@quartz-community/roam"
+    enabled: false
+    order: 92
+  - source: "@quartz-community/quartz-fonts"
+    enabled: true
+  - source: "@quartz-themes/core"
+    enabled: false
+    options:
+      theme: tokyo-night
+      mode: both
+  - source: "@quartz-community/remove-draft"
+    enabled: true
+  - source: "@quartz-community/explicit-publish"
+    enabled: false
+  - source: "@quartz-community/alias-redirects"
+    enabled: true
+  - source: "@quartz-community/content-index"
+    enabled: true
+    options:
+      enableSiteMap: true
+      enableRSS: true
+  - source: "@quartz-community/favicon"
+    enabled: true
+  - source: "@quartz-community/og-image"
+    enabled: true
+  # Файл CNAME нужен только чужому домену на GitHub Pages.
+  # Сайт пока локальный — иначе рядом лежал бы CNAME со словом
+  # localhost, и при публикации он увёл бы домен в никуда.
+  - source: "@quartz-community/cname"
+    enabled: false
+  - source: "@quartz-community/canvas-page"
+    enabled: true
+  - source: "@quartz-community/content-page"
+    enabled: true
+  - source: "@quartz-community/folder-page"
+    enabled: true
+  - source: "@quartz-community/tag-page"
+    enabled: true
+  - source: "@quartz-community/explorer"
+    enabled: true
+    layout:
+      position: left
+      priority: 50
+  # Граф связей — та самая картинка с точками в правой панели.
+  #
+  # Я её один раз выключил, приняв полноэкранный вид за поломку, и был
+  # неправ: разворот на весь экран — это штатное поведение по щелчку,
+  # закрывается клавишей Escape.
+  - source: "@quartz-community/graph"
+    enabled: true
+    options:
+      # Метки в графе не показываем.
+      #
+      # По умолчанию плагин рисует их точками наравне со статьями и
+      # подписывает решёткой: «#справка», «#сеть». На картинке связей это
+      # шум — метка не страница, читать в ней нечего, а точек она
+      # добавляет столько же, сколько разделов.
+      #
+      # Смысл графа в том, чтобы показать, какие статьи ссылаются друг на
+      # друга. Метки эту картину только загущают: под каждой висит по
+      # три-четыре раздела, и всё сползается в звёзды вокруг меток.
+      localGraph:
+        showTags: false
+      globalGraph:
+        showTags: false
+    layout:
+      position: right
+      priority: 10
+  - source: "@quartz-community/search"
+    enabled: true
+    layout:
+      position: left
+      priority: 20
+      group: toolbar
+      groupOptions:
+        grow: true
+  - source: "@quartz-community/backlinks"
+    enabled: true
+    layout:
+      position: right
+      priority: 50
+  - source: "@quartz-community/article-title"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 10
+  - source: "@quartz-community/content-meta"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 20
+  # Метки под заголовком статьи. Были выключены с самого начала — в
+  # настройках по умолчанию у этого компонента стоит false, и я этого не
+  # заметил. Отсюда и вся путаница: метки в статьях проставлены,
+  # страницы тегов собираются, а на экране их нет.
+  - source: "@quartz-community/tag-list"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 30
+  - source: "@quartz-community/page-title"
+    enabled: true
+    layout:
+      position: left
+      priority: 10
+  - source: "@quartz-community/darkmode"
+    enabled: true
+    layout:
+      position: left
+      priority: 30
+      group: toolbar
+  - source: "@quartz-community/reader-mode"
+    enabled: true
+    layout:
+      position: left
+      priority: 35
+      group: toolbar
+  - source: "@quartz-community/breadcrumbs"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 5
+      condition: not-index
+  - source: "@quartz-community/comments"
+    enabled: false
+    options:
+      provider: giscus
+      options: {}
+    layout:
+      position: afterBody
+      priority: 10
+  - source: "@quartz-community/footer"
+    enabled: true
+    options:
+      links:
+        GitHub: https://github.com/jackyzha0/quartz
+        Discord Community: https://discord.gg/cRFFHYye7t
+    layout:
+      position: footer
+      priority: 50
+  - source: "@quartz-community/recent-notes"
+    enabled: false
+  - source: "@quartz-community/spacer"
+    enabled: true
+    options: {}
+    order: 25
+    layout:
+      position: left
+      priority: 25
+      display: mobile-only
+  - source: "@quartz-community/bases-page"
+    enabled: true
+    options: {}
+    order: 50
+  # Таблица свойств заметки. Включена, но спрятана стилями.
+  #
+  # Выключать её нельзя, и это выяснилось на опыте: без неё служебный
+  # блок в начале файла перестаёт разбираться и печатается прямо в
+  # текст статьи — «title: VPN по ссылке», «tags:» и список меток
+  # обычным абзацем под заголовком.
+  #
+  # Показывать её тоже незачем: это раскрывающийся блок «Properties» с
+  # английским заголовком и строкой таблицы вместо меток. Метки рисует
+  # tag-list — значками сразу под заголовком. Скрытие в custom.scss.
+  - source: "@quartz-community/note-properties"
+    enabled: true
+    options:
+      includeAll: false
+      includedProperties:
+        - description
+        - tags
+        - aliases
+      excludedProperties: []
+      hidePropertiesView: false
+      delimiters: ---
+      language: yaml
+    order: 5
+    layout:
+      position: beforeBody
+      priority: 15
+      display: all
+  - source: "@quartz-community/unlisted-pages"
+    enabled: true
+    options: {}
+    order: 45
+  - source: "@quartz-community/encrypted-pages"
+    enabled: true
+    options:
+      iterations: 600000
+      passwordField: password
+      unlistWhenEncrypted: false
+      outputPath: static/encryptedContentIndex.json
+    order: 900
+  - source: "@quartz-community/stacked-pages"
+    enabled: false
+    layout:
+      position: afterBody
+      priority: 50
+      display: all
+layout:
+  groups:
+    toolbar:
+      priority: 35
+      direction: row
+      gap: 0.5rem
+  byPageType:
+    "404":
+      positions:
+        beforeBody: []
+        left: []
+        right: []
+    content: {}
+    folder:
+      exclude:
+        - reader-mode
+      positions:
+        right: []
+    tag:
+      exclude:
+        - reader-mode
+      positions:
+        right: []
+    canvas: {}
+    bases: {}

@@ -23,14 +23,6 @@ class PageName(Enum):
     ZAPRET2_PROFILE_ORDER = auto()
 
     # net67 v1: зеркальный путь, отличается только strategy внутри profile
-    ZAPRET1_MODE_CONTROL = auto()
-    ZAPRET1_USER_PRESETS = auto()
-    ZAPRET1_PRESET_RAW_EDITOR = auto()
-    ZAPRET1_PRESET_SETUP = auto()
-    ZAPRET1_PROFILE_SETUP = auto()
-    ZAPRET1_PROFILE_ORDER = auto()
-
-    DPI_SETTINGS = auto()            # Настройки DPI
 
     # === Настройки системы ===
     NETWORK = auto()                 # Сеть
@@ -52,5 +44,3 @@ class PageName(Enum):
     CONFIGS = auto()                 # Наборы настроек, перенос и правка файла
 
     # === Оркестратор (автообучение) ===
-    ORCHESTRA = auto()               # Оркестр - главная
-    ORCHESTRA_SETTINGS = auto()      # Настройки оркестратора (вкладки: залоченные, заблокированные, белый список, рейтинги)

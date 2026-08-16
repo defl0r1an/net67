@@ -8,13 +8,8 @@ from app.page_names import PageName
 
 _WINDOWS11_SIDEBAR_ICON_FILES: dict[PageName, str] = {
     PageName.ZAPRET2_MODE_CONTROL: "home.svg",
-    PageName.ZAPRET1_MODE_CONTROL: "home.svg",
-    PageName.ORCHESTRA: "services.svg",
     PageName.ZAPRET2_USER_PRESETS: "folder.svg",
-    PageName.ZAPRET1_USER_PRESETS: "folder.svg",
     PageName.ZAPRET2_PRESET_SETUP: "play.svg",
-    PageName.ZAPRET1_PRESET_SETUP: "play.svg",
-    PageName.DPI_SETTINGS: "settings.svg",
     PageName.NETWORK: "search.svg",
     PageName.TELEGRAM_PROXY: "share.svg",
     PageName.VPN: "shield.svg",
@@ -26,7 +21,6 @@ _WINDOWS11_SIDEBAR_ICON_FILES: dict[PageName, str] = {
     PageName.ABOUT: "info.svg",
     PageName.SERVERS: "cloud-download.svg",
     PageName.SUPPORT: "share.svg",
-    PageName.ORCHESTRA_SETTINGS: "settings.svg",
 }
 
 
@@ -62,16 +56,10 @@ def build_standard_nav_icons() -> dict[PageName, Any]:
         PageName.WINWS_LOG_ANALYZER: FluentIcon.SEARCH,
         PageName.LOGS: FluentIcon.HISTORY,
         PageName.ABOUT: FluentIcon.INFO,
-        PageName.DPI_SETTINGS: FluentIcon.SETTING,
         PageName.ZAPRET2_USER_PRESETS: FluentIcon.FOLDER,
         PageName.SERVERS: FluentIcon.UPDATE,
         PageName.SUPPORT: FluentIcon.CHAT,
-        PageName.ORCHESTRA: FluentIcon.MUSIC,
-        PageName.ORCHESTRA_SETTINGS: FluentIcon.SETTING,
         PageName.ZAPRET2_PRESET_SETUP: FluentIcon.PLAY,
-        PageName.ZAPRET1_MODE_CONTROL: FluentIcon.GAME,
-        PageName.ZAPRET1_PRESET_SETUP: FluentIcon.PLAY,
-        PageName.ZAPRET1_USER_PRESETS: FluentIcon.FOLDER,
         PageName.TELEGRAM_PROXY: FluentIcon.SEND,
         PageName.VPN: FluentIcon.VPN,
         PageName.CONFIGS: FluentIcon.SAVE_AS,

@@ -14,12 +14,9 @@ from ui.page_deps.system import (
     build_about_page_kwargs,
     build_blockcheck_page_kwargs,
     build_configs_page_kwargs,
-    build_dpi_settings_page_kwargs,
     build_hosts_page_kwargs,
     build_logs_page_kwargs,
     build_network_page_kwargs,
-    build_orchestra_page_kwargs,
-    build_orchestra_settings_page_kwargs,
     build_servers_page_kwargs,
     build_support_page_kwargs,
     build_telegram_proxy_page_kwargs,
@@ -36,19 +33,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         actions=("set_status", "request_exit", "open_connection_test", "open_folder", "show_page"),
         include_ui_state_store=True,
     ),
-    PageName.ZAPRET1_MODE_CONTROL: PageDepsSpec(
-        build_control_page_kwargs,
-        features=("presets", "profile", "runtime", "program_settings", "external_actions"),
-        actions=("set_status", "request_exit", "open_connection_test", "open_folder", "show_page"),
-        include_ui_state_store=True,
-    ),
     PageName.ZAPRET2_PRESET_SETUP: PageDepsSpec(
-        build_preset_setup_page_kwargs,
-        features=("profile", "external_actions"),
-        actions=("open_profile_setup", "show_page"),
-        include_ui_state_store=True,
-    ),
-    PageName.ZAPRET1_PRESET_SETUP: PageDepsSpec(
         build_preset_setup_page_kwargs,
         features=("profile", "external_actions"),
         actions=("open_profile_setup", "show_page"),
@@ -59,18 +44,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         features=("profile",),
         actions=("show_page", "on_profile_setup_changed"),
     ),
-    PageName.ZAPRET1_PROFILE_SETUP: PageDepsSpec(
-        build_profile_setup_page_kwargs,
-        features=("profile",),
-        actions=("show_page", "on_profile_setup_changed"),
-    ),
     PageName.ZAPRET2_PROFILE_ORDER: PageDepsSpec(
-        build_profile_order_page_kwargs,
-        features=("profile",),
-        actions=("show_page",),
-        include_ui_state_store=True,
-    ),
-    PageName.ZAPRET1_PROFILE_ORDER: PageDepsSpec(
         build_profile_order_page_kwargs,
         features=("profile",),
         actions=("show_page",),
@@ -82,28 +56,11 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         actions=("open_preset_raw_editor", "notify"),
         include_ui_state_store=True,
     ),
-    PageName.ZAPRET1_USER_PRESETS: PageDepsSpec(
-        build_user_presets_page_kwargs,
-        features=("presets", "external_actions"),
-        actions=("open_preset_raw_editor", "notify"),
-        include_ui_state_store=True,
-    ),
     PageName.ZAPRET2_PRESET_RAW_EDITOR: PageDepsSpec(
         build_preset_raw_editor_page_kwargs,
         features=("presets", "runtime"),
         actions=("show_page",),
         include_ui_state_store=True,
-    ),
-    PageName.ZAPRET1_PRESET_RAW_EDITOR: PageDepsSpec(
-        build_preset_raw_editor_page_kwargs,
-        features=("presets", "runtime"),
-        actions=("show_page",),
-        include_ui_state_store=True,
-    ),
-    PageName.DPI_SETTINGS: PageDepsSpec(
-        build_dpi_settings_page_kwargs,
-        features=("dpi_settings", "orchestra", "runtime"),
-        actions=("set_status", "after_launch_method_changed"),
     ),
     PageName.NETWORK: PageDepsSpec(build_network_page_kwargs, features=("dns",)),
     PageName.HOSTS: PageDepsSpec(build_hosts_page_kwargs, features=("hosts",)),
@@ -116,7 +73,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     ),
     PageName.SERVERS: PageDepsSpec(
         build_servers_page_kwargs,
-        features=("runtime", "updater", "external_actions", "dpi_settings"),
+        features=("runtime", "updater", "external_actions"),
         actions=("show_page", "request_exit"),
     ),
     PageName.BLOCKCHECK: PageDepsSpec(
@@ -126,19 +83,11 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     PageName.WINWS_LOG_ANALYZER: PageDepsSpec(build_winws_log_analyzer_page_kwargs),
     PageName.LOGS: PageDepsSpec(
         build_logs_page_kwargs,
-        features=("logs", "orchestra"),
+        features=("logs",),
     ),
     PageName.TELEGRAM_PROXY: PageDepsSpec(
         build_telegram_proxy_page_kwargs,
         features=("runtime", "telegram_proxy"),
-    ),
-    PageName.ORCHESTRA: PageDepsSpec(
-        build_orchestra_page_kwargs,
-        features=("orchestra", "runtime"),
-    ),
-    PageName.ORCHESTRA_SETTINGS: PageDepsSpec(
-        build_orchestra_settings_page_kwargs,
-        features=("orchestra",),
     ),
     # Обе страницы самодостаточны: ресурсы находят через APPLICATION_PATHS
     # и settings.store, внешних зависимостей им не требуется.

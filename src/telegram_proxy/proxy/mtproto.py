@@ -30,7 +30,10 @@ def dc_from_init(data: bytes) -> tuple[Optional[int], bool]:
             if 1 <= dc <= 1000:
                 return dc, (dc_raw < 0)
     except ImportError:
-        log.warning("tgcrypto library not installed -- cannot parse MTProto init")
+        # Раньше здесь не хватало tgcrypto. Теперь шифрование умеет
+        # работать и на cryptography, так что сюда попадаем, только если
+        # нет вообще ничего — и говорим именно это, а не про один пакет.
+        log.warning("Нет библиотеки шифрования (cryptography) — разобрать init MTProto нечем")
     except Exception as exc:
         log.debug("DC extraction failed: %s", exc)
 

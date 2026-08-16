@@ -13,7 +13,7 @@ from app.ui_texts import (
     normalize_language,
     tr,
 )
-from settings.mode import ZAPRET1_MODE, ZAPRET2_MODE, normalize_launch_method
+from settings.mode import ZAPRET2_MODE, normalize_launch_method
 
 
 @dataclass(frozen=True)
@@ -45,16 +45,6 @@ SEARCH_ENTRIES: tuple[SearchEntry, ...] = (
     SearchEntry("winws2.mode.title", PageName.ZAPRET2_PRESET_SETUP, "page.winws2_pages.title"),
     SearchEntry("winws2.user_presets.title", PageName.ZAPRET2_USER_PRESETS, "page.winws2_user_presets.title"),
     SearchEntry("winws2.profile_setup.title", PageName.ZAPRET2_PROFILE_SETUP, "page.winws2_profile_setup.title"),
-    SearchEntry("winws1.control.title", PageName.ZAPRET1_MODE_CONTROL, "page.winws1_control.title"),
-    SearchEntry("winws1.control.presets", PageName.ZAPRET1_MODE_CONTROL, "page.winws1_control.presets", section_key="page.winws1_control.presets"),
-    SearchEntry("winws1.mode.title", PageName.ZAPRET1_PRESET_SETUP, "page.winws1_pages.title"),
-    SearchEntry("winws1.user_presets.title", PageName.ZAPRET1_USER_PRESETS, "page.winws1_user_presets.title"),
-    SearchEntry("winws1.profile_setup.title", PageName.ZAPRET1_PROFILE_SETUP, "page.winws1_profile_setup.title"),
-    SearchEntry("orchestra.title", PageName.ORCHESTRA, "page.orchestra.title"),
-    SearchEntry("orchestra.training", PageName.ORCHESTRA, "page.orchestra.training_status", section_key="page.orchestra.training_status"),
-    SearchEntry("orchestra.log", PageName.ORCHESTRA, "page.orchestra.log", section_key="page.orchestra.log"),
-    SearchEntry("dpi.title", PageName.DPI_SETTINGS, "page.dpi_settings.title"),
-    SearchEntry("dpi.launch_method", PageName.DPI_SETTINGS, "page.dpi_settings.launch_method", section_key="page.dpi_settings.launch_method"),
     SearchEntry("network.title", PageName.NETWORK, "page.network.title"),
     SearchEntry("network.dns", PageName.NETWORK, "page.network.dns", section_key="page.network.dns"),
     SearchEntry("network.adapters", PageName.NETWORK, "page.network.adapters", section_key="page.network.adapters"),
@@ -88,16 +78,11 @@ SEARCH_ENTRIES: tuple[SearchEntry, ...] = (
     SearchEntry("about.support.discussions", PageName.ABOUT, "page.about.support.discussions.title", section_key="page.about.support", tab_key="about"),
     SearchEntry("about.help.docs.info", PageName.ABOUT, "page.about.help.docs.info.title", section_key="page.about.tab.help", tab_key="help"),
     SearchEntry("support.title", PageName.SUPPORT, "page.support.title"),
-    SearchEntry("orch.tab.locked", PageName.ORCHESTRA_SETTINGS, "tab.orchestra.locked", section_key="nav.page.orchestra_settings", tab_key="locked", text_prefixes=("page.orchestra.locked.",)),
-    SearchEntry("orch.tab.blocked", PageName.ORCHESTRA_SETTINGS, "tab.orchestra.blocked", section_key="nav.page.orchestra_settings", tab_key="blocked", text_prefixes=("page.orchestra.blocked.",)),
-    SearchEntry("orch.tab.whitelist", PageName.ORCHESTRA_SETTINGS, "tab.orchestra.whitelist", section_key="nav.page.orchestra_settings", tab_key="whitelist", text_prefixes=("page.orchestra.whitelist.",)),
-    SearchEntry("orch.tab.ratings", PageName.ORCHESTRA_SETTINGS, "tab.orchestra.ratings", section_key="nav.page.orchestra_settings", tab_key="ratings", text_prefixes=("page.orchestra.ratings.",)),
 )
 
 
 _PAGE_SEARCH_EXTRA_PREFIXES: dict[PageName, tuple[str, ...]] = {
     PageName.ZAPRET2_PRESET_SETUP: ("page.winws2_pages.",),
-    PageName.ZAPRET1_PRESET_SETUP: ("page.winws1_pages.",),
     PageName.BLOCKCHECK: (
         "page.connection.",
         "page.dns_check.",
@@ -197,12 +182,10 @@ def _is_primary_page_entry(entry: SearchEntry) -> bool:
 
 _PROFILE_PAGE_BY_METHOD = {
     ZAPRET2_MODE: PageName.ZAPRET2_PRESET_SETUP,
-    ZAPRET1_MODE: PageName.ZAPRET1_PRESET_SETUP,
 }
 
 _PRESET_PAGE_BY_METHOD = {
     ZAPRET2_MODE: PageName.ZAPRET2_USER_PRESETS,
-    ZAPRET1_MODE: PageName.ZAPRET1_USER_PRESETS,
 }
 
 

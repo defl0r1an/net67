@@ -1,17 +1,16 @@
 # winws_runtime/runners/runner_factory.py
 """
 Factory module for strategy runners.
-Выбирает между Winws1StrategyRunner и Winws2StrategyRunner по выбранному exe-файлу.
+
+Движок остался один — winws2. Раньше здесь выбирали между ним и
+winws1 по имени exe-файла; winws1 вырезан, и выбирать больше не из
+чего. Модуль оставлен: он держит единственный экземпляр и следит за
+сменой пути к exe, а это нужно по-прежнему.
 """
 
-import os
 from typing import Optional
 from log.log import log
 
-from settings.mode import EXE_NAME_WINWS2
-
-# Import both runner classes
-from .zapret1_runner import Winws1StrategyRunner
 from .zapret2_runner import Winws2StrategyRunner
 from .runner_base import StrategyRunnerBase
 
@@ -19,17 +18,10 @@ _strategy_runner_instance: Optional[StrategyRunnerBase] = None
 
 
 def get_strategy_runner(winws_exe_path: str) -> StrategyRunnerBase:
-    """
-    Получает или создает экземпляр runner'а.
-    Автоматически выбирает winws1 или winws2 на основе выбранного exe-файла.
-    """
+    """Получает или создаёт экземпляр runner'а."""
     global _strategy_runner_instance
 
-    exe_name = os.path.basename(str(winws_exe_path or "")).lower()
-    if exe_name == EXE_NAME_WINWS2:
-        runner_class = Winws2StrategyRunner
-    else:
-        runner_class = Winws1StrategyRunner
+    runner_class = Winws2StrategyRunner
 
     # Пересоздаём если exe или класс изменился
     if _strategy_runner_instance is not None:

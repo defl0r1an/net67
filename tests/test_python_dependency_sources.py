@@ -11,6 +11,11 @@ ROLE_FILES = (
     "requirements-build.txt",
     "requirements-publish.txt",
     "requirements-dev.txt",
+    # Необязательные ускорители держатся отдельно: pip прерывает
+    # установку целиком на первом же пакете, который не собрался, и
+    # TgCrypto без компилятора C уносил с собой весь список. Правила
+    # про точные версии и отсутствие дублей на них те же.
+    "requirements-optional.txt",
 )
 
 

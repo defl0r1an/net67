@@ -20,12 +20,6 @@ _PAGE_EXPORTS: dict[str, tuple[str, str]] = {
     "Zapret2UserPresetsPage": ("presets.ui.zapret2.user_presets_page", "Zapret2UserPresetsPage"),
     "Zapret2ProfileSetupPage": ("profile.ui.profile_setup_page", "Zapret2ProfileSetupPage"),
     "Zapret2ProfileOrderPage": ("profile.ui.profile_order_page", "Zapret2ProfileOrderPage"),
-    "Zapret1ModeControlPage": ("presets.ui.control.zapret1.page", "Zapret1ModeControlPage"),
-    "Zapret1PresetSetupPage": ("profile.ui.preset_setup_page", "Zapret1PresetSetupPage"),
-    "Zapret1ProfileSetupPage": ("profile.ui.profile_setup_page", "Zapret1ProfileSetupPage"),
-    "Zapret1ProfileOrderPage": ("profile.ui.profile_order_page", "Zapret1ProfileOrderPage"),
-    "Zapret1UserPresetsPage": ("presets.ui.zapret1.user_presets_page", "Zapret1UserPresetsPage"),
-    "DpiSettingsPage": ("settings.dpi.page", "DpiSettingsPage"),
     "NetworkPage": ("dns.ui.page", "NetworkPage"),
     "HostsPage": ("hosts.ui.page", "HostsPage"),
     "AboutPage": (".about_page", "AboutPage"),
@@ -34,12 +28,6 @@ _PAGE_EXPORTS: dict[str, tuple[str, str]] = {
     "BlockcheckPage": ("blockcheck.ui.page", "BlockcheckPage"),
     "ServersPage": ("updater.ui.page", "ServersPage"),
     "ConnectionTestPage": ("diagnostics.ui.page", "ConnectionTestPage"),
-    "OrchestraPage": ("orchestra.ui.page", "OrchestraPage"),
-    "OrchestraSettingsPage": ("orchestra.ui.settings_page", "OrchestraSettingsPage"),
-    "OrchestraLockedPage": ("orchestra.ui.locked_page", "OrchestraLockedPage"),
-    "OrchestraBlockedPage": ("orchestra.ui.blocked_page", "OrchestraBlockedPage"),
-    "OrchestraWhitelistPage": ("orchestra.ui.whitelist_page", "OrchestraWhitelistPage"),
-    "OrchestraRatingsPage": ("orchestra.ui.ratings_page", "OrchestraRatingsPage"),
 }
 
 __all__ = list(_PAGE_EXPORTS)

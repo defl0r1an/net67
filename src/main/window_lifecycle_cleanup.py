@@ -162,6 +162,17 @@ def cleanup_visual_and_proxy_resources_for_close(window, *, telegram_proxy_featu
     except Exception as exc:
         log(f"Ошибка остановки ядра Xray при закрытии: {exc}", "DEBUG")
 
+    # Сервер документации живёт, пока открыта программа: человек читает
+    # вики в соседней вкладке и возвращается к ней. При закрытии его
+    # надо погасить — иначе порт остаётся занятым до конца сеанса
+    # Windows, и следующий запуск возьмёт соседний, потом ещё один.
+    try:
+        from docs.local_site import stop as stop_docs_site
+
+        stop_docs_site()
+    except Exception as exc:
+        log(f"Ошибка остановки документации при закрытии: {exc}", "DEBUG")
+
 
 def cleanup_runtime_threads_for_close(runtime_feature) -> None:
     try:

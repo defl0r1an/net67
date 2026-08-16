@@ -49,6 +49,39 @@ def _merged(group: str) -> str:
         return group
 
 
+def _group_by_route() -> dict[str, str]:
+    """Карта «маршрут → раздел» по схеме навигации.
+
+    Схема — единственное место, где записано, какой странице какой
+    раздел принадлежит. Строится один раз: набор страниц за время
+    работы не меняется.
+    """
+    global _GROUP_BY_ROUTE
+
+    if _GROUP_BY_ROUTE is not None:
+        return _GROUP_BY_ROUTE
+
+    mapping: dict[str, str] = {}
+    try:
+        from ui.navigation.schema import iter_page_specs
+
+        for spec in iter_page_specs():
+            group = str(getattr(spec, "sidebar_group", "") or "").strip()
+            route = str(getattr(spec, "route_key", "") or "").strip()
+            if group and route:
+                mapping[route] = _merged(group)
+    except Exception:
+        # Схема недоступна — останется запасной путь по заголовкам.
+        mapping = {}
+
+    _GROUP_BY_ROUTE = mapping
+    return mapping
+
+
+#: Кэш карты «маршрут → раздел». None — ещё не построена.
+_GROUP_BY_ROUTE: dict[str, str] | None = None
+
+
 def _position_key(position) -> str:
     """Превращает NavigationItemPosition в наш ключ.
 
@@ -214,8 +247,30 @@ class NavigationCompat(QWidget):
             box.insertWidget(int(index), button)
 
         self._items[key] = button
-        self._item_group[key] = self._current_group
-        if self._visible_group is not None and self._current_group != self._visible_group:
+
+        # Раздел берём у самой страницы, а не у последнего заголовка.
+        #
+        # Раньше пункт получал `self._current_group` — раздел, чей
+        # заголовок добавили последним. Это верно ровно до тех пор, пока
+        # пункты добавляются подряд, группа за группой. Но панель
+        # вставляет их и по индексу, и позже — скрытые страницы
+        # дозаводятся отдельным проходом, а при смене режима заголовки
+        # уже добавлены и второй раз не создаются, так что «текущий
+        # раздел» остаётся от прошлой сборки.
+        #
+        # Тогда страницы достаются соседнему разделу молча. Так BlockCheck,
+        # разбор лога, логи и конфигурации оказались во вкладке
+        # «Инструменты», а «Диагностика» осталась ни с чем — при том, что
+        # в схеме всё расписано верно.
+        #
+        # Схема и есть источник правды: в ней у каждой страницы записан
+        # свой раздел. Заголовок остаётся запасным путём — для пунктов
+        # вне схемы, вроде переключателя вида.
+        group = _group_by_route().get(key) or self._current_group
+        self._item_group[key] = group
+        if group not in self._group_order:
+            self._group_order.append(group)
+        if self._visible_group is not None and group != self._visible_group:
             button.hide()
         self.structureChanged.emit()
         return button

@@ -16,6 +16,30 @@ def _start_worker_result(runtime_owner) -> tuple[int | None, list[str]]:
     return (pid if isinstance(pid, int) else None), warnings
 
 
+def release_worker_slot(runtime_owner, worker_attr: str) -> None:
+    """Отмечает работника завершившимся сразу по факту завершения.
+
+    Ссылку на работника снимала цепочка сигналов: `finished` работника →
+    очистка → `quit()` потока → `finished` потока → сброс ссылки на
+    поток. Цепочка длинная, и на живой машине она рвалась: ссылки
+    оставались, приложение считало запуск и остановку идущими вечно.
+
+    Со стороны это выглядело так: включить, выключить, включить — и на
+    третьем шаге «Обход не запустился за 40 секунд». В журнале при этом
+    «DPI успешно остановлен», а следом «Остановка не завершилась за
+    12000 мс»: одно противоречит другому, потому что говорили они о
+    разном — о работе и о ссылке на поток, который её давно закончил.
+
+    Здесь тот же сброс делается прямо в обработчике завершения. Он
+    вызывается всегда, о чём говорят строки «DPI успешно запущен» и
+    «DPI успешно остановлен» в журнале, и потому надёжнее цепочки.
+    """
+    try:
+        setattr(runtime_owner, worker_attr, None)
+    except Exception as exc:
+        log(f"Не удалось освободить {worker_attr}: {exc}", "DEBUG")
+
+
 def show_launch_error_top(runtime_owner, message: str) -> None:
     """Показывает человеко-понятную ошибку запуска через верхний InfoBar."""
     bridge = runtime_owner._runtime_ui_bridge()
@@ -73,6 +97,10 @@ def on_dpi_start_finished(runtime_owner, success, error_message):
         runtime_owner._runtime_service().set_busy(False)
         set_runtime_owner_status(runtime_owner, f"Ошибка: {e}")
     finally:
+        # Результат работника уже прочитан выше — держать ссылку больше
+        # не за чем, а её задержка стоила запрета на повторный запуск.
+        release_worker_slot(runtime_owner, "_dpi_start_worker")
+
         if runtime_owner._restart_request_generation > runtime_owner._restart_completed_generation:
             QTimer.singleShot(0, runtime_owner._process_pending_restart_request)
         if runtime_owner._presets_switch_requested_generation > runtime_owner._presets_switch_completed_generation:
@@ -101,6 +129,10 @@ def on_dpi_stop_finished(runtime_owner, success, error_message):
                     restart_generation_after_stop,
                     runtime_owner._restart_request_generation,
                 )
+                # Освобождаем до запуска, а не в finally: иначе старт
+                # увидит ссылку на самого себя — на остановку, которая
+                # его же и позвала, — и уйдёт ждать её окончания.
+                release_worker_slot(runtime_owner, "_dpi_stop_worker")
                 runtime_owner.start_dpi_async()
                 return
         else:
@@ -119,6 +151,11 @@ def on_dpi_stop_finished(runtime_owner, success, error_message):
         log(f"Ошибка при обработке результата остановки DPI: {e}", "❌ ERROR")
         set_runtime_owner_status(runtime_owner, f"Ошибка: {e}")
     finally:
+        # Ради этого всё и затевалось: пока ссылка на работника
+        # оставалась, следующее нажатие «включить» ждало окончания
+        # остановки, которая давно закончилась.
+        release_worker_slot(runtime_owner, "_dpi_stop_worker")
+
         if runtime_owner._presets_switch_requested_generation > runtime_owner._presets_switch_completed_generation:
             QTimer.singleShot(0, runtime_owner._process_pending_presets_switch)
 

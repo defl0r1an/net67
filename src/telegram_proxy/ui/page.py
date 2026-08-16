@@ -91,7 +91,6 @@ from qfluentwidgets import (
 # How often (ms) the GUI reads new log lines from the ring buffer
 _LOG_REFRESH_MS = 500
 
-_ZASTOGRAM_URL = ""  # ссылка на сторонний проект автора удалена
 
 
 
@@ -362,7 +361,6 @@ class TelegramProxyPage(BasePage):
             on_toggle_proxy=self._on_toggle_proxy,
             on_open_in_telegram=self._on_open_in_telegram,
             on_copy_link=self._on_copy_link,
-            on_open_zastogram=self._on_open_zastogram,
             on_open_mtproxy=self._on_open_mtproxy,
             on_generate_mtproxy_secret=self._on_generate_mtproxy_secret,
             on_copy_fake_tls_nginx_config=self._on_copy_fake_tls_nginx_config,
@@ -383,7 +381,6 @@ class TelegramProxyPage(BasePage):
         self._setup_card = widgets.setup_card
         self._setup_open_btn = widgets.setup_open_btn
         self._setup_copy_btn = widgets.setup_copy_btn
-        self._setup_zastogram_btn = widgets.setup_zastogram_btn
         self._settings_card = widgets.settings_card
         self._settings_host_row = widgets.settings_host_row
         self._host_label = widgets.host_label
@@ -2287,16 +2284,6 @@ class TelegramProxyPage(BasePage):
             url,
             success_log=f"Opened deep link: {url}",
             error_prefix="Failed to open link",
-        )
-
-    def _on_open_zastogram(self):
-        """Ссылка на сторонний проект автора удалена — открывать нечего."""
-        if not _ZASTOGRAM_URL:
-            return
-        self._start_external_link_worker(
-            _ZASTOGRAM_URL,
-            success_log=f"Opened ZaStoGram page: {_ZASTOGRAM_URL}",
-            error_prefix="Failed to open ZaStoGram page",
         )
 
     def create_external_link_worker(self, *, url: str, success_log: str, error_prefix: str):

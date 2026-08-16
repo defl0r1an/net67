@@ -51,6 +51,65 @@ def looks_like_subscription_url(text: str) -> bool:
     return lowered.startswith(("http://", "https://"))
 
 
+def _host_of(url: str) -> str:
+    """Имя узла из адреса — для сообщения человеку."""
+    try:
+        from urllib.parse import urlparse
+
+        return str(urlparse(str(url or "")).hostname or "").strip()
+    except Exception:
+        return ""
+
+
+def _explain_network_error(exc: Exception, url: str, timeout: int) -> str:
+    """Человеческое объяснение вместо текста исключения requests.
+
+    Подставлять исключение целиком нельзя: человек получал полотно вида
+
+        HTTPSConnectionPool(host='sub.example', port=443): Max retries
+        exceeded with url: /XXXX (Caused by ConnectTimeoutError(
+        <HTTPSConnection object at 0x19cb18d5e50>, 'Connection to
+        sub.example timed out. (connect timeout=10)'))
+
+    Здесь три повтора одного факта, адрес объекта в памяти и ни слова о
+    том, что делать. Полезного в нём ровно два слова — «timed out».
+
+    Разбираем по типу, а не по тексту: тексты requests меняются от
+    версии к версии и переводу не поддаются.
+    """
+    host = _host_of(url) or "сервер"
+
+    try:
+        import requests
+    except Exception:
+        return f"не удалось открыть ссылку: {exc}"
+
+    # Таймаут и отказ соединения — самые частые, и у них общая причина:
+    # до сервера подписки не достучаться. Обход тут помогает, поэтому о
+    # нём и говорим — вместо пересказа стека вызовов.
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return (
+            f"{host} не ответил за {timeout} секунд. "
+            "Проверьте, что ссылка верна, а если она открывается только "
+            "с обходом — включите обход и повторите."
+        )
+    if isinstance(exc, requests.exceptions.ReadTimeout):
+        return f"{host} принял запрос, но не прислал список за {timeout} секунд."
+    if isinstance(exc, requests.exceptions.SSLError):
+        return f"{host} не прошёл проверку сертификата — соединение может подменяться."
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return (
+            f"не удалось соединиться с {host}. "
+            "Проверьте сеть и адрес подписки; если он заблокирован — включите обход."
+        )
+    if isinstance(exc, requests.exceptions.TooManyRedirects):
+        return f"{host} перенаправляет по кругу — похоже, ссылка ведёт на страницу входа."
+    if isinstance(exc, requests.exceptions.MissingSchema):
+        return "ссылка на подписку должна начинаться с http:// или https://"
+
+    return f"не удалось открыть ссылку: {exc}"
+
+
 def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S) -> str:
     """Скачивает содержимое подписки. Возвращает текст как есть.
 
@@ -84,7 +143,7 @@ def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S) -> str:
             proxies={"http": None, "https": None},
         )
     except Exception as exc:
-        raise SubscriptionError(f"не удалось открыть ссылку: {exc}") from exc
+        raise SubscriptionError(_explain_network_error(exc, address, timeout)) from exc
 
     try:
         if response.status_code != 200:

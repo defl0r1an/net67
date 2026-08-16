@@ -9,12 +9,10 @@ if TYPE_CHECKING:
         BlockcheckFeature,
         DiagnosticsFeature,
         DnsFeature,
-        DpiSettingsFeature,
         ExternalActionsFeature,
         HostsFeature,
         ListsFeature,
         LogsFeature,
-        OrchestraFeature,
         PresetsFeature,
         ProfileFeature,
         ProgramSettingsFeature,
@@ -38,11 +36,9 @@ class AppFeatures:
     hosts: HostsFeature
     lists: ListsFeature
     logs: LogsFeature
-    dpi_settings: DpiSettingsFeature
     telegram_proxy: TelegramProxyFeature
     tray: TrayFeature
     updater: UpdaterFeature
     external_actions: ExternalActionsFeature
-    orchestra: OrchestraFeature
     program_settings: ProgramSettingsFeature
     window_geometry: WindowGeometryFeature

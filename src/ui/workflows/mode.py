@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from settings.mode import DEFAULT_LAUNCH_METHOD, ZAPRET1_MODE, ZAPRET2_MODE, normalize_launch_method
+from settings.mode import DEFAULT_LAUNCH_METHOD, ZAPRET2_MODE, normalize_launch_method
 from ui.navigation.sidebar_builder import sync_nav_visibility
 from ui.navigation_pages import (
     resolve_control_page_for_method,
     resolve_preset_setup_page_for_method,
-    resolve_zapret1_navigation_pages,
     resolve_zapret2_navigation_pages,
 )
 from app.page_names import PageName
@@ -16,19 +15,12 @@ from ui.workflows.common import get_current_launch_method
 def get_mode_context_pages(window) -> set:
     mode_context_pages = set()
     winws2_pages = resolve_zapret2_navigation_pages()
-    winws1_pages = resolve_zapret1_navigation_pages()
     for page_name in (
-        PageName.DPI_SETTINGS,
         winws2_pages.control_page,
         winws2_pages.user_presets_page,
         winws2_pages.preset_setup_page,
         winws2_pages.preset_raw_editor_page,
         winws2_pages.profile_setup_page,
-        winws1_pages.control_page,
-        winws1_pages.user_presets_page,
-        winws1_pages.preset_setup_page,
-        winws1_pages.preset_raw_editor_page,
-        winws1_pages.profile_setup_page,
     ):
         page = get_loaded_page(window, page_name)
         if page is not None:
@@ -47,28 +39,19 @@ def resolve_navigation_page_for_preset_setup(method: str | None) -> PageName:
 def resolve_mode_context_page_for_method(current_page_name: PageName | None, method: str | None) -> PageName:
     normalized = normalize_launch_method(method, default="")
     control_page = resolve_control_page_for_method(normalized)
-    pages = (
-        resolve_zapret2_navigation_pages()
-        if normalized == ZAPRET2_MODE
-        else resolve_zapret1_navigation_pages()
-        if normalized == ZAPRET1_MODE
-        else None
-    )
+    # Режим один: страницы всегда winws2.
+    pages = resolve_zapret2_navigation_pages() if normalized == ZAPRET2_MODE else None
     if pages is None:
         return control_page
 
     current = current_page_name
     if current in {
-        PageName.ZAPRET1_USER_PRESETS,
         PageName.ZAPRET2_USER_PRESETS,
-        PageName.ZAPRET1_PRESET_RAW_EDITOR,
         PageName.ZAPRET2_PRESET_RAW_EDITOR,
     }:
         return pages.user_presets_page
     if current in {
-        PageName.ZAPRET1_PRESET_SETUP,
         PageName.ZAPRET2_PRESET_SETUP,
-        PageName.ZAPRET1_PROFILE_SETUP,
         PageName.ZAPRET2_PROFILE_SETUP,
     }:
         return pages.preset_setup_page

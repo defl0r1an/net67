@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Iterable
 
-from settings.mode import DEFAULT_LAUNCH_METHOD, ORCHESTRA_MODE, ZAPRET1_MODE, ZAPRET2_MODE
+from settings.mode import DEFAULT_LAUNCH_METHOD, ZAPRET2_MODE
 from app.page_names import PageName
 
 
@@ -37,8 +37,6 @@ SIMPLE_MODE_PAGES: frozenset[PageName] = frozenset(
 
 _COMMON = ()
 _WINWS2_MODE = (ZAPRET2_MODE,)
-_WINWS1_MODE = (ZAPRET1_MODE,)
-_ORCHESTRA = (ORCHESTRA_MODE,)
 
 
 PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
@@ -107,83 +105,6 @@ PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
         launch_modes=_WINWS2_MODE,
         breadcrumb_parent=PageName.ZAPRET2_USER_PRESETS,
         sidebar_group=None,
-    ),
-    PageName.ZAPRET1_MODE_CONTROL: PageRouteSpec(
-        page_name=PageName.ZAPRET1_MODE_CONTROL,
-        module_name="presets.ui.control.zapret1.page",
-        class_name="Zapret1ModeControlPage",
-        route_key="Zapret1ModeControlPage",
-        is_top_level=True,
-        is_hidden=False,
-        launch_modes=_WINWS1_MODE,
-        breadcrumb_parent=None,
-        sidebar_group="root",
-    ),
-    PageName.ZAPRET1_USER_PRESETS: PageRouteSpec(
-        page_name=PageName.ZAPRET1_USER_PRESETS,
-        module_name="presets.ui.zapret1.user_presets_page",
-        class_name="Zapret1UserPresetsPage",
-        route_key="Zapret1UserPresetsPage",
-        is_top_level=True,
-        is_hidden=False,
-        launch_modes=_WINWS1_MODE,
-        breadcrumb_parent=PageName.ZAPRET1_MODE_CONTROL,
-        sidebar_group="settings",
-    ),
-    PageName.ZAPRET1_PRESET_SETUP: PageRouteSpec(
-        page_name=PageName.ZAPRET1_PRESET_SETUP,
-        module_name="profile.ui.preset_setup_page",
-        class_name="Zapret1PresetSetupPage",
-        route_key="Zapret1PresetSetupPage",
-        is_top_level=True,
-        is_hidden=False,
-        launch_modes=_WINWS1_MODE,
-        breadcrumb_parent=PageName.ZAPRET1_MODE_CONTROL,
-        sidebar_group="settings",
-    ),
-    PageName.ZAPRET1_PROFILE_SETUP: PageRouteSpec(
-        page_name=PageName.ZAPRET1_PROFILE_SETUP,
-        module_name="profile.ui.profile_setup_page",
-        class_name="Zapret1ProfileSetupPage",
-        route_key="Zapret1ProfileSetupPage",
-        is_top_level=False,
-        is_hidden=True,
-        launch_modes=_WINWS1_MODE,
-        breadcrumb_parent=PageName.ZAPRET1_PRESET_SETUP,
-        sidebar_group=None,
-    ),
-    PageName.ZAPRET1_PROFILE_ORDER: PageRouteSpec(
-        page_name=PageName.ZAPRET1_PROFILE_ORDER,
-        module_name="profile.ui.profile_order_page",
-        class_name="Zapret1ProfileOrderPage",
-        route_key="Zapret1ProfileOrderPage",
-        is_top_level=False,
-        is_hidden=True,
-        launch_modes=_WINWS1_MODE,
-        breadcrumb_parent=PageName.ZAPRET1_PRESET_SETUP,
-        sidebar_group=None,
-    ),
-    PageName.ZAPRET1_PRESET_RAW_EDITOR: PageRouteSpec(
-        page_name=PageName.ZAPRET1_PRESET_RAW_EDITOR,
-        module_name="presets.ui.common.preset_subpage_base",
-        class_name="PresetRawEditorPage",
-        route_key="Zapret1PresetRawEditor",
-        is_top_level=False,
-        is_hidden=True,
-        launch_modes=_WINWS1_MODE,
-        breadcrumb_parent=PageName.ZAPRET1_USER_PRESETS,
-        sidebar_group=None,
-    ),
-    PageName.DPI_SETTINGS: PageRouteSpec(
-        page_name=PageName.DPI_SETTINGS,
-        module_name="settings.dpi.page",
-        class_name="DpiSettingsPage",
-        route_key="DpiSettingsPage",
-        is_top_level=True,
-        is_hidden=False,
-        launch_modes=_COMMON,
-        breadcrumb_parent=None,
-        sidebar_group="settings",
     ),
     PageName.NETWORK: PageRouteSpec(
         page_name=PageName.NETWORK,
@@ -277,28 +198,6 @@ PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
         breadcrumb_parent=PageName.ABOUT,
         sidebar_group=None,
     ),
-    PageName.ORCHESTRA: PageRouteSpec(
-        page_name=PageName.ORCHESTRA,
-        module_name="orchestra.ui.page",
-        class_name="OrchestraPage",
-        route_key="OrchestraPage",
-        is_top_level=True,
-        is_hidden=False,
-        launch_modes=_ORCHESTRA,
-        breadcrumb_parent=None,
-        sidebar_group="root",
-    ),
-    PageName.ORCHESTRA_SETTINGS: PageRouteSpec(
-        page_name=PageName.ORCHESTRA_SETTINGS,
-        module_name="orchestra.ui.settings_page",
-        class_name="OrchestraSettingsPage",
-        route_key="OrchestraSettingsPage",
-        is_top_level=True,
-        is_hidden=False,
-        launch_modes=_ORCHESTRA,
-        breadcrumb_parent=None,
-        sidebar_group="settings",
-    ),
     PageName.TELEGRAM_PROXY: PageRouteSpec(
         page_name=PageName.TELEGRAM_PROXY,
         module_name="telegram_proxy.ui.page",
@@ -343,12 +242,6 @@ PAGE_CLEANUP_ORDER: tuple[PageName, ...] = (
     PageName.ZAPRET2_PROFILE_ORDER,
     PageName.ZAPRET2_PRESET_RAW_EDITOR,
     PageName.ZAPRET2_USER_PRESETS,
-    PageName.ZAPRET1_MODE_CONTROL,
-    PageName.ZAPRET1_PRESET_SETUP,
-    PageName.ZAPRET1_PROFILE_SETUP,
-    PageName.ZAPRET1_PROFILE_ORDER,
-    PageName.ZAPRET1_PRESET_RAW_EDITOR,
-    PageName.ZAPRET1_USER_PRESETS,
     PageName.LOGS,
     PageName.SERVERS,
     PageName.ABOUT,
@@ -356,8 +249,6 @@ PAGE_CLEANUP_ORDER: tuple[PageName, ...] = (
     PageName.WINWS_LOG_ANALYZER,
     PageName.HOSTS,
     PageName.NETWORK,
-    PageName.ORCHESTRA,
-    PageName.ORCHESTRA_SETTINGS,
     PageName.TELEGRAM_PROXY,
     PageName.VPN,
     PageName.CONFIGS,
@@ -392,16 +283,11 @@ INNER_PAGE_NAMES: frozenset[PageName] = frozenset(
         PageName.ZAPRET2_PROFILE_SETUP,
         PageName.ZAPRET2_PROFILE_ORDER,
         PageName.ZAPRET2_PRESET_RAW_EDITOR,
-        PageName.ZAPRET1_PROFILE_SETUP,
-        PageName.ZAPRET1_PROFILE_ORDER,
-        PageName.ZAPRET1_PRESET_RAW_EDITOR,
     }
 )
 
 MODE_ENTRY_PAGES: dict[str, PageName] = {
     ZAPRET2_MODE: PageName.ZAPRET2_MODE_CONTROL,
-    ZAPRET1_MODE: PageName.ZAPRET1_MODE_CONTROL,
-    ORCHESTRA_MODE: PageName.ORCHESTRA,
 }
 
 

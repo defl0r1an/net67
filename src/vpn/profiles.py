@@ -61,17 +61,58 @@ def load_profiles(root: Path | str) -> list[VpnProfile]:
         if not isinstance(item, dict):
             continue
         try:
-            profiles.append(_profile_from_dict(item))
+            profile = _profile_from_dict(item)
         except Exception:
             continue
+        if _is_empty_profile(profile):
+            continue
+        profiles.append(profile)
     return profiles
 
 
+def _is_empty_profile(profile: VpnProfile) -> bool:
+    """Профиль, которым нельзя подключиться и который не назвать.
+
+    Такие записи остались в файлах у тех, кто держал рядом конфигурации
+    и ссылки: ссылки записывались в файл конфигураций и при чтении
+    теряли все свои поля. Правку в `save_profiles` они бы пережили —
+    файл-то уже испорчен, — поэтому отсеиваются и на чтении.
+
+    Условие намеренно жёсткое: нет ни адреса, ни ключа, ни имени.
+    Настоящий профиль без адреса бесполезен, а ошибиться и выкинуть
+    чужое здесь нельзя — это чужие ключи.
+    """
+    if str(getattr(profile, "endpoint_host", "") or "").strip():
+        return False
+    if str(getattr(profile, "private_key", "") or "").strip():
+        return False
+    if str(getattr(profile, "name", "") or "").strip():
+        return False
+    return True
+
+
 def save_profiles(root: Path | str, profiles: list[VpnProfile]) -> tuple[bool, str]:
+    """Пишет конфигурации WireGuard. Чужое сюда не попадает.
+
+    Отбор — не перестраховка, а заплата на дыре, которая уже сработала.
+    Страница держит один список на оба рода профилей: к конфигурациям
+    подмешаны серверы из ссылок, они поднимаются другим клиентом и лежат
+    в своём файле. Этот общий список отдавали сюда целиком, и ссылки
+    записывались в файл конфигураций.
+
+    Обратно они уже не читались: `VpnProfile` объявлен со `slots=True`,
+    и `_profile_from_dict` выбрасывает поля, которых у него нет — а у
+    ссылки это все поля разом, вместе с адресом и названием. Из каждой
+    ссылки получался пустой профиль: «Профиль без имени» без адреса,
+    да ещё и на вкладке Amnezia, потому что признак ссылки тоже терялся.
+    Двадцать пять серверов подписки превращались в двадцать пять
+    пустышек при первом же сохранении конфигурации рядом с ними.
+    """
     path = profiles_path(root)
+    own = [p for p in (profiles or ()) if isinstance(p, VpnProfile)]
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"version": 1, "profiles": [_profile_to_dict(p) for p in profiles]}
+        payload = {"version": 1, "profiles": [_profile_to_dict(p) for p in own]}
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as exc:
         return (False, f"Не удалось сохранить профили: {exc}")

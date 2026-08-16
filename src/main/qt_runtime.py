@@ -229,6 +229,19 @@ def application_bootstrap() -> QApplication:
             "StartupQtCrashHandler",
             f"{(_time.perf_counter() - t_crash) * 1000:.0f}ms",
         )
+
+        # Сторож зависаний ставится рядом с обработчиком крашей, но
+        # ловит другое: тот срабатывает на падении, а зависание —
+        # не падение. Процесс жив, а главный поток стоит в вызове,
+        # который не возвращается, и в журнале не остаётся ничего.
+        from log.freeze_watchdog import install_freeze_watchdog
+
+        t_freeze = _time.perf_counter()
+        install_freeze_watchdog(app)
+        emit_startup_metric(
+            "StartupFreezeWatchdog",
+            f"{(_time.perf_counter() - t_freeze) * 1000:.0f}ms",
+        )
     except Exception as exc:
         ctypes.windll.user32.MessageBoxW(None, f"Ошибка инициализации Qt: {exc}", "net67", 0x10)
 

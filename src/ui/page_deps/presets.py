@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.page_names import PageName
-from settings.mode import ZAPRET1_MODE, ZAPRET2_MODE
+from settings.mode import ZAPRET2_MODE
 
 # Импорты preset-страниц здесь намеренно ленивые (внутри функций-билдеров):
 # preset_subpage_base тянет ui.fluent_widgets/qtawesome (~200 мс), а этот
@@ -35,14 +35,10 @@ def build_control_page_kwargs(
     )
     from presets.ui.control.control_page_shared import ControlRuntimeActions
 
-    if page_name == PageName.ZAPRET2_MODE_CONTROL:
-        user_presets_page = PageName.ZAPRET2_USER_PRESETS
-        preset_setup_page = PageName.ZAPRET2_PRESET_SETUP
-        method = ZAPRET2_MODE
-    else:
-        user_presets_page = PageName.ZAPRET1_USER_PRESETS
-        preset_setup_page = PageName.ZAPRET1_PRESET_SETUP
-        method = ZAPRET1_MODE
+    # Режим остался один, развилка «а если winws1» ушла вместе с ним.
+    user_presets_page = PageName.ZAPRET2_USER_PRESETS
+    preset_setup_page = PageName.ZAPRET2_PRESET_SETUP
+    method = ZAPRET2_MODE
 
     def _create_top_summary_worker(request_id: int, *, parent=None):
         return create_top_summary_worker(
@@ -106,7 +102,7 @@ def build_preset_setup_page_kwargs(
     show_page,
     ui_state_store,
 ) -> dict:
-    method = ZAPRET2_MODE if page_name == PageName.ZAPRET2_PRESET_SETUP else ZAPRET1_MODE
+    method = ZAPRET2_MODE
     return {
         "create_profile_list_load_worker": profile_feature.create_profile_list_load_worker,
         "create_profile_item_refresh_worker": profile_feature.create_profile_item_refresh_worker,
@@ -130,12 +126,8 @@ def build_profile_setup_page_kwargs(
     show_page,
     on_profile_setup_changed,
 ) -> dict:
-    method = ZAPRET2_MODE if page_name == PageName.ZAPRET2_PROFILE_SETUP else ZAPRET1_MODE
-    profiles_page = (
-        PageName.ZAPRET2_PRESET_SETUP
-        if page_name == PageName.ZAPRET2_PROFILE_SETUP
-        else PageName.ZAPRET1_PRESET_SETUP
-    )
+    method = ZAPRET2_MODE
+    profiles_page = PageName.ZAPRET2_PRESET_SETUP
     return {
         "create_profile_setup_load_worker": profile_feature.create_profile_setup_load_worker,
         "create_profile_list_file_load_worker": profile_feature.create_profile_list_file_load_worker,
@@ -167,17 +159,9 @@ def build_profile_order_page_kwargs(
     show_page,
     ui_state_store=None,
 ) -> dict:
-    method = ZAPRET2_MODE if page_name == PageName.ZAPRET2_PROFILE_ORDER else ZAPRET1_MODE
-    profiles_page = (
-        PageName.ZAPRET2_PRESET_SETUP
-        if page_name == PageName.ZAPRET2_PROFILE_ORDER
-        else PageName.ZAPRET1_PRESET_SETUP
-    )
-    control_page = (
-        PageName.ZAPRET2_MODE_CONTROL
-        if page_name == PageName.ZAPRET2_PROFILE_ORDER
-        else PageName.ZAPRET1_MODE_CONTROL
-    )
+    method = ZAPRET2_MODE
+    profiles_page = PageName.ZAPRET2_PRESET_SETUP
+    control_page = PageName.ZAPRET2_MODE_CONTROL
     return {
         "create_profile_order_load_worker": profile_feature.create_profile_order_load_worker,
         "create_preset_profile_order_move_worker": profile_feature.create_preset_profile_order_move_worker,
@@ -198,7 +182,7 @@ def build_user_presets_page_kwargs(
 ) -> dict:
     from presets.ui.common.user_presets_page_runtime import UserPresetsRuntimeActions
 
-    method = ZAPRET2_MODE if page_name == PageName.ZAPRET2_USER_PRESETS else ZAPRET1_MODE
+    method = ZAPRET2_MODE
 
     def _create_preset_link_action_worker(request_id: int, *, action: str, parent=None):
         return presets_feature.create_preset_link_action_worker(
@@ -249,7 +233,7 @@ def build_preset_raw_editor_page_kwargs(
 ) -> dict:
     from presets.ui.common.preset_subpage_base import RawPresetRuntimeActions
 
-    method = ZAPRET2_MODE if page_name == PageName.ZAPRET2_PRESET_RAW_EDITOR else ZAPRET1_MODE
+    method = ZAPRET2_MODE
     return {
         "create_raw_preset_load_worker": presets_feature.create_raw_preset_load_worker,
         "create_raw_preset_save_worker": presets_feature.create_raw_preset_save_worker,

@@ -65,6 +65,21 @@ from vpn.profiles import (
 #: десяток, и выбор перестал быть вознёй с полосой прокрутки.
 SERVER_LIST_HEIGHT = 380
 
+#: Наибольшая ширина списка серверов.
+#:
+#: Список тянулся во всю страницу — на широком мониторе это полоса в
+#: полтора метра, где название сервера жмётся к левому краю, а справа
+#: полтора экрана пустоты. Ширина ограничена по длине самой длинной
+#: строки с запасом: «GB Великобритания N1 (YouTube без рекламы)».
+SERVER_LIST_MAX_WIDTH = 560
+
+#: Высота значка флага в строке списка.
+#:
+#: Держится в паре с FLAG_HEIGHT из vpn/flags.py: там картинка
+#: масштабируется, здесь под неё отводится место. Разойдутся — флаг
+#: обрежется или повиснет в пустой рамке.
+SERVER_LIST_ICON_HEIGHT = 18
+
 #: Подписи кнопки сохранения — по одной на род профиля.
 #:
 #: Профиль AmneziaWG сохраняется настоящим файлом `.conf` формата
@@ -275,13 +290,32 @@ class VpnPage(BasePage):
         self.profile_list = QListWidget(self.content)
         self.profile_list.setObjectName("net67ServerList")
         self.profile_list.setFixedHeight(SERVER_LIST_HEIGHT)
+        # Ширину ограничиваем, а не задаём: на узком окне список сожмётся
+        # вместе с ним, на широком — остановится и не растянется в полосу
+        # во весь монитор.
+        self.profile_list.setMaximumWidth(SERVER_LIST_MAX_WIDTH)
+        from PyQt6.QtCore import QSize
+
+        self.profile_list.setIconSize(
+            QSize(SERVER_LIST_ICON_HEIGHT * 2, SERVER_LIST_ICON_HEIGHT)
+        )
+        # Ползунок убран по просьбе: он торчал серой полосой у самого
+        # края списка. Прокрутка осталась — колесом и клавишами, список
+        # её не терял, пропала только полоса.
+        from PyQt6.QtCore import Qt as _Qt
+
+        self.profile_list.setVerticalScrollBarPolicy(
+            _Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.profile_list.setHorizontalScrollBarPolicy(
+            _Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.profile_list.currentRowChanged.connect(self._on_profile_changed)
         set_control_accessibility(
             self.profile_list,
             name="Серверы",
             description="Выберите сервер для подключения",
         )
-        self.add_widget(self.profile_list)
 
         # Выпадающий список остаётся невидимым: на него смотрят
         # существующие обработчики страницы, и переписывать их всех ради
@@ -295,6 +329,8 @@ class VpnPage(BasePage):
             description="Выбор профиля подключения",
         )
 
+
+        self.add_widget(self.profile_list)
 
         self.details_label = BodyLabel("Профили не добавлены")
         self.details_label.setWordWrap(True)
@@ -373,6 +409,19 @@ class VpnPage(BasePage):
         for message in errors:
             log(f"Список серверов: {message}", "WARNING")
         self._refill_combo(select_endpoint=select_endpoint)
+
+    def _wireguard_profiles(self) -> list:
+        """Только конфигурации WireGuard — то, что живёт в файле профилей.
+
+        `self._profiles` собран для показа: в нём и конфигурации, и
+        серверы из ссылок, потому что список на экране один. Файл же у
+        каждого рода свой, и отдавать этот общий список в `save_profiles`
+        нельзя — ссылки записывались в файл конфигураций и возвращались
+        оттуда пустыми строчками «Профиль без имени».
+        """
+        from vpn.tabs import TAB_AMNEZIA, tab_for_profile
+
+        return [p for p in self._profiles if tab_for_profile(p) == TAB_AMNEZIA]
 
     def _refill_combo(self, *, select_endpoint: str = "") -> None:
         """Наполняет список профилями активной вкладки.
@@ -793,7 +842,7 @@ class VpnPage(BasePage):
             return
 
         self._profiles = upsert_profile(self._profiles, profile)
-        saved, message = save_profiles(_profiles_root(), self._profiles)
+        saved, message = save_profiles(_profiles_root(), self._wireguard_profiles())
         if not saved:
             self._error(message)
             return
@@ -1089,7 +1138,7 @@ class VpnPage(BasePage):
             return
 
         self._profiles = remove_profile(self._profiles, profile.endpoint)
-        saved, message = save_profiles(_profiles_root(), self._profiles)
+        saved, message = save_profiles(_profiles_root(), self._wireguard_profiles())
         if not saved:
             self._error(message)
             return

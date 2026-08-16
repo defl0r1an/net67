@@ -48,7 +48,7 @@ jobs:
         run: |
           import os, pathlib, re
 
-          FALLBACK_VERSION = "0.5.67"
+          FALLBACK_VERSION = "0.6.67"
 
           # Версия берётся из тега релиза: v0.4.67 -> 0.4.67. Так номер
           # в «О программе» и номер выпуска на GitHub не разъезжаются —
@@ -176,8 +176,8 @@ jobs:
             @("exe",                            "exe"),
             @("ico",                            "ico"),
             @("src\ico",                        "ico"),
-            @("src\presets\builtin\winws1",     "presets\winws1_builtin"),
             @("src\presets\builtin\winws2",     "presets\winws2_builtin"),
+            @("wiki\site",                      "docs"),
             @("src\profile\strategy_catalogs",  "profile\strategy_catalogs"),
             @("src\profile\templates",          "profile\templates"),
             @("lists",                          "lists"),
@@ -198,7 +198,10 @@ jobs:
             Write-Host "  $($pair[0]) -> $($pair[1])"
           }
 
-          foreach ($dir in @("presets\winws1", "presets\winws2", "lists\user", "logs", "settings", "tmp")) {
+          # winws1 здесь больше нет: режим вырезан, см. заголовок
+          # src\settings\mode.py. Пустая папка от него оставалась в
+          # выпуске и намекала на способ запуска, которого не существует.
+          foreach ($dir in @("presets\winws2", "lists\user", "logs", "settings", "tmp")) {
             New-Item -ItemType Directory -Path (Join-Path $artifact $dir) -Force | Out-Null
           }
 

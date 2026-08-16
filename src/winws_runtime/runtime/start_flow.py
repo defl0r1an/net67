@@ -31,8 +31,34 @@ STOP_WAIT_TIMEOUT_MS = 12_000
 STOP_WAIT_RETRY_MS = 200
 
 
+#: Переносчики вызова в главный поток, ждущие срабатывания.
+#:
+#: Держим ссылку на время ожидания: у объекта без родителя единственная
+#: ссылка — локальная переменная, и сборщик мусора уносит его вместе с
+#: отложенным запуском ещё до того, как таймер сработает.
+_PENDING_MAIN_THREAD_PUMPS: set = set()
+
+
+def _build_main_thread_pump():
+    """Создаёт объект-переносчик вызова в главный поток.
+
+    Класс объявлен внутри функции намеренно: модуль не должен требовать
+    PyQt6 на импорте — его тянут и те части, что работают без окна.
+    """
+    from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+
+    class _MainThreadPump(QObject):
+        requested = pyqtSignal(int, object)
+
+        def fire(self, delay_ms: int, callback) -> None:
+            _PENDING_MAIN_THREAD_PUMPS.discard(self)
+            QTimer.singleShot(int(delay_ms), callback)
+
+    return _MainThreadPump()
+
+
 def _schedule_in_main_thread(delay_ms: int, callback) -> None:
-    """Откладывает вызов, привязав таймер к главному потоку.
+    """Откладывает вызов так, чтобы он произошёл в главном потоке.
 
     Голый `QTimer.singleShot(ms, cb)` заводит таймер в том потоке, откуда
     его позвали. Запуск обхода приходит и из окна, и из рабочего потока
@@ -40,10 +66,22 @@ def _schedule_in_main_thread(delay_ms: int, callback) -> None:
     не сработал бы никогда. Отложенный запуск тихо потерялся бы, что
     ровно та беда, которую эта отсрочка и лечит.
 
-    Поэтому таймер привязываем к объекту приложения: он живёт в главном
-    потоке, и вызов приходит туда же.
+    Раньше здесь стояло `QTimer.singleShot(ms, app, cb)` — форма с
+    объектом-контекстом. В PyQt6 6.11 её нет: `singleShot.__doc__`
+    перечисляет только `(msec, slot)` и `(msec, timerType, slot)`.
+    Вызов падал с «arguments did not match any overloaded call», и
+    кнопка «Включить» отвечала «не удалось запустить обход».
+
+    Из главного потока таймер заводится напрямую. Из рабочего — через
+    объект, переселённый в поток приложения: сигнал с очередью
+    доставляется туда, и таймер заводится уже там.
+
+    Порядок здесь важен, и он проверен опытом: `connect` делается
+    ПОСЛЕ `moveToThread`. Соединение, заведённое до переезда, ставит
+    вызов в очередь прежнего потока — сигнал уходит впустую, а запуск
+    молча теряется.
     """
-    from PyQt6.QtCore import QCoreApplication, QTimer
+    from PyQt6.QtCore import QCoreApplication, Qt, QThread, QTimer
 
     app = QCoreApplication.instance()
     if app is None:
@@ -52,13 +90,49 @@ def _schedule_in_main_thread(delay_ms: int, callback) -> None:
         callback()
         return
 
-    QTimer.singleShot(int(delay_ms), app, callback)
+    delay = int(delay_ms)
+
+    if QThread.currentThread() == app.thread():
+        QTimer.singleShot(delay, callback)
+        return
+
+    pump = _build_main_thread_pump()
+    pump.moveToThread(app.thread())
+    pump.requested.connect(pump.fire, Qt.ConnectionType.QueuedConnection)
+    _PENDING_MAIN_THREAD_PUMPS.add(pump)
+    pump.requested.emit(delay, callback)
 
 
 def _stop_in_progress(runtime_owner) -> bool:
+    """Идёт ли ещё остановка обхода.
+
+    Смотрим на работника, а не на поток. Разница не формальная: поток
+    после окончания работы живёт в своём цикле событий, пока до него не
+    дойдёт `quit()`, и `isRunning()` всё это время возвращает True.
+    Работник же обнуляется сразу, как только закончил.
+
+    По потоку и выходила беда «включить → выключить → включить»:
+    остановка давно закончилась («DPI успешно остановлен» в журнале), а
+    поток числился живым. Запуск честно ждал двенадцать секунд, потом
+    шёл напролом — и упирался в проверку, которая молча возвращала
+    отказ. В журнале оставалось «Остановка не завершилась за 12000 мс»,
+    после чего не происходило ничего, а окно писало «Обход не запустился
+    за 40 секунд».
+    """
     try:
+        worker = getattr(runtime_owner, "_dpi_stop_worker", None)
+        if worker is not None:
+            return True
+
         thread = getattr(runtime_owner, "_dpi_stop_thread", None)
-        return bool(thread is not None and thread.isRunning())
+        if thread is None:
+            return False
+
+        # Работника нет, а поток остался — он уже сворачивается.
+        # Ждать его незачем, но и ссылку держать больше не за чем.
+        if not thread.isRunning():
+            runtime_owner._dpi_stop_thread = None
+        return False
     except RuntimeError:
         # Поток уже удалён на стороне C++ — значит не выполняется.
         runtime_owner._dpi_stop_thread = None
@@ -133,18 +207,61 @@ def prepare_start_preflight(
     skip_conflict_prompt: bool = False,
 ) -> bool:
     """Выполняет раннюю проверку перед построением launch request."""
+    # Тот же счёт, что и у остановки: занят, пока жив работник, а не
+    # пока жив поток. Поток после работы досиживает в своём цикле
+    # событий, и по нему запуск считался идущим, когда он давно кончился.
+    #
+    # Отказ здесь писался в DEBUG, а DEBUG в файл не попадает. Со стороны
+    # это выглядело так: человек жмёт «включить», в журнале ни строчки,
+    # окно через сорок секунд пишет, что обход не запустился. Поэтому
+    # уровень поднят: немой отказ — худший из возможных.
     try:
-        if runtime_owner._dpi_start_thread and runtime_owner._dpi_start_thread.isRunning():
-            log("Запуск DPI уже выполняется", "DEBUG")
+        worker = getattr(runtime_owner, "_dpi_start_worker", None)
+        thread = getattr(runtime_owner, "_dpi_start_thread", None)
+        if worker is not None and thread is not None and thread.isRunning():
+            log("Запуск DPI уже выполняется — повторное нажатие пропущено", "INFO")
             return False
+        if worker is None and thread is not None and not thread.isRunning():
+            runtime_owner._dpi_start_thread = None
     except RuntimeError:
         runtime_owner._dpi_start_thread = None
+
+    # Пока идёт проверка стратегий, движок принадлежит ей.
+    #
+    # Сканер снимает все процессы winws перед проверкой и поднимает свои
+    # по ходу — это его работа. Кнопка «Включить» при этом оставалась
+    # доступной, и запущенный ею процесс сканер убивал через несколько
+    # секунд. В журнале это выглядело так:
+    #
+    #     14:46:34  Starting: пресет Ростелеком
+    #     14:46:38  Завершено 1 процессов winws2.exe
+    #     14:46:38  winws2 завершился сразу (код 1)
+    #
+    # Человеку показывали «winws2 завершился сразу» или «обход не
+    # запустился за 40 секунд» — и то, и другое уводит в сторону: с
+    # пресетом и движком всё в порядке, просто их снял сканер.
+    try:
+        from winws_runtime.runtime.scan_guard import is_external_winws_scan_active
+
+        if is_external_winws_scan_active():
+            fail_start_preparation(
+                runtime_owner,
+                "Идёт проверка стратегий — она сама поднимает и останавливает движок. "
+                "Дождитесь её окончания или остановите её.",
+            )
+            return False
+    except ImportError:
+        pass
 
     if not skip_conflict_prompt and not handle_conflicting_processes_before_start(
         runtime_owner,
         selected_mode,
         launch_method,
     ):
+        # Отказ отсюда тоже был немым. Разбор конфликтов сам показывает
+        # человеку окно, но если он вернул отказ без окна — в журнале не
+        # оставалось ни следа, и запуск обрывался в тишине.
+        log("Запуск отменён на разборе конфликтующих процессов", "INFO")
         return False
 
     runtime_owner._pending_launch_warnings = []

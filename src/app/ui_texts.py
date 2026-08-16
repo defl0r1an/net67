@@ -4046,10 +4046,6 @@ TEXTS.update(TEXTS_PAGES_FINAL)
 
 NAV_PAGE_TEXT_KEYS: dict[PageName, str] = {
     PageName.ZAPRET2_MODE_CONTROL: "nav.page.zapret2_mode_control",
-    PageName.ZAPRET1_MODE_CONTROL: "nav.page.zapret1_mode_control",
-    PageName.ORCHESTRA: "nav.page.orchestra",
-    PageName.ORCHESTRA_SETTINGS: "nav.page.orchestra_settings",
-    PageName.DPI_SETTINGS: "nav.page.dpi_settings",
     PageName.NETWORK: "nav.page.network",
     PageName.VPN: "nav.page.vpn",
     PageName.CONFIGS: "nav.page.configs",
@@ -4063,9 +4059,6 @@ NAV_PAGE_TEXT_KEYS: dict[PageName, str] = {
     PageName.ZAPRET2_PRESET_SETUP: "nav.page.zapret2_mode",
     PageName.ZAPRET2_USER_PRESETS: "nav.page.zapret2_user_presets",
     PageName.ZAPRET2_PROFILE_SETUP: "page.winws2_profile_setup.title",
-    PageName.ZAPRET1_PRESET_SETUP: "nav.page.zapret1_mode",
-    PageName.ZAPRET1_USER_PRESETS: "nav.page.zapret1_user_presets",
-    PageName.ZAPRET1_PROFILE_SETUP: "page.winws1_profile_setup.title",
 }
 
 

@@ -338,7 +338,7 @@ def check_window_feature_aliases_not_used(files: list[Path]) -> list[Problem]:
             r"\b(?:self|window)\."
             r"(?:runtime_feature|presets_feature|profile_feature|"
             r"dns_feature|hosts_feature|lists_feature|telegram_proxy_feature|"
-            r"tray_feature|updater_feature|orchestra_feature)\b"
+            r"tray_feature|updater_feature)\b"
         ),
         "окно не должно хранить feature как свои поля; используйте явные deps",
     )
@@ -467,7 +467,7 @@ def check_window_page_deps_setup_uses_actions() -> list[Problem]:
             r"\bwindow\.(?:set_status|window_notification_center|app_runtime|ui_state_store|"
             r"runtime_feature|presets_feature|profile_feature|dns_feature|"
             r"hosts_feature|lists_feature|telegram_proxy_feature|tray_feature|updater_feature|"
-            r"orchestra_feature)\b|"
+            r")\b|"
             r"from ui\.(?:workflows|profile_setup_workflow|window_appearance_state))"
         ),
         "window_page_deps_setup.py должен получать callbacks через WindowPageActions, а не доставать их из окна",
@@ -546,7 +546,6 @@ def check_no_qfluentwidgets_fallbacks(files: list[Path]) -> list[Problem]:
         "src/blockcheck/ui/",
         "src/autostart/ui/",
         "src/settings/dpi/",
-        "src/orchestra/ui/",
     )
     scopes = [
         path for path in files
@@ -583,7 +582,6 @@ def check_no_legacy_toggle_widgets_in_production_ui(files: list[Path]) -> list[P
         "src/blockcheck/ui/",
         "src/autostart/ui/",
         "src/settings/dpi/",
-        "src/orchestra/ui/",
     )
     scopes = [
         path for path in files
@@ -613,7 +611,6 @@ def check_no_raw_text_edit_in_production_ui(files: list[Path]) -> list[Problem]:
         "src/blockcheck/ui/",
         "src/autostart/ui/",
         "src/settings/dpi/",
-        "src/orchestra/ui/",
         "src/log/ui/",
         "src/telegram_proxy/ui/",
     )
@@ -636,7 +633,6 @@ def check_pages_have_explicit_dependencies(files: list[Path]) -> list[Problem]:
     page_roots = (
         "src/profile/ui/",
         "src/presets/ui/",
-        "src/orchestra/ui/",
         "src/blockcheck/ui/",
         "src/dns/ui/",
         "src/hosts/ui/",
@@ -666,14 +662,13 @@ def check_external_imports(files: list[Path]) -> list[Problem]:
         "src/hosts/ui/",
         "src/blockcheck/ui/",
         "src/lists/ui/",
-        "src/orchestra/ui/",
         "src/telegram_proxy/ui/",
         "src/updater/ui/",
         "src/log/ui/",
     )
     feature_names = (
         "autostart|blockcheck|diagnostics|dns|hosts|lists|"
-        "log|orchestra|presets|profile|settings\\.dpi|telegram_proxy|"
+        "log|presets|profile|settings\\.dpi|telegram_proxy|"
         "updater|winws_runtime"
     )
     internals = "commands|public|service|manager|worker|runtime"
@@ -702,7 +697,6 @@ def check_no_feature_internals_from_external(files: list[Path]) -> list[Problem]
         "src/hosts/ui/",
         "src/blockcheck/ui/",
         "src/lists/ui/",
-        "src/orchestra/ui/",
         "src/telegram_proxy/ui/",
         "src/updater/ui/",
         "src/log/ui/",
@@ -888,7 +882,6 @@ def check_pages_have_no_command_request_signals(files: list[Path]) -> list[Probl
     page_roots = (
         "src/profile/ui/",
         "src/presets/ui/",
-        "src/orchestra/ui/",
         "src/blockcheck/ui/",
         "src/dns/ui/",
         "src/hosts/ui/",
@@ -914,7 +907,6 @@ def check_pages_have_no_navigation_request_signals(files: list[Path]) -> list[Pr
     page_roots = (
         "src/profile/ui/",
         "src/presets/ui/",
-        "src/orchestra/ui/",
         "src/blockcheck/ui/",
         "src/dns/ui/",
         "src/hosts/ui/",
@@ -939,7 +931,6 @@ def check_pages_have_no_navigation_request_signals(files: list[Path]) -> list[Pr
 
 def check_nested_preset_pages_use_breadcrumbs() -> list[Problem]:
     scopes = [
-        SRC_ROOT / "presets" / "ui" / "zapret1" / "user_presets_page.py",
         SRC_ROOT / "presets" / "ui" / "zapret2" / "user_presets_page.py",
         SRC_ROOT / "presets" / "ui" / "common" / "preset_subpage_base.py",
     ]
@@ -1025,7 +1016,6 @@ def check_preset_switch_has_no_full_start_fallback() -> list[Problem]:
 
 def check_fast_switch_runners_do_not_call_full_start_pipeline() -> list[Problem]:
     targets = (
-        (SRC_ROOT / "winws_runtime" / "runners" / "zapret1_runner.py", "Winws1StrategyRunner"),
         (SRC_ROOT / "winws_runtime" / "runners" / "zapret2_runner.py", "Winws2StrategyRunner"),
     )
     problems: list[Problem] = []

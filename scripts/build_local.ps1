@@ -24,7 +24,7 @@ Write-Host "[1/6] Checking generated files" -ForegroundColor Cyan
 
 $buildInfo = Join-Path $Root "src\config\build_info.py"
 if (-not (Test-Path $buildInfo)) {
-    $lines = @('APP_VERSION = "0.5.67"', 'CHANNEL = "stable"')
+    $lines = @('APP_VERSION = "0.6.67"', 'CHANNEL = "stable"')
     Set-Content -Path $buildInfo -Value $lines -Encoding UTF8
     Write-Host "      created build_info.py" -ForegroundColor Yellow
 }
@@ -196,11 +196,14 @@ Write-Host "[5/6] Copying resources next to _internal" -ForegroundColor Cyan
 #
 # The real resource layout comes from core\paths.py (EnginePaths) and
 # profile\strategy_catalog.py:
-#   presets\winws1          user presets, engine winws1  (starts empty)
-#   presets\winws1_builtin  shipped presets, engine winws1
 #   presets\winws2          user presets, engine winws2  (starts empty)
 #   presets\winws2_builtin  shipped presets, engine winws2
-#   profile\strategy_catalogs\winws1|winws2
+#   profile\strategy_catalogs\winws2
+#
+# winws1 used to sit next to winws2 here. The mode is gone - see the
+# header of src\settings\mode.py, ALL_LAUNCH_METHODS holds winws2 only -
+# but this script kept copying its presets and kept failing the build
+# when it found none. The removal was finished everywhere except here.
 #
 # exe, bin, lua, json, lists and windivert.filter hold the DPI engine
 # itself (winws.exe, winws2.exe, WinDivert) plus the hostlists, fake
@@ -214,8 +217,8 @@ $pairs = @(
     @("ico",                            "ico"),
     @("src\exe",                        "exe"),
     @("src\ico",                        "ico"),
-    @("src\presets\builtin\winws1",     "presets\winws1_builtin"),
     @("src\presets\builtin\winws2",     "presets\winws2_builtin"),
+    @("wiki\site",                      "docs"),
     @("src\profile\strategy_catalogs",  "profile\strategy_catalogs"),
     @("src\profile\templates",          "profile\templates"),
     @("lists",                          "lists"),
@@ -241,7 +244,6 @@ foreach ($pair in $pairs) {
 # Directories the app writes into. It creates them itself on first run,
 # but an empty tree makes the artifact self-describing.
 $emptyDirs = @(
-    "presets\winws1",
     "presets\winws2",
     "lists\base",
     "lists\user",
@@ -254,11 +256,10 @@ foreach ($dir in $emptyDirs) {
     New-Item -ItemType Directory -Path (Join-Path $Artifact $dir) -Force | Out-Null
 }
 
-$w1 = @(Get-ChildItem -Path (Join-Path $Artifact "presets\winws1_builtin") -Filter *.txt -ErrorAction SilentlyContinue)
 $w2 = @(Get-ChildItem -Path (Join-Path $Artifact "presets\winws2_builtin") -Filter *.txt -ErrorAction SilentlyContinue)
-Write-Host ("      builtin presets: winws1=" + $w1.Count + " winws2=" + $w2.Count)
-if ($w1.Count -eq 0 -or $w2.Count -eq 0) {
-    throw "No builtin presets were copied - check src\presets\builtin"
+Write-Host ("      builtin presets: winws2=" + $w2.Count)
+if ($w2.Count -eq 0) {
+    throw "No builtin presets were copied - check src\presets\builtin\winws2"
 }
 
 # Fail here rather than let the user find out from a red banner that

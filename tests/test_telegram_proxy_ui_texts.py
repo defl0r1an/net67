@@ -19,10 +19,11 @@ class TelegramProxyUiTextsTests(unittest.TestCase):
             "Откройте ссылку. Telegram сам предложит добавить прокси. "
             "Если Telegram не открылся, скопируйте ссылку и отправьте её себе в чат.",
         )
-        self.assertEqual(
-            plan.setup_fallback,
-            "Если ничего не помогает — скачайте Zastogram.",
-        )
+        # Проверка не ослаблена, а перевёрнута: строка вела к стороннему
+        # клиенту Zastogram и убрана. Пустое значение здесь — не
+        # «забыли заполнить», а признак, по которому метка прячется:
+        # и сборка, и обновление текста зовут setVisible(bool(...)).
+        self.assertEqual(plan.setup_fallback, "")
         self.assertEqual(plan.upstream_title, "Дополнительно")
         self.assertEqual(plan.upstream_toggle_title, "Внешний прокси")
         self.assertEqual(

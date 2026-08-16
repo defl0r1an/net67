@@ -64,7 +64,10 @@ class RuntimeLifecyclePort:
 class RuntimeDependencies:
     presets_feature: Any
     profile_feature: Any
-    orchestra_feature: Any
+    #: Оркестратор вырезан. Поле оставлено пустым: на него смотрит
+    #: остановка обхода, и проверка `if orchestra_feature is not None`
+    #: там уже была — теперь она просто всегда ложна.
+    orchestra_feature: Any = None
 
 
 @dataclass(slots=True)

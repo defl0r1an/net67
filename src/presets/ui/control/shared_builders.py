@@ -366,3 +366,35 @@ def build_updates_card(*, push_setting_card_cls, tr_fn, parent):
         ),
         parent=parent,
     )
+
+
+def build_docs_card(*, push_setting_card_cls, tr_fn, parent):
+    """Карточка «Документация» в «Дополнительных действиях».
+
+    Раздел был убран вместе со ссылками прежнего автора: адрес вики в
+    branding.py опустел, и карточка перестала показываться. Своей
+    документации тогда не было, и показывать было нечего.
+
+    Теперь она есть и едет вместе с программой — папка `docs` рядом с
+    исполняемым файлом. Открывается без интернета: программа поднимает
+    её на локальном адресе и зовёт браузер, см. docs/local_site.py.
+    """
+    from docs.local_site import open_in_browser
+
+    return build_deferred_themed_push_setting_card_common(
+        push_setting_card_cls=push_setting_card_cls,
+        button_text=tr_fn("page.control.docs.button", "Открыть"),
+        icon_name="fa5s.book",
+        icon_color="#8ab4f8",
+        title_text=tr_fn("page.control.docs.title", "Документация"),
+        content_text=tr_fn(
+            "page.control.docs.desc",
+            "Справка по программе: установка, обход, VPN, решение проблем",
+        ),
+        on_click=lambda: open_in_browser(),
+        button_accessible_name=tr_fn(
+            "page.control.docs.accessible_name",
+            "Открыть документацию",
+        ),
+        parent=parent,
+    )

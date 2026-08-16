@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -32,6 +33,27 @@ from pathlib import Path
 PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
+
+
+def _without_docstring(source: str) -> str:
+    """Исходник без пояснений.
+
+    Проверка «такого вызова здесь быть не должно» иначе спотыкается о
+    комментарий, который объясняет, почему его быть не должно.
+    """
+    import ast
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(source))
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list) or not body:
+            continue
+        first = body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+            if isinstance(first.value.value, str):
+                node.body = body[1:] or [ast.Pass()]
+    return ast.unparse(ast.fix_missing_locations(tree))
 
 
 class _Thread:
@@ -54,8 +76,9 @@ class _DeletedThread:
 
 
 class _Owner:
-    def __init__(self, stop_thread=None) -> None:
+    def __init__(self, stop_thread=None, stop_worker=None) -> None:
         self._dpi_stop_thread = stop_thread
+        self._dpi_stop_worker = stop_worker
 
 
 class StopDetectionTests(unittest.TestCase):
@@ -65,14 +88,33 @@ class StopDetectionTests(unittest.TestCase):
         return start_flow
 
     def test_running_stop_is_noticed(self) -> None:
+        """Признак работы — живой работник, а не живой поток."""
         flow = self._flow()
 
-        self.assertTrue(flow._stop_in_progress(_Owner(_Thread(running=True))))
+        owner = _Owner(_Thread(running=True), stop_worker=object())
+
+        self.assertTrue(flow._stop_in_progress(owner))
 
     def test_finished_stop_does_not_block_start(self) -> None:
         flow = self._flow()
 
         self.assertFalse(flow._stop_in_progress(_Owner(_Thread(running=False))))
+
+    def test_living_thread_without_worker_does_not_block_start(self) -> None:
+        """Поток переживает работу — на нём и обожглись.
+
+        Qt-поток после окончания работы крутится в своём цикле событий,
+        пока до него не дойдёт quit(), и всё это время isRunning()
+        отвечает True. Проверка по потоку держала запуск двенадцать
+        секунд, шла напролом и упиралась в отказ: в журнале оставалось
+        «остановка не завершилась», а окно писало «обход не запустился
+        за 40 секунд». Работник обнуляется сразу, как закончил.
+        """
+        flow = self._flow()
+
+        owner = _Owner(_Thread(running=True), stop_worker=None)
+
+        self.assertFalse(flow._stop_in_progress(owner))
 
     def test_no_stop_thread_at_all(self) -> None:
         flow = self._flow()
@@ -139,8 +181,25 @@ class WiringTests(unittest.TestCase):
 
         self.assertIn("_schedule_in_main_thread", source)
         self.assertIn("QCoreApplication.instance()", helper)
-        # Таймер привязан к объекту приложения, иначе привязки нет вовсе.
-        self.assertIn("QTimer.singleShot(int(delay_ms), app, callback)", helper)
+        # Отсрочка обязана попасть в поток приложения — там есть цикл
+        # событий, а в рабочем потоке его нет.
+        self.assertIn("app.thread()", helper)
+
+    def test_no_three_argument_single_shot(self) -> None:
+        """Формы `singleShot(ms, объект, вызов)` в PyQt6 нет.
+
+        Я её однажды применил: она выглядит как способ привязать таймер
+        к чужому потоку. Вызов падал с «arguments did not match any
+        overloaded call», и кнопка «Включить» отвечала отказом.
+        """
+        from winws_runtime.runtime import start_flow
+
+        helper = _without_docstring(inspect.getsource(start_flow._schedule_in_main_thread))
+        calls = re.findall(r"QTimer\.singleShot\(([^)]*)\)", helper)
+
+        for call in calls:
+            with self.subTest(call=call):
+                self.assertEqual(call.count(","), 1, "допустима только пара (задержка, вызов)")
 
 
 class RefusalIsReportedTests(unittest.TestCase):

@@ -31,7 +31,6 @@ class TelegramProxySettingsPanelWidgets:
     setup_card: object
     setup_open_btn: object
     setup_copy_btn: object
-    setup_zastogram_btn: object
     settings_card: object
     settings_host_row: object
     host_label: object
@@ -202,7 +201,6 @@ def build_telegram_proxy_settings_panel(
     on_toggle_proxy,
     on_open_in_telegram,
     on_copy_link,
-    on_open_zastogram,
     on_open_mtproxy,
     on_generate_mtproxy_secret,
     on_copy_fake_tls_nginx_config,
@@ -264,20 +262,6 @@ def build_telegram_proxy_settings_panel(
     set_state_text(setup_copy_btn, "Копировать ссылку Telegram Proxy")
     setup_copy_btn.clicked.connect(on_copy_link)
     setup_card.add_button(setup_copy_btn)
-
-    setup_zastogram_btn = push_button_cls("Zastogram", icon=FluentIcon.GITHUB)
-    setup_zastogram_btn.setMinimumWidth(132)
-    set_tooltip(setup_zastogram_btn, "Открыть страницу ZaStoGram Desktop на GitHub.")
-    set_control_accessibility(
-        setup_zastogram_btn,
-        name="Открыть ZaStoGram Desktop на GitHub",
-        description="Открывает страницу проекта ZaStoGram Desktop на GitHub в браузере.",
-    )
-    set_state_text(setup_zastogram_btn, "Открыть ZaStoGram Desktop на GitHub")
-    setup_zastogram_btn.clicked.connect(on_open_zastogram)
-    # Кнопка вела на страницу стороннего проекта ZaStoGram Desktop.
-    # В интерфейс не выводится, объект оставлен ради ссылок на него.
-    # setup_card.add_button(setup_zastogram_btn)
 
     layout.addWidget(setup_card)
 
@@ -377,7 +361,6 @@ def build_telegram_proxy_settings_panel(
         setup_card=setup_card,
         setup_open_btn=setup_open_btn,
         setup_copy_btn=setup_copy_btn,
-        setup_zastogram_btn=setup_zastogram_btn,
         settings_card=settings_card,
         settings_host_row=settings_host_row,
         host_label=host_label,

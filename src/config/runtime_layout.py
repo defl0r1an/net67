@@ -51,6 +51,16 @@ class ApplicationPaths:
         return self.root / "json"
 
     @property
+    def docs_dir(self) -> Path:
+        """Собранная вики, которую открывает раздел «Документация».
+
+        Обычный статический сайт: html, стили, картинки. Лежит рядом с
+        программой, потому что открывается без интернета — его поднимает
+        сама программа на локальном адресе, см. docs/local_site.py.
+        """
+        return self.root / "docs"
+
+    @property
     def lists_dir(self) -> Path:
         return self.root / "lists"
 

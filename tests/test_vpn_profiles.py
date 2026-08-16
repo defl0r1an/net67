@@ -167,5 +167,102 @@ class PingResultTests(unittest.TestCase):
         self.assertTrue(result.message.strip())
 
 
+class LinksDoNotLeakIntoProfileFileTests(unittest.TestCase):
+    """Серверы из ссылок не должны попадать в файл конфигураций.
+
+    Список на странице один на оба рода профилей, и этот общий список
+    отдавали в save_profiles целиком. Ссылки записывались в файл
+    конфигураций, а обратно не читались: VpnProfile объявлен со
+    slots=True, и лишние поля отбрасываются — у ссылки это все поля
+    сразу. Каждая превращалась в «Профиль без имени» без адреса, да ещё
+    и на вкладке Amnezia. Подписка из двадцати пяти серверов давала
+    двадцать пять пустышек при первом сохранении конфигурации рядом.
+    """
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.root = Path(self._dir.name)
+        self.addCleanup(self._dir.cleanup)
+
+    def _links(self, count: int):
+        from vpn.links import LinkProfile
+
+        return [
+            LinkProfile(
+                scheme="vless",
+                title=f"NL-{index}",
+                host=f"1.2.3.{index}",
+                port=443,
+                raw=f"vless://server{index}",
+            )
+            for index in range(count)
+        ]
+
+    def test_saving_mixed_list_keeps_only_wireguard(self) -> None:
+        from vpn.profiles import display_name, load_profiles, save_profiles
+
+        mixed = [_profile()] + self._links(25)
+
+        saved, message = save_profiles(self.root, mixed)
+        self.assertTrue(saved, message)
+
+        stored = load_profiles(self.root)
+
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(display_name(stored[0]), "Основной")
+
+    def test_already_broken_file_is_cleaned_on_read(self) -> None:
+        # Правка в save_profiles не помогает тем, у кого файл уже испорчен
+        # прежней версией, поэтому пустышки отсеиваются и на чтении.
+        import json
+
+        from vpn.profiles import load_profiles, profiles_path
+
+        profiles_path(self.root).write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "profiles": [
+                        {"name": "Живой", "endpoint_host": "10.0.0.2", "endpoint_port": 51820, "awg": {}},
+                        {"name": "", "endpoint_host": "", "private_key": "", "awg": {}},
+                        {"name": "", "endpoint_host": "", "private_key": "", "awg": {}},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stored = load_profiles(self.root)
+
+        self.assertEqual([p.name for p in stored], ["Живой"])
+
+    def test_nameless_profile_with_address_survives(self) -> None:
+        # Отсев не должен унести настоящий профиль: имя необязательно,
+        # в списке он показывается по адресу. Здесь чужие ключи, и
+        # ошибаться в эту сторону нельзя.
+        import json
+
+        from vpn.profiles import load_profiles, profiles_path
+
+        profiles_path(self.root).write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "profiles": [
+                        {"name": "", "endpoint_host": "8.8.8.8", "endpoint_port": 51820, "awg": {}},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stored = load_profiles(self.root)
+
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(stored[0].endpoint_host, "8.8.8.8")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,7 +21,6 @@ class RuntimeFeature:
     presets_feature: InitVar[Any] = None
     profile_feature: InitVar[Any] = None
     ui_state: InitVar[Any] = None
-    orchestra_feature: InitVar[Any] = None
     startup_state: InitVar[Any] = None
     mark_stop_and_exit_requested: InitVar[Any] = None
     ui_port: RuntimeUiPort = field(init=False)
@@ -39,7 +38,6 @@ class RuntimeFeature:
         presets_feature: Any,
         profile_feature: Any,
         ui_state: Any,
-        orchestra_feature: Any,
         startup_state: Any,
         mark_stop_and_exit_requested: Any,
     ) -> None:
@@ -49,10 +47,11 @@ class RuntimeFeature:
             qt_parent=qt_parent,
             mark_stop_and_exit_requested_callback=mark_stop_and_exit_requested,
         )
+        # Оркестратор вырезан: зависимость остаётся пустой, её проверка
+        # на None в остановке обхода была и раньше.
         self.dependencies = RuntimeDependencies(
             presets_feature=presets_feature,
             profile_feature=profile_feature,
-            orchestra_feature=orchestra_feature,
         )
         self.flags = RuntimeFlags()
         self.objects = RuntimeObjects(runtime_service=runtime_service)
@@ -235,7 +234,6 @@ def build_runtime_feature(
     state,
     presets_feature,
     profile_feature,
-    orchestra_feature,
 ) -> RuntimeFeature:
     from winws_runtime.health.post_mortem import resolve_unexpected_exit_message
     from winws_runtime.state import LaunchRuntimeService
@@ -249,7 +247,6 @@ def build_runtime_feature(
         presets_feature=presets_feature,
         profile_feature=profile_feature,
         ui_state=state.ui,
-        orchestra_feature=orchestra_feature,
         startup_state=startup_state,
         mark_stop_and_exit_requested=mark_stop_and_exit_requested,
     )

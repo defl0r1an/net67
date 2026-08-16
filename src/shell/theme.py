@@ -409,8 +409,9 @@ QListWidget#net67ServerList {{
     padding: 4px;
 }}
 QListWidget#net67ServerList::item {{
-    padding: 7px 10px;
+    padding: 11px 12px;
     border-radius: {ITEM_RADIUS}px;
+    font-size: {FONT_BODY}px;
 }}
 QListWidget#net67ServerList::item:hover {{ background: {colors.surface_hover}; }}
 QListWidget#net67ServerList::item:selected {{

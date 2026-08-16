@@ -46,11 +46,6 @@ PAGE_PERFORMANCE_PROFILE_OVERRIDES: dict[PageName, PagePerformanceProfile] = {
             PageName.ZAPRET2_PRESET_SETUP,
             PageName.ZAPRET2_PROFILE_SETUP,
             PageName.ZAPRET2_PRESET_RAW_EDITOR,
-            PageName.ZAPRET1_MODE_CONTROL,
-            PageName.ZAPRET1_PRESET_SETUP,
-            PageName.ZAPRET1_USER_PRESETS,
-            PageName.ZAPRET1_PROFILE_SETUP,
-            PageName.ZAPRET1_PRESET_RAW_EDITOR,
             PageName.ZAPRET2_USER_PRESETS,
         ),
         _profile(200),
@@ -67,7 +62,6 @@ PAGE_PERFORMANCE_PROFILE_OVERRIDES: dict[PageName, PagePerformanceProfile] = {
             PageName.BLOCKCHECK,
             PageName.LOGS,
             PageName.SERVERS,
-            PageName.ORCHESTRA,
             PageName.TELEGRAM_PROXY,
             # Крупные страницы настроек: первое построение ~120-140ms без единой
             # горячей секции — бюджет как у остальных тяжёлых страниц.

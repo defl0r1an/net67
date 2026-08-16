@@ -25,7 +25,7 @@ if (-not (Test-Path $config)) {
     throw "Запускать из корня репозитория: не найден $config"
 }
 
-$version = "0.5.67"
+$version = "0.6.67"
 
 $buildInfo = Join-Path $config "build_info.py"
 if (Test-Path $buildInfo) {

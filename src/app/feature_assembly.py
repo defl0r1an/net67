@@ -90,12 +90,10 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
             "blockcheck",
             "diagnostics",
             "dns",
-            "dpi_settings",
             "external",
             "hosts",
             "lists",
             "logs",
-            "orchestra",
             "program_settings",
             "runtime",
             "telegram_proxy",
@@ -108,12 +106,10 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
     BlockcheckFeature = facades["blockcheck"].BlockcheckFeature
     build_diagnostics_feature = facades["diagnostics"].build_diagnostics_feature
     build_dns_feature = facades["dns"].build_dns_feature
-    build_dpi_settings_feature = facades["dpi_settings"].build_dpi_settings_feature
     build_external_actions_feature = facades["external"].build_external_actions_feature
     build_hosts_feature = facades["hosts"].build_hosts_feature
     build_lists_feature = facades["lists"].build_lists_feature
     build_logs_feature = facades["logs"].build_logs_feature
-    build_orchestra_feature = facades["orchestra"].build_orchestra_feature
     build_program_settings_feature = facades["program_settings"].build_program_settings_feature
     build_runtime_feature = facades["runtime"].build_runtime_feature
     build_telegram_proxy_feature = facades["telegram_proxy"].build_telegram_proxy_feature
@@ -125,12 +121,6 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
         f"{(_time.perf_counter() - t_import) * 1000:.0f}ms",
     )
 
-    t_orchestra = _time.perf_counter()
-    orchestra_feature = build_orchestra_feature()
-    emit_startup_metric(
-        "StartupFeatureAssemblyOrchestra",
-        f"{(_time.perf_counter() - t_orchestra) * 1000:.0f}ms",
-    )
     t_preset_profile = _time.perf_counter()
     preset_profile = build_preset_profile_features(paths)
     emit_startup_metric(
@@ -146,7 +136,6 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
         state=state,
         presets_feature=preset_profile.presets,
         profile_feature=preset_profile.profile,
-        orchestra_feature=orchestra_feature,
     )
     emit_startup_metric(
         "StartupFeatureAssemblyRuntime",
@@ -184,12 +173,10 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
         hosts=build_hosts_feature(),
         lists=build_lists_feature(),
         logs=build_logs_feature(),
-        dpi_settings=build_dpi_settings_feature(),
         telegram_proxy=telegram_proxy_feature,
         tray=tray_feature,
         updater=build_updater_feature(),
         external_actions=build_external_actions_feature(),
-        orchestra=orchestra_feature,
         program_settings=build_program_settings_feature(),
         window_geometry=build_window_geometry_feature(),
     )
