@@ -11,11 +11,11 @@ on:
       builder:
         description: Сборщик runtime
         required: true
-        default: nuitka
+        default: pyinstaller
         type: choice
         options:
-          - nuitka
           - pyinstaller
+          - nuitka
 
 jobs:
   build:
@@ -28,7 +28,7 @@ jobs:
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
-      ZAPRET_BUILD_METHOD: ${{ github.event.inputs.builder || 'nuitka' }}
+      ZAPRET_BUILD_METHOD: ${{ github.event.inputs.builder || 'pyinstaller' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
         run: |
           import os, pathlib, re
 
-          FALLBACK_VERSION = "0.6.67"
+          FALLBACK_VERSION = "0.7.67"
 
           # Версия берётся из тега релиза: v0.4.67 -> 0.4.67. Так номер
           # в «О программе» и номер выпуска на GitHub не разъезжаются —
@@ -117,6 +117,15 @@ jobs:
               "--nofollow-import-to=numpy",
               "--nofollow-import-to=PIL",
               "--noinclude-dlls=opengl32sw.dll",
+              # Данные, которые лежат ВНУТРИ пакета и читаются
+              # относительно __file__. Локальная сборка отдаёт их
+              # PyInstaller ключом --add-data, а здесь их не было вовсе:
+              # blockcheck.targets ищет domains.txt рядом с собой и, не
+              # найдя, молча переходит на встроенный список. Отличие
+              # между сборками получалось невидимым, а вело себя
+              # приложение по-разному.
+              "--include-data-dir=src\blockcheck\data=blockcheck/data",
+              "--include-data-files=src\config\config.json=config/config.json",
               "--output-filename=net67.exe",
               "--windows-icon-from-ico=ico\net67.ico",
               "--output-dir=$buildRoot\nuitka"
@@ -140,7 +149,10 @@ jobs:
               "--contents-directory", ".",
               "--paths", "src",
               "--workpath", "$buildRoot\pyinstaller-work",
-              "--distpath", "$buildRoot\pyinstaller-dist"
+              "--distpath", "$buildRoot\pyinstaller-dist",
+              # Тот же набор данных пакетов, что в scripts\build_local.ps1.
+              "--add-data=src\blockcheck\data;blockcheck\data",
+              "--add-data=src\config\config.json;config"
             )
             $pyinstallerArgs += @($modules | ForEach-Object { "--hidden-import=$_" })
             $pyinstallerArgs += "src\main.py"
@@ -160,6 +172,25 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $runtimeTarget "net67.exe") -PathType Leaf)) {
             throw "Не удалось подготовить artifact\_internal\net67.exe"
           }
+          # Данные пакетов проверяем сразу, а не по жалобам.
+          #
+          # Их отсутствие не роняет приложение: blockcheck не находит
+          # domains.txt и молча берёт встроенный список. Со стороны это
+          # выглядит как «в сборке с GitHub диагностика ведёт себя не
+          # так, как в локальной» — и разбирается такое долго.
+          $packageData = @(
+            "blockcheck\data\domains.txt",
+            "blockcheck\data\tcp_16_20_targets.json",
+            "config\config.json"
+          )
+          foreach ($item in $packageData) {
+            $path = Join-Path $runtimeTarget $item
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Сборщик не положил данные пакета: $item"
+            }
+          }
+          Write-Host "Данные пакетов на месте: $($packageData.Count)"
+
           Write-Host "Готово: artifact\_internal\net67.exe ($env:ZAPRET_BUILD_METHOD)"
 
       - name: Copy runtime resources
