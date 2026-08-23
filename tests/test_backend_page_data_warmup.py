@@ -334,7 +334,6 @@ class BackendPageDataWarmupTests(unittest.TestCase):
             display_mode="dark",
             ui_language="ru",
             background_preset="standard",
-            rkn_background=None,
             mica_enabled=True,
             window_opacity=100,
             accent_color=None,
@@ -345,8 +344,6 @@ class BackendPageDataWarmupTests(unittest.TestCase):
             smooth_scroll_enabled=True,
             editor_smooth_scroll_enabled=True,
             sidebar_icon_style="standard",
-            garland_enabled=False,
-            snowflakes_enabled=False,
         )
 
         appearance.clear_warmed_page_initial_state_cache()

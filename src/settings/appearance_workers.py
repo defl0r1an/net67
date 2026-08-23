@@ -43,10 +43,7 @@ class AppearanceSettingsSaveWorker(QThread):
         save_ui_language,
         save_background_preset,
         save_mica_enabled,
-        save_rkn_background,
         save_window_opacity,
-        save_snowflakes_enabled,
-        save_garland_enabled,
         save_accent_color,
         save_follow_windows_accent,
         save_tinted_background,
@@ -68,10 +65,7 @@ class AppearanceSettingsSaveWorker(QThread):
         self._save_ui_language = save_ui_language
         self._save_background_preset = save_background_preset
         self._save_mica_enabled = save_mica_enabled
-        self._save_rkn_background = save_rkn_background
         self._save_window_opacity = save_window_opacity
-        self._save_snowflakes_enabled = save_snowflakes_enabled
-        self._save_garland_enabled = save_garland_enabled
         self._save_accent_color = save_accent_color
         self._save_follow_windows_accent = save_follow_windows_accent
         self._save_tinted_background = save_tinted_background
@@ -95,14 +89,8 @@ class AppearanceSettingsSaveWorker(QThread):
                 result = self._save_background_preset(str(self._value or "standard"))
             elif self._action == "mica_enabled":
                 result = self._save_mica_enabled(bool(self._value))
-            elif self._action == "rkn_background":
-                result = self._save_rkn_background(self._value)
             elif self._action == "window_opacity":
                 result = self._save_window_opacity(int(self._value or 0))
-            elif self._action == "snowflakes_enabled":
-                result = self._save_snowflakes_enabled(bool(self._value))
-            elif self._action == "garland_enabled":
-                result = self._save_garland_enabled(bool(self._value))
             elif self._action == "accent_color":
                 result = {
                     "accent": self._save_accent_color(str(self._value or "")),
@@ -160,19 +148,6 @@ class AppearanceWindowsAccentLoadWorker(QThread):
         self.loaded.emit(self._request_id, result)
 
 
-class ThemePersistWorker(QThread):
-    saved = pyqtSignal(str, bool)
-    failed = pyqtSignal(str, str)
-
-    def __init__(self, theme_name: str, *, save_selected_theme, parent=None):
-        super().__init__(parent)
-        self._theme_name = str(theme_name or "").strip()
-        self._save_selected_theme = save_selected_theme
-
-    def run(self) -> None:
-        try:
-            result = self._save_selected_theme(self._theme_name)
-        except Exception as exc:
-            self.failed.emit(self._theme_name, str(exc))
-            return
-        self.saved.emit(self._theme_name, bool(result))
+# ThemePersistWorker убран вместе с разделом тем: сохранять имя выбранной
+# темы было некому и негде — страница выбора вырезана, а сам список тем в
+# net67 никто не наполняет.

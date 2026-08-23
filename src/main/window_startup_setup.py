@@ -34,10 +34,7 @@ def attach_startup_deps_to_window(window, features) -> WindowStartupRuntime:
             set_status=window.set_status,
             mark_startup_core_ready=window.mark_startup_core_ready,
             mark_startup_post_init_done=_mark_startup_post_init_done,
-            init_theme_manager=lambda: init_theme_manager(
-                window,
-                appearance_feature=features.appearance,
-            ),
+            init_theme_manager=lambda: init_theme_manager(window),
         )
         return StartupCoordinator(
             runtime_feature=features.runtime,

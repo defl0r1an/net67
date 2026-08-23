@@ -24,7 +24,6 @@ def _settings() -> dict:
         "hosts": {"selection": {"a": "b"}, "bootstrap_signature": "v3", "active_domains": ["x"]},
         "dns": {"force_dns_enabled": True, "dns_crash_count": 7},
         "window": {"geometry": "1920x1080"},
-        "premium": {"device_id": "ABC-123"},
     }
 
 
@@ -74,7 +73,6 @@ class ExportScopeTests(unittest.TestCase):
         document, report = build_export(_settings())
 
         self.assertNotIn("window", document["sections"])
-        self.assertNotIn("premium", document["sections"])
         self.assertIn("window", report.skipped_sections)
 
     def test_machine_specific_fields_are_dropped(self) -> None:

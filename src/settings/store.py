@@ -14,9 +14,7 @@ except ImportError:  # pragma: no cover - WSL/static checks only
 from config.runtime_layout import APPLICATION_PATHS
 from settings.mode import (
     DEFAULT_LAUNCH_METHOD,
-    ENGINE_WINWS1,
     ENGINE_WINWS2,
-    SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1,
     SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2,
     normalize_launch_method,
 )
@@ -24,7 +22,6 @@ from settings.normalize import (
     as_clean_str as _as_clean_str,
     as_dict as _as_dict,
     as_int as _as_int,
-    normalize_askey as _normalize_askey,
     normalize_hex_secret as _normalize_hex_secret,
     normalize_settings as _normalize_settings,
     normalize_lookup_key as _normalize_lookup_key,
@@ -53,8 +50,10 @@ _SETTINGS_CACHE_SIGNATURE: tuple[str, int | None, int | None] | None = None
 # Кэш, заполненный чтением с materialize=False, не гарантирует, что файл на
 # диске починен/создан — materialize-чтение обязано пройти мимо такого кэша.
 _SETTINGS_CACHE_MATERIALIZED = False
+# winws1 здесь больше нет: движок из программы вырезан, а ключ
+# selected_source_preset_file_name_winws1 оставался в settings.json
+# мёртвым грузом.
 _DIRECT_PRESET_SELECTION_PATHS = {
-    ENGINE_WINWS1: ("program", SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1),
     ENGINE_WINWS2: ("program", SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2),
 }
 
@@ -359,15 +358,6 @@ def set_hosts_settings(values: dict[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(updated["hosts"])
 
 
-def get_premium_settings() -> dict[str, Any]:
-    return copy.deepcopy(read_settings()["premium"])
-
-
-def set_premium_settings(values: dict[str, Any]) -> dict[str, Any]:
-    updated = _update_settings(lambda data: data["premium"].update(_as_dict(values)))
-    return copy.deepcopy(updated["premium"])
-
-
 def get_ui_state_settings() -> dict[str, Any]:
     return copy.deepcopy(read_settings()["ui_state"])
 
@@ -447,15 +437,6 @@ def set_profile_identity_registry(engine: str, registry: dict[str, Any]) -> dict
         lambda data: _set_path_value(data, ("profile_identity", key), _as_dict(registry))
     )
     return copy.deepcopy(updated["profile_identity"].get(key) or {})
-
-
-def get_orchestra_settings() -> dict[str, Any]:
-    return copy.deepcopy(read_settings()["orchestra"]["settings"])
-
-
-def set_orchestra_settings(values: dict[str, Any]) -> dict[str, Any]:
-    updated = _update_settings(lambda data: data["orchestra"]["settings"].update(_as_dict(values)))
-    return copy.deepcopy(updated["orchestra"]["settings"])
 
 
 def get_dpi_autostart() -> bool:
@@ -620,14 +601,6 @@ def set_background_preset(value: str) -> bool:
     return _set_str(("appearance", "background_preset"), value)
 
 
-def get_rkn_background() -> str | None:
-    return _get_nullable_str(("appearance", "rkn_background"))
-
-
-def set_rkn_background(value: str | None) -> bool:
-    return _set_nullable_str(("appearance", "rkn_background"), value)
-
-
 def get_animations_enabled() -> bool:
     return _get_bool(("appearance", "animations_enabled"), False)
 
@@ -765,30 +738,6 @@ def get_tinted_background_intensity() -> int:
 
 def set_tinted_background_intensity(value: int) -> bool:
     return _set_int(("appearance", "tinted_background_intensity"), value)
-
-
-def get_garland_enabled() -> bool:
-    return _get_bool(("appearance", "garland_enabled"), False)
-
-
-def set_garland_enabled(value: bool) -> bool:
-    return _set_bool(("appearance", "garland_enabled"), value)
-
-
-def get_snowflakes_enabled() -> bool:
-    return _get_bool(("appearance", "snowflakes_enabled"), False)
-
-
-def set_snowflakes_enabled(value: bool) -> bool:
-    return _set_bool(("appearance", "snowflakes_enabled"), value)
-
-
-def get_selected_theme() -> str:
-    return _get_str(("appearance", "selected_theme"), "")
-
-
-def set_selected_theme(value: str) -> bool:
-    return _set_str(("appearance", "selected_theme"), value)
 
 
 def get_windows_system_accent() -> str | None:
@@ -951,98 +900,6 @@ def set_hosts_selection(selection: dict[str, str]) -> bool:
         if service_name and profile_name:
             normalized[service_name] = profile_name
     _update_settings(lambda data: _set_path_value(data, ("hosts", "selection"), normalized))
-    return True
-
-
-def get_premium_device_id() -> str:
-    return _get_str(("premium", "device_id"), "")
-
-
-def set_premium_device_id(value: str) -> bool:
-    return _set_str(("premium", "device_id"), _as_clean_str(value))
-
-
-def get_premium_device_token() -> str | None:
-    return _get_nullable_str(("premium", "device_token"))
-
-
-def set_premium_device_token(value: str | None) -> bool:
-    return _set_nullable_str(("premium", "device_token"), _as_clean_str(value) or None)
-
-
-def get_premium_last_check() -> str | None:
-    return _get_nullable_str(("premium", "last_check"))
-
-
-def set_premium_last_check(value: str | None) -> bool:
-    return _set_nullable_str(("premium", "last_check"), value)
-
-
-def get_premium_last_network_failure_ts() -> int | None:
-    value = _get_path_value(read_settings(), ("premium", "last_network_failure_ts"), None)
-    try:
-        return int(value) if value is not None else None
-    except Exception:
-        return None
-
-
-def set_premium_last_network_failure_ts(value: int | None) -> bool:
-    _update_settings(
-        lambda data: _set_path_value(
-            data,
-            ("premium", "last_network_failure_ts"),
-            None if value is None else int(value),
-        )
-    )
-    return True
-
-
-def get_premium_pair_code() -> str | None:
-    value = _get_nullable_str(("premium", "pair_code"))
-    return value.upper() if value else None
-
-
-def set_premium_pair_code(*, code: str | None, expires_at: int | None) -> bool:
-    normalized_code = _as_clean_str(code).upper()
-    expires = None
-    if expires_at is not None:
-        try:
-            expires = int(expires_at)
-        except Exception:
-            expires = None
-    if not normalized_code or not expires or expires <= 0:
-        normalized_code = ""
-        expires = None
-    _update_settings(
-        lambda data: (
-            _set_path_value(data, ("premium", "pair_code"), normalized_code or None),
-            _set_path_value(data, ("premium", "pair_expires_at"), expires),
-        )
-    )
-    return True
-
-
-def get_premium_pair_expires_at() -> int | None:
-    value = _get_path_value(read_settings(), ("premium", "pair_expires_at"), None)
-    try:
-        return int(value) if value is not None else None
-    except Exception:
-        return None
-
-
-def get_premium_cache() -> dict[str, Any] | None:
-    cache = _get_path_value(read_settings(), ("premium", "premium_cache"), None)
-    return copy.deepcopy(cache) if isinstance(cache, dict) else None
-
-
-def set_premium_cache(cache: dict[str, Any] | None) -> bool:
-    _update_settings(
-        lambda data: _set_path_value(
-            data,
-            ("premium", "premium_cache"),
-            copy.deepcopy(cache) if isinstance(cache, dict) else None,
-        )
-    )
     return True
 
 
@@ -1222,251 +1079,6 @@ def set_tg_proxy_proxy_protocol(value: bool) -> bool:
     return _set_bool(("telegram_proxy", "proxy_protocol"), value)
 
 
-def get_orchestra_strict_detection() -> bool:
-    return _get_bool(("orchestra", "settings", "strict_detection"), True)
-
-
-def set_orchestra_strict_detection(value: bool) -> bool:
-    return _set_bool(("orchestra", "settings", "strict_detection"), value)
-
-
-def get_orchestra_keep_debug_file() -> bool:
-    return _get_bool(("orchestra", "settings", "keep_debug_file"), False)
-
-
-def set_orchestra_keep_debug_file(value: bool) -> bool:
-    return _set_bool(("orchestra", "settings", "keep_debug_file"), value)
-
-
-def get_orchestra_auto_restart_on_discord_fail() -> bool:
-    return _get_bool(("orchestra", "settings", "auto_restart_on_discord_fail"), True)
-
-
-def set_orchestra_auto_restart_on_discord_fail(value: bool) -> bool:
-    return _set_bool(("orchestra", "settings", "auto_restart_on_discord_fail"), value)
-
-
-def get_orchestra_discord_fails_for_restart() -> int:
-    return _get_int(("orchestra", "settings", "discord_fails_for_restart"), 3)
-
-
-def set_orchestra_discord_fails_for_restart(value: int) -> bool:
-    return _set_int(("orchestra", "settings", "discord_fails_for_restart"), value)
-
-
-def get_orchestra_lock_successes() -> int:
-    return _get_int(("orchestra", "settings", "lock_successes"), 3)
-
-
-def set_orchestra_lock_successes(value: int) -> bool:
-    return _set_int(("orchestra", "settings", "lock_successes"), value)
-
-
-def get_orchestra_unlock_fails() -> int:
-    return _get_int(("orchestra", "settings", "unlock_fails"), 3)
-
-
-def set_orchestra_unlock_fails(value: int) -> bool:
-    return _set_int(("orchestra", "settings", "unlock_fails"), value)
-
-
-def get_orchestra_whitelist_user_domains() -> list[str]:
-    values = _get_path_value(read_settings(), ("orchestra", "whitelist", "user_domains"), [])
-    return _unique_str_list(values)
-
-
-def set_orchestra_whitelist_user_domains(domains: list[str]) -> bool:
-    normalized = [_normalize_lookup_key(item) for item in _unique_str_list(domains) if _normalize_lookup_key(item)]
-    _update_settings(lambda data: _set_path_value(data, ("orchestra", "whitelist", "user_domains"), normalized))
-    return True
-
-
-def add_orchestra_whitelist_domain(domain: str) -> bool:
-    items = get_orchestra_whitelist_user_domains()
-    value = _normalize_lookup_key(domain)
-    if value and value not in items:
-        items.append(value)
-    return set_orchestra_whitelist_user_domains(items)
-
-
-def remove_orchestra_whitelist_domain(domain: str) -> bool:
-    value = _normalize_lookup_key(domain)
-    items = [item for item in get_orchestra_whitelist_user_domains() if item != value]
-    return set_orchestra_whitelist_user_domains(items)
-
-
-def clear_orchestra_whitelist_user_domains() -> bool:
-    return set_orchestra_whitelist_user_domains([])
-
-
-def get_orchestra_locked_map(askey: str) -> dict[str, int]:
-    key = _normalize_askey(askey)
-    data = _get_path_value(read_settings(), ("orchestra", "locked", key), {})
-    return copy.deepcopy(data if isinstance(data, dict) else {})
-
-
-def set_orchestra_locked_map(askey: str, data: dict[str, int]) -> bool:
-    key = _normalize_askey(askey)
-    _update_settings(lambda settings: _set_path_value(settings, ("orchestra", "locked", key), _as_dict(data)))
-    return True
-
-
-def set_orchestra_locked_strategy(askey: str, target: str, strategy: int) -> bool:
-    key = _normalize_askey(askey)
-    lookup_key = _normalize_lookup_key(target)
-    if not lookup_key:
-        return False
-
-    def _mutator(data: dict[str, Any]) -> None:
-        mapping = _as_dict(_get_path_value(data, ("orchestra", "locked", key), {}))
-        mapping[lookup_key] = int(strategy)
-        _set_path_value(data, ("orchestra", "locked", key), mapping)
-
-    _update_settings(_mutator)
-    return True
-
-
-def remove_orchestra_locked_target(askey: str, target: str) -> bool:
-    key = _normalize_askey(askey)
-    lookup_key = _normalize_lookup_key(target)
-
-    def _mutator(data: dict[str, Any]) -> None:
-        mapping = _as_dict(_get_path_value(data, ("orchestra", "locked", key), {}))
-        mapping.pop(lookup_key, None)
-        _set_path_value(data, ("orchestra", "locked", key), mapping)
-
-    _update_settings(_mutator)
-    return True
-
-
-def clear_orchestra_locked_map(askey: str) -> bool:
-    return set_orchestra_locked_map(askey, {})
-
-
-def get_orchestra_user_locked(askey: str) -> list[str]:
-    key = _normalize_askey(askey)
-    values = _get_path_value(read_settings(), ("orchestra", "user_locked", key), [])
-    return [_normalize_lookup_key(item) for item in _unique_str_list(values) if _normalize_lookup_key(item)]
-
-
-def set_orchestra_user_locked(askey: str, values: list[str]) -> bool:
-    key = _normalize_askey(askey)
-    normalized = [_normalize_lookup_key(item) for item in _unique_str_list(values) if _normalize_lookup_key(item)]
-    _update_settings(lambda data: _set_path_value(data, ("orchestra", "user_locked", key), normalized))
-    return True
-
-
-def add_orchestra_user_locked(askey: str, target: str) -> bool:
-    items = get_orchestra_user_locked(askey)
-    value = _normalize_lookup_key(target)
-    if value and value not in items:
-        items.append(value)
-    return set_orchestra_user_locked(askey, items)
-
-
-def remove_orchestra_user_locked(askey: str, target: str) -> bool:
-    value = _normalize_lookup_key(target)
-    items = [item for item in get_orchestra_user_locked(askey) if item != value]
-    return set_orchestra_user_locked(askey, items)
-
-
-def clear_orchestra_user_locked(askey: str) -> bool:
-    return set_orchestra_user_locked(askey, [])
-
-
-def get_orchestra_user_blocked(askey: str) -> dict[str, list[int]]:
-    key = _normalize_askey(askey)
-    data = _get_path_value(read_settings(), ("orchestra", "user_blocked", key), {})
-    return copy.deepcopy(data if isinstance(data, dict) else {})
-
-
-def set_orchestra_user_blocked(askey: str, data: dict[str, list[int]]) -> bool:
-    key = _normalize_askey(askey)
-    _update_settings(lambda settings: _set_path_value(settings, ("orchestra", "user_blocked", key), _as_dict(data)))
-    return True
-
-
-def set_orchestra_user_blocked_strategies(askey: str, target: str, strategies: list[int]) -> bool:
-    key = _normalize_askey(askey)
-    lookup_key = _normalize_lookup_key(target)
-    if not lookup_key:
-        return False
-
-    def _mutator(data: dict[str, Any]) -> None:
-        mapping = _as_dict(_get_path_value(data, ("orchestra", "user_blocked", key), {}))
-        normalized = _unique_int_list(strategies)
-        if normalized:
-            mapping[lookup_key] = normalized
-        else:
-            mapping.pop(lookup_key, None)
-        _set_path_value(data, ("orchestra", "user_blocked", key), mapping)
-
-    _update_settings(_mutator)
-    return True
-
-
-def remove_orchestra_user_blocked_target(askey: str, target: str) -> bool:
-    key = _normalize_askey(askey)
-    lookup_key = _normalize_lookup_key(target)
-
-    def _mutator(data: dict[str, Any]) -> None:
-        mapping = _as_dict(_get_path_value(data, ("orchestra", "user_blocked", key), {}))
-        mapping.pop(lookup_key, None)
-        _set_path_value(data, ("orchestra", "user_blocked", key), mapping)
-
-    _update_settings(_mutator)
-    return True
-
-
-def clear_orchestra_user_blocked(askey: str) -> bool:
-    return set_orchestra_user_blocked(askey, {})
-
-
-def get_orchestra_history() -> dict[str, Any]:
-    data = _get_path_value(read_settings(), ("orchestra", "history"), {})
-    return copy.deepcopy(data if isinstance(data, dict) else {})
-
-
-def set_orchestra_history(data: dict[str, Any]) -> bool:
-    _update_settings(lambda settings: _set_path_value(settings, ("orchestra", "history"), _as_dict(data)))
-    return True
-
-
-def get_orchestra_history_for_target(target: str) -> dict[str, Any]:
-    lookup_key = _normalize_lookup_key(target)
-    return copy.deepcopy(get_orchestra_history().get(lookup_key, {}))
-
-
-def set_orchestra_history_for_target(target: str, data: dict[str, Any]) -> bool:
-    lookup_key = _normalize_lookup_key(target)
-    if not lookup_key:
-        return False
-
-    def _mutator(settings: dict[str, Any]) -> None:
-        history = _as_dict(_get_path_value(settings, ("orchestra", "history"), {}))
-        history[lookup_key] = _as_dict(data)
-        _set_path_value(settings, ("orchestra", "history"), history)
-
-    _update_settings(_mutator)
-    return True
-
-
-def remove_orchestra_history_target(target: str) -> bool:
-    lookup_key = _normalize_lookup_key(target)
-
-    def _mutator(settings: dict[str, Any]) -> None:
-        history = _as_dict(_get_path_value(settings, ("orchestra", "history"), {}))
-        history.pop(lookup_key, None)
-        _set_path_value(settings, ("orchestra", "history"), history)
-
-    _update_settings(_mutator)
-    return True
-
-
-def clear_orchestra_history() -> bool:
-    return set_orchestra_history({})
-
-
 __all__ = [
     "get_accent_color",
     "get_active_hosts_domains",
@@ -1483,7 +1095,6 @@ __all__ = [
     "get_follow_windows_accent",
     "get_force_dns_enabled",
     "get_folders_settings",
-    "get_garland_enabled",
     "get_gui_autostart_enabled",
     "get_hosts_bootstrap_signature",
     "get_hosts_selection",
@@ -1491,33 +1102,10 @@ __all__ = [
     "get_kaspersky_warning_disabled",
     "get_max_blocked",
     "get_mica_enabled",
-    "get_orchestra_auto_restart_on_discord_fail",
-    "get_orchestra_discord_fails_for_restart",
-    "get_orchestra_history",
-    "get_orchestra_history_for_target",
-    "get_orchestra_keep_debug_file",
-    "get_orchestra_lock_successes",
-    "get_orchestra_locked_map",
-    "get_orchestra_settings",
-    "get_orchestra_strict_detection",
-    "get_orchestra_unlock_fails",
-    "get_orchestra_user_blocked",
-    "get_orchestra_user_locked",
-    "get_orchestra_whitelist_user_domains",
     "get_program_settings",
-    "get_premium_cache",
-    "get_premium_device_id",
-    "get_premium_device_token",
-    "get_premium_last_check",
-    "get_premium_last_network_failure_ts",
-    "get_premium_pair_code",
-    "get_premium_pair_expires_at",
-    "get_premium_settings",
     "get_profile_strategy_state_settings",
     "get_remove_github_api",
-    "get_rkn_background",
     "get_russian_state_media_blocked",
-    "get_selected_theme",
     "get_selected_source_preset_file_name",
     "get_advanced_mode",
     "get_sidebar_icon_style",
@@ -1529,7 +1117,6 @@ __all__ = [
     "get_wizard_services",
     "get_settings_path",
     "get_smooth_scroll_enabled",
-    "get_snowflakes_enabled",
     "get_strategy_launch_method",
     "get_telega_warning_disabled",
     "get_tg_proxy_deeplink_done",
@@ -1567,11 +1154,6 @@ __all__ = [
     "materialize_settings_file",
     "read_settings",
     "remove_active_hosts_domain",
-    "remove_orchestra_history_target",
-    "remove_orchestra_locked_target",
-    "remove_orchestra_user_blocked_target",
-    "remove_orchestra_user_locked",
-    "remove_orchestra_whitelist_domain",
     "reset_dns_crash_count",
     "replace_settings",
     "reset_settings",
@@ -1590,7 +1172,6 @@ __all__ = [
     "set_follow_windows_accent",
     "set_force_dns_enabled",
     "set_folders_settings",
-    "set_garland_enabled",
     "set_gui_autostart_enabled",
     "set_hosts_bootstrap_signature",
     "set_hosts_selection",
@@ -1598,34 +1179,10 @@ __all__ = [
     "set_kaspersky_warning_disabled",
     "set_max_blocked",
     "set_mica_enabled",
-    "set_orchestra_auto_restart_on_discord_fail",
-    "set_orchestra_discord_fails_for_restart",
-    "set_orchestra_history",
-    "set_orchestra_history_for_target",
-    "set_orchestra_keep_debug_file",
-    "set_orchestra_lock_successes",
-    "set_orchestra_locked_map",
-    "set_orchestra_locked_strategy",
-    "set_orchestra_settings",
-    "set_orchestra_strict_detection",
-    "set_orchestra_unlock_fails",
-    "set_orchestra_user_blocked",
-    "set_orchestra_user_blocked_strategies",
-    "set_orchestra_user_locked",
-    "set_orchestra_whitelist_user_domains",
     "set_program_settings",
-    "set_premium_cache",
-    "set_premium_device_id",
-    "set_premium_device_token",
-    "set_premium_last_check",
-    "set_premium_last_network_failure_ts",
-    "set_premium_pair_code",
-    "set_premium_settings",
     "set_profile_strategy_state_settings",
     "set_remove_github_api",
-    "set_rkn_background",
     "set_russian_state_media_blocked",
-    "set_selected_theme",
     "set_selected_source_preset_file_name",
     "set_advanced_mode",
     "set_sidebar_icon_style",
@@ -1636,7 +1193,6 @@ __all__ = [
     "set_wizard_completed",
     "set_wizard_services",
     "set_smooth_scroll_enabled",
-    "set_snowflakes_enabled",
     "set_strategy_launch_method",
     "set_telega_warning_disabled",
     "set_tg_proxy_deeplink_done",

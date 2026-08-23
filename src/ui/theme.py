@@ -75,7 +75,6 @@ _THEME_DYNAMIC_LAYER_BEGIN = "/* __THEME_DYNAMIC_LAYER_BEGIN__ */"
 _THEME_DYNAMIC_LAYER_END = "/* __THEME_DYNAMIC_LAYER_END__ */"
 
 
-
 def _parse_rgb(rgb: str, *, default: tuple[int, int, int] = (0, 0, 0)) -> tuple[int, int, int]:
     try:
         parts = [int(x.strip()) for x in rgb.split(",")]
@@ -320,7 +319,7 @@ def apply_window_background(window, theme_name: str | None = None, preset: str |
     try:
         from PyQt6.QtGui import QColor as _QColor
 
-        if preset == "amoled" or preset == "rkn_chan":
+        if preset == "amoled":
             # Solid black, remove any DWM effects
             if hasattr(window, 'windowEffect'):
                 try:
@@ -1110,22 +1109,15 @@ class ThemeBuildWorker(QObject):
 class ThemeManager:
     """Класс для управления текущей темой приложения."""
 
-    def __init__(self, app, widget, *, create_theme_persist_worker):
+    def __init__(self, app, widget):
         self.app = app
         self.widget = widget
-        self._create_theme_persist_worker = create_theme_persist_worker
         self._cleanup_in_progress = False
 
         self._theme_request_seq = 0
         self._latest_theme_request_id = 0
         self._latest_requested_theme: str | None = None
         self._active_theme_build_jobs: dict[int, OneShotWorkerRuntime] = {}
-        self._theme_persist_runtime = OneShotWorkerRuntime()
-        self._theme_persist_runtime_worker = None
-        self._theme_persist_state = LatestValueWorkerState(
-            self._theme_persist_runtime,
-            empty_value=None,
-        )
         
 
         # список тем — теперь пустой (тема определяется isDarkTheme() системно)
@@ -1157,15 +1149,6 @@ class ThemeManager:
                 except RuntimeError:
                     pass
             self._cleanup_theme_build_thread()
-            self._theme_persist_state_obj().reset()
-            self._theme_persist_runtime_worker = None
-            self._theme_persist_runtime.stop(
-                blocking=False,
-                wait_timeout_ms=1000,
-                log_fn=log,
-                warning_prefix="theme persist worker",
-            )
-            self._theme_persist_runtime.cancel()
                     
             log("ThemeManager очищен", "DEBUG")
             
@@ -1369,74 +1352,14 @@ class ThemeManager:
 
             self.current_theme = clean
 
-            if persist:
-                self._request_theme_persist(clean)
+            # persist сохраняется в сигнатуре ради вызывающих, но
+            # сохранять больше нечего: ключ appearance.selected_theme был
+            # мёртвым — его писали и никогда не читали. Светлая или тёмная
+            # тема хранится в appearance.display_mode и живёт своей жизнью.
 
         except Exception as e:
             log(f"Ошибка в _apply_css_only: {e}", "❌ ERROR")
 
-    def _request_theme_persist(self, theme_name: str) -> None:
-        clean = _normalize_theme_name(theme_name)
-        state = self._theme_persist_state_obj()
-        if state.is_busy():
-            state.pending = clean
-            return
-        state.pending = None
-        self._start_theme_persist_worker(clean)
-
-    def _start_theme_persist_worker(self, theme_name: str) -> None:
-        def bind_worker(worker) -> None:
-            worker.saved.connect(lambda saved_theme, _ok: log(f"💾 Тема сохранена: '{saved_theme}'", "DEBUG"))
-            worker.failed.connect(lambda saved_theme, error: log(f"Не удалось сохранить тему '{saved_theme}': {error}", "WARNING"))
-
-        _request_id, worker = self._theme_persist_runtime.start_qthread_worker(
-            worker_factory=lambda _request_id: self._create_theme_persist_worker(theme_name, parent=self.widget),
-            bind_worker=bind_worker,
-            on_finished=self._on_theme_persist_finished,
-            signal_includes_request_id=False,
-        )
-        self._theme_persist_runtime_worker = worker
-
-    def _on_theme_persist_finished(self, _worker) -> None:
-        current_worker = self.__dict__.get("_theme_persist_runtime_worker")
-        if current_worker is not None and _worker is not current_worker:
-            return
-        self._theme_persist_runtime_worker = None
-        pending = self._theme_persist_state_obj().pending
-        self._theme_persist_state_obj().pending = None
-        if pending and not self._cleanup_in_progress:
-            self._schedule_theme_persist_worker_start(pending)
-
-    def _schedule_theme_persist_worker_start(self, theme_name: str) -> None:
-        pending = _normalize_theme_name(theme_name)
-        state = self._theme_persist_state_obj()
-        state.pending = pending
-        state.schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_theme_persist_worker_start,
-            cleanup_in_progress=bool(self.__dict__.get("_cleanup_in_progress", False)),
-            pending_when_already_scheduled=pending,
-        )
-
-    def _run_scheduled_theme_persist_worker_start(self) -> None:
-        pending = self._theme_persist_state_obj().take_pending_for_scheduled_start(
-            cleanup_in_progress=bool(self.__dict__.get("_cleanup_in_progress", False)),
-        )
-        if pending and not bool(self.__dict__.get("_cleanup_in_progress", False)):
-            self._start_theme_persist_worker(pending)
-
-    def _theme_persist_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_theme_persist_state")
-        runtime = self.__dict__.get("_theme_persist_runtime")
-        if state is None:
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=None,
-            )
-            self.__dict__["_theme_persist_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
 
     def _set_status(self, text):
         """Устанавливает текст статуса (через главное окно)"""

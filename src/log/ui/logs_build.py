@@ -340,8 +340,10 @@ def build_logs_secondary_panels_ui(
     errors_header.addWidget(errors_title_label)
     errors_header.addSpacing(8)
 
+    # Стартовое состояние — «ошибок нет»: панель строится до того, как
+    # в неё что-то попадёт.
     errors_count_label = caption_label_cls(
-        tr_catalog_fn("page.logs.errors.count", language=ui_language, default="Ошибок: {count}").format(count=0)
+        tr_catalog_fn("page.logs.errors.none", language=ui_language, default="Ошибок нет")
     )
     set_state_text(errors_count_label, errors_count_label.text())
     errors_header.addWidget(errors_count_label)
@@ -365,6 +367,7 @@ def build_logs_secondary_panels_ui(
         ),
     )
     clear_errors_btn.clicked.connect(on_clear_errors)
+    clear_errors_btn.setVisible(False)  # очищать нечего, пока ошибок нет
     errors_header.addWidget(clear_errors_btn)
 
     errors_layout.addLayout(errors_header)
@@ -398,6 +401,9 @@ def build_logs_secondary_panels_ui(
         ),
     )
     errors_text.document().contentsChanged.connect(on_update_errors_height)
+    # Пока ошибок нет, рамки не видно. Показывает её страница, когда
+    # появится первая запись.
+    errors_text.setVisible(False)
     errors_layout.addWidget(errors_text)
 
     errors_card.add_layout(errors_layout)

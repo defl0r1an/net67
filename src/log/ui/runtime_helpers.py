@@ -2,7 +2,64 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ui.accessibility import set_state_text
+
+
+#: Значок панели ошибок, когда всё чисто.
+ERRORS_ICON_CLEAN = "fa5s.check-circle"
+
+#: Значок панели ошибок, когда есть о чём сказать.
+ERRORS_ICON_PROBLEM = "fa5s.exclamation-triangle"
+
+
+@dataclass(frozen=True)
+class ErrorsPanelView:
+    """Как выглядит панель ошибок при таком числе записей."""
+
+    has_errors: bool
+    icon_name: str
+    icon_color: str
+    show_text: bool
+    show_clear_button: bool
+
+
+def errors_panel_view(*, count: int, is_light: bool) -> ErrorsPanelView:
+    """Вид панели ошибок по числу записей.
+
+    Раньше панель всегда выглядела тревожно: красный треугольник и
+    пустая красная рамка под ним висели и тогда, когда ошибок не было
+    ни одной. Читалось это как «что-то сломано», хотя сломано ничего не
+    было, а настоящую ошибку в такой панели уже никто бы не заметил —
+    она ничем не отличалась бы от обычного состояния.
+
+    Теперь чистое состояние выглядит чистым: зелёная галочка и ничего
+    больше. Рамка с текстом и красный треугольник появляются вместе с
+    первой записью.
+    """
+    has_errors = int(count or 0) > 0
+
+    if has_errors:
+        color = "#dc2626" if is_light else "#f87171"
+        return ErrorsPanelView(
+            has_errors=True,
+            icon_name=ERRORS_ICON_PROBLEM,
+            icon_color=color,
+            show_text=True,
+            show_clear_button=True,
+        )
+
+    # Зелёный подобран так, чтобы читаться на обеих темах: на светлой
+    # тёмный (#15803d), на тёмной светлый (#4ade80).
+    color = "#15803d" if is_light else "#4ade80"
+    return ErrorsPanelView(
+        has_errors=False,
+        icon_name=ERRORS_ICON_CLEAN,
+        icon_color=color,
+        show_text=False,
+        show_clear_button=False,
+    )
 
 
 def render_send_status_label(*, label, text: str, tone: str, theme_tokens) -> None:
@@ -74,9 +131,20 @@ def compute_errors_text_height(*, text_edit, min_height: int, max_height: int) -
     return max(min_height, min(max_height, target_height))
 
 
+def errors_count_text(tr_fn, count: int) -> str:
+    """Подпись со счётчиком. Ноль называется словами, а не цифрой.
+
+    «Ошибок: 0» рядом с зелёной галочкой — лишнее уточнение к тому, что
+    и так видно.
+    """
+    if int(count or 0) <= 0:
+        return tr_fn("page.logs.errors.none", "Ошибок нет")
+    return tr_fn("page.logs.errors.count", "Ошибок: {count}").format(count=int(count))
+
+
 def append_error(*, errors_text, errors_count_label, tr_fn, current_count: int, text: str) -> int:
     next_count = int(current_count) + 1
-    count_text = tr_fn("page.logs.errors.count", "Ошибок: {count}").format(count=next_count)
+    count_text = errors_count_text(tr_fn, next_count)
     errors_count_label.setText(count_text)
     set_state_text(errors_count_label, count_text)
     errors_text.append(text)
@@ -85,7 +153,7 @@ def append_error(*, errors_text, errors_count_label, tr_fn, current_count: int, 
 
 def clear_errors(*, errors_text, errors_count_label, tr_fn) -> int:
     errors_text.clear()
-    count_text = tr_fn("page.logs.errors.count", "Ошибок: {count}").format(count=0)
+    count_text = errors_count_text(tr_fn, 0)
     errors_count_label.setText(count_text)
     set_state_text(errors_count_label, count_text)
     return 0

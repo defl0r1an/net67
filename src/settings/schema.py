@@ -5,7 +5,6 @@ from typing import Any
 from settings.mode import (
     ALL_LAUNCH_METHODS,
     DEFAULT_LAUNCH_METHOD,
-    SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1,
     SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2,
 )
 
@@ -23,7 +22,7 @@ DEFAULT_TG_PROXY_UPSTREAM_PORT = 1080
 VALID_LAUNCH_METHODS = ALL_LAUNCH_METHODS
 VALID_DISPLAY_MODES = frozenset({"dark", "light", "system"})
 VALID_UI_LANGUAGES = frozenset({"ru", "en"})
-VALID_BACKGROUND_PRESETS = frozenset({"standard", "amoled", "rkn_chan"})
+VALID_BACKGROUND_PRESETS = frozenset({"standard", "amoled"})
 VALID_SIDEBAR_ICON_STYLES = frozenset({"standard", "windows11_fluent"})
 VALID_TG_PROXY_MODES = frozenset({"socks5", "mtproxy"})
 VALID_TG_PROXY_UPSTREAM_MODES = frozenset({"fallback", "always"})
@@ -37,17 +36,6 @@ VALID_TRAY_CLOSE_MODES = frozenset(
         TRAY_CLOSE_MODE_NORMAL,
     }
 )
-ORCHESTRA_ASKEYS = (
-    "tls",
-    "http",
-    "quic",
-    "discord",
-    "wireguard",
-    "mtproto",
-    "dns",
-    "stun",
-    "unknown",
-)
 
 
 def default_program() -> dict[str, Any]:
@@ -55,7 +43,6 @@ def default_program() -> dict[str, Any]:
         "dpi_autostart": True,
         "gui_autostart_enabled": False,
         "strategy_launch_method": DEFAULT_LAUNCH_METHOD,
-        SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1: "",
         SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2: "",
         "auto_update_enabled": True,
         "remove_github_api": True,
@@ -88,7 +75,6 @@ def default_appearance() -> dict[str, Any]:
         "tinted_background": False,
         "tinted_background_intensity": DEFAULT_TINTED_INTENSITY,
         "background_preset": "standard",
-        "rkn_background": None,
         # Анимации включены. Умолчание было False, а переключатель к нему
         # из интерфейса убран, — то есть анимации оказались выключены у
         # всех и включить их было нечем. Лента песчинок из-за этого
@@ -97,9 +83,6 @@ def default_appearance() -> dict[str, Any]:
         "smooth_scroll_enabled": False,
         "editor_smooth_scroll_enabled": False,
         "sidebar_icon_style": "standard",
-        "garland_enabled": False,
-        "snowflakes_enabled": False,
-        "selected_theme": "",
     }
 
 
@@ -156,18 +139,6 @@ def default_hosts() -> dict[str, Any]:
     }
 
 
-def default_premium() -> dict[str, Any]:
-    return {
-        "device_id": "",
-        "device_token": None,
-        "last_check": None,
-        "last_network_failure_ts": None,
-        "pair_code": None,
-        "pair_expires_at": None,
-        "premium_cache": None,
-    }
-
-
 def default_ui_state() -> dict[str, Any]:
     return {
         "sidebar_expanded": True,
@@ -207,40 +178,6 @@ def default_user_profiles() -> dict[str, Any]:
     return {
         "version": 1,
         "profiles": {},
-    }
-
-
-def default_orchestra_settings() -> dict[str, Any]:
-    return {
-        "strict_detection": True,
-        "keep_debug_file": False,
-        "auto_restart_on_discord_fail": True,
-        "discord_fails_for_restart": 3,
-        "lock_successes": 3,
-        "unlock_fails": 3,
-    }
-
-
-def default_orchestra_locked_maps() -> dict[str, dict[str, int]]:
-    return {askey: {} for askey in ORCHESTRA_ASKEYS}
-
-
-def default_orchestra_user_locked_maps() -> dict[str, list[str]]:
-    return {askey: [] for askey in ORCHESTRA_ASKEYS}
-
-
-def default_orchestra_user_blocked_maps() -> dict[str, dict[str, list[int]]]:
-    return {askey: {} for askey in ORCHESTRA_ASKEYS}
-
-
-def default_orchestra() -> dict[str, Any]:
-    return {
-        "settings": default_orchestra_settings(),
-        "whitelist": {"user_domains": []},
-        "locked": default_orchestra_locked_maps(),
-        "user_locked": default_orchestra_user_locked_maps(),
-        "user_blocked": default_orchestra_user_blocked_maps(),
-        "history": {},
     }
 
 
@@ -299,11 +236,9 @@ def build_default_settings() -> dict[str, Any]:
         "telegram_proxy": default_telegram_proxy(),
         "dns": default_dns(),
         "hosts": default_hosts(),
-        "premium": default_premium(),
         "ui_state": default_ui_state(),
         "profile_strategy_state": default_profile_strategy_state(),
         "user_profiles": default_user_profiles(),
-        "orchestra": default_orchestra(),
         "updater": default_updater(),
         "blockcheck": default_blockcheck(),
         "folders": default_folders(),

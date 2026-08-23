@@ -1441,6 +1441,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Ошибок: {count}",
         "en": "Errors: {count}",
     },
+    "page.logs.errors.none": {
+        "ru": "Ошибок нет",
+        "en": "No errors",
+    },
     "page.logs.stats.loading": {
         "ru": "📊 Загрузка...",
         "en": "📊 Loading...",

@@ -48,6 +48,7 @@ from settings.mode import (
 )
 from winws_runtime.health.windivert_diagnostics import describe_windivert_readiness_failure
 from winws_runtime.public import CREATE_NO_WINDOW, STARTF_USESHOWWINDOW, SW_HIDE
+from winws_runtime.runners.preset_runner_support import at_config_launch_arg
 from winws_runtime.runtime.system_ops import (
     aggressive_windivert_cleanup_runtime,
     standard_windivert_cleanup_runtime,
@@ -697,7 +698,12 @@ class StrategyScanner:
                     strategy_args=args,
                     target=target,
                 )
-            self._cb.on_log(f"  preset: {preset_path}")
+            # В лог идёт аргумент в том виде, в каком его получит winws2,
+            # а не абсолютный путь. Разница между ними и была причиной
+            # падений — в логе её было не видно.
+            self._cb.on_log(
+                f"  preset: {at_config_launch_arg(preset_path, self._work_dir)}"
+            )
             if self._scan_protocol == _PROTOCOL_UDP_GAMES:
                 if self._games_ipset_sources:
                     shown = ", ".join(os.path.basename(p) for p in self._games_ipset_sources[:4])
@@ -1514,7 +1520,16 @@ class StrategyScanner:
         if readiness_error:
             raise RuntimeError(readiness_error)
 
-        cmd = [self._winws2_exe, f"@{preset_path}"]
+        # Путь к файлу параметров — через ту же функцию, что и основной
+        # запуск. winws2 — cygwin-бинарник и аргумент `@путь с пробелом`
+        # не разбирает: печатает баннер версии и выходит с кодом 1.
+        #
+        # Здесь стоял прямой f"@{preset_path}", поэтому диагностика
+        # падала на каждой стратегии у всех, у кого программа лежит по
+        # пути с пробелом — «C:\\Program Files\\net67»,
+        # «...\\AyuGram Desktop\\...». Основной обход при этом работал:
+        # он ходит через at_config_launch_arg с самого начала.
+        cmd = [self._winws2_exe, at_config_launch_arg(preset_path, self._work_dir)]
 
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags = STARTF_USESHOWWINDOW

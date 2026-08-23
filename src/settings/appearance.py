@@ -69,31 +69,10 @@ class AppearanceTintedSettingsPlan:
 
 
 @dataclass(slots=True)
-class AppearanceRknBackgroundPlan:
-    value: str | None
-
-
-@dataclass(slots=True)
-class AppearancePremiumEffectsPlan:
-    garland_enabled: bool
-    snowflakes_enabled: bool
-
-
-@dataclass(slots=True)
-class AppearancePremiumStatusPlan:
-    effective_preset: str | None
-    garland_checked: bool
-    snowflakes_checked: bool
-    disable_garland: bool
-    disable_snowflakes: bool
-
-
-@dataclass(slots=True)
 class AppearancePageInitialStatePlan:
     display_mode: str
     ui_language: str
     background_preset: str
-    rkn_background: str | None
     mica_enabled: bool
     window_opacity: int
     accent_color: str | None
@@ -104,16 +83,12 @@ class AppearancePageInitialStatePlan:
     smooth_scroll_enabled: bool
     editor_smooth_scroll_enabled: bool
     sidebar_icon_style: str
-    garland_enabled: bool
-    snowflakes_enabled: bool
 
 
 _warmed_page_initial_state_lock = threading.Lock()
 _warmed_page_initial_state_cache: AppearancePageInitialStatePlan | None = None
 _warmed_ui_language_lock = threading.Lock()
 _warmed_ui_language_cache: str | None = None
-_warmed_rkn_background_lock = threading.Lock()
-_warmed_rkn_background_cache: str | None = None
 _warmed_background_preset_lock = threading.Lock()
 _warmed_background_preset_cache: str | None = None
 _warmed_mica_enabled_lock = threading.Lock()
@@ -132,8 +107,6 @@ _warmed_editor_smooth_scroll_enabled_lock = threading.Lock()
 _warmed_editor_smooth_scroll_enabled_cache: bool | None = None
 _warmed_sidebar_icon_style_lock = threading.Lock()
 _warmed_sidebar_icon_style_cache: str | None = None
-_warmed_premium_effects_lock = threading.Lock()
-_warmed_premium_effects_cache: AppearancePremiumEffectsPlan | None = None
 
 
 def store_warmed_ui_language(language: str | None) -> None:
@@ -151,24 +124,6 @@ def clear_warmed_ui_language_cache() -> None:
     global _warmed_ui_language_cache
     with _warmed_ui_language_lock:
         _warmed_ui_language_cache = None
-
-
-def store_warmed_rkn_background(value: str | None) -> None:
-    global _warmed_rkn_background_cache
-    normalized = str(value or "").strip().replace("\\", "/") or None
-    with _warmed_rkn_background_lock:
-        _warmed_rkn_background_cache = normalized
-
-
-def peek_warmed_rkn_background() -> str | None:
-    with _warmed_rkn_background_lock:
-        return _warmed_rkn_background_cache
-
-
-def clear_warmed_rkn_background_cache() -> None:
-    global _warmed_rkn_background_cache
-    with _warmed_rkn_background_lock:
-        _warmed_rkn_background_cache = None
 
 
 def store_warmed_background_preset(preset: str | None) -> None:
@@ -361,28 +316,6 @@ def clear_warmed_sidebar_icon_style_cache() -> None:
         _warmed_sidebar_icon_style_cache = None
 
 
-def store_warmed_premium_effects(garland_enabled: bool | None, snowflakes_enabled: bool | None) -> None:
-    global _warmed_premium_effects_cache
-    defaults = schema.default_appearance()
-    plan = AppearancePremiumEffectsPlan(
-        garland_enabled=bool(defaults["garland_enabled"]) if garland_enabled is None else bool(garland_enabled),
-        snowflakes_enabled=bool(defaults["snowflakes_enabled"]) if snowflakes_enabled is None else bool(snowflakes_enabled),
-    )
-    with _warmed_premium_effects_lock:
-        _warmed_premium_effects_cache = plan
-
-
-def peek_warmed_premium_effects() -> AppearancePremiumEffectsPlan | None:
-    with _warmed_premium_effects_lock:
-        return _warmed_premium_effects_cache
-
-
-def clear_warmed_premium_effects_cache() -> None:
-    global _warmed_premium_effects_cache
-    with _warmed_premium_effects_lock:
-        _warmed_premium_effects_cache = None
-
-
 def store_warmed_page_initial_state(state: AppearancePageInitialStatePlan) -> None:
     global _warmed_page_initial_state_cache
     with _warmed_page_initial_state_lock:
@@ -393,12 +326,10 @@ def store_warmed_page_initial_state(state: AppearancePageInitialStatePlan) -> No
     store_warmed_window_opacity(state.window_opacity)
     store_warmed_accent_color(state.accent_color)
     store_warmed_tinted_settings(state.follow_windows_accent, state.tinted_background, state.tinted_intensity)
-    store_warmed_rkn_background(state.rkn_background)
     store_warmed_animations_enabled(state.animations_enabled)
     store_warmed_smooth_scroll_enabled(state.smooth_scroll_enabled)
     store_warmed_editor_smooth_scroll_enabled(state.editor_smooth_scroll_enabled)
     store_warmed_sidebar_icon_style(state.sidebar_icon_style)
-    store_warmed_premium_effects(state.garland_enabled, state.snowflakes_enabled)
 
 
 def clear_warmed_page_initial_state_cache() -> None:
@@ -422,7 +353,6 @@ def build_default_page_initial_state() -> AppearancePageInitialStatePlan:
         display_mode=str(appearance_defaults["display_mode"]),
         ui_language=normalize_language(str(appearance_defaults["ui_language"])),
         background_preset=str(appearance_defaults["background_preset"]),
-        rkn_background=None,
         mica_enabled=bool(appearance_defaults["mica_enabled"]),
         window_opacity=int(window_defaults["opacity"]),
         accent_color=None,
@@ -433,8 +363,6 @@ def build_default_page_initial_state() -> AppearancePageInitialStatePlan:
         smooth_scroll_enabled=bool(appearance_defaults["smooth_scroll_enabled"]),
         editor_smooth_scroll_enabled=bool(appearance_defaults["editor_smooth_scroll_enabled"]),
         sidebar_icon_style=normalize_sidebar_icon_style(str(appearance_defaults["sidebar_icon_style"])),
-        garland_enabled=bool(appearance_defaults["garland_enabled"]),
-        snowflakes_enabled=bool(appearance_defaults["snowflakes_enabled"]),
     )
 
 
@@ -478,7 +406,6 @@ def load_page_initial_state() -> AppearancePageInitialStatePlan:
         display_mode=_plan_str(appearance, "display_mode", appearance_defaults["display_mode"]),
         ui_language=normalize_language(_plan_str(appearance, "ui_language", appearance_defaults["ui_language"])),
         background_preset=_plan_str(appearance, "background_preset", appearance_defaults["background_preset"]),
-        rkn_background=_plan_nullable_str(appearance, "rkn_background"),
         mica_enabled=_plan_bool(appearance, "mica_enabled", bool(appearance_defaults["mica_enabled"])),
         window_opacity=_plan_int(window, "opacity", int(window_defaults["opacity"])),
         accent_color=_plan_nullable_str(appearance, "accent_color"),
@@ -491,8 +418,6 @@ def load_page_initial_state() -> AppearancePageInitialStatePlan:
         sidebar_icon_style=normalize_sidebar_icon_style(
             _plan_str(appearance, "sidebar_icon_style", appearance_defaults["sidebar_icon_style"])
         ),
-        garland_enabled=_plan_bool(appearance, "garland_enabled", bool(appearance_defaults["garland_enabled"])),
-        snowflakes_enabled=_plan_bool(appearance, "snowflakes_enabled", bool(appearance_defaults["snowflakes_enabled"])),
     )
 
 
@@ -780,83 +705,4 @@ def load_windows_system_accent() -> AppearanceAccentColorPlan:
         hex_color = None
     return AppearanceAccentColorPlan(hex_color=hex_color)
 
-def load_rkn_background() -> AppearanceRknBackgroundPlan:
-    try:
-        from settings.store import get_rkn_background
 
-        value = get_rkn_background()
-    except Exception:
-        value = None
-    return AppearanceRknBackgroundPlan(value=value)
-
-def save_rkn_background(value: str | None) -> AppearanceRknBackgroundPlan:
-    normalized = str(value).strip().replace("\\", "/") if value is not None else None
-    try:
-        from settings.store import set_rkn_background
-
-        set_rkn_background(normalized)
-    except Exception:
-        pass
-    store_warmed_rkn_background(normalized)
-    return AppearanceRknBackgroundPlan(value=normalized or None)
-
-def load_premium_effects() -> AppearancePremiumEffectsPlan:
-    try:
-        from settings.store import get_garland_enabled, get_snowflakes_enabled
-
-        garland = bool(get_garland_enabled())
-        snowflakes = bool(get_snowflakes_enabled())
-    except Exception:
-        garland = False
-        snowflakes = False
-    return AppearancePremiumEffectsPlan(
-        garland_enabled=garland,
-        snowflakes_enabled=snowflakes,
-    )
-
-def save_garland_enabled(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_garland_enabled
-
-        set_garland_enabled(bool(enabled))
-    except Exception:
-        pass
-    current = peek_warmed_premium_effects()
-    store_warmed_premium_effects(bool(enabled), None if current is None else current.snowflakes_enabled)
-    return AppearanceTogglePlan(enabled=bool(enabled))
-
-def save_snowflakes_enabled(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_snowflakes_enabled
-
-        set_snowflakes_enabled(bool(enabled))
-    except Exception:
-        pass
-    current = peek_warmed_premium_effects()
-    store_warmed_premium_effects(None if current is None else current.garland_enabled, bool(enabled))
-    return AppearanceTogglePlan(enabled=bool(enabled))
-
-def save_selected_theme(theme_name: str) -> bool:
-    from settings.store import set_selected_theme
-
-    return bool(set_selected_theme(str(theme_name or "").strip()))
-
-def build_premium_status_plan(
-    *,
-    is_premium: bool,
-    current_preset: str,
-    was_garland_enabled: bool,
-    was_snowflakes_enabled: bool,
-    premium_effects: AppearancePremiumEffectsPlan,
-) -> AppearancePremiumStatusPlan:
-    effective_preset = None
-    if not is_premium and current_preset in ("amoled", "rkn_chan"):
-        effective_preset = "standard"
-
-    return AppearancePremiumStatusPlan(
-        effective_preset=effective_preset,
-        garland_checked=premium_effects.garland_enabled if is_premium else False,
-        snowflakes_checked=premium_effects.snowflakes_enabled if is_premium else False,
-        disable_garland=bool((not is_premium) and was_garland_enabled),
-        disable_snowflakes=bool((not is_premium) and was_snowflakes_enabled),
-    )

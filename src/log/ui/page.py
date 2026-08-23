@@ -39,6 +39,8 @@ from log.ui.runtime_helpers import (
     append_error,
     clear_errors,
     compute_errors_text_height,
+    errors_count_text,
+    errors_panel_view,
     render_send_status_label,
 )
 from log.ui.send_build import (
@@ -313,13 +315,9 @@ class LogsPage(BasePage):
         err_bg = "rgba(220, 38, 38, 0.08)" if tokens.is_light else "rgba(248, 113, 113, 0.10)"
         err_border = "rgba(220, 38, 38, 0.25)" if tokens.is_light else "rgba(248, 113, 113, 0.25)"
 
-        if self._warning_icon_label is not None:
-            try:
-                self._warning_icon_label.setPixmap(
-                    get_cached_qta_pixmap('fa5s.exclamation-triangle', color=err_fg, size=16)
-                )
-            except Exception:
-                pass
+        # Значок ставится не здесь: он зависит от того, есть ли ошибки, а
+        # не только от темы. Единственное место — _apply_errors_panel_state.
+        self._apply_errors_panel_state()
 
         # errors_count_label is now a CaptionLabel (Fluent) — no manual style needed
 
@@ -604,15 +602,14 @@ class LogsPage(BasePage):
             try:
                 self.errors_title_label.setText(tr_catalog("page.logs.errors.title", language=self._ui_language, default="Ошибки и предупреждения"))
                 self.clear_errors_btn.setText(tr_catalog("page.logs.button.clear", language=self._ui_language, default="Очистить"))
-                errors_count_text = tr_catalog(
-                    "page.logs.errors.count",
-                    language=self._ui_language,
-                    default="Ошибок: {count}",
-                ).format(
-                    count=max(0, int(self._errors_count))
+                count_text = errors_count_text(
+                    lambda key, default: tr_catalog(
+                        key, language=self._ui_language, default=default
+                    ),
+                    max(0, int(self._errors_count)),
                 )
-                self.errors_count_label.setText(errors_count_text)
-                set_state_text(self.errors_count_label, errors_count_text)
+                self.errors_count_label.setText(count_text)
+                set_state_text(self.errors_count_label, count_text)
             except Exception:
                 pass
 
@@ -823,6 +820,7 @@ class LogsPage(BasePage):
         self.errors_text = logs_widgets.errors_text
 
         self._logs_secondary_initialized = True
+        self._apply_errors_panel_state()
         self._update_errors_text_height()
         self._apply_page_theme(force=True)
         return True
@@ -1579,9 +1577,56 @@ class LogsPage(BasePage):
         except (TypeError, ValueError):
             return False
 
+    def _apply_errors_panel_state(self) -> None:
+        """Приводит панель ошибок в вид, соответствующий числу записей.
+
+        Ошибок нет — зелёная галочка и ничего больше: ни пустой красной
+        рамки, ни кнопки «Очистить», очищать нечего. Появилась ошибка —
+        возвращается красный треугольник, рамка с текстом и кнопка.
+        """
+        icon_label = getattr(self, "_warning_icon_label", None)
+        errors_text = getattr(self, "errors_text", None)
+        clear_btn = getattr(self, "clear_errors_btn", None)
+        if icon_label is None and errors_text is None:
+            return
+
+        try:
+            tokens = get_theme_tokens()
+            is_light = bool(tokens.is_light)
+        except Exception:
+            is_light = False
+
+        view = errors_panel_view(count=int(getattr(self, "_errors_count", 0)), is_light=is_light)
+
+        if icon_label is not None:
+            try:
+                icon_label.setPixmap(
+                    get_cached_qta_pixmap(view.icon_name, color=view.icon_color, size=16)
+                )
+            except Exception:
+                pass
+
+        if errors_text is not None:
+            errors_text.setVisible(view.show_text)
+
+        if clear_btn is not None:
+            clear_btn.setVisible(view.show_clear_button)
+
+        count_label = getattr(self, "errors_count_label", None)
+        if count_label is not None:
+            text = errors_count_text(
+                lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
+                int(getattr(self, "_errors_count", 0)),
+            )
+            count_label.setText(text)
+            set_state_text(count_label, text)
+
     def _update_errors_text_height(self):
         """Подстраивает высоту панели ошибок под содержимое."""
         if not hasattr(self, "errors_text") or self.errors_text is None:
+            return
+        if not self.errors_text.isVisible() and int(getattr(self, "_errors_count", 0)) <= 0:
+            # Скрытая рамка не должна резервировать высоту под себя.
             return
         target_height = compute_errors_text_height(
             text_edit=self.errors_text,
@@ -1603,6 +1648,9 @@ class LogsPage(BasePage):
             current_count=self._errors_count,
             text=text,
         )
+        # Порядок важен: рамку сначала надо показать, иначе высоту
+        # считать не по чему.
+        self._apply_errors_panel_state()
         self._update_errors_text_height()
         
         # Автопрокрутка
@@ -1618,6 +1666,7 @@ class LogsPage(BasePage):
             errors_count_label=self.errors_count_label,
             tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
         )
+        self._apply_errors_panel_state()
         self._update_errors_text_height()
         self._set_info_text(
             tr_catalog(

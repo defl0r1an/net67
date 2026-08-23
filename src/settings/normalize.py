@@ -5,10 +5,8 @@ from typing import Any
 
 from settings import schema
 from settings.mode import (
-    SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1,
     SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2,
 )
-
 
 
 def _as_panel_side(value, default: str) -> str:
@@ -268,11 +266,6 @@ def normalize_lookup_key(value: object) -> str:
     return as_clean_str(value).lower()
 
 
-def normalize_askey(value: object) -> str:
-    normalized = as_clean_str(value).lower()
-    return normalized if normalized in schema.ORCHESTRA_ASKEYS else "tls"
-
-
 def normalize_program(data: object) -> dict[str, Any]:
     raw = as_dict(data)
     defaults = schema.default_program()
@@ -280,10 +273,6 @@ def normalize_program(data: object) -> dict[str, Any]:
         "dpi_autostart": as_bool(raw.get("dpi_autostart"), defaults["dpi_autostart"]),
         "gui_autostart_enabled": as_bool(raw.get("gui_autostart_enabled"), defaults["gui_autostart_enabled"]),
         "strategy_launch_method": as_str_in(raw.get("strategy_launch_method"), schema.VALID_LAUNCH_METHODS, defaults["strategy_launch_method"]),
-        SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1: as_clean_str(
-            raw.get(SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1),
-            defaults[SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS1],
-        ),
         SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2: as_clean_str(
             raw.get(SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2),
             defaults[SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2],
@@ -335,7 +324,6 @@ def normalize_appearance(data: object) -> dict[str, Any]:
             maximum=schema.MAX_TINTED_INTENSITY,
         ),
         "background_preset": as_str_in(raw.get("background_preset"), schema.VALID_BACKGROUND_PRESETS, defaults["background_preset"]),
-        "rkn_background": as_nullable_str(raw.get("rkn_background")),
         "animations_enabled": as_bool(raw.get("animations_enabled"), defaults["animations_enabled"]),
         "smooth_scroll_enabled": as_bool(raw.get("smooth_scroll_enabled"), defaults["smooth_scroll_enabled"]),
         "editor_smooth_scroll_enabled": as_bool(raw.get("editor_smooth_scroll_enabled"), defaults["editor_smooth_scroll_enabled"]),
@@ -344,9 +332,6 @@ def normalize_appearance(data: object) -> dict[str, Any]:
             schema.VALID_SIDEBAR_ICON_STYLES,
             defaults["sidebar_icon_style"],
         ),
-        "garland_enabled": as_bool(raw.get("garland_enabled"), defaults["garland_enabled"]),
-        "snowflakes_enabled": as_bool(raw.get("snowflakes_enabled"), defaults["snowflakes_enabled"]),
-        "selected_theme": as_clean_str(raw.get("selected_theme"), defaults["selected_theme"]),
     }
 
 
@@ -433,21 +418,6 @@ def normalize_hosts(data: object) -> dict[str, Any]:
         "bootstrap_signature": as_nullable_str(raw.get("bootstrap_signature")),
         "active_domains": unique_str_list(raw.get("active_domains")),
         "selection": selection,
-    }
-
-
-def normalize_premium(data: object) -> dict[str, Any]:
-    raw = as_dict(data)
-    cache = raw.get("premium_cache")
-    pair_code = as_clean_str(raw.get("pair_code")).upper()
-    return {
-        "device_id": as_clean_str(raw.get("device_id")),
-        "device_token": as_nullable_str(raw.get("device_token")),
-        "last_check": as_nullable_str(raw.get("last_check")),
-        "last_network_failure_ts": as_nullable_int(raw.get("last_network_failure_ts")),
-        "pair_code": pair_code or None,
-        "pair_expires_at": as_nullable_int(raw.get("pair_expires_at")),
-        "premium_cache": cache if isinstance(cache, dict) else None,
     }
 
 
@@ -541,106 +511,6 @@ def normalize_user_profiles(data: object) -> dict[str, Any]:
     return {
         "version": 1,
         "profiles": profiles,
-    }
-
-
-def normalize_orchestra_settings(data: object) -> dict[str, Any]:
-    raw = as_dict(data)
-    defaults = schema.default_orchestra_settings()
-    return {
-        "strict_detection": as_bool(raw.get("strict_detection"), defaults["strict_detection"]),
-        "keep_debug_file": as_bool(raw.get("keep_debug_file"), defaults["keep_debug_file"]),
-        "auto_restart_on_discord_fail": as_bool(
-            raw.get("auto_restart_on_discord_fail"),
-            defaults["auto_restart_on_discord_fail"],
-        ),
-        "discord_fails_for_restart": as_int(
-            raw.get("discord_fails_for_restart"),
-            defaults["discord_fails_for_restart"],
-            minimum=1,
-        ),
-        "lock_successes": as_int(raw.get("lock_successes"), defaults["lock_successes"], minimum=1),
-        "unlock_fails": as_int(raw.get("unlock_fails"), defaults["unlock_fails"], minimum=1),
-    }
-
-
-def normalize_orchestra_locked_maps(data: object) -> dict[str, dict[str, int]]:
-    raw = as_dict(data)
-    normalized: dict[str, dict[str, int]] = {}
-    for askey in schema.ORCHESTRA_ASKEYS:
-        source = as_dict(raw.get(askey))
-        entries: dict[str, int] = {}
-        for lookup_key, strategy in source.items():
-            target = normalize_lookup_key(lookup_key)
-            if not target:
-                continue
-            entries[target] = as_int(strategy, 0, minimum=0)
-        normalized[askey] = entries
-    return normalized
-
-
-def normalize_orchestra_user_locked_maps(data: object) -> dict[str, list[str]]:
-    raw = as_dict(data)
-    normalized: dict[str, list[str]] = {}
-    for askey in schema.ORCHESTRA_ASKEYS:
-        values = unique_str_list(raw.get(askey))
-        normalized[askey] = [normalize_lookup_key(item) for item in values if normalize_lookup_key(item)]
-    return normalized
-
-
-def normalize_orchestra_user_blocked_maps(data: object) -> dict[str, dict[str, list[int]]]:
-    raw = as_dict(data)
-    normalized: dict[str, dict[str, list[int]]] = {}
-    for askey in schema.ORCHESTRA_ASKEYS:
-        source = as_dict(raw.get(askey))
-        entries: dict[str, list[int]] = {}
-        for lookup_key, strategies in source.items():
-            target = normalize_lookup_key(lookup_key)
-            if not target:
-                continue
-            entries[target] = unique_int_list(strategies)
-        normalized[askey] = entries
-    return normalized
-
-
-def normalize_orchestra_history(data: object) -> dict[str, Any]:
-    raw = as_dict(data)
-    normalized: dict[str, dict[str, dict[str, int]]] = {}
-    for lookup_key, strategies in raw.items():
-        target = normalize_lookup_key(lookup_key)
-        if not target:
-            continue
-        strategies_raw = as_dict(strategies)
-        strategies_out: dict[str, dict[str, int]] = {}
-        for strategy_key, metrics in strategies_raw.items():
-            strategy_name = as_clean_str(strategy_key)
-            if not strategy_name:
-                continue
-            metrics_raw = as_dict(metrics)
-            strategies_out[strategy_name] = {
-                "successes": as_int(metrics_raw.get("successes"), 0, minimum=0),
-                "failures": as_int(metrics_raw.get("failures"), 0, minimum=0),
-            }
-        normalized[target] = strategies_out
-    return normalized
-
-
-def normalize_orchestra(data: object) -> dict[str, Any]:
-    raw = as_dict(data)
-    whitelist_raw = as_dict(raw.get("whitelist"))
-    return {
-        "settings": normalize_orchestra_settings(raw.get("settings")),
-        "whitelist": {
-            "user_domains": [
-                normalize_lookup_key(item)
-                for item in unique_str_list(whitelist_raw.get("user_domains"))
-                if normalize_lookup_key(item)
-            ],
-        },
-        "locked": normalize_orchestra_locked_maps(raw.get("locked")),
-        "user_locked": normalize_orchestra_user_locked_maps(raw.get("user_locked")),
-        "user_blocked": normalize_orchestra_user_blocked_maps(raw.get("user_blocked")),
-        "history": normalize_orchestra_history(raw.get("history")),
     }
 
 
@@ -743,11 +613,9 @@ def normalize_settings(data: object) -> dict[str, Any]:
         "telegram_proxy": normalize_telegram_proxy(raw.get("telegram_proxy")),
         "dns": normalize_dns(raw.get("dns")),
         "hosts": normalize_hosts(raw.get("hosts")),
-        "premium": normalize_premium(raw.get("premium")),
         "ui_state": normalize_ui_state(raw.get("ui_state")),
         "profile_strategy_state": normalize_profile_strategy_state(raw.get("profile_strategy_state")),
         "user_profiles": normalize_user_profiles(raw.get("user_profiles")),
-        "orchestra": normalize_orchestra(raw.get("orchestra")),
         "updater": normalize_updater(raw.get("updater")),
         "blockcheck": normalize_blockcheck(raw.get("blockcheck")),
         "folders": normalize_folders(raw.get("folders")),

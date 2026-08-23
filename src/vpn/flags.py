@@ -93,7 +93,6 @@ COUNTRY_NAMES: dict[str, tuple[str, ...]] = {
     "EE": ("эстония", "estonia"),
     "CZ": ("чехия", "czech"),
     "RO": ("румыния", "romania"),
-    "MD": ("молдова", "moldova"),
     "AM": ("армения", "armenia"),
     "KZ": ("казахстан", "kazakhstan"),
     "RU": ("россия", "russia"),

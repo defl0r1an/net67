@@ -214,7 +214,6 @@ __all__ = [
     "build_hosts_page_kwargs",
     "build_logs_page_kwargs",
     "build_network_page_kwargs",
-    "build_premium_page_kwargs",
     "build_servers_page_kwargs",
     "build_winws_log_analyzer_page_kwargs",
     "build_support_page_kwargs",

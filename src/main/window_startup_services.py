@@ -5,16 +5,18 @@ import time
 from log.log import log
 
 
-def init_theme_manager(app, *, appearance_feature) -> None:
+def init_theme_manager(app) -> None:
     started_at = time.perf_counter()
 
     from PyQt6.QtWidgets import QApplication
     from ui.theme import ThemeManager
 
+    # appearance_feature больше не нужен: менеджер темы сохранял выбор в
+    # appearance.selected_theme, а этот ключ никто никогда не читал.
+    # Светлая или тёмная тема живёт в appearance.display_mode.
     app.visual_state.theme_manager = ThemeManager(
         app=QApplication.instance(),
         widget=app,
-        create_theme_persist_worker=appearance_feature.create_theme_persist_worker,
     )
 
     current_theme = app.visual_state.theme_manager.current_theme

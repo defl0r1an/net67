@@ -26,7 +26,6 @@ def build_initial_ui_state() -> AppUiState:
             store_warmed_background_preset,
             store_warmed_editor_smooth_scroll_enabled,
             store_warmed_mica_enabled,
-            store_warmed_rkn_background,
             store_warmed_sidebar_icon_style,
             store_warmed_smooth_scroll_enabled,
             store_warmed_tinted_settings,
@@ -44,7 +43,6 @@ def build_initial_ui_state() -> AppUiState:
             appearance.get("tinted_background"),
             appearance.get("tinted_background_intensity"),
         )
-        store_warmed_rkn_background(appearance.get("rkn_background"))
         store_warmed_animations_enabled(appearance.get("animations_enabled"))
         store_warmed_smooth_scroll_enabled(appearance.get("smooth_scroll_enabled"))
         store_warmed_editor_smooth_scroll_enabled(appearance.get("editor_smooth_scroll_enabled"))
