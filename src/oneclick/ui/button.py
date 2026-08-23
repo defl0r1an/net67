@@ -80,6 +80,13 @@ def _refresh_hero_icon(button, state) -> None:
 #: строке, то есть комфортная длина для чтения.
 TEXT_COLUMN_WIDTH = 420
 
+#: Ниже этой ширины колонку не сжимаем — иначе строка снова рвётся в
+#: столбик.
+TEXT_COLUMN_MIN_WIDTH = 160
+
+#: Отступ от краёв окна, который колонка обязана оставить.
+TEXT_COLUMN_SIDE_PADDING = 24
+
 
 #: В этих состояниях кнопка занята и нажатие игнорируется.
 _BUSY = (OneClickState.PREPARING, OneClickState.CHECKING)
@@ -154,17 +161,22 @@ class OneClickButton(QWidget):
         # Строка «Сейчас откроется Telegram и предложит включить прокси
         # net67 — подтвердите в его окне» рвалась там по два слова в
         # строку и вылезала за пределы колонки.
+        # Ширина не жёсткая, а пересчитывается в resizeEvent. Жёсткие 420
+        # пикселей переживали не всякое окно: в простом виде и на узком
+        # экране колонка оказывалась шире самой страницы, и длинные
+        # сообщения — «Telegram Desktop не запущен, поэтому прокси не
+        # поднимался...» — уезжали за рамку.
         self.state_label = BodyLabel(_STATE_TEXT[OneClickState.OFF])
         self.state_label.setWordWrap(True)
         self.state_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self.state_label.setFixedWidth(TEXT_COLUMN_WIDTH)
         layout.addWidget(self.state_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.detail_label = QLabel("")
         self.detail_label.setWordWrap(True)
         self.detail_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self.detail_label.setFixedWidth(TEXT_COLUMN_WIDTH)
         layout.addWidget(self.detail_label, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self._apply_text_column_width(TEXT_COLUMN_WIDTH)
 
         # Сколько защита уже работает. Отсчёт идёт от момента входа в
         # состояние RUNNING, а не от запуска программы: человека
@@ -203,6 +215,29 @@ class OneClickButton(QWidget):
         self._apply_state(OneClickState.OFF, "")
 
     # ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def text_column_width_for(available_width: int) -> int:
+        """Ширина колонки с подписями при такой ширине окна.
+
+        Колонка не шире 420 пикселей (комфортная строка для чтения), не
+        шире доступного места за вычетом полей и не уже 160 — на этом
+        пороге строка начинает рваться в столбик, что читается хуже
+        любого переполнения.
+        """
+        room = int(available_width) - TEXT_COLUMN_SIDE_PADDING
+        if room < TEXT_COLUMN_MIN_WIDTH:
+            return TEXT_COLUMN_MIN_WIDTH
+        return min(TEXT_COLUMN_WIDTH, room)
+
+    def _apply_text_column_width(self, width: int) -> None:
+        for label in (self.state_label, self.detail_label):
+            if label.width() != width:
+                label.setFixedWidth(width)
+
+    def resizeEvent(self, event):  # noqa: N802 — имя от Qt
+        super().resizeEvent(event)
+        self._apply_text_column_width(self.text_column_width_for(self.width()))
 
     def _apply_theme(self) -> None:
         tokens = get_theme_tokens()

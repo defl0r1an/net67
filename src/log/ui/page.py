@@ -132,7 +132,17 @@ def update_logs_tabs_accessibility(pivot, *, current: object | None = None, lang
 class LogsPage(BasePage):
     """Страница просмотра логов"""
     
-    def __init__(self, parent=None, *, logs_feature, orchestra_feature):
+    def __init__(self, parent=None, *, logs_feature, orchestra_feature=None):
+        # orchestra_feature больше не обязателен.
+        #
+        # Оркестратор из программы вырезан, и фабрика страниц его давно
+        # не передаёт — а здесь он остался обязательным. Открытие раздела
+        # «Логи» падало с «missing 1 required keyword-only argument».
+        #
+        # Значение по умолчанию, а не удаление параметра: так страница
+        # переживает и вызов со старой сигнатурой, если такой где-то
+        # остался. Индикатор оркестратора при этом всё равно не
+        # показывается — is_orchestra_launch_method отвечает False.
         super().__init__(
             "Логи",
             "Просмотр логов приложения в реальном времени",
@@ -871,7 +881,10 @@ class LogsPage(BasePage):
             return ""
 
     def _get_orchestra_runner(self):
-        return self._orchestra.runner
+        # Оркестратора может не быть вовсе — тогда и запускать нечего.
+        if self._orchestra is None:
+            return None
+        return getattr(self._orchestra, "runner", None)
 
     def _get_orchestra_log_path(self) -> str:
         """

@@ -11,6 +11,7 @@ from blockcheck.strategy_scan_targeting import (
     stun_target_parts,
 )
 from config.runtime_layout import APPLICATION_PATHS
+from profile.winws2_preset_source import preset_path_value
 
 
 def _line_option_values(line: str) -> list[str]:
@@ -250,7 +251,9 @@ def apply_strategy(
         new_strategy_lines = [
             "--wf-udp-out=443,50000-65535",
             "--filter-udp=443,50000-65535",
-            *[f"--ipset={path}" for path in games_ipset_paths],
+            # Пути пишутся относительными: файл параметров winws2 режется по
+            # пробелам, а «C:\\Program Files\\net67» на этом разваливается.
+            *[f"--ipset={preset_path_value(path)}" for path in games_ipset_paths],
             strategy_args,
         ]
         shown_paths = ", ".join(games_ipset_paths[:3])

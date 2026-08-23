@@ -35,6 +35,53 @@ EXTENSION_LUA_INITS: dict[str, set[str]] = {
     },
 }
 
+def preset_path_value(path, base_dir=None) -> str:
+    """Путь в том виде, в каком его переживёт файл параметров winws2.
+
+    Движок разбирает файл параметров по пробелам и кавычек не понимает.
+    Абсолютный путь вида `C:\\Program Files\\net67\\lists\\ipset-all.txt`
+    разваливается на два куска, и запуск падает с «failed to split command
+    line options from file». Встроенные пресеты поэтому и пишут `lists/...`
+    — относительно каталога программы, откуда движок и запускается.
+
+    Путь приводится к относительному от base_dir (по умолчанию — корень
+    установки). Если это невозможно (другой диск, каталог вне программы),
+    возвращается исходный путь: сломать его сильнее нельзя, а на путях без
+    пробелов он работает.
+    """
+    text = str(path or "")
+    if not text:
+        return text
+
+    if base_dir is None:
+        try:
+            from config.runtime_layout import APPLICATION_PATHS
+
+            base_dir = str(APPLICATION_PATHS.root)
+        except Exception:
+            return text
+
+    # Разбор путей берётся под стиль самого пути, а не под систему, где
+    # выполняется код. Программа живёт на Windows, но тесты гоняются и на
+    # Linux, где posixpath не видит в `C:\...\lists` ни разделителей, ни
+    # диска и возвращает путь целиком — вместе с пробелом, ради которого
+    # всё и затевалось.
+    import ntpath
+    import posixpath
+
+    module = ntpath if ("\\" in text or ntpath.splitdrive(text)[0]) else posixpath
+
+    try:
+        relative = module.relpath(text, str(base_dir))
+    except ValueError:
+        return text
+
+    if relative.startswith(".."):
+        return text
+
+    return relative.replace("\\", "/")
+
+
 _LUA_DESYNC_FUNC_RE = re.compile(r"--lua-desync=([a-z0-9_]+)", re.IGNORECASE)
 _LUA_INIT_RE = re.compile(r"--lua-init=@?(.+)", re.IGNORECASE)
 _STRATEGY_TAG_RE = re.compile(r":strategy=\d+", re.IGNORECASE)

@@ -39,7 +39,7 @@ from blockcheck.models import TestStatus
 from blockcheck.scan_models import StrategyProbeResult, StrategyScanReport
 from blockcheck.stun_tester import test_stun
 from config.runtime_layout import APPLICATION_PATHS
-from profile.winws2_preset_source import WINWS2_LUA_INIT_LINES
+from profile.winws2_preset_source import WINWS2_LUA_INIT_LINES, preset_path_value
 from settings.mode import (
     ENGINE_WINWS2,
     EXE_NAME_WINWS2,
@@ -1384,6 +1384,16 @@ class StrategyScanner:
 
         return found
 
+    def _preset_path_value(self, path: str) -> str:
+        """Путь для файла параметров winws2 — относительно рабочего каталога.
+
+        Процесс запускается с cwd=self._work_dir, поэтому относительный путь
+        движок найдёт. Абсолютный же разваливается по пробелу в
+        `C:\\Program Files\\net67` — движок не понимает кавычек и падает с
+        «failed to split command line options from file».
+        """
+        return preset_path_value(path, self._work_dir)
+
     def _build_games_ipset_temp_file(self) -> str:
         """Build merged temporary game ipset file and return path to use."""
         if self._games_ipset_compiled_path and os.path.exists(self._games_ipset_compiled_path):
@@ -1470,7 +1480,7 @@ class StrategyScanner:
             lines.append("")
 
             lines.append(f"--filter-udp={_UDP_GAMES_PORT_FILTER}")
-            lines.append(f"--ipset={games_ipset_path}")
+            lines.append(f"--ipset={self._preset_path_value(games_ipset_path)}")
             lines.append("")
         else:
             # WinDivert filter
@@ -1479,7 +1489,7 @@ class StrategyScanner:
 
             # Filter + hostlist + range
             lines.append("--filter-tcp=443")
-            lines.append(f"--hostlist={hostlist_path}")
+            lines.append(f"--hostlist={self._preset_path_value(hostlist_path)}")
             lines.append("--out-range=-d8")
             lines.append("")
 
