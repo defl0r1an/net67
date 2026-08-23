@@ -96,8 +96,8 @@ def apply_profile_language(
     )
 
     auto_dpi_toggle.set_texts(
-        tr_catalog("page.winws2_control.setting.autostart.title", language=language, default="Автозапуск DPI после старта программы"),
-        tr_catalog("page.winws2_control.setting.autostart.desc", language=language, default="После запуска net67 автоматически запускать текущий DPI-режим"),
+        tr_catalog("page.winws2_control.setting.autostart.title", language=language, default="Автозапуск обхода после старта программы"),
+        tr_catalog("page.winws2_control.setting.autostart.desc", language=language, default="После запуска net67 сразу включать обход с текущим пресетом"),
     )
     if gui_autostart_toggle is not None:
         gui_autostart_toggle.set_texts(

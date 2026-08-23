@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, PrimaryPushButton
 
 from log.log import log
+from oneclick.autostart import initial_button_state
 from oneclick.state import OneClickState
 from ui.accessibility import set_control_accessibility, set_state_text
 from ui.theme import get_theme_tokens
@@ -79,6 +80,14 @@ def _refresh_hero_icon(button, state) -> None:
 #: рвалось там по два слова в строку. 420 — примерно шестьдесят знаков в
 #: строке, то есть комфортная длина для чтения.
 TEXT_COLUMN_WIDTH = 420
+
+#: Через сколько после появления кнопки сверяемся с состоянием обхода.
+#:
+#: Не сразу: конструктор кнопки выполняется во время сборки страницы, и
+#: обращаться к рантайму оттуда рано. Небольшая задержка даёт автозапуску
+#: обхода уже подняться, чтобы кнопка сразу показала правильное «Обход
+#: включён», а не «выключен».
+AUTOSTART_DELAY_MS = 900
 
 #: Ниже этой ширины колонку не сжимаем — иначе строка снова рвётся в
 #: столбик.
@@ -214,7 +223,43 @@ class OneClickButton(QWidget):
         self._apply_theme()
         self._apply_state(OneClickState.OFF, "")
 
+        # Сверка с реальным состоянием обхода. Автозапуск включает обход
+        # ещё до появления кнопки, и без этой сверки под кругом висело бы
+        # «Обход выключен», хотя он работает.
+        QTimer.singleShot(AUTOSTART_DELAY_MS, self._sync_initial_state)
+
     # ──────────────────────────────────────────────────────────────────
+
+    def _sync_initial_state(self) -> None:
+        """Показывает «Обход включён», если он уже работает.
+
+        Не запускает ничего сама: обход на старте поднимает координатор
+        (в том числе в свёрнутом окне). Кнопка лишь отражает факт.
+        """
+        if self._state in _BUSY or self._state is OneClickState.RUNNING:
+            return
+
+        feature = None
+        if callable(self._get_runtime_feature):
+            try:
+                feature = self._get_runtime_feature()
+            except Exception as exc:
+                log(f"Кнопка обхода: подсистема недоступна: {exc}", "DEBUG")
+
+        running = False
+        if feature is not None:
+            try:
+                running = bool(feature.is_any_running(silent=True))
+            except TypeError:
+                try:
+                    running = bool(feature.is_any_running())
+                except Exception:
+                    running = False
+            except Exception:
+                running = False
+
+        if initial_button_state(bypass_running=running) is OneClickState.RUNNING:
+            self._apply_state(OneClickState.RUNNING, "")
 
     @staticmethod
     def text_column_width_for(available_width: int) -> int:
@@ -483,9 +528,23 @@ class OneClickButton(QWidget):
             return
 
         enable = self._state is not OneClickState.RUNNING
+        self._start_worker(enable=enable, feature=feature)
+
+    def _start_worker(self, *, enable: bool, feature) -> None:
+        """Запускает включение или выключение в отдельном потоке.
+
+        Общий путь для нажатия и для автозапуска: разными они были ровно
+        до тех пор, пока автозапуск не начал делать не то же самое.
+        """
+        if feature is None:
+            self._apply_state(OneClickState.ERROR, "Подсистема запуска недоступна")
+            return
+        if self._worker is not None and self._worker.isRunning():
+            return
+
         self._apply_state(OneClickState.PREPARING, "")
 
-        worker = _OneClickWorker(enable=enable, runtime_feature=feature, parent=self)
+        worker = _OneClickWorker(enable=bool(enable), runtime_feature=feature, parent=self)
         worker.progress.connect(self._on_progress)
         worker.finished_with.connect(self._on_finished)
         # Какой именно поток завершился — обязательный параметр. Без него

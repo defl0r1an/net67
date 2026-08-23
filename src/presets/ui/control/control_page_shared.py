@@ -479,7 +479,7 @@ class ControlPageActionMixin:
                 from qfluentwidgets import InfoBar
 
                 InfoBar.success(
-                    title=str(getattr(result, "title", "Автозапуск DPI") or "Автозапуск DPI"),
+                    title=str(getattr(result, "title", "Автозапуск обхода") or "Автозапуск обхода"),
                     content=str(getattr(result, "message", "") or ""),
                     parent=self.window(),
                 )

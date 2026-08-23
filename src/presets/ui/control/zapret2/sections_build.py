@@ -78,8 +78,8 @@ def build_winws2_pages_settings_sections(
     with timer.step("auto_dpi_toggle"):
         auto_dpi_toggle = win11_toggle_row_cls(
             "fa5s.bolt",
-            tr_fn("page.winws2_control.setting.autostart.title", "Автозапуск DPI после старта программы"),
-            tr_fn("page.winws2_control.setting.autostart.desc", "После запуска net67 автоматически запускать текущий DPI-режим"),
+            tr_fn("page.winws2_control.setting.autostart.title", "Автозапуск обхода после старта программы"),
+            tr_fn("page.winws2_control.setting.autostart.desc", "После запуска net67 сразу включать обход с текущим пресетом"),
         )
     auto_dpi_toggle.toggled.connect(on_auto_dpi_toggled)
 

@@ -222,12 +222,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Active strategy",
     },
     "page.control.setting.autostart.title": {
-        "ru": "Автозапуск DPI после старта программы",
-        "en": "Auto-start DPI after app launch",
+        "ru": "Автозапуск обхода после старта программы",
+        "en": "Start bypass automatically after app launch",
     },
     "page.control.setting.autostart.desc": {
-        "ru": "После запуска net67 автоматически запускать текущий DPI-режим",
-        "en": "Automatically start the current DPI mode after net67 launches",
+        "ru": "После запуска net67 сразу включать обход с текущим пресетом",
+        "en": "Turn the bypass on with the current preset right after net67 starts",
     },
     "page.control.setting.gui_autostart.title": {
         "ru": "Автозапуск net67",
@@ -358,12 +358,12 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Open",
     },
     "page.winws1_control.setting.autostart.title": {
-        "ru": "Автозапуск DPI после старта программы",
-        "en": "Auto-start DPI after app launch",
+        "ru": "Автозапуск обхода после старта программы",
+        "en": "Start bypass automatically after app launch",
     },
     "page.winws1_control.setting.autostart.desc": {
-        "ru": "После запуска net67 автоматически запускать текущий DPI-режим",
-        "en": "Automatically start the current DPI mode after net67 launches",
+        "ru": "После запуска net67 сразу включать обход с текущим пресетом",
+        "en": "Turn the bypass on with the current preset right after net67 starts",
     },
     "page.winws1_control.card.advanced": {
         "ru": "Дополнительные настройки",
@@ -4032,16 +4032,16 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
         "en": "🧹 Errors cleared",
     },
     "page.winws2_control.setting.autostart.title": {
-        "ru": "Автозапуск DPI после старта программы",
-        "en": "Auto-start DPI after app launch",
+        "ru": "Автозапуск обхода после старта программы",
+        "en": "Start bypass automatically after app launch",
     },
     "page.winws2_control.setting.autostart.desc": {
-        "ru": "После запуска net67 автоматически запускать текущий DPI-режим",
-        "en": "Automatically start the current DPI mode after net67 launches",
+        "ru": "После запуска net67 сразу включать обход с текущим пресетом",
+        "en": "Turn the bypass on with the current preset right after net67 starts",
     },
     "page.winws2_control.strategy.autostart_disabled": {
-        "ru": "Автозапуск DPI после старта программы отключён",
-        "en": "Auto-start DPI after app launch is disabled",
+        "ru": "Автозапуск обхода после старта программы отключён",
+        "en": "Automatic bypass start is disabled",
     },
 }
 

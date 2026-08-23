@@ -24,7 +24,7 @@ Write-Host "[1/6] Checking generated files" -ForegroundColor Cyan
 
 $buildInfo = Join-Path $Root "src\config\build_info.py"
 if (-not (Test-Path $buildInfo)) {
-    $lines = @('APP_VERSION = "0.8.67"', 'CHANNEL = "stable"')
+    $lines = @('APP_VERSION = "0.9.67"', 'CHANNEL = "stable"')
     Set-Content -Path $buildInfo -Value $lines -Encoding UTF8
     Write-Host "      created build_info.py" -ForegroundColor Yellow
 }
@@ -280,6 +280,23 @@ if ($missing.Count -gt 0) {
     throw ("DPI engine files are missing from the artifact: " + ($missing -join ", "))
 }
 Write-Host "      engine: winws.exe, winws2.exe, WinDivert, lua, lists, bin - ok"
+
+# The wiki must have a home page, not just a pile of stylesheets.
+#
+# A failed Quartz rebuild leaves the output folder half-written: the CSS
+# survives, every .html except 404 is gone. The copy above then happily
+# ships that, the docs folder looks populated, and the "Documentation"
+# button opens nothing. Caught the hard way - checking the folder exists
+# was not enough.
+$docsIndex = Join-Path $Artifact "docs\index.html"
+if (-not (Test-Path $docsIndex)) {
+    throw "Wiki is broken: docs\index.html is missing. Rebuild it with wiki\Пересобрать сайт.cmd"
+}
+$docsPages = @(Get-ChildItem -Path (Join-Path $Artifact "docs") -Filter "*.html" -Force)
+if ($docsPages.Count -lt 10) {
+    throw ("Wiki looks truncated: only " + $docsPages.Count + " html pages in docs. Rebuild it with wiki\Пересобрать сайт.cmd")
+}
+Write-Host ("      docs: " + $docsPages.Count + " pages - ok")
 
 Write-Host "[6/6] Done" -ForegroundColor Green
 Write-Host ""

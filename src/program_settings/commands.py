@@ -21,12 +21,13 @@ class ProgramSettingActionResult:
 
 
 def is_user_admin() -> bool:
-    try:
-        import ctypes
+    # Через токен процесса, а не через IsUserAnAdmin: старый вызов
+    # возвращал 0 у повышенного процесса, и отключение Windows Defender
+    # упиралось в «Требуются права администратора» всегда. См.
+    # startup/admin_rights.py.
+    from startup.admin_rights import is_admin
 
-        return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
-        return False
+    return bool(is_admin())
 
 
 def is_auto_dpi_enabled() -> bool:
@@ -54,12 +55,12 @@ def set_auto_dpi_enabled(
     message = (
         "DPI будет запускаться автоматически после старта net67"
         if enabled
-        else "Автозапуск DPI после старта программы отключён"
+        else "Автозапуск обхода после старта программы отключён"
     )
     return AutoDpiUpdateResult(
         enabled=bool(enabled),
         message=message,
-        title="Автозапуск DPI после старта программы",
+        title="Автозапуск обхода после старта программы",
     )
 
 

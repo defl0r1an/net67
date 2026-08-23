@@ -48,7 +48,7 @@ jobs:
         run: |
           import os, pathlib, re
 
-          FALLBACK_VERSION = "0.8.67"
+          FALLBACK_VERSION = "0.9.67"
 
           # Версия берётся из тега релиза: v0.4.67 -> 0.4.67. Так номер
           # в «О программе» и номер выпуска на GitHub не разъезжаются —
@@ -253,6 +253,22 @@ jobs:
             throw "В артефакте $($lists.Count) списков хостов вместо сотни с лишним. Обход не заработает."
           }
           Write-Host "Списков хостов: $($lists.Count)"
+
+          # Вика. У неё обязана быть главная страница, а не только стили.
+          #
+          # Неудачная пересборка Quartz оставляет папку недописанной: css
+          # на месте, а все .html кроме 404 пропали. Копирование выше
+          # такое переносит охотно, папка docs выглядит наполненной, а
+          # кнопка «Документация» открывает пустоту. Один раз уже уехало.
+          $docsIndex = Join-Path $artifact "docs\index.html"
+          if (-not (Test-Path -LiteralPath $docsIndex -PathType Leaf)) {
+            throw "Вика битая: нет docs\index.html. Пересоберите её через wiki\Пересобрать сайт.cmd"
+          }
+          $docsPages = @(Get-ChildItem (Join-Path $artifact "docs") -Filter *.html -ErrorAction SilentlyContinue)
+          if ($docsPages.Count -lt 10) {
+            throw "Вика урезана: $($docsPages.Count) страниц вместо полутора десятков."
+          }
+          Write-Host "Страниц документации: $($docsPages.Count)"
 
       - name: Build installer
         shell: pwsh

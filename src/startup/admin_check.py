@@ -5,11 +5,20 @@ from log.log import log
 
 
 def is_admin():
-    """Проверяет, запущено ли приложение с правами администратора"""
+    """Проверяет, запущено ли приложение с правами администратора.
+
+    Через токен процесса (см. startup/admin_rights.py), а не через один
+    IsUserAnAdmin: последний у повышенного процесса иногда возвращает 0.
+    """
     try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
+        from startup.admin_rights import is_admin as _is_admin
+
+        return bool(_is_admin())
+    except Exception:
+        try:
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            return False
 
 def request_admin_restart(
     *,
