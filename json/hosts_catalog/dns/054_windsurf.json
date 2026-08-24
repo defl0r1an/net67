@@ -1,0 +1,135 @@
+{
+  "name": "Windsurf",
+  "domains": [
+    {
+      "host": "codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "76.76.21.21",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "codeiumdata.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "45.155.204.190",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "inference.codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "192.34.20.166",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "marketplace.windsurf.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.223.238.178",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "server.codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.223.238.178",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "unleash.codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.223.238.178",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "web-backend.codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.223.238.178",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "windsurf-stable.codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.223.238.178",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "windsurf-telemetry.codeium.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.223.238.178",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "windsurf.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "76.76.21.21",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

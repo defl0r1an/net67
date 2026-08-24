@@ -1,0 +1,77 @@
+{
+  "name": "WhatsApp (работает обход если есть IPv6)",
+  "hosts": [
+    {
+      "ip": "2a03:2880:f37a:120:face:b00c:0:167",
+      "host": "www.whatsapp.com"
+    },
+    {
+      "ip": "2a03:2880:f36f:120:face:b00c:0:167",
+      "host": "www.whatsapp.com"
+    },
+    {
+      "ip": "57.144.245.32",
+      "host": "www.whatsapp.com"
+    },
+    {
+      "ip": "57.144.223.32",
+      "host": "www.whatsapp.com"
+    },
+    {
+      "ip": "2a03:2880:f36f:120:face:b00c:0:167",
+      "host": "web.whatsapp.com"
+    },
+    {
+      "ip": "2a03:2880:f213:c3:face:b00c:0:167",
+      "host": "web.whatsapp.com"
+    },
+    {
+      "ip": "2a03:2880:f213:c3:face:b00c:0:167",
+      "host": "web.whatsapp.com"
+    },
+    {
+      "ip": "57.144.223.32",
+      "host": "web.whatsapp.com"
+    },
+    {
+      "ip": "57.144.245.32",
+      "host": "web.whatsapp.com"
+    },
+    {
+      "ip": "2a03:2880:f37a:120:face:b00c:0:167",
+      "host": "static.whatsapp.net"
+    },
+    {
+      "ip": "2a03:2880:f20a:c5:face:b00c:0:167",
+      "host": "static.whatsapp.net"
+    },
+    {
+      "ip": "2a03:2880:f213:c3:face:b00c:0:167",
+      "host": "static.whatsapp.net"
+    },
+    {
+      "ip": "57.144.223.32",
+      "host": "static.whatsapp.net"
+    },
+    {
+      "ip": "57.144.245.32",
+      "host": "static.whatsapp.net"
+    },
+    {
+      "ip": "2a03:2880:f20a:c5:face:b00c:0:167",
+      "host": "scontent.whatsapp.net"
+    },
+    {
+      "ip": "2a03:2880:f213:c3:face:b00c:0:167",
+      "host": "scontent.whatsapp.net"
+    },
+    {
+      "ip": "57.144.245.32",
+      "host": "scontent.whatsapp.net"
+    },
+    {
+      "ip": "57.144.241.32",
+      "host": "scontent.whatsapp.net"
+    }
+  ]
+}

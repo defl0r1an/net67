@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Zapret Strategy",
+  "description": "Схема для определения DPI-стратегии Zapret",
+  "type": "object",
+  "required": ["id", "name", "args"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Уникальный идентификатор стратегии (латиница, цифры, _)",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Отображаемое название стратегии"
+    },
+    "description": {
+      "type": "string",
+      "description": "Описание стратегии",
+      "default": ""
+    },
+    "author": {
+      "type": "string",
+      "description": "Автор стратегии",
+      "default": "unknown"
+    },
+    "version": {
+      "type": "string",
+      "description": "Версия стратегии",
+      "default": "1.0"
+    },
+    "label": {
+      "type": ["string", "null"],
+      "description": "Метка: recommended, game, caution, experimental, stable или null",
+      "enum": ["recommended", "game", "caution", "experimental", "stable", null]
+    },
+    "blobs": {
+      "type": "array",
+      "description": "Список используемых блобов (имена из blobs.py)",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "args": {
+      "type": "string",
+      "description": "Аргументы для winws2.exe (без --filter-*, они берутся из категории)"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Включена ли стратегия",
+      "default": true
+    },
+    "user_created": {
+      "type": "boolean",
+      "description": "Создана пользователем (не удалять при обновлении)",
+      "default": false
+    }
+  }
+}
+

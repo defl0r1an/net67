@@ -1,0 +1,4 @@
+gemini.google.com
+bard.google.com
+generativelanguage.googleapis.com
+aistudio.google.com

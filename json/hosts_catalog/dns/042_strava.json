@@ -1,0 +1,408 @@
+{
+  "name": "Strava",
+  "domains": [
+    {
+      "host": "blog.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "business.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "c.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "cdn-1.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "communityhub.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "content-a.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dam.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dev.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "email.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "email1.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "graphql.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "interview.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "links.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "metro.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "mi.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "promo.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "scim.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "shop.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "staging.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "status.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "store.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "stories.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "support.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "tiles.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "watch.samsung.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.blog.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.business.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.metro.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.promo.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.strava.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

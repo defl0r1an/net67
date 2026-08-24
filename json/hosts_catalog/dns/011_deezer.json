@@ -1,0 +1,798 @@
+{
+  "name": "Deezer",
+  "domains": [
+    {
+      "host": "aaa.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "145.239.32.210",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "account.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "activation.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "affiliate.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "185.159.107.201",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "ansync.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "api-websub.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "api.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "auth.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "backstage.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "bo-partners.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "185.159.107.201",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "bo-playlist.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "connect.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.26",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "creators.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "5.42.197.81",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "creatorsupport.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "216.198.54.11",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "curl-prod.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "127.0.0.1",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dalida.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dataconnect.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "13.249.8.4",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dev-gcast.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.111.22.69",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "discovery.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "45.155.204.190",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "drp-auth.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.22.249.154",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "games-servers.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.205.156.155",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "games.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "gcast.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "handshake.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "hhe.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.96",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "homepod.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.117.141.162",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "images.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.117.71.21",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "inward.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "45.155.204.190",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "jobs.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "104.199.78.246",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "m.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.26",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "media.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.110.218.108",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "mydeezerstory.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "oauth.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "papi.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "partners.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "pay.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "payment.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "pipe.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "platform.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "plumbers.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "podcasters.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "185.159.107.201",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "preprod-preview.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "8.233.202.200",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "preprod-stream.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "8.233.198.237",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "preview.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.54.24.201",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "queue.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "research.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "185.199.110.153",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "shaker.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "sonos-queue-bridge.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "45.155.204.190",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "spleeterpro.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "34.8.236.198",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "stream.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "130.211.34.129",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "support.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "216.198.53.11",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "tv2.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "23.219.79.76",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "vdp.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.98.173.232",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "webviews.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.96",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "weight-images.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "45.155.204.190",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "wellbeing.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.190.2.236",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "widget.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.84",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "ws.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "185.159.107.201",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "2.22.145.96",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "zen.deezer.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "35.227.205.143",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

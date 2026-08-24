@@ -1,0 +1,265 @@
+{
+  "name": "Claude",
+  "domains": [
+    {
+      "host": "a-api.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "a-cdn.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "api.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "api.claude.ai",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "assets-proxy.anthropic.com",
+      "ips": {
+        "zapret_dns": "5.178.109.10",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "80.74.24.165",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "160.79.104.10",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "downloads.claude.ai",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "api.console.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "auth.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "claude.ai",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "console.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "s-cdn.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "statsig.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "status.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "support.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.anthropic.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.claude.ai",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "claude.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.claude.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "platform.claude.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.204",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

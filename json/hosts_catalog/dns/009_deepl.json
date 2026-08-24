@@ -1,0 +1,421 @@
+{
+  "name": "DeepL",
+  "domains": [
+    {
+      "host": "api-free.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "api.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "auth.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "backend.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "checkout.www.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "clearance.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "community-auth.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "developers.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dict-audio.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "dict.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "errortracking.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "experimentation-grpc.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "experimentation.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "gtm.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "home.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "hs.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "internal.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "ita-free.app.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "ita-free.www.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "jobs.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "login-wall.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "oneshot-free.www.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "ott.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "s.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "shield.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "sl.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "static.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "support.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "w.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "write-free.www.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    },
+    {
+      "host": "www.deepl.com",
+      "ips": {
+        "zapret_dns": "72.56.93.144",
+        "xbox_dns": "87.228.47.195",
+        "comss_dns": "95.182.120.241",
+        "malw_dns": "185.246.223.127",
+        "malw_dns_v2": "45.95.233.23",
+        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns_old": "45.155.204.190",
+        "fin_dns": "31.77.140.129"
+      }
+    }
+  ]
+}

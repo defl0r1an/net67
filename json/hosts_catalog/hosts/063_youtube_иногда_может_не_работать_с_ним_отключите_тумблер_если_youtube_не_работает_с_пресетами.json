@@ -1,0 +1,29 @@
+{
+  "name": "YouTube (иногда может не работать с ним! Отключите тумблер если YouTube не работает с пресетами)",
+  "hosts": [
+    {
+      "ip": "64.233.162.198",
+      "host": "www.youtube.com"
+    },
+    {
+      "ip": "216.58.201.206",
+      "host": "www.youtube.com"
+    },
+    {
+      "ip": "74.125.205.198",
+      "host": "www.youtube.com"
+    },
+    {
+      "ip": "142.251.14.93",
+      "host": "www.youtube.com"
+    },
+    {
+      "ip": "142.250.117.93",
+      "host": "www.youtube.com"
+    },
+    {
+      "ip": "216.58.206.78",
+      "host": "www.youtube.com"
+    }
+  ]
+}

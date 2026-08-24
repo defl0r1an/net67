@@ -1,0 +1,166 @@
+# ui/fluent_app_window.py
+"""
+Main app window using qfluentwidgets FluentWindow (WinUI 3 style).
+Replaces the old QWidget + FramelessWindowMixin + CustomTitleBar stack.
+"""
+import time as _time
+
+from branding import APP_NAME
+from qfluentwidgets import (
+    FluentWindow, NavigationItemPosition, FluentIcon,
+    setTheme, Theme, setThemeColor, NavigationAvatarWidget,
+)
+from qfluentwidgets import NavigationWidget
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel
+from PyQt6.QtGui import QPixmap, QPainter, QColor
+from PyQt6.QtCore import Qt
+
+from config.build_info import APP_VERSION
+
+from log.log import log
+from main.runtime_state import log_startup_metric as emit_startup_metric
+
+
+
+class AppFluentWindow(FluentWindow):
+    """Main app window using qfluentwidgets FluentWindow (WinUI 3 style)."""
+
+    def __init__(self, parent=None):
+        # Tint color painted as window background (below all content, above Mica).
+        # QColor(0,0,0,0) = pure Mica (no tint), alpha 1-200 = visible tint.
+        self._mica_tint_color = QColor(0, 0, 0, 0)
+
+        t_super = _time.perf_counter()
+        super().__init__(parent)
+        emit_startup_metric(
+            "StartupFluentWindowSuper",
+            f"{(_time.perf_counter() - t_super) * 1000:.0f}ms",
+        )
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self._sync_titlebar_icon_from_application()
+
+        # Theme mode (DARK/LIGHT) is set in main.py via _sync_theme_mode_to_qfluent()
+        # before the window is created, so no hardcoded setTheme(DARK) here.
+
+    def setTitleBar(self, title_bar) -> None:  # noqa: N802 (qfluentwidgets API)
+        """Безопасно заменяет верхнюю панель окна.
+
+        qframelesswindow регистрирует каждую TitleBar как фильтр событий окна,
+        но при замене только откладывает её удаление. На Python 3.14 / PyQt6
+        6.11 старая панель иногда успевает получить WindowStateChange уже во
+        время очистки Python-объекта, когда maxBtn в нём больше нет.
+        """
+        previous_title_bar = getattr(self, "titleBar", None)
+        if previous_title_bar is not None and previous_title_bar is not title_bar:
+            self.removeEventFilter(previous_title_bar)
+
+        super().setTitleBar(title_bar)
+
+    def _sync_titlebar_icon_from_application(self) -> None:
+        """Показывает уже готовый общий значок в окончательной верхней панели."""
+        app = QApplication.instance()
+        title_bar = getattr(self, "titleBar", None)
+        set_icon = getattr(title_bar, "setIcon", None)
+        if app is None or not callable(set_icon):
+            return
+
+        icon = app.windowIcon()
+        if not icon.isNull():
+            set_icon(icon)
+
+    # ------------------------------------------------------------------
+    # Background tint (Mica + semi-transparent Qt background layer)
+    # ------------------------------------------------------------------
+
+    def _normalBackgroundColor(self) -> QColor:  # noqa: N802
+        """Override: inject semi-transparent tint when Mica is active.
+
+        FluentWidget._normalBackgroundColor() returns QColor(0,0,0,0) when
+        Mica is enabled, making the Qt surface fully transparent. By returning
+        our _mica_tint_color instead, the background is painted as a
+        semi-transparent fill BELOW all content widgets, so the tint blends
+        with the DWM Mica backdrop without covering text or controls.
+        """
+        try:
+            if self.isMicaEffectEnabled():
+                return self._mica_tint_color
+        except Exception:
+            pass
+        return super()._normalBackgroundColor()
+
+    def set_tint_overlay(self, r: int, g: int, b: int, alpha: int) -> None:
+        """Update the Mica tint color (painted below content, above Mica backdrop).
+
+        alpha=0  → pure Mica (no tint)
+        alpha=200 → strong tint but content still readable (drawn on top)
+        """
+        self._mica_tint_color = QColor(r, g, b, max(0, min(255, alpha)))
+        try:
+            self._updateBackgroundColor()
+        except Exception:
+            pass
+
+    def clear_tint_overlay(self) -> None:
+        """Reset tint to fully transparent (pure Mica or default background)."""
+        self._mica_tint_color = QColor(0, 0, 0, 0)
+        try:
+            self._updateBackgroundColor()
+        except Exception:
+            pass
+
+    def prepare_transparent_mica_background(self) -> None:
+        """Готовит прозрачный фон перед отключением Mica на Windows 11."""
+        self._darkBackgroundColor = QColor(0, 0, 0, 0)
+        self._lightBackgroundColor = QColor(0, 0, 0, 0)
+
+    # ------------------------------------------------------------------
+    # Navigation helpers
+    # ------------------------------------------------------------------
+
+    def addSeparatorToNav(self):
+        """Add a separator line in the navigation."""
+        self.navigationInterface.addSeparator()
+
+    # ------------------------------------------------------------------
+    # Background image support (for РКН Тян preset)
+    # ------------------------------------------------------------------
+
+    def set_background_image(self, path: str | None) -> None:
+        """Set a full-window background image (dimmed). Pass None to hide."""
+        if not hasattr(self, '_bg_label'):
+            self._bg_label = QLabel(self)
+            self._bg_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            self._bg_rawpath = None
+        if path is None:
+            self._bg_label.hide()
+            self._bg_rawpath = None
+            return
+        self._bg_rawpath = path
+        self._rescale_bg()
+        self._bg_label.lower()
+        self._bg_label.show()
+
+    def _rescale_bg(self) -> None:
+        """Rescale and dim the background image to current window size."""
+        if not (hasattr(self, '_bg_label') and getattr(self, '_bg_rawpath', None)):
+            return
+        pm = QPixmap(self._bg_rawpath)
+        if pm.isNull():
+            return
+        pm = pm.scaled(
+            self.size(),
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        dimmed = QPixmap(pm.size())
+        dimmed.fill(QColor(0, 0, 0, 0))
+        p = QPainter(dimmed)
+        p.drawPixmap(0, 0, pm)
+        p.fillRect(dimmed.rect(), QColor(0, 0, 0, 155))
+        p.end()
+        self._bg_label.setPixmap(dimmed)
+        self._bg_label.setGeometry(self.rect())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._rescale_bg()

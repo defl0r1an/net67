@@ -1,0 +1,236 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from types import SimpleNamespace
+from typing import Any
+
+
+def install_first_run_wizard(*args, **kwargs):
+    from main.post_startup_wizard import install_first_run_wizard as install
+
+    return install(*args, **kwargs)
+
+
+def install_autotune(*args, **kwargs):
+    from main.post_startup_autotune import install_autotune as install
+
+    return install(*args, **kwargs)
+
+
+def install_startup_checks(*args, **kwargs):
+    from main.post_startup_checks import install_startup_checks as install
+
+    return install(*args, **kwargs)
+
+
+def install_backend_page_data_warmup(*args, **kwargs):
+    from main.post_startup_backend_warmup import install_backend_page_data_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_cpu_diagnostic(*args, **kwargs):
+    from main.post_startup_diagnostics import install_cpu_diagnostic as install
+
+    return install(*args, **kwargs)
+
+
+def install_global_exception_handler(*args, **kwargs):
+    from main.post_startup_diagnostics import install_global_exception_handler as install
+
+    return install(*args, **kwargs)
+
+
+def install_qt_event_diagnostic_probe(*args, **kwargs):
+    from main.post_startup_diagnostics import install_qt_event_diagnostic_probe as install
+
+    return install(*args, **kwargs)
+
+
+def install_startup_audit(*args, **kwargs):
+    from main.startup_audit import install_startup_audit as install
+
+    return install(*args, **kwargs)
+
+
+def install_dns_startup(*args, **kwargs):
+    from main.post_startup_dns import install_dns_startup as install
+
+    return install(*args, **kwargs)
+
+
+def install_dns_page_data_warmup(*args, **kwargs):
+    from main.post_startup_dns_warmup import install_dns_page_data_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_hosts_page_warmup(*args, **kwargs):
+    from main.post_startup_hosts_warmup import install_hosts_page_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_lists_check(*args, **kwargs):
+    from main.post_startup_lists import install_lists_check as install
+
+    return install(*args, **kwargs)
+
+
+def install_deferred_maintenance(*args, **kwargs):
+    from main.post_startup_maintenance import install_deferred_maintenance as install
+
+    return install(*args, **kwargs)
+
+
+def install_profile_warmup(*args, **kwargs):
+    from main.post_startup_profile_warmup import install_profile_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_user_presets_warmup(*args, **kwargs):
+    from main.post_startup_user_presets_warmup import install_user_presets_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_telegram_proxy_startup(*args, **kwargs):
+    from main.post_startup_proxy import install_telegram_proxy_startup as install
+
+    return install(*args, **kwargs)
+
+
+def install_telegram_proxy_page_warmup(*args, **kwargs):
+    from main.post_startup_telegram_proxy_warmup import install_telegram_proxy_page_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_update_check(*args, **kwargs):
+    from main.post_startup_update import install_update_check as install
+
+    return install(*args, **kwargs)
+
+@dataclass(frozen=True, slots=True)
+class PostStartupDeps:
+    startup_host: Any
+    profile_feature: Any
+    dns_feature: Any
+    notify: Any
+    notify_many: Any
+    set_status: Any
+    log_startup_metric: Any
+    start_proxy_if_enabled_async: Any
+    startup_lists_check: Any
+    apply_dns_on_startup_async: Any
+    install_tray_post_startup: Any
+    updater_feature: Any
+    hosts_feature: Any = None
+    logs_feature: Any = None
+    presets_feature: Any = None
+    ui_state_store: Any = None
+    #: Нужен автоподбору: он останавливает winws на время проверки
+    #: каждой стратегии, а делает это runtime-функция приложения.
+    runtime_feature: Any = None
+    launch_method: str = ""
+
+
+def install_post_startup_tasks(deps: PostStartupDeps) -> None:
+    startup_host = deps.startup_host
+    on_profile_warmup_ready = None
+    if deps.presets_feature is not None and deps.ui_state_store is not None:
+        on_profile_warmup_ready = lambda method: deps.presets_feature.refresh_profile_strategy_summary_in_store(
+            method=method,
+            profile_feature=deps.profile_feature,
+            ui_state_store=deps.ui_state_store,
+        )
+
+    install_first_run_wizard(
+        startup_host,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_startup_checks(
+        startup_host,
+        notify_many=deps.notify_many,
+        set_status=deps.set_status,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    if deps.presets_feature is not None and deps.runtime_feature is not None:
+        install_autotune(
+            startup_host,
+            features=SimpleNamespace(
+                presets=deps.presets_feature,
+                runtime=deps.runtime_feature,
+            ),
+            set_status=deps.set_status,
+        )
+    install_deferred_maintenance(
+        startup_host,
+        notify_many=deps.notify_many,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_telegram_proxy_startup(
+        startup_host,
+        start_proxy_if_enabled_async=deps.start_proxy_if_enabled_async,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_telegram_proxy_page_warmup(
+        startup_host,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_lists_check(
+        startup_host,
+        startup_lists_check=deps.startup_lists_check,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_dns_startup(
+        startup_host,
+        apply_dns_on_startup_async=deps.apply_dns_on_startup_async,
+        set_status=deps.set_status,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_dns_page_data_warmup(
+        startup_host,
+        dns_feature=deps.dns_feature,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_hosts_page_warmup(
+        startup_host,
+        hosts_feature=deps.hosts_feature,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    if deps.logs_feature is not None:
+        install_backend_page_data_warmup(
+            startup_host,
+            logs_feature=deps.logs_feature,
+            log_startup_metric=deps.log_startup_metric,
+        )
+    install_profile_warmup(
+        startup_host,
+        profile_feature=deps.profile_feature,
+        log_startup_metric=deps.log_startup_metric,
+        current_launch_method=str(getattr(deps, "launch_method", "") or ""),
+        on_profile_warmup_ready=on_profile_warmup_ready,
+    )
+    if deps.presets_feature is not None:
+        install_user_presets_warmup(
+            startup_host,
+            presets_feature=deps.presets_feature,
+            log_startup_metric=deps.log_startup_metric,
+            current_launch_method=str(getattr(deps, "launch_method", "") or ""),
+        )
+    deps.install_tray_post_startup()
+    install_update_check(
+        startup_host,
+        updater_feature=deps.updater_feature,
+        notify=deps.notify,
+        set_status=deps.set_status,
+    )
+    install_cpu_diagnostic()
+    install_qt_event_diagnostic_probe()
+    install_startup_audit()
+    install_global_exception_handler()
+
+
+__all__ = ["PostStartupDeps", "install_post_startup_tasks"]

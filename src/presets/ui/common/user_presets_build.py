@@ -1,0 +1,251 @@
+"""Сборка общей страницы пользовательских preset-ов."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from types import MethodType
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QListView, QSizePolicy
+from qfluentwidgets import FluentIcon, PrimaryPushButton
+
+from ui.fluent_widgets import SettingsCard, set_tooltip
+from presets.ui.common.user_presets_accessibility import apply_user_presets_accessibility
+from ui.presets_menu.delegate import PresetListDelegate
+from ui.presets_menu.model import PresetListModel
+from ui.presets_menu.toolbar import PresetsToolbarLayout
+from ui.presets_menu.view import LinkedWheelListView
+from ui.widgets.fluent_scrollbar import install_fluent_scrollbars
+
+
+@dataclass(slots=True)
+class UserPresetsPageBuildWidgets:
+    toolbar_layout: object
+    create_btn: object
+    import_btn: object
+    open_folder_btn: object
+    reset_all_btn: object
+    presets_info_btn: object
+    info_btn: object
+    preset_search_input: object
+    presets_list: object
+    presets_model: object
+    presets_delegate: object
+
+
+def wire_preset_search_keyboard_activation(preset_search_input, presets_list) -> None:
+    """Enter в поиске пресетов активирует текущий элемент списка."""
+
+    if preset_search_input is None or presets_list is None:
+        return
+    if bool(getattr(preset_search_input, "_preset_search_keyboard_activation", False)):
+        return
+    original_key_press = getattr(preset_search_input, "keyPressEvent", None)
+
+    def _search_key_press(self, event):
+        if event.key() in (
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Down,
+            Qt.Key.Key_Up,
+            Qt.Key.Key_Home,
+            Qt.Key.Key_End,
+            Qt.Key.Key_PageDown,
+            Qt.Key.Key_PageUp,
+        ):
+            presets_list.setFocus(Qt.FocusReason.OtherFocusReason)
+            presets_list.keyPressEvent(event)
+            return
+        if callable(original_key_press):
+            original_key_press(event)
+
+    preset_search_input.keyPressEvent = MethodType(_search_key_press, preset_search_input)
+    preset_search_input._preset_search_keyboard_activation = True
+
+
+def build_user_presets_page_shell(
+    *,
+    parent,
+    tr_fn,
+    tokens,
+    strong_body_label_cls,
+    line_edit_cls,
+    primary_tool_button_cls,
+    tr_prefix: str,
+    delegate_language_scope: str,
+    delegate_help_name_role: str,
+    fluent_icon,
+    get_cached_qta_pixmap_fn,
+    on_create_clicked,
+    on_import_clicked,
+    on_open_folder_clicked,
+    on_reset_all_presets_clicked,
+    on_open_presets_info,
+    on_info_clicked,
+    on_preset_search_text_changed,
+    on_activate_preset,
+    on_move_preset_by_step,
+    on_item_dropped,
+    on_preset_context_requested,
+    on_folder_context_requested,
+    on_background_context_requested,
+    on_preset_list_action,
+    ui_language: str,
+):
+    # Карточка со ссылкой на GitHub Discussions автора исходного проекта
+    # удалена вместе с виджетами configs_card, configs_icon,
+    # configs_title_label и get_configs_btn.
+
+    toolbar_layout = PresetsToolbarLayout(parent)
+
+    create_btn = toolbar_layout.create_primary_tool_button(
+        primary_tool_button_cls,
+        fluent_icon.ADD if fluent_icon else None,
+    )
+    set_tooltip(
+        create_btn,
+        tr_fn(f"{tr_prefix}.tooltip.create", "Создать новый пресет"),
+    )
+    create_btn.clicked.connect(on_create_clicked)
+
+    import_btn = toolbar_layout.create_action_button(
+        tr_fn(f"{tr_prefix}.button.import", "Импорт"),
+        FluentIcon.DOWNLOAD,
+    )
+    set_tooltip(
+        import_btn,
+        tr_fn(f"{tr_prefix}.tooltip.import", "Импорт пресета из файла"),
+    )
+    import_btn.clicked.connect(on_import_clicked)
+
+    open_folder_btn = toolbar_layout.create_action_button(
+        tr_fn(f"{tr_prefix}.button.open_folder", "Открыть папку"),
+        FluentIcon.FOLDER,
+    )
+    set_tooltip(
+        open_folder_btn,
+        tr_fn(f"{tr_prefix}.tooltip.open_folder", "Открыть папку, где лежат ваши пресеты"),
+    )
+    open_folder_btn.clicked.connect(on_open_folder_clicked)
+
+    reset_all_btn = toolbar_layout.create_action_button(
+        tr_fn(f"{tr_prefix}.button.reset_all", "Вернуть встроенные"),
+        FluentIcon.RETURN,
+    )
+    set_tooltip(
+        reset_all_btn,
+        tr_fn(
+            f"{tr_prefix}.tooltip.reset_all",
+            "Возвращает встроенные пресеты. Ваши изменения во встроенных пресетах будут потеряны.",
+        ),
+    )
+    reset_all_btn.clicked.connect(on_reset_all_presets_clicked)
+
+    presets_info_btn = toolbar_layout.create_action_button(
+        tr_fn(f"{tr_prefix}.button.wiki", "Вики по пресетам"),
+        FluentIcon.INFO,
+    )
+    presets_info_btn.clicked.connect(on_open_presets_info)
+    presets_info_btn.hide()
+
+    info_btn = toolbar_layout.create_action_button(
+        tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"),
+        FluentIcon.QUESTION,
+    )
+    info_btn.clicked.connect(on_info_clicked)
+
+    preset_search_input = line_edit_cls()
+    preset_search_input.setPlaceholderText(
+        tr_fn(f"{tr_prefix}.search.placeholder", "Поиск пресетов по имени...")
+    )
+    preset_search_input.setClearButtonEnabled(True)
+    preset_search_input.setFixedHeight(34)
+    preset_search_input.setProperty("noDrag", True)
+    preset_search_input.textChanged.connect(on_preset_search_text_changed)
+    apply_user_presets_accessibility(
+        tr_fn=tr_fn,
+        tr_prefix=tr_prefix,
+        create_btn=create_btn,
+        import_btn=import_btn,
+        open_folder_btn=open_folder_btn,
+        reset_all_btn=reset_all_btn,
+        presets_info_btn=presets_info_btn,
+        info_btn=info_btn,
+        preset_search_input=preset_search_input,
+    )
+
+    toolbar_layout.set_buttons([
+        create_btn,
+        import_btn,
+        open_folder_btn,
+        reset_all_btn,
+        info_btn,
+    ])
+    toolbar_layout.set_trailing_widget(preset_search_input, minimum_width=280)
+    toolbar_layout.refresh_for_viewport(parent.viewport().width(), parent.layout.contentsMargins())
+
+    presets_list = LinkedWheelListView(parent)
+    presets_list.setObjectName("userPresetsList")
+    presets_list.setMouseTracking(True)
+    presets_list.setSelectionMode(QListView.SelectionMode.NoSelection)
+    presets_list.setEditTriggers(QListView.EditTrigger.NoEditTriggers)
+    presets_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    presets_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    presets_list.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+    presets_list.setUniformItemSizes(False)
+    presets_list.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    presets_list.setProperty("uiList", True)
+    presets_list.setProperty("noDrag", True)
+    presets_list.viewport().setProperty("noDrag", True)
+    presets_list.preset_activated.connect(on_activate_preset)
+    presets_list.preset_move_requested.connect(on_move_preset_by_step)
+    presets_list.item_dropped.connect(on_item_dropped)
+    presets_list.preset_context_requested.connect(on_preset_context_requested)
+    presets_list.folder_context_requested.connect(on_folder_context_requested)
+    presets_list.folder_toggle_requested.connect(lambda folder_key: on_preset_list_action("toggle_folder", folder_key))
+    presets_list.background_context_requested.connect(on_background_context_requested)
+    presets_list.setDragEnabled(True)
+    presets_list.setAcceptDrops(True)
+    presets_list.setDropIndicatorShown(False)
+    presets_list.setDefaultDropAction(Qt.DropAction.MoveAction)
+    presets_list.setDragDropMode(QListView.DragDropMode.DragDrop)
+
+    presets_model = PresetListModel(presets_list)
+    presets_delegate = PresetListDelegate(
+        presets_list,
+        language_scope=delegate_language_scope,
+        help_name_role=delegate_help_name_role,
+    )
+    presets_delegate.set_ui_language(ui_language)
+    presets_delegate.action_triggered.connect(on_preset_list_action)
+    presets_list.setModel(presets_model)
+    wire_preset_search_keyboard_activation(preset_search_input, presets_list)
+    apply_user_presets_accessibility(
+        tr_fn=tr_fn,
+        tr_prefix=tr_prefix,
+        presets_list=presets_list,
+    )
+    presets_list.setItemDelegate(presets_delegate)
+    presets_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+    presets_list.setFrameShape(QFrame.Shape.NoFrame)
+    presets_list.verticalScrollBar().setSingleStep(28)
+    install_fluent_scrollbars(
+        presets_list,
+        vertical=True,
+        horizontal=False,
+        reserve_vertical_space=True,
+    )
+
+    return UserPresetsPageBuildWidgets(
+        toolbar_layout=toolbar_layout,
+        create_btn=create_btn,
+        import_btn=import_btn,
+        open_folder_btn=open_folder_btn,
+        reset_all_btn=reset_all_btn,
+        presets_info_btn=presets_info_btn,
+        info_btn=info_btn,
+        preset_search_input=preset_search_input,
+        presets_list=presets_list,
+        presets_model=presets_model,
+        presets_delegate=presets_delegate,
+    )

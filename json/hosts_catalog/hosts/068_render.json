@@ -1,0 +1,9 @@
+{
+  "name": "Render",
+  "hosts": [
+    {
+      "ip": "216.24.57.8",
+      "host": "render.com"
+    }
+  ]
+}

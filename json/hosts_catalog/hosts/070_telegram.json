@@ -1,0 +1,149 @@
+{
+  "name": "Telegram (работает только веб-версия)",
+  "hosts": [
+    {
+      "ip": "149.154.167.220",
+      "host": "web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "k.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "a.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "z.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "oauth.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "cdn.telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "cdn5.telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "zws4.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "vesta.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "core.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "my.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "vesta-1.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "venus-1.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "telegram.me"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "telegram.dog"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "telegram.space"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "cdn1.telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "cdn2.telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "cdn3.telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "cdn4.telesco.pe"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "tg.dev"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "desktop.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "macos.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "t.me"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "api.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "td.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "venus.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "kws2-1.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "kws2.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "kws4-1.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "kws4.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "zws2-1.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "zws2.web.telegram.org"
+    },
+    {
+      "ip": "149.154.167.220",
+      "host": "zws4-1.web.telegram.org"
+    }
+  ]
+}

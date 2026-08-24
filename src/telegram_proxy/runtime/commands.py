@@ -1,0 +1,306 @@
+from __future__ import annotations
+
+import os
+import subprocess
+import webbrowser
+from dataclasses import dataclass
+
+from telegram_proxy.runtime.plans import (
+    TelegramProxyActionResult,
+    TelegramProxyDiagnosticsFinishPlan,
+    TelegramProxyDiagnosticsPollPlan,
+    TelegramProxyDiagnosticsStartPlan,
+    build_diagnostics_finish_plan,
+    build_diagnostics_poll_plan,
+    build_diagnostics_start_plan,
+)
+
+# Флаг скрытия консольного окна. На Windows любой subprocess без него
+# на мгновение показывает чёрный прямоугольник — человек описал это как
+# «маленькое чёрное окошко при запуске». getattr нужен, потому что на
+# не-Windows такого флага в модуле нет.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramProxyStartConfig:
+    host: str
+    port: int
+    mode: str
+    upstream_config: object | None
+    cloudflare_config: object | None
+    mtproxy_secret: str
+    dc_endpoint_overrides: dict[int, str]
+    pool_size: int
+    buffer_kb: int
+    fake_tls_domain: str
+    proxy_protocol: bool
+
+
+def get_proxy_manager():
+    from telegram_proxy.manager import get_proxy_manager as _get_proxy_manager
+
+    return _get_proxy_manager()
+
+
+def start_proxy_if_enabled_async() -> bool:
+    from telegram_proxy.manager import start_proxy_if_enabled_async as _start_proxy_if_enabled_async
+
+    return bool(_start_proxy_if_enabled_async())
+
+
+def get_start_config() -> TelegramProxyStartConfig:
+    from settings.store import (
+        get_tg_proxy_buffer_kb,
+        get_tg_proxy_fake_tls_domain,
+        get_tg_proxy_host,
+        get_tg_proxy_mode,
+        get_tg_proxy_mtproxy_secret,
+        get_tg_proxy_pool_size,
+        get_tg_proxy_port,
+        get_tg_proxy_proxy_protocol,
+    )
+
+
+    from telegram_proxy.config.settings import (
+        build_cloudflare_config,
+        build_dc_endpoint_overrides,
+        build_upstream_config,
+        ensure_mtproxy_secret_for_mode,
+        normalize_buffer_kb,
+        normalize_fake_tls_domain,
+        normalize_pool_size,
+        normalize_proxy_mode,
+    )
+
+    mode = normalize_proxy_mode(get_tg_proxy_mode())
+    mtproxy_secret = ensure_mtproxy_secret_for_mode(mode, get_tg_proxy_mtproxy_secret())
+
+    return TelegramProxyStartConfig(
+        host=str(get_tg_proxy_host() or "127.0.0.1"),
+        port=int(get_tg_proxy_port() or 1353),
+        mode=mode,
+        upstream_config=build_upstream_config(),
+        cloudflare_config=build_cloudflare_config(),
+        mtproxy_secret=mtproxy_secret,
+        dc_endpoint_overrides=build_dc_endpoint_overrides(),
+        pool_size=normalize_pool_size(get_tg_proxy_pool_size()),
+        buffer_kb=normalize_buffer_kb(get_tg_proxy_buffer_kb()),
+        fake_tls_domain=normalize_fake_tls_domain(get_tg_proxy_fake_tls_domain()),
+        proxy_protocol=bool(get_tg_proxy_proxy_protocol()),
+    )
+
+
+def build_upstream_config():
+    from telegram_proxy.config.settings import build_upstream_config as _build_upstream_config
+
+    return _build_upstream_config()
+
+
+def build_cloudflare_config():
+    from telegram_proxy.config.settings import build_cloudflare_config as _build_cloudflare_config
+
+    return _build_cloudflare_config()
+
+
+def build_dc_endpoint_overrides():
+    from telegram_proxy.config.settings import build_dc_endpoint_overrides as _build_dc_endpoint_overrides
+
+    return _build_dc_endpoint_overrides()
+
+
+def copy_text(
+    text: str,
+    *,
+    success_title: str,
+    success_content: str,
+    success_log: str = "",
+    clipboard_writer=None,
+) -> TelegramProxyActionResult:
+    payload = str(text or "")
+    if clipboard_writer is None or not payload:
+        return TelegramProxyActionResult(False, "", "", "")
+    try:
+        clipboard_writer(payload)
+    except Exception:
+        return TelegramProxyActionResult(False, "", "", "")
+    return TelegramProxyActionResult(
+        ok=True,
+        log_line=success_log,
+        info_title=success_title,
+        info_content=success_content,
+    )
+
+
+def ensure_telegram_hosts() -> TelegramProxyActionResult:
+    try:
+        from telegram_proxy.telegram_hosts import ensure_telegram_hosts
+
+        ensure_telegram_hosts()
+        return TelegramProxyActionResult(True, "", "", "")
+    except Exception as e:
+        return TelegramProxyActionResult(False, f"Telegram hosts check error: {e}", "", "")
+
+
+def set_enabled(enabled: bool) -> None:
+    from settings.store import set_tg_proxy_enabled
+
+    set_tg_proxy_enabled(bool(enabled))
+
+
+def append_log_line(message: str) -> None:
+    manager = get_proxy_manager()
+    manager.proxy_logger.log(str(message or ""))
+
+
+def consume_auto_deeplink_request() -> bool:
+    import telegram_proxy.config.settings as telegram_proxy_settings
+
+    return bool(telegram_proxy_settings.consume_auto_deeplink_request())
+
+
+def load_page_initial_state():
+    import telegram_proxy.config.settings as telegram_proxy_settings
+
+    return telegram_proxy_settings.load_page_initial_state()
+
+
+def save_settings_action(
+    action: str,
+    *,
+    host: str = "",
+    port: int = 0,
+    user: str = "",
+    password: str = "",
+    preset_id: str = "",
+    enabled: bool = False,
+    value: object = "",
+):
+    import telegram_proxy.config.settings as telegram_proxy_settings
+
+    action_name = str(action or "").strip()
+    if action_name.startswith("upstream") or action_name == "manual_upstream":
+        try:
+            from log.log import log
+
+            if action_name == "upstream_preset":
+                detail = preset_id
+            elif action_name == "manual_upstream":
+                detail = f"{host}:{port}"
+            else:
+                detail = f"enabled={enabled}"
+            log(f"Telegram Proxy: сохранение настройки {action_name} ({detail})", "INFO")
+        except Exception:
+            pass
+    if action_name == "host":
+        return telegram_proxy_settings.set_host(host)
+    if action_name == "port":
+        return telegram_proxy_settings.set_port(port)
+    if action_name == "proxy_enabled":
+        return telegram_proxy_settings.set_proxy_enabled(enabled)
+    if action_name == "proxy_mode":
+        return telegram_proxy_settings.set_proxy_mode(value)
+    if action_name == "mtproxy_secret":
+        return telegram_proxy_settings.set_mtproxy_secret(str(value or ""))
+    if action_name == "dc_ip":
+        return telegram_proxy_settings.set_dc_ip(value)
+    if action_name == "pool_size":
+        return telegram_proxy_settings.set_pool_size(value)
+    if action_name == "buffer_kb":
+        return telegram_proxy_settings.set_buffer_kb(value)
+    if action_name == "fake_tls_domain":
+        return telegram_proxy_settings.set_fake_tls_domain(value)
+    if action_name == "proxy_protocol":
+        return telegram_proxy_settings.set_proxy_protocol(enabled)
+    if action_name == "upstream_enabled":
+        return telegram_proxy_settings.set_upstream_enabled(enabled)
+    if action_name == "upstream_preset":
+        return telegram_proxy_settings.set_upstream_preset(preset_id)
+    if action_name == "manual_upstream":
+        return telegram_proxy_settings.set_manual_upstream(host, port, user, password)
+    if action_name == "upstream_mode":
+        return telegram_proxy_settings.set_upstream_mode(enabled)
+    if action_name == "upstream_udp_enabled":
+        return telegram_proxy_settings.set_upstream_udp_enabled(enabled)
+    if action_name == "cloudflare_enabled":
+        return telegram_proxy_settings.set_cloudflare_enabled(enabled)
+    if action_name == "cloudflare_domains":
+        return telegram_proxy_settings.set_cloudflare_domains(value)
+    if action_name == "cloudflare_worker_enabled":
+        return telegram_proxy_settings.set_cloudflare_worker_enabled(enabled)
+    if action_name == "cloudflare_worker_domains":
+        return telegram_proxy_settings.set_cloudflare_worker_domains(value)
+    raise ValueError(f"Неизвестная настройка Telegram Proxy: {action_name}")
+
+
+def open_log_file(path: str) -> TelegramProxyActionResult:
+    target = os.path.normpath(str(path or ""))
+    if os.path.exists(target):
+        try:
+            subprocess.Popen(["explorer", "/select,", target], creationflags=_NO_WINDOW)
+            return TelegramProxyActionResult(True, "", "", "")
+        except Exception as e:
+            return TelegramProxyActionResult(False, f"Failed to open log file: {e}", "", "")
+    return TelegramProxyActionResult(False, f"Log file not found: {target}", "", "")
+
+
+def open_external_link(url: str, *, success_log: str, error_prefix: str) -> TelegramProxyActionResult:
+    target = str(url or "").strip()
+    if not target:
+        return TelegramProxyActionResult(False, f"{error_prefix}: empty url", "", "")
+    try:
+        webbrowser.open(target)
+        return TelegramProxyActionResult(True, success_log, "", "")
+    except Exception as e:
+        return TelegramProxyActionResult(False, f"{error_prefix}: {e}", "", "")
+
+
+def run_diagnostics(*, proxy_port: int, progress_callback=None) -> str:
+    from telegram_proxy.diagnostics import run_all
+
+    return str(run_all(proxy_port=proxy_port, progress_callback=progress_callback))
+
+
+def check_relay_reachable(*, timeout: float = 5.0) -> dict:
+    from telegram_proxy.wss_proxy import check_relay_reachable as _check_relay_reachable
+
+    return dict(_check_relay_reachable(timeout=timeout))
+
+
+def check_relay_http(relay_ip: str = "149.154.167.220", timeout: float = 5.0) -> bool:
+    import socket
+
+    try:
+        sock = socket.create_connection((relay_ip, 80), timeout=timeout)
+        sock.close()
+        return True
+    except Exception:
+        return False
+
+
+def check_cloudflare_connectivity(kind: str, domains: object, *, timeout: float = 6.0):
+    from telegram_proxy.proxy.cloudflare import run_cloudflare_connectivity_check
+
+    return run_cloudflare_connectivity_check(kind, domains, timeout=timeout)
+
+
+def get_cloudflare_dns_records_text() -> str:
+    from telegram_proxy.proxy.cloudflare import build_cfproxy_dns_records_text
+
+    return build_cfproxy_dns_records_text()
+
+
+def get_cloudflare_worker_code() -> str:
+    from telegram_proxy.proxy.cloudflare import build_cfworker_code
+
+    return build_cfworker_code()
+
+
+def get_fake_tls_nginx_config(*, fake_tls_domain: str = "", upstream_host: str = "127.0.0.1", upstream_port: int = 8446) -> str:
+    from telegram_proxy.proxy.fake_tls import build_fake_tls_nginx_config
+
+    return build_fake_tls_nginx_config(
+        fake_tls_domain=fake_tls_domain,
+        upstream_host=upstream_host,
+        upstream_port=upstream_port,
+    )
