@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 
-from ui.navigation.search import route_search_result, update_titlebar_search_width
+from ui.navigation.routing import route_to_page
 from app.page_names import PageName
 from ui.window_ui_session import get_window_ui_session
 
@@ -54,13 +54,14 @@ def get_current_page(window):
     return session.page_host.current_page()
 
 
-def sync_titlebar_search_width(window) -> None:
-    update_titlebar_search_width(window)
-
-
 def refresh_titlebar_layout(window) -> None:
-    """Обновляет верхнюю панель после первого показа окна."""
-    sync_titlebar_search_width(window)
+    """Обновляет верхнюю панель после первого показа окна.
+
+    Пересчитывать в ней теперь нечего: строка поиска убрана, а ничего
+    другого с плавающей шириной там нет. Заглушка оставлена, потому что
+    на неё смотрит порядок запуска окна.
+    """
+    return None
 
     title_bar = getattr(window, "titleBar", None)
     if title_bar is None:
@@ -83,8 +84,8 @@ def refresh_titlebar_layout(window) -> None:
         pass
 
 
-def route_window_search_result(window, page_name: PageName, tab_key: str = "") -> bool:
-    return route_search_result(window, page_name, tab_key)
+def route_window_to_page(window, page_name: PageName, tab_key: str = "") -> bool:
+    return route_to_page(window, page_name, tab_key)
 
 
 def persist_window_geometry(window) -> None:
@@ -142,9 +143,8 @@ __all__ = [
     "refresh_titlebar_layout",
     "release_input_interaction_states",
     "request_exit",
-    "route_window_search_result",
+    "route_window_to_page",
     "send_page_command",
     "show_page",
     "show_window",
-    "sync_titlebar_search_width",
 ]

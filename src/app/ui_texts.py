@@ -1,7 +1,8 @@
-"""Centralized application text catalog and sidebar search index.
+"""Централизованный каталог текстов интерфейса.
 
-This module contains user-facing strings for navigation/search and the
-declarative index used by the left sidebar global search.
+Здесь лежат подписи разделов, страниц и элементов управления. Указателя
+для общего поиска здесь больше нет: поиск по разделам убран из
+приложения целиком.
 """
 
 from settings.mode import ENGINE_WINWS1, ENGINE_WINWS2, EXE_NAME_WINWS1, EXE_NAME_WINWS2
@@ -17,10 +18,6 @@ LANGUAGE_OPTIONS = (
 
 
 TEXTS: dict[str, dict[str, str]] = {
-    "sidebar.search.placeholder": {
-        "ru": "Найти в разделах и страницах",
-        "en": "Find in sections and pages",
-    },
     "nav.header.settings": {
         "ru": "Настройки Запрета",
         "en": "net67 Settings",
@@ -3651,7 +3648,7 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "appearance.language.desc": {
         "ru": "Язык бокового меню и глобального поиска. Полный перевод страниц расширяется поэтапно.",
-        "en": "Language for sidebar and global search. Full page translation is being expanded step by step.",
+        "en": "Language for the sidebar. Full page translation is being expanded step by step.",
     },
     "appearance.language.label": {
         "ru": "Язык",

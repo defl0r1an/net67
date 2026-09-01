@@ -374,25 +374,3 @@ class GuiAutostartContractTests(unittest.TestCase):
                 source.index("program_settings_card.addSettingCard(auto_dpi_toggle)"),
             )
 
-    def test_autostart_is_no_longer_registered_as_standalone_page(self) -> None:
-        import ui.pages as pages
-        from app.page_names import PageName
-        from app.search_index import SEARCH_ENTRIES
-        from ui.navigation.schema import PAGE_ROUTE_SPECS
-        from ui.page_composition import PAGE_DEPS_BUILDERS
-
-        self.assertFalse(hasattr(PageName, "AUTOSTART"))
-        self.assertNotIn("AutostartPage", pages.__all__)
-        self.assertFalse(
-            any(entry.entry_id.startswith("autostart.") for entry in SEARCH_ENTRIES)
-        )
-        self.assertFalse(
-            any(
-                str(getattr(page_name, "name", "")) == "AUTOSTART"
-                for page_name in (*PAGE_ROUTE_SPECS.keys(), *PAGE_DEPS_BUILDERS.keys())
-            )
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()

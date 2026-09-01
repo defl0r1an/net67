@@ -174,7 +174,7 @@ PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
     ),
     # «О программе» убрана из интерфейса: версия видна в заголовке окна,
     # а ссылки на ресурсы автора исходного проекта оттуда вычищены.
-    # Ключ оставлен — на него ссылаются page_registry, search_index и
+    # Ключ оставлен — на него ссылаются page_registry и
     # page_deps, удаление уронило бы get_page_spec с KeyError.
     PageName.ABOUT: PageRouteSpec(
         page_name=PageName.ABOUT,
@@ -383,10 +383,6 @@ def is_page_mode_open_allowed(page_name: PageName) -> bool:
     return page_name not in INNER_PAGE_NAMES
 
 
-def is_page_search_visible(page_name: PageName) -> bool:
-    return page_name not in INNER_PAGE_NAMES
-
-
 def get_page_route_key(page_name: PageName) -> str:
     return str(get_page_spec(page_name).route_key)
 
@@ -482,28 +478,6 @@ def get_nav_visibility(method: str | None, *, advanced: bool | None = None) -> d
     return visibility
 
 
-def get_sidebar_search_pages_for_method(
-    method: str | None,
-    all_pages: set[PageName],
-    *,
-    advanced: bool | None = None,
-) -> set[PageName]:
-    allowed_pages: set[PageName] = set()
-    if advanced is None:
-        advanced = is_advanced_mode_enabled()
-    for page_name in all_pages:
-        spec = PAGE_ROUTE_SPECS.get(page_name)
-        if spec is None:
-            continue
-        # Поиск не должен показывать расширенные страницы в простом режиме,
-        # иначе скрытый интерфейс всё равно протекает наружу.
-        if not _is_visible_in_ui_mode(spec, advanced, method):
-            continue
-        if _matches_method(spec, method) and is_page_search_visible(page_name):
-            allowed_pages.add(page_name)
-    return allowed_pages
-
-
 __all__ = [
     "MODE_ENTRY_PAGES",
     "PAGE_CLEANUP_ORDER",
@@ -523,11 +497,9 @@ __all__ = [
     "get_page_spec",
     "is_page_allowed_for_method",
     "is_page_mode_open_allowed",
-    "is_page_search_visible",
     "iter_page_names_for_cleanup",
     "get_sidebar_layout_pages_for_method",
     "get_sidebar_pages_for_method",
-    "get_sidebar_search_pages_for_method",
     "iter_page_specs",
     "normalize_launch_method_for_ui",
 ]

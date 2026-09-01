@@ -313,15 +313,15 @@ class WindowTests(unittest.TestCase):
 class TitleBarLayoutTests(unittest.TestCase):
     """Кнопки окна должны оставаться неразрывной тройкой справа.
 
-    На экране было видно: «свернуть» и «развернуть» уехали в середину
-    полосы, а «закрыть» осталась справа. Причина не в вёрстке заголовка,
-    а в строке поиска: attach_sidebar_search_to_titlebar вставляет её в
-    ту же раскладку по индексу `count() - 1`, то есть предпоследним
-    элементом, и сразу за ней добавляет растяжку. С тремя отдельными
-    кнопками поиск оказывался между «развернуть» и «закрыть», а растяжка
-    их растаскивала.
+    Однажды это уже ломалось: «свернуть» и «развернуть» уехали в
+    середину полосы, а «закрыть» осталась справа. Виновата была не
+    вёрстка заголовка, а чужой виджет, который вставлял себя в ту же
+    раскладку по индексу `count() - 1` — то есть предпоследним, между
+    «развернуть» и «закрыть», — и сразу за собой добавлял растяжку.
 
-    Здесь повторяется ровно эта пара вставок.
+    Тот виджет был строкой поиска, и её больше нет. Проверка осталась:
+    вставить что-нибудь в полосу заголовка может понадобиться снова, и
+    тогда лучше узнать о разъехавшихся кнопках отсюда, а не с экрана.
     """
 
     def _title_bar(self):
@@ -338,19 +338,6 @@ class TitleBarLayoutTests(unittest.TestCase):
         for button in bar.window_buttons:
             with self.subTest(button=button.objectName()):
                 self.assertIs(button.parent(), bar.buttons_host)
-
-    def test_search_insert_does_not_split_them(self) -> None:
-        from PyQt6.QtWidgets import QLabel
-
-        bar = self._title_bar()
-        layout = bar.hBoxLayout
-        search = QLabel("поиск", bar)
-
-        # Ровно то, что делает attach_sidebar_search_to_titlebar.
-        layout.insertWidget(max(0, layout.count() - 1), search)
-        layout.insertStretch(layout.indexOf(search) + 1, 1)
-
-        self.assertLess(layout.indexOf(search), layout.indexOf(bar.buttons_host))
 
     def test_buttons_stay_last_in_the_bar(self) -> None:
         bar = self._title_bar()

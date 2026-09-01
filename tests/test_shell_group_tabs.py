@@ -396,31 +396,6 @@ class WindowTests(unittest.TestCase):
 
         self.assertEqual(list(window.groupTabs.tabs), ["system"])
 
-    def test_search_box_is_gone_from_the_title_bar(self) -> None:
-        """Искать не в чем: четыре раздела и по три-четыре страницы.
-
-        Поиск оставлен рабочим — на нём держатся подсказки и переход по
-        результату, — но из заголовка убран: места он занимал больше
-        всех остальных элементов вместе взятых.
-        """
-        from ui.navigation.search import SEARCH_IN_TITLEBAR
-
-        self.assertFalse(SEARCH_IN_TITLEBAR)
-
-    def test_removing_search_did_not_split_the_window_buttons(self) -> None:
-        """Поиск вставлялся в раскладку заголовка и тянул за собой растяжку.
-
-        Именно на этом «свернуть» и «развернуть» уезжали в середину
-        полосы. Проверка сторожит, что после его удаления тройка кнопок
-        осталась последней.
-        """
-        window = self._window()
-        layout = window.titleBar.hBoxLayout
-
-        self.assertEqual(
-            layout.indexOf(window.titleBar.buttons_host), layout.count() - 1
-        )
-
     def test_version_stays_at_the_left_edge(self) -> None:
         """Название всплывало к середине после удаления поиска.
 

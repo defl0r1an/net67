@@ -196,15 +196,6 @@ def toggle_advanced_mode(window) -> None:
     except Exception as exc:
         log(f"[NAV] вкладки разделов не пересобраны: {exc}", "DEBUG")
 
-    # Поисковые подсказки тоже зависят от режима: в простом виде
-    # расширенные страницы не должны находиться поиском.
-    try:
-        from ui.navigation.search import update_sidebar_search_suggestions
-
-        update_sidebar_search_suggestions(window)
-    except Exception:
-        pass
-
     # Простому виду хватает окна вдвое меньше: одна страница и два
     # пункта в боковой панели.
     try:
@@ -241,7 +232,7 @@ def _return_to_entry_page(window, method) -> None:
     """
     try:
         from ui.navigation.schema import get_mode_entry_page
-        from ui.navigation.search import show_page
+        from ui.navigation.routing import show_page
     except Exception as exc:
         log(f"[NAV] возврат на главную недоступен: {exc}", "DEBUG")
         return

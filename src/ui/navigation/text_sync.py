@@ -29,17 +29,11 @@ def get_nav_label(window, page_name: PageName) -> str:
 
 
 def refresh_navigation_texts(window) -> None:
-    from ui.navigation.search import update_sidebar_search_suggestions
     from ui.navigation.sidebar_builder import apply_nav_visibility_filter
 
     session = get_window_ui_session(window)
     if session is None:
         return
-
-    if session.sidebar_search_nav_widget is not None:
-        session.sidebar_search_nav_widget.set_placeholder_text(
-            tr_catalog("sidebar.search.placeholder", language=session.ui_language)
-        )
 
     for page_name, item in session.nav_items.items():
         try:
@@ -56,7 +50,6 @@ def refresh_navigation_texts(window) -> None:
             pass
 
     apply_nav_visibility_filter(window)
-    update_sidebar_search_suggestions(window)
 
 
 def on_ui_language_changed(window, language: str) -> None:

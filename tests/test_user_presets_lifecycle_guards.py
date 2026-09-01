@@ -71,17 +71,6 @@ class UserPresetsLifecycleGuardTests(unittest.TestCase):
         self.assertEqual(page.title_label.calls, [])
         self.assertEqual(page.subtitle_label.calls, [])
 
-    def test_sidebar_search_skips_duplicate_query_refresh(self) -> None:
-        from presets.ui.common.user_presets_page import UserPresetsPageBase
-
-        page = UserPresetsPageBase.__new__(UserPresetsPageBase)
-        page._preset_search_input = _TextWidget("Discord")
-        page._apply_preset_search = Mock(side_effect=AssertionError("same search query must not refresh presets"))
-
-        self.assertTrue(UserPresetsPageBase.apply_sidebar_search_query(page, "Discord"))
-
-        page._apply_preset_search.assert_not_called()
-
     def test_clean_activation_keeps_ready_presets_list_attached(self) -> None:
         from presets.ui.common.user_presets_page import UserPresetsPageBase
 

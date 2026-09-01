@@ -32,7 +32,6 @@ from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 from ui.accessibility import set_control_accessibility, set_state_text
 
 
-SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS = 300
 SIDEBAR_HIDDEN_MODE_ITEMS_AFTER_INTERACTIVE_MS = 700
 SIDEBAR_SECONDARY_GROUPS_AFTER_INTERACTIVE_MS = 150
 SIDEBAR_SECONDARY_GROUP_STEP_MS = 6
@@ -482,7 +481,7 @@ def add_nav_item(
     if page_name in session.nav_items:
         return
 
-    from ui.navigation.search import show_page
+    from ui.navigation.routing import show_page
     from ui.navigation.text_sync import get_nav_label
 
     route_key = get_page_route_key(page_name)
@@ -562,95 +561,6 @@ def _set_nav_item_accessibility(item, text: str) -> None:
         description=f"Открывает раздел {label} в боковом меню.",
     )
     set_state_text(item, state_text)
-
-
-def _install_sidebar_search(window) -> None:
-    import time as _time
-
-    started_at = _time.perf_counter()
-    session = get_window_ui_session(window)
-    if session is None:
-        return
-    if session.sidebar_search_nav_widget is not None:
-        return
-
-    widget_cls = session.sidebar_search_widget_cls
-    if widget_cls is None:
-        return
-
-    from ui.navigation.search import (
-        attach_sidebar_search_to_titlebar,
-        on_sidebar_search_changed,
-        setup_sidebar_search_completer,
-        update_titlebar_search_width,
-    )
-
-    # Родителем — окно, а не пустота.
-    #
-    # Виджет без родителя в Qt становится окном верхнего уровня со своей
-    # системной рамкой. Поиск из полосы заголовка убран, в раскладку он
-    # не попадает, и такой сирота висел отдельным окном 640x40: скрытым,
-    # но живым — при запуске оно успевало мигнуть на экране.
-    #
-    # Замер при старте показывал три окна вместо одного: наше, этот
-    # виджет и выпадающий список подсказок к нему.
-    session.sidebar_search_nav_widget = widget_cls(window)
-    session.sidebar_search_nav_widget.textChanged.connect(
-        lambda text, current_window=window: on_sidebar_search_changed(current_window, text)
-    )
-    session.sidebar_search_nav_widget.set_placeholder_text(
-        tr_catalog("sidebar.search.placeholder", language=session.ui_language)
-    )
-    setup_sidebar_search_completer(window)
-    attach_sidebar_search_to_titlebar(window)
-    update_titlebar_search_width(window)
-    try:
-        window.log_startup_metric(
-            "StartupSidebarSearchReady",
-            f"{(_time.perf_counter() - started_at) * 1000:.0f}ms",
-        )
-    except Exception:
-        pass
-
-
-def _schedule_sidebar_search_after_interactive(window) -> None:
-    session = get_window_ui_session(window)
-    if session is None:
-        return
-    if session.sidebar_search_widget_cls is None:
-        return
-
-    scheduled = False
-
-    def _schedule(*_args) -> None:
-        nonlocal scheduled
-        if scheduled:
-            return
-        scheduled = True
-        try:
-            window.log_startup_metric(
-                "StartupSidebarSearchQueued",
-                f"{SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS}ms after interactive",
-            )
-        except Exception:
-            pass
-        QTimer.singleShot(
-            SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS,
-            lambda: _install_sidebar_search(window),
-        )
-
-    try:
-        if bool(getattr(window.startup_state, "interactive_logged", False)):
-            _schedule()
-            return
-    except Exception:
-        _schedule()
-        return
-
-    try:
-        window.startup_interactive_ready.connect(_schedule)
-    except Exception:
-        _schedule()
 
 
 def _install_hidden_mode_nav_items(window) -> None:
@@ -920,18 +830,12 @@ def init_navigation(window) -> None:
     current_method = window.get_launch_method()
 
     session.nav_items = {}
-    session.nav_search_query = ""
     session.nav_mode_visibility = {}
     session.nav_headers = []
     session.nav_header_by_group = {}
-    session.sidebar_search_nav_widget = None
-    session.sidebar_search_model = None
-    session.sidebar_search_completer = None
-    session.sidebar_search_titlebar_attached = False
     session.advanced_toggle_item = None
     initial_visibility = get_nav_visibility(current_method)
 
-    _schedule_sidebar_search_after_interactive(window)
     _schedule_secondary_sidebar_groups_after_interactive(window)
     _schedule_hidden_mode_nav_items_after_interactive(window)
 
@@ -991,8 +895,6 @@ def sync_nav_visibility(
     if session is None or not session.nav_items:
         return
 
-    from ui.navigation.search import update_sidebar_search_suggestions
-
     method = _resolve_nav_visibility_method(window, method)
 
     visibility_by_page = get_nav_visibility(method, advanced=advanced)
@@ -1034,7 +936,6 @@ def sync_nav_visibility(
     _reorder_sidebar_scroll_layout_for_method(window, method, advanced=advanced)
     session.nav_mode_visibility = mode_visibility
     apply_nav_visibility_filter(window, method=method, advanced=advanced)
-    update_sidebar_search_suggestions(window)
 
 
 def sync_existing_nav_visibility(window, method: str | None = None) -> None:
@@ -1083,10 +984,8 @@ def apply_nav_visibility_filter(
     if session is None or not session.nav_items:
         return
 
-    from ui.navigation.text_sync import get_nav_label
     from ui.navigation.schema import get_nav_visibility
 
-    search_query = (session.nav_search_query or "").casefold()
     mode_visibility = session.nav_mode_visibility or {}
     current_method = method
     if current_method is None:
@@ -1101,11 +1000,13 @@ def apply_nav_visibility_filter(
         schema_visible = bool(fallback_mode_visibility.get(page_name, True))
         stored_visible = bool(mode_visibility.get(page_name, schema_visible))
         mode_visible = schema_visible and stored_visible
-        label = get_nav_label(window, page_name)
-        matches_query = not search_query or (search_query in label.casefold())
-        final_visible = mode_visible and matches_query
-        _set_visible_if_changed(item, final_visible)
-        visible_by_page[page_name] = final_visible
+        # Видимость решает только режим запуска.
+        #
+        # Раньше сюда домножался фильтр по строке общего поиска: набрал
+        # текст — в панели остались подходящие пункты. Поиск убран, и
+        # прятать пункты больше нечему.
+        _set_visible_if_changed(item, mode_visible)
+        visible_by_page[page_name] = mode_visible
 
     for header, grouped_pages, _header_key in session.nav_headers:
         if header is None:

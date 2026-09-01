@@ -51,7 +51,6 @@ class UiRootStartupLaunchMethodTests(unittest.TestCase):
                 nav_labels={},
                 default_nav_icon=object(),
                 nav_scroll_position=object(),
-                sidebar_search_widget_cls=object,
             )
 
         eager_pages.assert_called_once_with("zapret1_mode")

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from PyQt6.QtCore import QEvent, QModelIndex, QPoint, QRect, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QFontMetrics, QKeySequence, QPainter, QShortcut
+from PyQt6.QtGui import QAction, QFontMetrics, QPainter
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
@@ -446,12 +446,16 @@ class ProfileStrategyListWidget(QWidget):
         self._search_row.hide()
         layout.addWidget(top_row)
 
-        self._search_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
-        # WindowShortcut: Ctrl+F работает с любым фокусом в окне; защита от
-        # срабатывания на других страницах — проверка isVisible() в обработчике.
-        self._search_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._search_shortcut.activated.connect(self._on_search_shortcut)
-        self._search_shortcut.activatedAmbiguously.connect(self._on_search_shortcut)
+        # Ctrl+F убран.
+        #
+        # Сочетание ловилось на всё окно (WindowShortcut), а от чужих
+        # страниц спасала только проверка isVisible() в обработчике.
+        # Виджет считается видимым и когда лежит на неактивной вкладке —
+        # оттого строка поиска и выскакивала посреди совсем других
+        # разделов, будто сама по себе.
+        #
+        # Фильтр никуда не делся: строка открывается кнопкой рядом со
+        # списком и закрывается Esc.
 
         self._list = ProfileStrategyListView(self)
         self._list.setItemDelegate(ProfileStrategyListDelegate(self._list))
@@ -504,16 +508,6 @@ class ProfileStrategyListWidget(QWidget):
                     event.accept()
                     return True
         return super().eventFilter(watched, event)
-
-    def _on_search_shortcut(self) -> None:
-        if not self.isVisible() or not self.isEnabled():
-            return
-        # Ctrl+F работает как переключатель: повторное нажатие закрывает
-        # поиск и сбрасывает фильтр, как Esc или кнопка закрытия.
-        if self._search_row.isVisible():
-            self.hide_search()
-        else:
-            self.show_search()
 
     def show_search(self) -> None:
         self._search_row.show()

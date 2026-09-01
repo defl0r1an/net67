@@ -143,10 +143,10 @@ class WindowActionsMixin:
         try:
             from app.page_names import PageName
             from ui.page_actions import request_blockcheck_diagnostics_focus
-            from ui.window_adapter import route_window_search_result, show_page
+            from ui.window_adapter import route_window_to_page, show_page
 
             if show_page(self, PageName.BLOCKCHECK):
-                route_window_search_result(self, PageName.BLOCKCHECK, "diagnostics")
+                route_window_to_page(self, PageName.BLOCKCHECK, "diagnostics")
                 request_blockcheck_diagnostics_focus(self)
                 log("Открыта вкладка диагностики в BlockCheck", "INFO")
         except Exception as e:

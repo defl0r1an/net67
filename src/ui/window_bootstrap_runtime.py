@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
@@ -36,7 +35,6 @@ def initialize_build_ui_state(
     nav_labels,
     default_nav_icon,
     nav_scroll_position,
-    sidebar_search_widget_cls,
 ) -> None:
     page_factory = UiPageFactory(window, PAGE_CLASS_SPECS, page_deps_sources)
     page_host = WindowPageHost(window, page_factory)
@@ -49,16 +47,7 @@ def initialize_build_ui_state(
         nav_labels=nav_labels,
         default_nav_icon=default_nav_icon,
         nav_scroll_position=nav_scroll_position,
-        sidebar_search_widget_cls=sidebar_search_widget_cls,
         ui_language=resolve_ui_language(window),
-        sidebar_search_profile_loader=partial(
-            load_sidebar_search_profile_items,
-            runtime_deps.profile_feature,
-        ),
-        sidebar_search_preset_loader=partial(
-            load_sidebar_search_preset_manifests,
-            runtime_deps.presets_feature,
-        ),
         sidebar_expanded_save_worker_factory=runtime_deps.sidebar_expanded_save_worker_factory,
     )
     window.ui_session.runtime_ui_bridge = RuntimeUiBridge(
@@ -141,27 +130,3 @@ def resolve_active_preset_watch_path(*, presets_feature) -> str:
     return str(preset_path or "")
 
 
-def load_sidebar_search_profile_items(profile_feature, launch_method: str) -> tuple[object, ...]:
-    payload = None
-    try:
-        payload = profile_feature.peek_cached_profile_list(launch_method)
-    except Exception:
-        payload = None
-    return tuple(getattr(payload, "items", ()) or ())
-
-
-def load_sidebar_search_preset_manifests(presets_feature, launch_method: str) -> tuple[object, ...]:
-    try:
-        metadata = presets_feature.peek_cached_preset_list_metadata(launch_method)
-    except Exception:
-        return ()
-    if not isinstance(metadata, dict):
-        return ()
-    return tuple(
-        SimpleNamespace(
-            file_name=str(file_name or ""),
-            name=str((meta or {}).get("display_name") or (meta or {}).get("name") or file_name or ""),
-        )
-        for file_name, meta in metadata.items()
-        if isinstance(meta, dict)
-    )

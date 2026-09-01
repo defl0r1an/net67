@@ -32,7 +32,6 @@ class WindowUiRoot:
         nav_labels,
         default_nav_icon,
         nav_scroll_position,
-        sidebar_search_widget_cls,
     ) -> None:
         _ = width
         _ = height
@@ -52,7 +51,6 @@ class WindowUiRoot:
             nav_labels=nav_labels,
             default_nav_icon=default_nav_icon,
             nav_scroll_position=nav_scroll_position,
-            sidebar_search_widget_cls=sidebar_search_widget_cls,
         )
         _metric("StartupWindowUiRootInitialize", started_at)
         session = get_window_ui_session(self._window)

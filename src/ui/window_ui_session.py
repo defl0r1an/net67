@@ -26,18 +26,11 @@ class WindowUiSession:
     default_nav_icon: Any
     nav_scroll_position: Any
 
-    sidebar_search_widget_cls: type | None
     startup_ui_pump_counter: int = 0
-    nav_search_query: str = ""
     nav_mode_visibility: dict[PageName, bool] = field(default_factory=dict)
     nav_headers: list[tuple[Any, tuple[PageName, ...], str]] = field(default_factory=list)
     nav_header_by_group: dict[str, Any] = field(default_factory=dict)
     nav_items: dict[PageName, Any] = field(default_factory=dict)
-    sidebar_search_nav_widget: Any | None = None
-    sidebar_search_model: Any | None = None
-    sidebar_search_completer: Any | None = None
-    sidebar_search_selected_row: int = -1
-    sidebar_search_titlebar_attached: bool = False
     #: Кнопка «Расширенные настройки» внизу сайдбара. Не страница.
     advanced_toggle_item: Any | None = None
 
@@ -49,15 +42,12 @@ class WindowUiSession:
     runtime_ui_bridge: Any | None = None
     page_stack_bootstrap_complete: bool = False
     ui_bootstrap_bindings_connected: bool = False
-    sidebar_search_profile_loader: Callable[[str], tuple[object, ...]] | None = None
-    sidebar_search_preset_loader: Callable[[str], tuple[object, ...]] | None = None
     sidebar_intent_controller: Any | None = None
     sidebar_menu_button_event_filter: Any | None = None
     sidebar_expanded_save_worker_factory: Callable[..., Any] | None = None
     sidebar_expanded_save_runtime: OneShotWorkerRuntime = field(default_factory=OneShotWorkerRuntime)
     sidebar_expanded_save_state: LatestValueWorkerState | None = None
     sidebar_expanded_save_runtime_worker: Any | None = None
-    sidebar_search_runtime_cache: dict[str, tuple[float, tuple[object, ...]]] = field(default_factory=dict)
 
 
 def get_window_ui_session(window) -> WindowUiSession | None:

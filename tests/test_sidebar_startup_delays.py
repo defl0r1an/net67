@@ -10,11 +10,9 @@ class SidebarStartupDelayTests(unittest.TestCase):
         self.assertLessEqual(sidebar_builder.SIDEBAR_SECONDARY_GROUPS_AFTER_INTERACTIVE_MS, 150)
         self.assertLessEqual(sidebar_builder.SIDEBAR_SECONDARY_GROUP_STEP_MS, 6)
 
-    def test_sidebar_search_and_hidden_mode_items_stay_after_initial_paint_but_not_late(self) -> None:
+    def test_hidden_mode_items_stay_after_initial_paint_but_not_late(self) -> None:
         import ui.navigation.sidebar_builder as sidebar_builder
 
-        self.assertGreaterEqual(sidebar_builder.SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS, 250)
-        self.assertLessEqual(sidebar_builder.SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS, 300)
         self.assertGreaterEqual(sidebar_builder.SIDEBAR_HIDDEN_MODE_ITEMS_AFTER_INTERACTIVE_MS, 600)
         self.assertLessEqual(sidebar_builder.SIDEBAR_HIDDEN_MODE_ITEMS_AFTER_INTERACTIVE_MS, 700)
 

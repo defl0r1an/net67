@@ -133,10 +133,6 @@ class WindowLifecycleMixin:
         """Обновляем геометрию при изменении размера окна."""
         super().resizeEvent(event)
         try:
-            sync_titlebar_search_width(self)
-        except Exception as e:
-            log(f"Не удалось синхронизировать ширину поиска в заголовке: {e}", "DEBUG")
-        try:
             reapply_sidebar_intent_on_resize(self)
         except Exception as e:
             log(f"Не удалось восстановить развёрнутый сайдбар после ресайза: {e}", "DEBUG")
@@ -182,12 +178,6 @@ class WindowLifecycleMixin:
             log("🎨 Принудительное обновление стилей выполнено после показа окна", "DEBUG")
         except Exception as e:
             log(f"Ошибка обновления стилей: {e}", "DEBUG")
-
-
-def sync_titlebar_search_width(window) -> None:
-    from ui.window_adapter import sync_titlebar_search_width as _sync_titlebar_search_width
-
-    _sync_titlebar_search_width(window)
 
 
 def reapply_sidebar_intent_on_resize(window) -> None:

@@ -328,16 +328,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
             nav_labels={},
         )
@@ -350,7 +344,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         with (
             patch.object(
                 sidebar_builder,
-                "_schedule_sidebar_search_after_interactive",
                 side_effect=lambda current_window: None,
             ),
             patch.object(
@@ -420,16 +413,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
             nav_labels={},
         )
@@ -448,7 +435,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
             session.nav_items[page_name] = SimpleNamespace(setVisible=Mock())
 
         with (
-            patch.object(sidebar_builder, "_schedule_sidebar_search_after_interactive", side_effect=lambda current_window: None),
             patch.object(sidebar_builder, "_schedule_hidden_mode_nav_items_after_interactive", side_effect=lambda current_window: None),
             patch.object(sidebar_builder.QTimer, "singleShot", side_effect=lambda delay_ms, callback: scheduled.append((delay_ms, callback))),
             patch.object(sidebar_builder, "add_nav_item", side_effect=_fake_add_nav_item),
@@ -514,16 +500,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
         )
         nav = FakeNavigationInterface()
@@ -540,7 +520,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         with (
             patch.object(
                 sidebar_builder,
-                "_schedule_sidebar_search_after_interactive",
                 side_effect=lambda current_window: None,
             ),
             patch.object(
@@ -598,16 +577,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
         )
         nav = FakeNavigationInterface()
@@ -621,7 +594,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         with (
             patch.object(
                 sidebar_builder,
-                "_schedule_sidebar_search_after_interactive",
                 side_effect=lambda current_window: None,
             ),
             patch.object(
@@ -678,16 +650,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
         )
         nav = FakeNavigationInterface()
@@ -698,7 +664,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         )
 
         with (
-            patch.object(sidebar_builder, "_schedule_sidebar_search_after_interactive", side_effect=lambda *_args: None),
             patch.object(sidebar_builder, "_schedule_hidden_mode_nav_items_after_interactive", side_effect=lambda *_args: None),
             patch.object(sidebar_builder, "add_nav_item", side_effect=lambda *_args, **_kwargs: None),
             patch("settings.store.get_ui_state_settings", return_value={"sidebar_expanded": True}),
@@ -753,16 +718,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
         )
         nav = FakeNavigationInterface()
@@ -783,7 +742,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         with (
             patch.object(
                 sidebar_builder,
-                "_schedule_sidebar_search_after_interactive",
                 side_effect=lambda current_window: None,
             ),
             patch.object(
@@ -862,16 +820,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         session = SimpleNamespace(
             nav_scroll_position=None,
             ui_language="ru",
-            sidebar_search_widget_cls=None,
             nav_items={},
             nav_headers=[],
             nav_header_by_group={},
             nav_mode_visibility={},
-            nav_search_query="",
-            sidebar_search_nav_widget=None,
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
-            sidebar_search_titlebar_attached=False,
             pages={},
         )
         nav = FakeNavigationInterface()
@@ -888,7 +840,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         with (
             patch.object(
                 sidebar_builder,
-                "_schedule_sidebar_search_after_interactive",
                 side_effect=lambda current_window: None,
             ),
             patch.object(
@@ -1022,13 +973,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
             nav_labels={},
             nav_headers=[],
             nav_header_by_group={},
-            nav_search_query="",
             nav_mode_visibility={},
             nav_scroll_position=None,
             default_nav_icon=None,
             ui_language="ru",
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
             page_host=SimpleNamespace(ensure_page=lambda page_name: None),
         )
         window = SimpleNamespace(
@@ -1077,7 +1025,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.ZAPRET1_MODE_CONTROL: "Управление Zapret 1",
             },
             nav_headers=[(header, (PageName.ZAPRET2_MODE_CONTROL,), "nav.header.root")],
-            nav_search_query="",
             nav_mode_visibility={
                 PageName.ZAPRET2_MODE_CONTROL: True,
                 PageName.ZAPRET1_MODE_CONTROL: False,
@@ -1182,7 +1129,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.NETWORK: "Настройка DNS",
             },
             nav_headers=[],
-            nav_search_query="",
             nav_mode_visibility={
                 PageName.ZAPRET2_MODE_CONTROL: True,
             },
@@ -1232,7 +1178,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.NETWORK: "Настройка DNS",
             },
             nav_headers=[],
-            nav_search_query="",
             nav_mode_visibility={
                 PageName.ZAPRET2_MODE_CONTROL: True,
                 PageName.ZAPRET1_MODE_CONTROL: True,
@@ -1334,13 +1279,10 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 )
             ],
             nav_header_by_group={"settings": settings_header},
-            nav_search_query="",
             nav_mode_visibility={},
             nav_scroll_position=None,
             default_nav_icon=None,
             ui_language="ru",
-            sidebar_search_model=None,
-            sidebar_search_completer=None,
             page_host=SimpleNamespace(ensure_page=lambda page_name: None),
         )
         window = SimpleNamespace(
@@ -1408,395 +1350,6 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         window.addSubInterface.assert_called_once()
         self.assertIs(window.addSubInterface.call_args.args[0], loaded_page)
         self.assertIn(PageName.ZAPRET2_MODE_CONTROL, session.nav_items)
-
-    def test_sidebar_search_is_delayed_until_interactive_ready(self) -> None:
-        import ui.navigation.sidebar_builder as sidebar_builder
-
-        class Signal:
-            def __init__(self) -> None:
-                self._callbacks = []
-
-            def connect(self, callback) -> None:
-                self._callbacks.append(callback)
-
-            def emit(self) -> None:
-                for callback in list(self._callbacks):
-                    callback("ui_ready")
-
-        signal = Signal()
-        window = SimpleNamespace(
-            ui_session=SimpleNamespace(
-                sidebar_search_widget_cls=object,
-            ),
-            startup_state=SimpleNamespace(interactive_logged=False),
-            startup_interactive_ready=signal,
-        )
-        scheduled = []
-        installed = []
-
-        with (
-            patch.object(
-                sidebar_builder.QTimer,
-                "singleShot",
-                side_effect=lambda delay_ms, callback: scheduled.append((int(delay_ms), callback)),
-            ),
-            patch.object(
-                sidebar_builder,
-                "_install_sidebar_search",
-                side_effect=lambda current_window: installed.append(current_window),
-            ),
-        ):
-            sidebar_builder._schedule_sidebar_search_after_interactive(window)
-            self.assertEqual(scheduled, [])
-            self.assertEqual(installed, [])
-
-            signal.emit()
-
-            self.assertEqual(len(scheduled), 1)
-            self.assertEqual(scheduled[0][0], sidebar_builder.SIDEBAR_SEARCH_AFTER_INTERACTIVE_MS)
-            self.assertEqual(installed, [])
-
-            scheduled[0][1]()
-
-        self.assertEqual(installed, [window])
-
-    def test_sidebar_search_keeps_typing_global_even_when_page_has_local_handler(self) -> None:
-        import ui.navigation.search as sidebar_search
-
-        class CurrentPage:
-            def __init__(self) -> None:
-                self.queries = []
-
-            def apply_sidebar_search_query(self, query: str) -> bool:
-                self.queries.append(query)
-                return True
-
-        current_page = CurrentPage()
-        session = SimpleNamespace(
-            nav_search_query="",
-            page_host=SimpleNamespace(current_page=lambda: current_page),
-        )
-        window = SimpleNamespace(ui_session=session)
-
-        with (
-            patch.object(sidebar_search, "route_sidebar_search_by_text", return_value=False) as route_by_text,
-            patch.object(sidebar_search, "update_sidebar_search_suggestions") as update_suggestions,
-            patch("ui.navigation.sidebar_builder.apply_nav_visibility_filter") as apply_nav_visibility_filter,
-        ):
-            sidebar_search.on_sidebar_search_changed(window, "Discord")
-
-        self.assertEqual(session.nav_search_query, "Discord")
-        self.assertEqual(current_page.queries, [])
-        route_by_text.assert_called_once_with(window, "Discord", prefer_first=False)
-        apply_nav_visibility_filter.assert_called_once_with(window)
-        update_suggestions.assert_called_once_with(window)
-
-    def test_sidebar_search_applies_result_query_after_route(self) -> None:
-        import ui.navigation.search as sidebar_search
-        from app.page_names import PageName
-
-        queries = []
-        session = SimpleNamespace(
-            page_host=SimpleNamespace(
-                current_page=lambda: SimpleNamespace(
-                    apply_sidebar_search_query=lambda query: queries.append(query) or True
-                )
-            ),
-            sidebar_search_nav_widget=SimpleNamespace(clear=Mock()),
-        )
-        window = SimpleNamespace(ui_session=session)
-
-        with patch.object(sidebar_search, "route_search_result", return_value=True):
-            routed = sidebar_search._route_search_result_and_clear(
-                window,
-                PageName.ZAPRET2_PRESET_SETUP,
-                query_text="Discord Voice",
-            )
-
-        self.assertTrue(routed)
-        self.assertEqual(queries, ["Discord Voice"])
-
-
-    def test_sidebar_search_builds_profile_and_preset_runtime_entries(self) -> None:
-        from app.page_names import PageName
-        from settings.mode import ZAPRET2_MODE
-        import ui.navigation.search as sidebar_search
-
-        profiles = (
-            SimpleNamespace(
-                key="profile:0",
-                display_name="Discord Voice",
-                strategy_name="Fake",
-                group_name="Voice",
-                list_type="hostlist",
-                match_lines=("--hostlist=lists/private-discord-file.txt",),
-            ),
-        )
-        manifests = (
-            SimpleNamespace(file_name="gaming.txt", name="Gaming Preset"),
-        )
-        session = SimpleNamespace(
-            sidebar_search_profile_loader=Mock(return_value=profiles),
-            sidebar_search_preset_loader=Mock(return_value=manifests),
-        )
-        window = SimpleNamespace(
-            ui_session=session,
-            get_launch_method=lambda: ZAPRET2_MODE,
-        )
-
-        entries = sidebar_search._build_runtime_search_entries(window)
-
-        self.assertTrue(
-            any(entry.kind == "profile" and entry.page_name == PageName.ZAPRET2_PRESET_SETUP for entry in entries)
-        )
-        self.assertTrue(
-            any(entry.kind == "preset" and entry.page_name == PageName.ZAPRET2_USER_PRESETS for entry in entries)
-        )
-        self.assertFalse(any("private-discord-file" in " ".join(entry.keywords) for entry in entries))
-        session.sidebar_search_profile_loader.assert_called_once_with(ZAPRET2_MODE)
-        session.sidebar_search_preset_loader.assert_called_once_with(ZAPRET2_MODE)
-
-    def test_sidebar_search_suggestions_expose_screen_reader_text(self) -> None:
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QStandardItemModel
-
-        from app.page_names import PageName
-        from app.search_index import SearchEntry, SearchMatch
-        import ui.navigation.search as sidebar_search
-
-        class _Completer:
-            def popup(self):
-                return SimpleNamespace(hide=Mock())
-
-        entry = SearchEntry(
-            "runtime.profile.discord",
-            PageName.ZAPRET2_PRESET_SETUP,
-            title="Discord Voice",
-            location="Готовые стратегии",
-            query_text="Discord Voice",
-        )
-        model = QStandardItemModel()
-        session = SimpleNamespace(
-            nav_search_query="Discord",
-            ui_language="ru",
-            sidebar_search_model=model,
-            sidebar_search_completer=_Completer(),
-            sidebar_search_nav_widget=SimpleNamespace(isVisible=lambda: False),
-        )
-        window = SimpleNamespace(ui_session=session)
-
-        with (
-            patch.object(sidebar_search, "get_sidebar_search_pages", return_value={PageName.ZAPRET2_PRESET_SETUP}),
-            patch.object(sidebar_search, "_build_runtime_search_entries", return_value=()),
-            patch.object(sidebar_search, "find_search_entries", return_value=(SearchMatch(entry, 10),)),
-        ):
-            sidebar_search.update_sidebar_search_suggestions(window)
-
-        item = model.item(0)
-
-        self.assertEqual(item.text(), "Discord Voice - Готовые стратегии")
-        self.assertEqual(
-            item.data(Qt.ItemDataRole.AccessibleTextRole),
-            "Результат поиска: Discord Voice, место: Готовые стратегии. Нажмите Enter, чтобы открыть.",
-        )
-
-    def test_sidebar_search_popup_reports_current_result_to_screen_reader(self) -> None:
-        import os
-
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-        from PyQt6.QtCore import QObject, Qt
-        from PyQt6.QtGui import QStandardItem
-        from PyQt6.QtWidgets import QApplication
-
-        import ui.navigation.search as sidebar_search
-
-        app = QApplication.instance() or QApplication([])
-        self.assertIsNotNone(app)
-
-        class _SearchWidget:
-            def __init__(self) -> None:
-                self.completer = None
-
-            def set_completer(self, completer) -> None:
-                self.completer = completer
-
-        search_widget = _SearchWidget()
-        session = SimpleNamespace(sidebar_search_nav_widget=search_widget)
-        window = QObject()
-        window.ui_session = session
-
-        sidebar_search.setup_sidebar_search_completer(window)
-        item = QStandardItem("Discord Voice - Готовые стратегии")
-        item.setData(
-            "Результат поиска: Discord Voice, место: Готовые стратегии. Нажмите Enter, чтобы открыть.",
-            int(Qt.ItemDataRole.AccessibleTextRole),
-        )
-        session.sidebar_search_model.appendRow(item)
-
-        popup = session.sidebar_search_completer.popup()
-        popup.setCurrentIndex(session.sidebar_search_model.index(0, 0))
-
-        self.assertEqual(
-            popup.property("screenReaderStateText"),
-            "Результат поиска: Discord Voice, место: Готовые стратегии. Нажмите Enter, чтобы открыть.",
-        )
-
-    def test_sidebar_search_keyboard_navigation_reads_selected_result(self) -> None:
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QStandardItem, QStandardItemModel
-
-        import ui.navigation.search as sidebar_search
-
-        class _SearchWidget:
-            def __init__(self) -> None:
-                self.state_texts: list[str] = []
-
-            def set_keyboard_result_text(self, text: str) -> None:
-                self.state_texts.append(text)
-
-        first = QStandardItem("DNS - Настройка DNS")
-        first.setData(
-            "Результат поиска: DNS, место: Настройка DNS. Нажмите Enter, чтобы открыть.",
-            int(Qt.ItemDataRole.AccessibleTextRole),
-        )
-        second = QStandardItem("Логи - Логи")
-        second.setData(
-            "Результат поиска: Логи, место: Логи. Нажмите Enter, чтобы открыть.",
-            int(Qt.ItemDataRole.AccessibleTextRole),
-        )
-        model = QStandardItemModel()
-        model.appendRow(first)
-        model.appendRow(second)
-        session = SimpleNamespace(
-            sidebar_search_model=model,
-            sidebar_search_nav_widget=_SearchWidget(),
-            sidebar_search_selected_row=-1,
-        )
-        window = SimpleNamespace(ui_session=session)
-
-        self.assertTrue(sidebar_search.select_sidebar_search_result_by_keyboard(window, 1))
-        self.assertEqual(session.sidebar_search_selected_row, 0)
-        self.assertEqual(
-            session.sidebar_search_nav_widget.state_texts[-1],
-            "Результат поиска: DNS, место: Настройка DNS. Нажмите Enter, чтобы открыть.",
-        )
-
-        self.assertTrue(sidebar_search.select_sidebar_search_result_by_keyboard(window, 1))
-        self.assertEqual(session.sidebar_search_selected_row, 1)
-        self.assertEqual(
-            session.sidebar_search_nav_widget.state_texts[-1],
-            "Результат поиска: Логи, место: Логи. Нажмите Enter, чтобы открыть.",
-        )
-
-    def test_sidebar_search_keyboard_activation_opens_selected_result(self) -> None:
-        from PyQt6.QtGui import QStandardItem, QStandardItemModel
-
-        from app.page_names import PageName
-        import ui.navigation.search as sidebar_search
-
-        item = QStandardItem("Логи - Логи")
-        item.setData(PageName.LOGS.name, sidebar_search._PAGE_ROLE)
-        item.setData("", sidebar_search._TAB_ROLE)
-        item.setData("", sidebar_search._QUERY_ROLE)
-        model = QStandardItemModel()
-        model.appendRow(item)
-        session = SimpleNamespace(
-            nav_search_query="лог",
-            sidebar_search_model=model,
-            sidebar_search_nav_widget=SimpleNamespace(clear=Mock()),
-            sidebar_search_selected_row=0,
-        )
-        window = SimpleNamespace(ui_session=session)
-
-        with patch.object(sidebar_search, "route_search_result", return_value=True) as route:
-            self.assertTrue(sidebar_search.activate_sidebar_search_result_from_keyboard(window))
-
-        route.assert_called_once_with(window, PageName.LOGS, "")
-        session.sidebar_search_nav_widget.clear.assert_called_once_with()
-
-    def test_sidebar_search_reuses_runtime_entries_cache_while_typing(self) -> None:
-        from settings.mode import ZAPRET2_MODE
-        import ui.navigation.search as sidebar_search
-
-        profiles = (
-            SimpleNamespace(key="profile:0", display_name="Discord Voice"),
-        )
-        manifests = (
-            SimpleNamespace(file_name="gaming.txt", name="Gaming Preset"),
-        )
-        session = SimpleNamespace(
-            sidebar_search_profile_loader=Mock(return_value=profiles),
-            sidebar_search_preset_loader=Mock(return_value=manifests),
-            sidebar_search_runtime_cache={},
-        )
-        window = SimpleNamespace(
-            ui_session=session,
-            get_launch_method=lambda: ZAPRET2_MODE,
-        )
-
-        first_entries = sidebar_search._build_runtime_search_entries(window)
-        second_entries = sidebar_search._build_runtime_search_entries(window)
-
-        self.assertIs(first_entries, second_entries)
-        session.sidebar_search_profile_loader.assert_called_once_with(ZAPRET2_MODE)
-        session.sidebar_search_preset_loader.assert_called_once_with(ZAPRET2_MODE)
-
-    def test_sidebar_search_loaders_use_peek_cache_without_sync_rebuild(self) -> None:
-        import ui.window_bootstrap_runtime as bootstrap_runtime
-
-        profile_source = inspect.getsource(bootstrap_runtime.load_sidebar_search_profile_items)
-        preset_source = inspect.getsource(bootstrap_runtime.load_sidebar_search_preset_manifests)
-
-        self.assertIn("peek_cached_profile_list", profile_source)
-        self.assertIn("peek_cached_preset_list_metadata", preset_source)
-        self.assertNotIn(".list_profiles(", profile_source)
-        self.assertNotIn(".list_preset_manifests(", preset_source)
-
-    def test_sidebar_search_loaders_return_empty_when_cache_missing(self) -> None:
-        import ui.window_bootstrap_runtime as bootstrap_runtime
-
-        profile_feature = SimpleNamespace(
-            peek_cached_profile_list=Mock(return_value=None),
-            list_profiles=Mock(side_effect=AssertionError("sync profile rebuild")),
-        )
-        presets_feature = SimpleNamespace(
-            peek_cached_preset_list_metadata=Mock(return_value=None),
-            list_preset_manifests=Mock(side_effect=AssertionError("sync preset rebuild")),
-        )
-
-        self.assertEqual(bootstrap_runtime.load_sidebar_search_profile_items(profile_feature, "preset"), ())
-        self.assertEqual(bootstrap_runtime.load_sidebar_search_preset_manifests(presets_feature, "preset"), ())
-        profile_feature.peek_cached_profile_list.assert_called_once_with("preset")
-        presets_feature.peek_cached_preset_list_metadata.assert_called_once_with("preset")
-        profile_feature.list_profiles.assert_not_called()
-        presets_feature.list_preset_manifests.assert_not_called()
-
-    def test_preset_setup_page_exposes_sidebar_search_handler(self) -> None:
-        from profile.ui.preset_setup_page import PresetSetupPageBase
-
-        handler_source = inspect.getsource(PresetSetupPageBase.apply_sidebar_search_query)
-
-        self.assertIn("_profile_search_input", handler_source)
-        self.assertIn("_on_profile_search_text_changed(query)", handler_source)
-
-    def test_preset_setup_sidebar_search_skips_duplicate_query(self) -> None:
-        from profile.ui.preset_setup_page import PresetSetupPageBase
-
-        search_input = SimpleNamespace(
-            text=lambda: "Discord",
-            setText=Mock(side_effect=AssertionError("same profile search query must not rewrite input")),
-        )
-        page = PresetSetupPageBase.__new__(PresetSetupPageBase)
-        page._profile_search_input = search_input
-        page._on_profile_search_text_changed = Mock(
-            side_effect=AssertionError("same profile search query must not refresh profile list")
-        )
-
-        self.assertTrue(PresetSetupPageBase.apply_sidebar_search_query(page, "Discord"))
-
-        search_input.setText.assert_not_called()
-        page._on_profile_search_text_changed.assert_not_called()
 
     def test_hidden_mode_sidebar_items_are_delayed_until_interactive_ready(self) -> None:
         import ui.navigation.sidebar_builder as sidebar_builder
