@@ -205,11 +205,13 @@ class Win11ToggleRow(FluentSettingCard):
 
         `SwitchButton.setChecked` в qfluentwidgets зовёт `_updateText()`
         до того, как обновит индикатор, а `_updateText` читает состояние
-        именно у индикатора. Подпись отстаёт на одно переключение.
-        Обычно это незаметно, но `_freeze_switch_width` переключает
-        состояние трижды подряд, и после замера рядом с выключенным
-        переключателем оставалось «Вкл.» — замерено на странице
-        «Серверы»: индикатор выключен, подпись «Вкл.».
+        именно у индикатора. Обычно подпись всё же догоняет: индикатор
+        шлёт `toggled`, а тот повторно зовёт `_updateText`.
+
+        Догоняет — пока состояние действительно меняется. Установка того
+        же значения сигнала не шлёт, и подпись остаётся от предыдущего
+        состояния. Отсюда «Вкл.» рядом с выключенным переключателем на
+        странице «Серверы».
         """
         try:
             toggle.setText(_TOGGLE_ON_TEXT if toggle.isChecked() else _TOGGLE_OFF_TEXT)
@@ -218,29 +220,118 @@ class Win11ToggleRow(FluentSettingCard):
 
     @classmethod
     def _freeze_switch_width(cls, toggle) -> None:
-        """Закрепляет ширину переключателя по более длинному состоянию.
+        """Закрепляет ширину переключателя по более длинной подписи.
 
         SwitchButton при каждой смене состояния зовёт adjustSize(), а
         «Вкл.» короче «Выкл.» — и переключатель, прижатый к правому
-        краю, прыгал вправо при включении. Ширину считаем по обоим
-        состояниям и берём большую.
+        краю, прыгал вправо при включении.
+
+        Ширину меряем по шрифту, а не переключением состояния.
+
+        Прежний способ включал и выключал переключатель трижды подряд,
+        чтобы снять sizeHint в обоих положениях. Замер выходил верным, а
+        переключатель — сломанным.
+
+        Кружок в qfluentwidgets ездит анимацией `slideAni`, которую
+        запускает сигнал `toggled` у индикатора. А `QAbstractAnimation.
+        start()` на уже запущенной анимации не делает ничего — молча
+        возвращается. Замер оставлял `slideAni` запущенной, и следующая
+        же установка состояния — та, которой страница восстанавливала
+        сохранённые настройки, — попадала в эти самые сто двадцать
+        миллисекунд. Кружок никуда не ехал.
+
+        Наружу это выглядело так: подпись «Вкл.», настройки под
+        тумблером раскрыты, обход работает — а тумблер нарисован
+        выключенным. Страдали только те, что включаются при построении
+        страницы: выключенным кружок стоит на месте и без анимации.
+
+        Теперь ширина считается по метрикам шрифта, состояние при этом
+        не трогается вовсе — ломаться нечему.
         """
         try:
-            was_checked = bool(toggle.isChecked())
-            widths = []
-            for checked in (False, True):
-                toggle.blockSignals(True)
-                toggle.setChecked(checked)
-                toggle.blockSignals(False)
-                toggle.adjustSize()
-                widths.append(int(toggle.sizeHint().width()))
-            toggle.blockSignals(True)
-            toggle.setChecked(was_checked)
-            toggle.blockSignals(False)
-            cls._sync_switch_text(toggle)
-            toggle.setFixedWidth(max(widths))
+            label = cls._switch_label(toggle)
+            if label is None:
+                return
+
+            metrics = label.fontMetrics()
+            text_width = max(
+                int(metrics.horizontalAdvance(_TOGGLE_ON_TEXT)),
+                int(metrics.horizontalAdvance(_TOGGLE_OFF_TEXT)),
+            )
+
+            # Ширина «всего остального» — сам переключатель, отступы,
+            # поля раскладки — берётся у виджета, а не константами из
+            # чужой библиотеки: поменяет размер у себя, у нас ничего не
+            # разъедется.
+            frame = int(toggle.sizeHint().width()) - int(label.sizeHint().width())
+
+            # Нижняя граница, а не жёсткая ширина. Жёсткая обрезала бы
+            # подпись многоточием, если шрифт окажется крупнее, чем мы
+            # намеряли до применения стилей. Нижняя граница только не
+            # даёт переключателю сжаться и прыгнуть влево.
+            toggle.setMinimumWidth(max(0, frame) + text_width + 4)
         except Exception:
             pass
+
+    @staticmethod
+    def _snap_indicator(toggle) -> None:
+        """Ставит кружок переключателя в конечное положение без поездки.
+
+        Кружок в qfluentwidgets ездит анимацией, а запускается она по
+        сигналу `toggled` у индикатора. Сигнала нет — кружок остаётся
+        там, где стоял, и переключатель рисуется выключенным при
+        включённом состоянии. Ровно это и было видно на странице
+        Telegram Proxy: подпись «Вкл.», настройки под тумблером
+        раскрыты, а сам тумблер выглядит выключенным.
+
+        Программная установка состояния — это не действие человека, а
+        восстановление сохранённых настроек при построении страницы.
+        Ехать кружку неоткуда: страницу только что открыли, и
+        «анимация» свелась бы к рывку на уже нарисованном виджете.
+        Поэтому ставим положение прямо и анимацию не ждём.
+        """
+        indicator = getattr(toggle, "indicator", None)
+        if indicator is None:
+            return
+
+        try:
+            animation = getattr(indicator, "slideAni", None)
+            if animation is not None:
+                # Иначе недоехавшая анимация вернёт кружок обратно.
+                animation.stop()
+
+            # Отступ слева и диаметр кружка заданы в отрисовке
+            # индикатора: круг рисуется 12 на 12 с отступом 5. Считаем
+            # по ширине, а не константой 25, чтобы правка размера
+            # переключателя в библиотеке не оставила кружок висеть
+            # посреди дорожки.
+            margin, diameter = 5, 12
+            end = int(indicator.width()) - diameter - margin if toggle.isChecked() else margin
+            indicator.setSliderX(max(margin, end))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _switch_label(toggle):
+        """Подпись внутри SwitchButton — та, что показывает «Вкл./Выкл.»."""
+        label = getattr(toggle, "label", None)
+        # Проверяем ровно то, чем пользуемся: метрики шрифта и sizeHint.
+        # Проверка «а есть ли setFixedWidth» осталась бы от прошлого
+        # способа и молча отбрасывала бы годную подпись.
+        if label is not None and hasattr(label, "fontMetrics") and hasattr(label, "sizeHint"):
+            return label
+
+        # Имя поля — деталь чужой библиотеки, и на неё нельзя опираться
+        # намертво: сменится в следующей версии — тумблеры начнут
+        # прыгать, а мы об этом не узнаем.
+        try:
+            from PyQt6.QtWidgets import QLabel
+
+            for child in toggle.findChildren(QLabel):
+                return child
+        except Exception:
+            pass
+        return None
 
     def setChecked(self, checked: bool, block_signals: bool = False):
         toggle = getattr(self, "_switch_button", None)
@@ -249,9 +340,13 @@ class Win11ToggleRow(FluentSettingCard):
         next_checked = bool(checked)
         try:
             if bool(toggle.isChecked()) == next_checked:
-                # Состояние уже верное, но подпись могла отстать после
-                # замера ширины — сверяем её и здесь тоже.
+                # Состояние уже верное — но именно в этом случае
+                # индикатор не пришлёт `toggled`, а значит кружок и
+                # подпись никто не обновит. Приводим оба к состоянию
+                # руками, иначе тумблер, выставленный до показа окна,
+                # так и останется нарисованным выключенным.
                 self._sync_switch_text(toggle)
+                self._snap_indicator(toggle)
                 return
         except Exception:
             pass
@@ -267,6 +362,7 @@ class Win11ToggleRow(FluentSettingCard):
         finally:
             self._programmatic_set_checked = False
         self._sync_switch_text(toggle)
+        self._snap_indicator(toggle)
         self._update_toggle_accessibility()
 
     def isChecked(self) -> bool:
