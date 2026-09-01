@@ -15,6 +15,7 @@ _WIDGET_EXPORTS: dict[str, tuple[str, str]] = {
     "StrategiesListTooltip": (".strategies_tooltip", "StrategiesListTooltip"),
     "NotificationBanner": (".notification_banner", "NotificationBanner"),
     "Win11Spinner": (".win11_spinner", "Win11Spinner"),
+    "CollapsibleSection": (".collapsible_section", "CollapsibleSection"),
     "FolderGroup": (".folder_header", "FolderGroup"),
     "FolderGroupHeader": (".folder_header", "FolderGroupHeader"),
     "ProfileTypeSelector": ("profile.ui.widgets.profile_type_selector", "ProfileTypeSelector"),
