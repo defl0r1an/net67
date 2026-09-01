@@ -25,6 +25,8 @@
 
 from __future__ import annotations
 
+import time
+
 
 #: Сколько ждём ответа. Подписка — короткий текстовый файл; если сервер
 #: молчит десять секунд, он недоступен, а не задумался.
@@ -110,7 +112,7 @@ def _explain_network_error(exc: Exception, url: str, timeout: int) -> str:
     return f"не удалось открыть ссылку: {exc}"
 
 
-def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S) -> str:
+def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S, with_headers: bool = False):
     """Скачивает содержимое подписки. Возвращает текст как есть.
 
     Расшифровкой base64 занимается разборщик — здесь только доставка.
@@ -169,7 +171,17 @@ def fetch_subscription(url: str, *, timeout: int = TIMEOUT_S) -> str:
     if not chunks:
         raise SubscriptionError("по ссылке пусто")
 
-    return b"".join(chunks).decode("utf-8", errors="replace")
+    text = b"".join(chunks).decode("utf-8", errors="replace")
+    if not with_headers:
+        return text
+
+    # Заголовки нужны целиком: помимо трафика панели кладут туда имя
+    # подписки, а какие ещё — заранее неизвестно.
+    try:
+        headers = {str(k).lower(): str(v) for k, v in response.headers.items()}
+    except Exception:
+        headers = {}
+    return text, headers
 
 
 def load_subscription(url: str, *, timeout: int = TIMEOUT_S) -> tuple[list, list[str]]:
@@ -179,18 +191,78 @@ def load_subscription(url: str, *, timeout: int = TIMEOUT_S) -> tuple[list, list
     показывает их одинаково, и разделять два пути ради одного и того же
     сообщения незачем.
     """
+    profiles, errors, _info = load_subscription_with_info(url, timeout=timeout)
+    return (profiles, errors)
+
+
+def load_subscription_with_info(url: str, *, timeout: int = TIMEOUT_S):
+    """То же, плюс сведения о самой подписке: трафик, срок, имя.
+
+    Отдельная функция, а не замена прежней: у той два вызова в коде, и
+    менять их форму ради дополнения незачем.
+    """
     from vpn.links import parse_subscription
+    from vpn.subscriptions import (
+        PROFILE_TITLE_HEADER,
+        Subscription,
+        USERINFO_HEADER,
+        parse_usage,
+    )
 
     try:
-        body = fetch_subscription(url, timeout=timeout)
+        body, headers = fetch_subscription(url, timeout=timeout, with_headers=True)
     except SubscriptionError as exc:
-        return ([], [str(exc)])
+        return ([], [str(exc)], None)
 
-    return parse_subscription(body)
+    profiles, errors = parse_subscription(body)
+
+    title = str(headers.get(PROFILE_TITLE_HEADER) or "").strip()
+    if title:
+        # Панели кладут имя в base64, если в нём не-латиница.
+        title = _decode_header_title(title)
+
+    info = Subscription(
+        url=url,
+        title=title,
+        updated_at=time.time(),
+        server_count=len(profiles),
+        usage=parse_usage(headers.get(USERINFO_HEADER, "")),
+    )
+    return (profiles, errors, info)
+
+
+#: Приставка, которой панели помечают имя, закодированное в base64.
+#:
+#: Единого правила тут нет: одни панели шлют голый base64, другие —
+#: с приставкой. Без её отсечения имя не декодировалось совсем: двоеточие
+#: для base64 недопустимо, разбор падал, и в списке серверов красовалось
+#: «base64:R3J1VlBO» вместо «GruVPN».
+_BASE64_PREFIX = "base64:"
+
+
+def _decode_header_title(value: str) -> str:
+    """Имя подписки из заголовка. Может быть в base64, может не быть."""
+    import base64
+    import binascii
+
+    text = str(value or "").strip()
+    if text.lower().startswith(_BASE64_PREFIX):
+        text = text[len(_BASE64_PREFIX) :].strip()
+
+    try:
+        decoded = base64.b64decode(text + "=" * (-len(text) % 4), validate=True)
+    except (binascii.Error, ValueError):
+        return text
+
+    try:
+        return decoded.decode("utf-8").strip() or text
+    except UnicodeDecodeError:
+        return text
 
 
 __all__ = [
     "MAX_BYTES",
+    "load_subscription_with_info",
     "SubscriptionError",
     "TIMEOUT_S",
     "USER_AGENT",

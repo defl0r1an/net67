@@ -32,10 +32,12 @@ from vpn.tabs import (
     TAB_HINTS,
     TAB_INPUT_TITLES,
     TAB_LINKS,
+    TAB_NOTES,
     TAB_ORDER,
     TAB_PLACEHOLDERS,
     TAB_SUBTITLES,
     TAB_TITLES,
+    TAB_WARNINGS,
     empty_text,
     normalize_tab,
     profiles_for_tab,
@@ -69,9 +71,18 @@ SERVER_LIST_HEIGHT = 380
 #:
 #: Список тянулся во всю страницу — на широком мониторе это полоса в
 #: полтора метра, где название сервера жмётся к левому краю, а справа
-#: полтора экрана пустоты. Ширина ограничена по длине самой длинной
-#: строки с запасом: «GB Великобритания N1 (YouTube без рекламы)».
-SERVER_LIST_MAX_WIDTH = 560
+#: полтора экрана пустоты. Поэтому ширина ограничена.
+#:
+#: Прежние 560 оказались малы. В них не влезали ни длинные названия
+#: («Великобритания N1 (YouTube без рекламы)»), ни заголовок группы с
+#: трафиком, и обрезалось всё подряд: «GruVPN · 24 серверов · 314…».
+#: Многоточие вместо остатка трафика — ровно то место, ради которого
+#: трафик и показывают.
+SERVER_LIST_MAX_WIDTH = 760
+
+#: Наименьшая ширина списка. Ниже названия начинают обрезаться уже у
+#: коротких стран, и список перестаёт быть списком серверов.
+SERVER_LIST_MIN_WIDTH = 420
 
 #: Высота значка флага в строке списка.
 #:
@@ -96,6 +107,18 @@ def _profiles_root():
     return APPLICATION_PATHS.settings_dir
 
 
+def _profile_key(profile) -> tuple[str, str]:
+    """Чем отличаем выбранный профиль от остальных.
+
+    Одного адреса мало: в подписке у нескольких серверов бывает общий
+    адрес и разные имена. Одного имени тоже мало — имена повторяются
+    между подписками.
+    """
+    if profile is None:
+        return ("", "")
+    return (str(getattr(profile, "endpoint", "") or ""), _profile_name(profile))
+
+
 def _profile_name(profile) -> str:
     """Имя профиля независимо от его рода.
 
@@ -112,6 +135,10 @@ def _profile_name(profile) -> str:
     """
     return str(getattr(profile, "name", "") or getattr(profile, "title", "") or "")
 
+
+#: В этой роли у строки-заголовка лежит адрес подписки. По ней же
+#: заголовок отличается от строки сервера: у сервера роль пустая.
+_GROUP_KEY_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
 #: Как часто перечитывать статистику туннеля, пока страница открыта.
 #: Запрос уходит в фоновый поток, поэтому секунда окна не тормозит.
@@ -135,6 +162,23 @@ class VpnPage(BasePage):
         #: Профили активной вкладки. Хранилище общее, вкладки — только
         #: способ показа, поэтому фильтруем на лету, а не режем файл.
         self._visible_profiles = []
+        #: Свёрнутые группы — по адресу подписки. Пустая строка значит
+        #: группу «Мои серверы».
+        self._collapsed_groups: set[str] = set()
+        #: Кто выбран, независимо от того, видно ли его сейчас.
+        #:
+        #: Раньше выбор жил в строке списка, и свернуть группу с текущим
+        #: сервером значило потерять выбор: строка исчезала, страница
+        #: считала, что не выбрано ничего, и гасила кнопку подключения.
+        #: Свернуть список — не то же самое, что передумать.
+        self._selected_key: tuple[str, str] = ("", "")
+        #: Какой профиль лежит в какой строке списка.
+        #:
+        #: Список делится на группы по подпискам, и строки-заголовки
+        #: занимают в нём место наравне с серверами. Совпадение «номер
+        #: строки = номер профиля» на этом кончилось, поэтому связь
+        #: держится здесь: в строке-заголовке лежит -1.
+        self._row_profiles: list[int] = []
         self._tab = TAB_ORDER[0]
         #: Замок на разделе подключения по ссылке снят.
         #:
@@ -165,6 +209,8 @@ class VpnPage(BasePage):
         self._stats_timer.timeout.connect(self._refresh_connection_state)
 
         self._build_ui()
+        self._sync_warning_label(self._tab)
+        self._sync_refresh_button()
         self._clear_stale_system_proxy()
         self._reload_profiles()
 
@@ -244,13 +290,26 @@ class VpnPage(BasePage):
         self.tabs.currentItemChanged.connect(self._on_tab_changed)
         self.add_widget(self.tabs)
 
+        # Добавление сервера убрано под раскрывающийся блок.
+        #
+        # Поле ввода, подсказка и две кнопки висели всегда, хотя ссылку
+        # вставляют один раз, а дальше только выбирают сервер из списка.
+        # Половина экрана уходила под то, что нужно раз в месяц.
+        from ui.widgets.collapsible_section import CollapsibleSection
+
+        self.add_section = CollapsibleSection(
+            TAB_INPUT_TITLES[self._tab],
+            parent=self.content,
+        )
+        self.add_widget(self.add_section)
+
         self.input_title_label = StrongBodyLabel(TAB_INPUT_TITLES[self._tab])
-        self.add_widget(self.input_title_label)
+        self.input_title_label.hide()
 
         self.hint_label = BodyLabel(TAB_HINTS[self._tab])
         self.hint_label.setWordWrap(True)
         self.hint_label.setStyleSheet(f"QLabel {{ color: {tokens.fg_muted}; }}")
-        self.add_widget(self.hint_label)
+        self.add_section.add_widget(self.hint_label)
 
         # Поле ввода низкое намеренно. Сюда вставляют одну строку —
         # ключ или ссылку, — и поле в полтораста пикселей занимало пол-
@@ -264,7 +323,7 @@ class VpnPage(BasePage):
             name="Ключ или конфигурация VPN",
             description="Поле для вставки ключа vpn или содержимого файла .conf",
         )
-        self.add_widget(self.input_edit)
+        self.add_section.add_widget(self.input_edit)
 
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
@@ -278,9 +337,26 @@ class VpnPage(BasePage):
         buttons.addWidget(self.save_btn)
 
         buttons.addStretch()
-        self._add_row(buttons)
+        self.add_section.add_layout(buttons)
 
-        self.add_widget(StrongBodyLabel("Сохранённые профили"))
+        header = QHBoxLayout()
+        header.setSpacing(8)
+        header.addWidget(StrongBodyLabel("Сохранённые профили"))
+        header.addStretch()
+
+        # Обновление подписки — отдельное действие, а не побочный
+        # результат повторного добавления ссылки. Раньше единственным
+        # способом получить свежий список серверов было вставить ту же
+        # ссылку заново, и старые серверы оставались лежать рядом.
+        self.refresh_subs_btn = PushButton("Обновить подписки")
+        self.refresh_subs_btn.clicked.connect(self._on_refresh_subscriptions)
+        set_control_accessibility(
+            self.refresh_subs_btn,
+            name="Обновить подписки",
+            description="Перечитывает все сохранённые подписки и обновляет список серверов",
+        )
+        header.addWidget(self.refresh_subs_btn)
+        self._add_row(header)
 
         # Список, а не выпадающий: у подписки бывает тридцать серверов,
         # и выбирать из них по одному, каждый раз раскрывая список, —
@@ -294,6 +370,10 @@ class VpnPage(BasePage):
         # вместе с ним, на широком — остановится и не растянется в полосу
         # во весь монитор.
         self.profile_list.setMaximumWidth(SERVER_LIST_MAX_WIDTH)
+        # Нижняя граница — чтобы кнопка справа не отжимала список в
+        # ничто на узком окне: раскладка отдаёт место обоим, и без неё
+        # список схлопывался до пары сантиметров.
+        self.profile_list.setMinimumWidth(SERVER_LIST_MIN_WIDTH)
         from PyQt6.QtCore import QSize
 
         self.profile_list.setIconSize(
@@ -311,6 +391,7 @@ class VpnPage(BasePage):
             _Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.profile_list.currentRowChanged.connect(self._on_profile_changed)
+        self.profile_list.itemClicked.connect(self._on_list_item_clicked)
         set_control_accessibility(
             self.profile_list,
             name="Серверы",
@@ -330,23 +411,67 @@ class VpnPage(BasePage):
         )
 
 
-        self.add_widget(self.profile_list)
+        # Список слева, кнопка подключения справа — в том месте, где
+        # раньше пустовало полэкрана. Заодно кнопка перестаёт теряться
+        # среди мелких кнопок внизу: включение и выключение — главное
+        # действие страницы, и выглядеть оно должно соответственно.
+        from vpn.ui.connect_button import VpnConnectButton
+
+        selection = QHBoxLayout()
+        selection.setSpacing(16)
+        # Вес 3 против 2 у правой колонки: место, освободившееся после
+        # удаления нижней кнопки, отдаём списку, а не пустоте.
+        selection.addWidget(self.profile_list, 3)
+
+        right = QVBoxLayout()
+        right.setSpacing(10)
+        right.addStretch()
+
+        self.connect_button = VpnConnectButton(self.content)
+        self.connect_button.clicked.connect(self._on_toggle_connection)
+        right.addWidget(self.connect_button, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self.connect_caption = StrongBodyLabel(self.connect_button.title())
+        self.connect_caption.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        right.addWidget(self.connect_caption)
 
         self.details_label = BodyLabel("Профили не добавлены")
         self.details_label.setWordWrap(True)
+        self.details_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.details_label.setStyleSheet(f"QLabel {{ color: {tokens.fg_muted}; }}")
-        self.add_widget(self.details_label)
+        right.addWidget(self.details_label)
 
-        connection = QHBoxLayout()
-        connection.setSpacing(8)
+        right.addStretch()
+        selection.addLayout(right, 2)
+        self._add_row(selection)
 
-        self.connect_btn = PrimaryPushButton("Подключить")
-        self.connect_btn.clicked.connect(self._on_toggle_connection)
-        connection.addWidget(self.connect_btn)
+        # Охват соединения — выбор человека, а не наш.
+        #
+        # Прокси правит ветку реестра WinINET: её читают Chromium и
+        # Edge, но не приложения на Electron, Node, .NET и Go — они
+        # ходят своим стеком и идут мимо VPN. Туннель заворачивает всё,
+        # но требует прав администратора и правит таблицу маршрутов,
+        # поэтому включать его молча за человека неправильно.
+        from ui.widgets.win11_controls import Win11ToggleRow
+        from vpn.link_runtime import set_tun_mode_enabled, tun_mode_enabled
 
+        self.tun_mode_toggle = Win11ToggleRow(
+            "fa5s.route",
+            "Весь трафик системы",
+            "Через сервер пойдут все программы, а не только браузер. "
+            "Требуются права администратора.",
+            tokens.accent_hex,
+        )
+        self.tun_mode_toggle.setChecked(tun_mode_enabled(), block_signals=True)
+        self.tun_mode_toggle.toggled.connect(self._on_tun_mode_toggled)
+        self.add_widget(self.tun_mode_toggle)
+
+        # Кнопка подключения здесь была вторая — рядом с круглой справа.
+        # Две кнопки с одинаковым названием на одном экране заставляют
+        # гадать, чем они отличаются, а не отличаются они ничем.
+        # Осталась только строка состояния.
         self.state_label = QLabel("Отключено")
-        connection.addWidget(self.state_label, 1)
-        self._add_row(connection)
+        self.add_widget(self.state_label)
 
         actions = QHBoxLayout()
         actions.setSpacing(8)
@@ -371,15 +496,20 @@ class VpnPage(BasePage):
         self.ping_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.add_widget(self.ping_label)
 
-        note = BodyLabel(
-            "Туннель поднимается службой Windows через клиент AmneziaWG. "
-            "Обход DPI при этом не выключается: он может помочь рукопожатию "
-            "пройти сквозь фильтрацию, но может и помешать. Если туннель не "
-            "поднимается — попробуйте остановить обход и подключиться снова."
+        # Предупреждение — только там, где есть о чём предупреждать.
+        self.warning_label = BodyLabel(TAB_WARNINGS[self._tab])
+        self.warning_label.setWordWrap(True)
+        self.warning_label.setStyleSheet(
+            f"QLabel {{ color: {tokens.fg_muted}; font-size: 12px; }}"
         )
-        note.setWordWrap(True)
-        note.setStyleSheet(f"QLabel {{ color: {tokens.fg_faint}; font-size: 12px; }}")
-        self.add_widget(note)
+        self.add_widget(self.warning_label)
+
+        # Примечание своё на каждую вкладку: способы подключения разные,
+        # и общий текст на вкладке ссылок описывал соседнюю.
+        self.note_label = BodyLabel(TAB_NOTES[self._tab])
+        self.note_label.setWordWrap(True)
+        self.note_label.setStyleSheet(f"QLabel {{ color: {tokens.fg_faint}; font-size: 12px; }}")
+        self.add_widget(self.note_label)
 
     def _add_row(self, layout: QHBoxLayout) -> None:
         from PyQt6.QtWidgets import QWidget
@@ -448,29 +578,126 @@ class VpnPage(BasePage):
         from vpn.flags import decorate, flag_icon, strip_country_prefix
 
         for profile in self._visible_profiles:
-            name = display_name(profile)
-            self.profile_combo.addItem(name)
+            self.profile_combo.addItem(display_name(profile))
 
-            icon = flag_icon(name)
-            if icon is None:
-                self.profile_list.addItem(decorate(name))
+        self._row_profiles = []
+        for key, header, members in self._grouped_profiles():
+            collapsed = key in self._collapsed_groups
+            if header:
+                self.profile_list.addItem(self._group_header_item(key, header, collapsed))
+                self._row_profiles.append(-1)
+
+            if collapsed:
                 continue
 
-            item = QListWidgetItem(strip_country_prefix(name))
-            item.setIcon(icon)
-            self.profile_list.addItem(item)
+            for position in members:
+                profile = self._visible_profiles[position]
+                name = display_name(profile)
+                icon = flag_icon(name)
+                if icon is None:
+                    item = QListWidgetItem(decorate(name))
+                else:
+                    item = QListWidgetItem(strip_country_prefix(name))
+                    item.setIcon(icon)
+                self.profile_list.addItem(item)
+                self._row_profiles.append(position)
 
-        index = 0
+        index = -1
         if select_endpoint:
             for position, profile in enumerate(self._visible_profiles):
                 if profile.endpoint == select_endpoint:
                     index = position
                     break
-        if self._visible_profiles:
+        if index < 0:
+            # Список перестраивается на каждое сворачивание группы, и
+            # сбрасывать выбор на первый сервер каждый раз значило бы
+            # менять сервер за человека.
+            index = self._index_for_key(self._selected_key)
+        if index < 0 and self._visible_profiles:
+            index = 0
+
+        if 0 <= index < len(self._visible_profiles):
             self.profile_combo.setCurrentIndex(index)
-            self.profile_list.setCurrentRow(index)
+            self._selected_key = _profile_key(self._visible_profiles[index])
+            row = self._row_for_profile(index)
+            # Строки может не быть: выбранный сервер спрятан в свёрнутой
+            # группе. Подсветки тогда нет, но выбор остаётся, и кнопка
+            # подключения продолжает работать.
+            self.profile_list.setCurrentRow(row if row >= 0 else -1)
         self.profile_combo.blockSignals(False)
         self.profile_list.blockSignals(False)
+
+    def _index_for_key(self, key: tuple[str, str]) -> int:
+        """Где сейчас лежит профиль с этим ключом. -1 — нигде."""
+        if not any(key):
+            return -1
+        for position, profile in enumerate(self._visible_profiles):
+            if _profile_key(profile) == key:
+                return position
+        return -1
+
+    # ── группировка списка ────────────────────────────────────────────
+
+    def _group_header_item(self, key: str, text: str, collapsed: bool):
+        """Строка-заголовок группы: нажимается, но не выбирается.
+
+        Флаг ровно один — «включён». Без `ItemIsSelectable` щелчок по
+        заголовку не сдвигает выбор сервера и стрелки его перескакивают,
+        а сигнал о нажатии всё равно приходит — по нему группа и
+        сворачивается.
+
+        Раньше стояло `NoItemFlags`, и заголовок был мёртвым: нажатия по
+        выключенным элементам Qt не отдаёт вовсе. Оттого сворачивание и
+        «не работало».
+        """
+        # QtGui подтягивается здесь, а не наверху файла: модуль страницы
+        # читают проверки, которым окно не нужно, а QtGui тянет за собой
+        # графические библиотеки системы и падает там, где их нет.
+        from PyQt6.QtCore import Qt as _Qt
+        from PyQt6.QtGui import QColor
+        from PyQt6.QtWidgets import QListWidgetItem
+
+        item = QListWidgetItem(f"{'▸' if collapsed else '▾'}  {text}")
+        item.setFlags(_Qt.ItemFlag.ItemIsEnabled)
+        item.setData(_GROUP_KEY_ROLE, key)
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
+        item.setForeground(QColor(get_theme_tokens().fg_muted))
+        item.setToolTip("Нажмите, чтобы свернуть или развернуть группу")
+        return item
+
+    def _on_list_item_clicked(self, item) -> None:
+        """Щелчок по заголовку сворачивает и разворачивает группу."""
+        if item is None:
+            return
+        key = item.data(_GROUP_KEY_ROLE)
+        if key is None:
+            return  # строка сервера, а не заголовок
+
+        key = str(key)
+        self._collapsed_groups.symmetric_difference_update({key})
+        self._refill_combo()
+
+    def _grouped_profiles(self):
+        """Делит видимые профили на группы по подпискам."""
+        from vpn.subscriptions import group_by_subscription, load_subscriptions
+
+        try:
+            subscriptions = load_subscriptions(_profiles_root())
+        except Exception:
+            # Подписки — сведения вспомогательные: без них список просто
+            # останется одной группой, ронять из-за них страницу нельзя.
+            subscriptions = []
+
+        return group_by_subscription(self._visible_profiles, subscriptions)
+
+    def _row_for_profile(self, index: int) -> int:
+        """Строка списка, в которой лежит профиль с этим номером."""
+        try:
+            return self._row_profiles.index(int(index))
+        except ValueError:
+            return -1
 
         self._sync_tab_labels()
         self._update_details()
@@ -538,18 +765,57 @@ class VpnPage(BasePage):
         self._tab = tab
         self.hint_label.setText(TAB_HINTS[tab])
         self.input_title_label.setText(TAB_INPUT_TITLES[tab])
+        section = getattr(self, "add_section", None)
+        if section is not None:
+            section.set_title(TAB_INPUT_TITLES[tab])
         subtitle = getattr(self, "subtitle_label", None)
         if subtitle is not None:
             subtitle.setText(TAB_SUBTITLES[tab])
         self.input_edit.setPlaceholderText(TAB_PLACEHOLDERS[tab])
+        note = getattr(self, "note_label", None)
+        if note is not None:
+            note.setText(TAB_NOTES[tab])
+        self._sync_warning_label(tab)
+        self._sync_refresh_button()
         self._refill_combo()
+
+    def _sync_warning_label(self, tab: str) -> None:
+        """Показывает предупреждение только на вкладке, где оно есть.
+
+        Пустая подпись всё равно занимает высоту строки и оставляет
+        зазор посреди страницы — поэтому виджет прячется целиком.
+        """
+        label = getattr(self, "warning_label", None)
+        if label is None:
+            return
+        text = str(TAB_WARNINGS.get(tab, "") or "")
+        label.setText(text)
+        label.setVisible(bool(text))
+
+    def _sync_refresh_button(self) -> None:
+        """Подписки бывают только у серверов по ссылке.
+
+        На вкладке AmneziaWG обновлять нечего: там конфигурации, которые
+        человек приносит файлом. Кнопка, которая на половине вкладок
+        отвечает «нет сохранённых подписок», — это кнопка-обманка.
+        """
+        button = getattr(self, "refresh_subs_btn", None)
+        if button is not None:
+            button.setVisible(self._tab == TAB_LINKS)
 
     def _current_profile(self):
         # Спрашиваем список: он на экране, и именно в нём человек выбрал
         # строку. Выпадающий держим в согласии с ним ради обработчиков,
         # которые на него смотрят.
-        index = self.profile_list.currentRow()
-        if index != self.profile_combo.currentIndex():
+        row = self.profile_list.currentRow()
+        index = -1
+        if 0 <= row < len(self._row_profiles):
+            index = self._row_profiles[row]
+        if index < 0:
+            # Строки нет — сервер спрятан в свёрнутой группе. Выбор от
+            # этого не пропал, он просто не подсвечен.
+            index = self._index_for_key(self._selected_key)
+        if index >= 0 and index != self.profile_combo.currentIndex():
             self.profile_combo.blockSignals(True)
             self.profile_combo.setCurrentIndex(index)
             self.profile_combo.blockSignals(False)
@@ -615,6 +881,32 @@ class VpnPage(BasePage):
             except Exception as exc:
                 log(f"Остановка фонового потока VPN ({attr}): {exc}", "DEBUG")
 
+    def _sync_connect_button(self, *, connected: bool = False, busy: bool = False,
+                             disconnecting: bool = False) -> None:
+        """Приводит круглую кнопку к текущему состоянию соединения.
+
+        Кнопка и подпись под ней ведутся вместе: подпись повторяет то,
+        что кнопка означает сейчас, и человеку не приходится гадать по
+        цвету круга.
+        """
+        button = getattr(self, "connect_button", None)
+        if button is None:
+            return
+
+        from vpn.ui.connect_button import VpnButtonState
+
+        if busy:
+            state = VpnButtonState.DISCONNECTING if disconnecting else VpnButtonState.CONNECTING
+        elif connected:
+            state = VpnButtonState.CONNECTED
+        else:
+            state = VpnButtonState.DISCONNECTED
+
+        button.set_state(state)
+        caption = getattr(self, "connect_caption", None)
+        if caption is not None:
+            caption.setText(button.title())
+
     def _refresh_connection_state(self) -> None:
         """Запрашивает состояние службы туннеля в фоне.
 
@@ -657,7 +949,7 @@ class VpnPage(BasePage):
         self._tunnel_state = state
         self._last_stats = stats
         self._sync_stats_timer(state is TunnelState.CONNECTED)
-        self.connect_btn.setText("Отключить" if state is TunnelState.CONNECTED else "Подключить")
+        self._sync_connect_button(connected=state is TunnelState.CONNECTED)
 
         text = describe_state(state)
         if stats is not None:
@@ -698,8 +990,9 @@ class VpnPage(BasePage):
         profile = self._current_profile()
         has_profile = profile is not None
 
-        for button in (self.ping_btn, self.export_btn, self.delete_btn, self.connect_btn):
+        for button in (self.ping_btn, self.export_btn, self.delete_btn):
             button.setEnabled(has_profile)
+        self.connect_button.setEnabled(has_profile)
 
         self._apply_export_button_label(profile)
 
@@ -726,8 +1019,39 @@ class VpnPage(BasePage):
         dns = getattr(profile, "dns", "")
         if dns:
             parts.append(f"DNS: {dns}")
+
+        usage = self._subscription_line(profile)
+        if usage:
+            parts.append(usage)
+
         self.details_label.setText("\n".join(parts))
         self.ping_label.setText("")
+
+    def _subscription_line(self, profile) -> str:
+        """Остаток трафика подписки, из которой пришёл этот сервер.
+
+        В заголовке группы он тоже есть, но заголовок остаётся вверху и
+        уезжает за край при прокрутке. Здесь — рядом с выбранным
+        сервером, где на него и смотрят перед подключением.
+        """
+        source = str(getattr(profile, "source", "") or "").strip()
+        if not source:
+            return ""
+
+        try:
+            from vpn.subscriptions import find, load_subscriptions
+
+            info = find(load_subscriptions(_profiles_root()), source)
+        except Exception:
+            return ""
+
+        if info is None:
+            return ""
+
+        usage = info.usage.describe()
+        if not usage:
+            return f"Подписка: {info.display_title()}"
+        return f"Подписка: {info.display_title()} — {usage}"
 
     # ──────────────────────────────────────────────────────────────────
     # Действия
@@ -741,7 +1065,7 @@ class VpnPage(BasePage):
         ответа сервера, а ждать там можно до десяти секунд.
         """
         from vpn.links import parse_subscription
-        from vpn.subscription import load_subscription, looks_like_subscription_url
+        from vpn.subscription import load_subscription_with_info, looks_like_subscription_url
 
         raw = str(text or "").strip()
 
@@ -749,7 +1073,7 @@ class VpnPage(BasePage):
             self.state_label.setText("Загружаем подписку...")
             started = self._start_worker(
                 "_subscription_worker",
-                lambda url=raw: load_subscription(url),
+                lambda url=raw: load_subscription_with_info(url),
                 self._on_subscription_loaded,
                 self._on_subscription_failed,
             )
@@ -761,17 +1085,119 @@ class VpnPage(BasePage):
         self._apply_links(added, errors)
 
     def _on_subscription_loaded(self, result) -> None:
-        added, errors = result
+        # Форма результата зависит от того, кто загружал: добавление
+        # подписки отдаёт ещё и сведения о ней, обновление — тоже.
+        if isinstance(result, tuple) and len(result) == 3:
+            added, errors, info = result
+        else:
+            added, errors, info = (*result, None)
+
         self._refresh_connection_state()
-        self._apply_links(added, errors)
+
+        if info is not None:
+            self._remember_subscription(info)
+            # Серверы помечаем подпиской: по этой метке список делится
+            # на группы, и по ней же подписка обновляется целиком.
+            import dataclasses
+
+            added = [dataclasses.replace(p, source=info.url) for p in added]
+
+        self._apply_links(added, errors, sources=[info.url] if info is not None else None)
+
+    def _remember_subscription(self, info) -> None:
+        """Сохраняет подписку: адрес, имя, трафик, время обновления."""
+        from vpn.subscriptions import load_subscriptions, save_subscriptions, upsert
+
+        root = _profiles_root()
+        try:
+            items = upsert(load_subscriptions(root), info)
+            saved, message = save_subscriptions(root, items)
+            if not saved:
+                log(f"Подписка не сохранена: {message}", "⚠ WARNING")
+        except Exception as exc:
+            # Подписка — сведения вспомогательные: серверы уже добавлены
+            # и работают без неё. Ронять из-за этого добавление нельзя.
+            log(f"Подписка не сохранена: {exc}", "⚠ WARNING")
+
+    def _on_refresh_subscriptions(self) -> None:
+        """Перезагружает все подписки и обновляет списки серверов."""
+        from vpn.subscriptions import load_subscriptions
+
+        subscriptions = load_subscriptions(_profiles_root())
+        if not subscriptions:
+            self._error("Нет сохранённых подписок — добавьте ссылку на подписку")
+            return
+
+        urls = [item.url for item in subscriptions]
+
+        def _reload():
+            from vpn.subscription import load_subscription_with_info
+
+            collected, problems, infos = [], [], []
+            for url in urls:
+                profiles, errors, info = load_subscription_with_info(url)
+                problems.extend(errors)
+                if info is not None:
+                    infos.append(info)
+                collected.extend(
+                    __import__("dataclasses").replace(p, source=url) for p in profiles
+                )
+            return collected, problems, infos
+
+        started = self._start_worker(
+            "_subscription_worker",
+            _reload,
+            self._on_subscriptions_refreshed,
+            self._on_subscription_failed,
+        )
+        if started is None:
+            self._error("Подписка уже загружается")
+            return
+
+        self.state_label.setText(f"Обновляем подписки ({len(urls)})...")
+
+    def _on_subscriptions_refreshed(self, result) -> None:
+        from vpn.link_store import load_links, replace_source, save_links
+
+        added, errors, infos = result
+        for info in infos:
+            self._remember_subscription(info)
+
+        if not added:
+            self._error(errors[0] if errors else "Подписки не вернули ни одного сервера")
+            return
+
+        root = _profiles_root()
+        existing, _load_errors = load_links(root)
+        # Именно замена: сервер, убранный из подписки, должен исчезнуть и
+        # у нас, иначе в списке копится мёртвое.
+        merged = replace_source(existing, added, [info.url for info in infos])
+
+        saved, message = save_links(root, merged)
+        if not saved:
+            self._error(message)
+            return
+
+        self._reload_profiles()
+
+        if errors:
+            self._error(f"Серверов обновлено: {len(added)}. Не разобрано: {len(errors)}")
+            return
+        self._success(f"Подписки обновлены: серверов {len(added)}")
 
     def _on_subscription_failed(self, message: str) -> None:
         self._refresh_connection_state()
         self._error(f"Не удалось загрузить подписку: {message}")
 
-    def _apply_links(self, added, errors) -> None:
-        """Кладёт разобранные серверы в хранилище и обновляет список."""
-        from vpn.link_store import load_links, merge, save_links
+    def _apply_links(self, added, errors, *, sources=None) -> None:
+        """Кладёт разобранные серверы в хранилище и обновляет список.
+
+        `sources` — адреса подписок, серверы которых пришли заново. Их
+        прежние серверы выбрасываются: вставить ту же ссылку второй раз
+        человек может только чтобы обновить список, а не чтобы получить
+        рядом со свежими тридцатью ещё тридцать вчерашних.
+        """
+        from vpn.link_store import load_links, merge, replace_source, save_links
 
         if not added:
             self._error(errors[0] if errors else "Не удалось разобрать ссылку")
@@ -779,7 +1205,10 @@ class VpnPage(BasePage):
 
         root = _profiles_root()
         existing, _load_errors = load_links(root)
-        merged = merge(existing, added)
+        if sources:
+            merged = replace_source(existing, added, sources)
+        else:
+            merged = merge(existing, added)
 
         saved, message = save_links(root, merged)
         if not saved:
@@ -897,6 +1326,7 @@ class VpnPage(BasePage):
         self._success(f"Конфигурация сохранена: {path}")
 
     def _on_profile_changed(self, _index: int) -> None:
+        self._selected_key = _profile_key(self._current_profile())
         self._update_details()
 
         # Щелчок по другому серверу при поднятом ядре — это смена
@@ -930,6 +1360,32 @@ class VpnPage(BasePage):
             return
 
         self.state_label.setText(f"Переключаем на {_profile_name(profile)}...")
+
+    def _on_tun_mode_toggled(self, enabled: bool) -> None:
+        """Переключает охват соединения.
+
+        На лету не переключаем: туннель поднимается поверх уже
+        работающего ядра и правит маршруты, а менять их под идущим
+        соединением — верный способ оборвать его на середине. Настройка
+        применится при следующем подключении, о чём и говорим.
+        """
+        from vpn.link_runtime import is_connected, set_tun_mode_enabled
+        from vpn.tun_mode import check_available
+
+        if enabled:
+            available, message = check_available()
+            if not available:
+                self.tun_mode_toggle.setChecked(False, block_signals=True)
+                self._error(message)
+                return
+
+        set_tun_mode_enabled(bool(enabled))
+
+        if is_connected():
+            self._success(
+                "Режим сохранён. Он применится при следующем подключении — "
+                "переключите сервер или отключитесь и подключитесь снова."
+            )
 
     def _on_toggle_connection(self) -> None:
         from vpn.tunnel import TunnelState
@@ -973,8 +1429,9 @@ class VpnPage(BasePage):
         if started is None:
             return
 
-        self.connect_btn.setEnabled(False)
+        self.connect_button.setEnabled(False)
         self.state_label.setText("Отключение..." if disconnecting else "Подключение...")
+        self._sync_connect_button(busy=True, disconnecting=disconnecting)
 
     def _toggle_link_connection(self, profile) -> None:
         """Подключение по ссылке: поднимает или гасит ядро Xray.
@@ -1005,19 +1462,20 @@ class VpnPage(BasePage):
         if started is None:
             return
 
-        self.connect_btn.setEnabled(False)
+        self.connect_button.setEnabled(False)
         self.state_label.setText("Отключение..." if disconnecting else "Подключение...")
+        self._sync_connect_button(busy=True, disconnecting=disconnecting)
 
     def _on_link_result(self, result) -> None:
         from vpn.link_runtime import is_connected
 
-        self.connect_btn.setEnabled(True)
+        self.connect_button.setEnabled(True)
 
         ok, message = result if isinstance(result, tuple) else (False, str(result))
         connected = is_connected()
 
-        self.connect_btn.setText("Отключить" if connected else "Подключить")
         self.state_label.setText("Подключено" if connected else "Отключено")
+        self._sync_connect_button(connected=connected)
 
         if ok:
             self._success(message)
@@ -1027,7 +1485,7 @@ class VpnPage(BasePage):
     def _on_tunnel_result(self, status, profile) -> None:
         from vpn.tunnel import TunnelState, describe_state
 
-        self.connect_btn.setEnabled(True)
+        self.connect_button.setEnabled(True)
 
         if status.state is TunnelState.ERROR:
             self._error(status.message or "Не удалось подключиться")
@@ -1042,7 +1500,7 @@ class VpnPage(BasePage):
 
     def _on_tunnel_failed(self, message: str) -> None:
         log(f"Переключение туннеля: {message}", "ERROR")
-        self.connect_btn.setEnabled(True)
+        self.connect_button.setEnabled(True)
         self._error(f"Не удалось выполнить операцию: {message}")
         self._refresh_connection_state()
 
@@ -1060,11 +1518,27 @@ class VpnPage(BasePage):
         # WireGuard, у него и порт UDP. У vless и trojan порт говорит по
         # TCP, и UDP-проба отвечала «хост принял датаграмму и промолчал»:
         # верно и совершенно бесполезно.
-        from vpn.link_runtime import is_link_profile
+        from vpn.link_runtime import is_connected, is_link_profile, local_proxy_address
         from vpn.ping import tcp_probe
 
         if is_link_profile(profile):
-            probe = lambda h=host, p=port: tcp_probe(h, int(p or 0))
+            # Подключённый сервер проверяем настоящим запросом через него.
+            #
+            # «Порт открыт» — не то, что человек хочет знать. Узел может
+            # отвечать на TCP и при этом не пропускать трафик, упираться
+            # в исчерпанную подписку или ловить перехват запроса. Ходом
+            # через сервер это видно, а простукиванием порта — нет.
+            #
+            # Через сервер можно ходить, только пока он поднят, поэтому
+            # для неподключённого остаётся проба порта: она отвечает на
+            # меньший вопрос, но хотя бы честно.
+            if is_connected():
+                from vpn.http_probe import check_through_proxy
+
+                address = local_proxy_address()
+                probe = lambda a=address: check_through_proxy(proxy_address=a)
+            else:
+                probe = lambda h=host, p=port: tcp_probe(h, int(p or 0))
         else:
             stats = self._last_stats
             probe = lambda: check_server(host, port, stats=stats)

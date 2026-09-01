@@ -42,11 +42,18 @@ def store_path(root: Path) -> Path:
 
 
 def to_record(profile) -> dict:
-    """Запись для файла: имя и ссылка, больше ничего."""
-    return {
+    """Запись для файла: имя, ссылка и откуда сервер взялся."""
+    record = {
         "title": str(getattr(profile, "title", "") or ""),
         "link": str(getattr(profile, "raw", "") or ""),
     }
+    source = str(getattr(profile, "source", "") or "")
+    if source:
+        # Пишем только когда есть: у серверов, добавленных одиночной
+        # ссылкой, поля быть не должно, и пустая строка в файле только
+        # засоряла бы его.
+        record["source"] = source
+    return record
 
 
 def load_links(root: Path) -> tuple[list, list[str]]:
@@ -75,9 +82,11 @@ def load_links(root: Path) -> tuple[list, list[str]]:
     for record in records:
         link = ""
         title = ""
+        source = ""
         if isinstance(record, dict):
             link = str(record.get("link") or "")
             title = str(record.get("title") or "")
+            source = str(record.get("source") or "")
         elif isinstance(record, str):
             link = record
         if not link:
@@ -96,6 +105,8 @@ def load_links(root: Path) -> tuple[list, list[str]]:
             # Неизменяемость здесь к месту: профиль читают из нескольких
             # мест, и правка на месте разошлась бы с файлом.
             profile = dataclasses.replace(profile, title=title)
+        if source:
+            profile = dataclasses.replace(profile, source=source)
         profiles.append(profile)
     return (profiles, errors)
 
@@ -134,11 +145,33 @@ def merge(existing, added) -> list:
     return result
 
 
+def replace_source(existing, added, sources) -> list:
+    """Заменяет серверы перечисленных подписок на пришедшие заново.
+
+    Обновление подписки — не то же самое, что добавление. `merge` умеет
+    только досыпать новое: сервер, убранный из подписки, остался бы в
+    списке навсегда, а через полгода там лежала бы половина мёртвых
+    адресов, которые человек не может отличить от живых.
+
+    Поэтому серверы обновляемых подписок выбрасываются целиком и
+    кладутся заново. Чужие серверы — из других подписок и добавленные
+    руками — не трогаем: они здесь ни при чём.
+    """
+    keys = {str(item or "").strip() for item in (sources or ()) if str(item or "").strip()}
+    result = [
+        item
+        for item in (existing or ())
+        if str(getattr(item, "source", "") or "").strip() not in keys
+    ]
+    return merge(result, added)
+
+
 __all__ = [
     "FORMAT_VERSION",
     "STORE_NAME",
     "load_links",
     "merge",
+    "replace_source",
     "save_links",
     "store_path",
     "to_record",
