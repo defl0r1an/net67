@@ -46,10 +46,26 @@ def default_program() -> dict[str, Any]:
         SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2: "",
         "auto_update_enabled": True,
         "remove_github_api": True,
-        "discord_auto_restart": True,
+        # Перезапуск Discord выключен по умолчанию.
+        #
+        # Настройка закрывает чужое приложение и открывает заново — при
+        # каждой смене стратегии. Делать такое без спроса нельзя: в
+        # Discord в этот момент может идти разговор, и человек, который
+        # про настройку не знал, увидит просто оборвавшийся звонок.
+        "discord_auto_restart": False,
         "max_blocked": False,
         "russian_state_media_blocked": False,
         "defender_disabled": False,
+        # Охват VPN: весь трафик системы через туннель или только
+        # браузер через системный прокси. Выключено по умолчанию —
+        # туннель правит таблицу маршрутов и требует прав администратора.
+        "vpn_tun_mode": False,
+        # Поднимать ли прокси Telegram вместе с обходом.
+        #
+        # Прокси и обход — разные вещи и включались порознь: прокси при
+        # старте программы, обход по кнопке. Кому нужен Telegram только
+        # под обходом, приходилось помнить про две кнопки.
+        "telegram_proxy_with_bypass": False,
     }
 
 
@@ -98,7 +114,16 @@ def default_warnings() -> dict[str, Any]:
 
 def default_telegram_proxy() -> dict[str, Any]:
     return {
-        "enabled": True,
+        # Выключен по умолчанию.
+        #
+        # Прокси поднимался при каждом запуске программы, а тумблер
+        # «Прокси Telegram вместе с обходом» стоял при этом в «выкл.».
+        # Со стороны это выглядело как сломанная настройка: человек её
+        # не включал, а прокси всё равно висел на порту.
+        #
+        # Прокси — отдельная служба со своим портом и своим влиянием на
+        # Telegram. Поднимать её без спроса неправильно.
+        "enabled": False,
         "host": DEFAULT_TG_PROXY_HOST,
         "port": DEFAULT_TG_PROXY_PORT,
         "mode": "mtproxy",

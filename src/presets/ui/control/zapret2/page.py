@@ -156,6 +156,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.state_media_block_toggle = None
         self.additional_settings_section_label = None
         self.discord_restart_toggle = None
+        self.telegram_proxy_toggle = None
         self.wssize_toggle = None
         self.debug_log_toggle = None
         self.additional_settings_card = None
@@ -515,6 +516,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             on_max_blocker_toggled=self._on_max_blocker_toggled,
             on_state_media_block_toggled=self._on_state_media_block_toggled,
             on_discord_restart_changed=self._on_discord_restart_changed,
+            on_telegram_proxy_with_bypass_toggled=self._on_telegram_proxy_with_bypass_toggled,
             on_wssize_toggled=self._on_wssize_toggled,
             on_debug_log_toggled=self._on_debug_log_toggled,
             on_open_connection_test=self._open_connection_test,
@@ -538,6 +540,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
 
         self.additional_settings_section_label = None
         self.discord_restart_toggle = section_widgets.discord_restart_toggle
+        self.telegram_proxy_toggle = section_widgets.telegram_proxy_toggle
         self.wssize_toggle = section_widgets.wssize_toggle
         self.debug_log_toggle = section_widgets.debug_log_toggle
         self.additional_settings_card = section_widgets.additional_settings_card
@@ -708,6 +711,26 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
     def _on_discord_restart_changed(self, enabled: bool) -> None:
         self._request_additional_settings_save("discord_restart", bool(enabled), launch_method=ZAPRET2_MODE)
 
+    def _on_telegram_proxy_with_bypass_toggled(self, enabled: bool) -> None:
+        """Поднимать ли прокси Telegram вместе с обходом.
+
+        Это не параметр движка, а поведение программы, поэтому пишется
+        прямо в настройки, а не через сохранение дополнительных
+        параметров запуска.
+        """
+        try:
+            from settings import store
+
+            store.set_program_settings({"telegram_proxy_with_bypass": bool(enabled)})
+        except Exception as exc:
+            # Импорт внутри обработчика, как и у соседей в этом модуле:
+            # наверху файла `log` не импортируется, и обращение к нему
+            # отсюда падало бы вторым исключением поверх первого — как
+            # раз тогда, когда надо разобраться в первом.
+            from log.log import log
+
+            log(f"Не удалось сохранить связку прокси Telegram с обходом: {exc}", "⚠ WARNING")
+
     def _on_wssize_toggled(self, enabled: bool) -> None:
         self._request_additional_settings_save("wssize", bool(enabled), launch_method=ZAPRET2_MODE)
 
@@ -840,6 +863,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             defender_toggle=self.defender_toggle,
             max_block_toggle=self.max_block_toggle,
             state_media_block_toggle=self.state_media_block_toggle,
+            telegram_proxy_toggle=self.telegram_proxy_toggle,
         )
 
     def _on_gui_autostart_toggled(self, enabled: bool) -> None:

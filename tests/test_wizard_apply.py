@@ -29,6 +29,7 @@ def _writers(record: dict, *, fail_on: str = ""):
         apply_hosts=lambda entries: "",
         set_wizard_services=make("services"),
         set_wizard_completed=make("completed"),
+        set_telegram_proxy_with_bypass=make("telegram_proxy"),
     )
 
 
@@ -89,7 +90,8 @@ class WizardApplyTests(unittest.TestCase):
                 set_tray_close_mode=make("tray_mode"),
                 apply_hosts=lambda entries: "",
                 set_wizard_services=make("services"),
-                        set_wizard_completed=make("completed"),
+                set_wizard_completed=make("completed"),
+                set_telegram_proxy_with_bypass=make("telegram_proxy"),
             ),
         )
 
@@ -168,6 +170,7 @@ class AutostartRegistrationTests(unittest.TestCase):
             apply_hosts=lambda entries: "",
             set_wizard_services=lambda value: calls.append(("services", value)),
             set_wizard_completed=lambda value: calls.append(("done", value)),
+            set_telegram_proxy_with_bypass=lambda value: calls.append(("tg_proxy", value)),
         )
 
         result = apply_wizard(
@@ -193,6 +196,7 @@ class AutostartRegistrationTests(unittest.TestCase):
             apply_hosts=lambda entries: "",
             set_wizard_services=lambda value: None,
             set_wizard_completed=lambda value: None,
+            set_telegram_proxy_with_bypass=lambda value: None,
         )
 
         result = apply_wizard(

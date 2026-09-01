@@ -125,6 +125,7 @@ def apply_program_settings_toggles(
     defender_toggle=None,
     max_block_toggle=None,
     state_media_block_toggle=None,
+    telegram_proxy_toggle=None,
 ) -> None:
     if auto_dpi_toggle is not None:
         set_toggle_checked(auto_dpi_toggle, getattr(snapshot, "auto_dpi_enabled", False))
@@ -140,6 +141,11 @@ def apply_program_settings_toggles(
         set_toggle_checked(
             state_media_block_toggle,
             getattr(snapshot, "russian_state_media_blocked", False),
+        )
+    if telegram_proxy_toggle is not None:
+        set_toggle_checked(
+            telegram_proxy_toggle,
+            getattr(snapshot, "telegram_proxy_with_bypass", False),
         )
 
 

@@ -25,7 +25,7 @@ def get_additional_settings_state(profile_services, launch_method: str = DEFAULT
     try:
         from discord.discord_restart import get_discord_restart_setting
 
-        discord_restart = bool(get_discord_restart_setting(default=True))
+        discord_restart = bool(get_discord_restart_setting(default=False))
     except Exception:
         pass
 

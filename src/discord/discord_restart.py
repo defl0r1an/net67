@@ -3,7 +3,7 @@ from settings.store import get_discord_restart_enabled, set_discord_restart_enab
 # ----------------------------------------------------------------------
 # 1.  Чтение / запись настройки в реестре
 # ----------------------------------------------------------------------
-def get_discord_restart_setting(default: bool = True) -> bool:
+def get_discord_restart_setting(default: bool = False) -> bool:
     """
     Возвращает текущее значение AutoRestartDiscord.
     Если параметра нет – отдаёт default (по-умолчанию True).

@@ -26,6 +26,7 @@ class Zapret2SettingsBuildWidgets:
     additional_settings_card: object
     additional_settings_notice: object
     discord_restart_toggle: object | None
+    telegram_proxy_toggle: object | None
     wssize_toggle: object | None
     debug_log_toggle: object | None
     extra_section_label: object | None
@@ -52,6 +53,7 @@ def build_winws2_pages_settings_sections(
     on_max_blocker_toggled,
     on_state_media_block_toggled,
     on_discord_restart_changed,
+    on_telegram_proxy_with_bypass_toggled,
     on_wssize_toggled,
     on_debug_log_toggled,
     on_open_connection_test,
@@ -99,6 +101,27 @@ def build_winws2_pages_settings_sections(
         lambda _index: on_tray_close_mode_changed(tray_close_mode_combo.currentData())
     )
 
+    with timer.step("telegram_proxy_toggle"):
+        # Место — «Настройки программы», рядом с автозапуском.
+        #
+        # Раньше тумблер лежал в дополнительных настройках, под красной
+        # надписью «изменяйте только если знаете что делаете». Но это не
+        # параметр движка, а поведение программы: поднимать ли прокси
+        # Telegram вместе с обходом. Прятать такое за предупреждением —
+        # значит прятать от тех, кому оно и нужно.
+        telegram_proxy_toggle = (
+            win11_toggle_row_cls(
+                "fa5b.telegram-plane",
+                "Прокси Telegram вместе с обходом",
+                "Поднимать локальный прокси Telegram при включении обхода",
+                "#2aabee",
+            )
+            if win11_toggle_row_cls
+            else None
+        )
+    if telegram_proxy_toggle:
+        telegram_proxy_toggle.toggled.connect(on_telegram_proxy_with_bypass_toggled)
+
     with timer.step("windows_feature_toggles"):
         windows_feature_toggles = build_windows_feature_toggles(
             tr_fn=tr_fn,
@@ -109,6 +132,8 @@ def build_winws2_pages_settings_sections(
 
     program_settings_card.addSettingCard(gui_autostart_toggle)
     program_settings_card.addSettingCard(auto_dpi_toggle)
+    if telegram_proxy_toggle:
+        program_settings_card.addSettingCard(telegram_proxy_toggle)
     program_settings_card.addSettingCard(tray_close_mode_combo)
     program_settings_card.addSettingCard(windows_feature_toggles.defender_toggle)
     program_settings_card.addSettingCard(windows_feature_toggles.max_block_toggle)
@@ -251,6 +276,7 @@ def build_winws2_pages_settings_sections(
         additional_settings_card=additional_settings_card,
         additional_settings_notice=additional_settings_notice,
         discord_restart_toggle=discord_restart_toggle,
+        telegram_proxy_toggle=telegram_proxy_toggle,
         wssize_toggle=wssize_toggle,
         debug_log_toggle=debug_log_toggle,
         extra_section_label=extra_section_label,

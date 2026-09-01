@@ -31,6 +31,13 @@ class WizardWriters:
     apply_hosts: Callable[[dict], object]
     set_wizard_services: Callable[[list], object]
     set_wizard_completed: Callable[[bool], object]
+    #: Записывает «поднимать прокси Telegram вместе с обходом».
+    #:
+    #: Мастер обязан выставить эту настройку сам. Отметил «Мессенджеры»
+    #: — значит согласился, и тумблер в настройках должен это показывать.
+    #: Иначе получилось бы наоборот: галка в мастере ничего не включает,
+    #: а тумблер стоит в «выкл.» при работающем прокси.
+    set_telegram_proxy_with_bypass: Callable[[bool], object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +92,17 @@ def _apply_hosts_entries(service_profiles: dict) -> str:
     return ""
 
 
+def _set_telegram_proxy_with_bypass(enabled: bool) -> str:
+    """Сохраняет настройку. Возвращает текст ошибки или пустую строку."""
+    try:
+        from settings import store
+
+        store.set_program_settings({"telegram_proxy_with_bypass": bool(enabled)})
+        return ""
+    except Exception as exc:
+        return f"Не удалось сохранить настройку прокси Telegram: {exc}"
+
+
 def build_default_writers() -> WizardWriters:
     from settings.store import (
         set_dpi_autostart,
@@ -100,6 +118,7 @@ def build_default_writers() -> WizardWriters:
         apply_hosts=_apply_hosts_entries,
         set_wizard_services=set_wizard_services,
         set_wizard_completed=set_wizard_completed,
+        set_telegram_proxy_with_bypass=_set_telegram_proxy_with_bypass,
     )
 
 
@@ -136,6 +155,14 @@ def apply_wizard(
         writers.set_dpi_autostart(settings.dpi_autostart)
         writers.set_tray_close_mode(settings.tray_close_mode)
         writers.set_wizard_services(sorted(selected))
+
+        # Согласие на прокси Telegram даётся здесь, галкой «Мессенджеры».
+        # Записываем его настройкой, чтобы тумблер в «Настройках
+        # программы» показывал правду, а кнопка «Включить» знала, что
+        # делать.
+        proxy_problem = writers.set_telegram_proxy_with_bypass(request.needs_telegram_proxy)
+        if proxy_problem:
+            warnings.append(str(proxy_problem))
 
         # Записи hosts применяем сразу, а не откладываем до «Включить».
         # Иначе человек отмечает «Нейросети», открывает редактор hosts и
@@ -174,14 +201,46 @@ def is_wizard_needed() -> bool:
         return True
 
 
+def _telegram_proxy_with_bypass_enabled() -> bool:
+    """Разрешено ли поднимать прокси Telegram вместе с обходом.
+
+    Настройка живёт в «Настройках программы» и видна человеку. Ответ
+    мастера первого запуска — не то же самое: галка «Мессенджеры» стоит
+    там по умолчанию, её ставят один раз и забывают, а тумблер потом
+    выключают осознанно.
+    """
+    try:
+        from settings import store
+
+        return bool(store.get_program_settings().get("telegram_proxy_with_bypass", False))
+    except Exception:
+        return False
+
+
 def build_request_from_settings() -> OneClickRequest:
-    """Запрос для кнопки «Включить» из сохранённых ответов мастера."""
+    """Запрос для кнопки «Включить» из сохранённых ответов мастера.
+
+    Шаг с прокси Telegram подчиняется тумблеру в настройках, а не
+    ответу мастера.
+
+    Раньше он шёл от галки «Мессенджеры», которая в мастере отмечена по
+    умолчанию. Отсюда и получалось необъяснимое: тумблер выключен,
+    прокси всё равно поднимается при каждом включении обхода, и Telegram
+    выпрыгивает поверх работы с вопросом про прокси.
+    """
+    import dataclasses
+
     try:
         from settings.store import get_wizard_services
 
-        return build_oneclick_request(get_wizard_services())
+        request = build_oneclick_request(get_wizard_services())
     except Exception:
-        return build_oneclick_request(())
+        request = build_oneclick_request(())
+
+    return dataclasses.replace(
+        request,
+        needs_telegram_proxy=_telegram_proxy_with_bypass_enabled(),
+    )
 
 
 __all__ = [

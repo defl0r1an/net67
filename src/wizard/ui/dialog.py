@@ -67,6 +67,41 @@ class _DetectWorker(QThread):
         self.finished_with.emit(results)
 
 
+#: Подписи переключателя. В qfluentwidgets они «On» и «Off», и мастер
+#: первого запуска — единственное место, где переключатель создавался
+#: напрямую, а не через Win11ToggleRow. Оттуда и английские слова
+#: посреди русского окна.
+SWITCH_ON_TEXT = "Вкл."
+SWITCH_OFF_TEXT = "Выкл."
+
+
+def _russian_switch() -> SwitchButton:
+    """Переключатель с русскими подписями и неподвижной шириной.
+
+    Ширину закрепляем по более длинному слову: «Выкл.» шире «Вкл.», а
+    SwitchButton зовёт adjustSize() на каждой смене состояния — без
+    этого переключатель подпрыгивал бы вбок при каждом нажатии.
+    """
+    switch = SwitchButton()
+    switch.setOnText(SWITCH_ON_TEXT)
+    switch.setOffText(SWITCH_OFF_TEXT)
+
+    try:
+        metrics = switch.label.fontMetrics()
+        text_width = max(
+            int(metrics.horizontalAdvance(SWITCH_ON_TEXT)),
+            int(metrics.horizontalAdvance(SWITCH_OFF_TEXT)),
+        )
+        frame = int(switch.sizeHint().width()) - int(switch.label.sizeHint().width())
+        switch.setMinimumWidth(max(0, frame) + text_width + 4)
+    except Exception:
+        # Имя поля — деталь чужой библиотеки. Сменится в новой версии —
+        # переключатель просто останется прыгающим, а не сломается.
+        pass
+
+    return switch
+
+
 class WizardDialog(MessageBoxBase):
     """Три экрана: провайдер, проверка доступности, параметры запуска.
 
@@ -208,7 +243,7 @@ class WizardDialog(MessageBoxBase):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        self.autostart_switch = SwitchButton()
+        self.autostart_switch = _russian_switch()
         self.autostart_switch.setChecked(True)
         self._add_switch_row(
             layout,
@@ -217,7 +252,7 @@ class WizardDialog(MessageBoxBase):
             "Обход включится сам после входа в систему",
         )
 
-        self.tray_switch = SwitchButton()
+        self.tray_switch = _russian_switch()
         self.tray_switch.setChecked(True)
         self._add_switch_row(
             layout,

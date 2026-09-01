@@ -286,6 +286,15 @@ def normalize_program(data: object) -> dict[str, Any]:
             defaults["russian_state_media_blocked"],
         ),
         "defender_disabled": as_bool(raw.get("defender_disabled"), defaults["defender_disabled"]),
+        # Без строки здесь настройка не сохраняется вовсе: раздел
+        # пересобирается по этому списку, и ключ, которого в нём нет,
+        # молча выбрасывается. Переключатель «весь трафик» именно так и
+        # терялся — на экране «Вкл.», а в журнале «режим только браузер».
+        "vpn_tun_mode": as_bool(raw.get("vpn_tun_mode"), defaults["vpn_tun_mode"]),
+        "telegram_proxy_with_bypass": as_bool(
+            raw.get("telegram_proxy_with_bypass"),
+            defaults["telegram_proxy_with_bypass"],
+        ),
     }
 
 

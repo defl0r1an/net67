@@ -16,6 +16,39 @@ def _start_worker_result(runtime_owner) -> tuple[int | None, list[str]]:
     return (pid if isinstance(pid, int) else None), warnings
 
 
+def _telegram_proxy_with_bypass_enabled() -> bool:
+    try:
+        from settings import store
+
+        return bool(store.get_program_settings().get("telegram_proxy_with_bypass", False))
+    except Exception:
+        return False
+
+
+def _start_telegram_proxy_with_bypass() -> None:
+    """Поднимает прокси Telegram вместе с обходом, если так настроено.
+
+    Прокси и обход включались порознь: прокси при старте программы,
+    обход по кнопке. Кому Telegram нужен только под обходом, приходилось
+    помнить про две кнопки в разных разделах.
+
+    Отказ здесь не должен трогать запуск обхода: обход уже поднят и
+    работает, а прокси — дополнение к нему.
+    """
+    if not _telegram_proxy_with_bypass_enabled():
+        return
+
+    try:
+        from telegram_proxy.public import start_proxy_if_enabled_async
+
+        if start_proxy_if_enabled_async():
+            log("Прокси Telegram поднят вместе с обходом", "INFO")
+        else:
+            log("Прокси Telegram уже запущен или выключен в своих настройках", "DEBUG")
+    except Exception as exc:
+        log(f"Прокси Telegram не поднялся вместе с обходом: {exc}", "⚠ WARNING")
+
+
 def release_worker_slot(runtime_owner, worker_attr: str) -> None:
     """Отмечает работника завершившимся сразу по факту завершения.
 
@@ -74,6 +107,7 @@ def on_dpi_start_finished(runtime_owner, success, error_message):
             set_runtime_owner_status(runtime_owner, "✅ DPI успешно запущен")
             runtime_owner._runtime_feature.flags.mark_intentional_start()
             maybe_restart_discord_after_runtime_apply(runtime_owner, skip_first_start=True)
+            _start_telegram_proxy_with_bypass()
 
             pending_warnings = list(runtime_owner._pending_launch_warnings or [])
             runtime_owner._pending_launch_warnings = []

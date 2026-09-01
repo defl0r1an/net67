@@ -17,7 +17,7 @@ class DiscordRestartWorker(QObject):
         try:
             from discord.discord_restart import get_discord_restart_setting
 
-            if not bool(get_discord_restart_setting(default=True)):
+            if not bool(get_discord_restart_setting(default=False)):
                 return
 
             from discord.discord import DiscordRestartService

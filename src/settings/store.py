@@ -494,7 +494,7 @@ def set_remove_github_api(value: bool) -> bool:
 
 
 def get_discord_restart_enabled() -> bool:
-    return _get_bool(("program", "discord_auto_restart"), True)
+    return _get_bool(("program", "discord_auto_restart"), False)
 
 
 def set_discord_restart_enabled(value: bool) -> bool:
@@ -904,7 +904,16 @@ def set_hosts_selection(selection: dict[str, str]) -> bool:
 
 
 def get_tg_proxy_enabled() -> bool:
-    return _get_bool(("telegram_proxy", "enabled"), True)
+    # По умолчанию выключен.
+    #
+    # Прокси поднимался при каждом запуске программы, а тумблер «Прокси
+    # Telegram вместе с обходом» при этом стоял в «выкл.». Со стороны
+    # это выглядело как то, что настройка не работает: человек её не
+    # включал, а прокси всё равно висел на порту.
+    #
+    # Прокси — отдельная служба со своим портом и своим влиянием на
+    # Telegram. Поднимать её без спроса неправильно.
+    return _get_bool(("telegram_proxy", "enabled"), False)
 
 
 def set_tg_proxy_enabled(value: bool) -> bool:

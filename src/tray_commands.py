@@ -37,7 +37,7 @@ def toggle_github_api_removal(*, status_callback=None) -> bool:
         return False
 
 
-def get_discord_restart_enabled(default: bool = True) -> bool:
+def get_discord_restart_enabled(default: bool = False) -> bool:
     from discord.discord_restart import get_discord_restart_setting
 
     return bool(get_discord_restart_setting(default=default))

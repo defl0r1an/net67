@@ -20,6 +20,7 @@ def apply_program_settings_snapshot(
     defender_toggle=None,
     max_block_toggle=None,
     state_media_block_toggle=None,
+    telegram_proxy_toggle=None,
 ) -> None:
     apply_program_settings_toggles(
         snapshot,
@@ -29,6 +30,7 @@ def apply_program_settings_snapshot(
         defender_toggle=defender_toggle,
         max_block_toggle=max_block_toggle,
         state_media_block_toggle=state_media_block_toggle,
+        telegram_proxy_toggle=telegram_proxy_toggle,
     )
 
 

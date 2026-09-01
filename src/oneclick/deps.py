@@ -168,10 +168,19 @@ def _start_telegram_proxy() -> tuple[bool, str]:
     """
     import time
 
-    from telegram_proxy.public import set_enabled, start_proxy_if_enabled_async
+    from telegram_proxy.public import start_proxy_if_enabled_async
 
     if not _is_telegram_proxy_running():
-        set_enabled(True)
+        # `set_enabled(True)` отсюда убран.
+        #
+        # Он переписывал настройку человека молча и навсегда: тумблер
+        # «Прокси Telegram вместе с обходом» стоял в «выкл.», а прокси
+        # всё равно поднимался при каждом включении обхода — и в файле
+        # настроек оставался включённым. Выключить его было нельзя в
+        # принципе: следующее нажатие «Включить» возвращало всё назад.
+        #
+        # Шаг теперь исполняется, только если человек его разрешил, и
+        # включать настройку за него незачем.
         start_proxy_if_enabled_async()
 
         # Слушатель поднимается за десятки миллисекунд; пять секунд —

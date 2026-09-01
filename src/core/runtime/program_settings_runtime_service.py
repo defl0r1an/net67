@@ -14,13 +14,20 @@ from settings.schema import (
 
 @dataclass(frozen=True, slots=True)
 class ProgramSettingsSnapshot:
-    revision: tuple[bool, bool, str, bool, bool, bool]
+    revision: tuple[bool, bool, str, bool, bool, bool, bool]
     auto_dpi_enabled: bool
     gui_autostart_enabled: bool
     tray_close_mode: str
     defender_disabled: bool
     max_blocked: bool
     russian_state_media_blocked: bool
+    #: Поднимать ли прокси Telegram вместе с обходом.
+    #:
+    #: Настройка сохранялась, но нигде не читалась при построении
+    #: страницы: тумблер после перезапуска всегда показывал «выкл.»,
+    #: сколько бы раз его ни включали. Прокси при этом исправно
+    #: поднимался — то есть тумблер врал ровно наоборот.
+    telegram_proxy_with_bypass: bool = False
 
 
 _warmed_tray_close_mode_lock = RLock()
@@ -67,6 +74,7 @@ class ProgramSettingsRuntimeService:
         defender_disabled: bool,
         max_blocked: bool,
         russian_state_media_blocked: bool,
+        telegram_proxy_with_bypass: bool = False,
     ) -> ProgramSettingsSnapshot:
         normalized_tray_close_mode = normalize_tray_close_mode(tray_close_mode)
         revision = (
@@ -76,6 +84,7 @@ class ProgramSettingsRuntimeService:
             bool(defender_disabled),
             bool(max_blocked),
             bool(russian_state_media_blocked),
+            bool(telegram_proxy_with_bypass),
         )
         return ProgramSettingsSnapshot(
             revision=revision,
@@ -85,6 +94,7 @@ class ProgramSettingsRuntimeService:
             defender_disabled=bool(defender_disabled),
             max_blocked=bool(max_blocked),
             russian_state_media_blocked=bool(russian_state_media_blocked),
+            telegram_proxy_with_bypass=bool(telegram_proxy_with_bypass),
         )
 
     def _read_fast_snapshot(self) -> ProgramSettingsSnapshot:
@@ -108,6 +118,7 @@ class ProgramSettingsRuntimeService:
             defender_disabled=bool(program.get("defender_disabled", False)),
             max_blocked=bool(program.get("max_blocked", False)),
             russian_state_media_blocked=bool(program.get("russian_state_media_blocked", False)),
+            telegram_proxy_with_bypass=bool(program.get("telegram_proxy_with_bypass", False)),
         )
 
     def read_snapshot(self) -> ProgramSettingsSnapshot:
@@ -153,6 +164,7 @@ class ProgramSettingsRuntimeService:
                 bool(snapshot.defender_disabled),
                 bool(snapshot.max_blocked),
                 bool(snapshot.russian_state_media_blocked),
+                bool(snapshot.telegram_proxy_with_bypass),
             ),
             auto_dpi_enabled=bool(snapshot.auto_dpi_enabled),
             gui_autostart_enabled=bool(snapshot.gui_autostart_enabled),
@@ -160,6 +172,7 @@ class ProgramSettingsRuntimeService:
             defender_disabled=bool(snapshot.defender_disabled),
             max_blocked=bool(snapshot.max_blocked),
             russian_state_media_blocked=bool(snapshot.russian_state_media_blocked),
+            telegram_proxy_with_bypass=bool(snapshot.telegram_proxy_with_bypass),
         )
         return self.publish_snapshot(updated)
 

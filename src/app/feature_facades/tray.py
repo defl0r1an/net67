@@ -168,7 +168,7 @@ class TrayFeature:
 
         commands = self._commands()
         try:
-            current = bool(commands.get_discord_restart_enabled(default=True))
+            current = bool(commands.get_discord_restart_enabled(default=False))
         except Exception:
             current = True
         enabled = not current

@@ -201,7 +201,7 @@ def create_additional_settings_save_worker(
 def build_additional_settings_state(state: dict | None) -> ControlAdditionalSettingsState:
     state = state if isinstance(state, dict) else {}
     return ControlAdditionalSettingsState(
-        discord_restart=bool(state.get("discord_restart", True)),
+        discord_restart=bool(state.get("discord_restart", False)),
         wssize_enabled=bool(state.get("wssize_enabled", False)),
         debug_log_enabled=bool(state.get("debug_log_enabled", False)),
     )

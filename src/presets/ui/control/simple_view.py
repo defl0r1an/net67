@@ -43,6 +43,10 @@ HIDDEN_SETTING_ROWS: tuple[str, ...] = (
     "defender_toggle",
     "max_block_toggle",
     "state_media_block_toggle",
+    # Прокси Telegram — настройка для тех, кто им пользуется, и в
+    # простом виде она лишняя: там оставлены кнопка, состояние и
+    # автозапуск, всё остальное убрано.
+    "telegram_proxy_toggle",
 )
 
 #: Где страница хранит исходные высоты отступов.
