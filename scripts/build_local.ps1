@@ -84,7 +84,13 @@ function Stop-Net67Engine {
     # своим процессом и держит artifact\bin\xray\xray.exe. Один сеанс
     # подключения - и сборка падает на "Artifact folder is locked",
     # причём про xray в сообщении нет ни слова.
-    foreach ($name in @("net67", "winws", "winws2", "amneziawg", "awg", "xray")) {
+    #
+    # tun2socks по той же причине, и он переживает приложение чаще
+    # остальных: его запускает режим "весь трафик", а останавливает
+    # только штатное сворачивание туннеля. Закрыли окно на живом
+    # туннеле - процесс остался и держит bin\tun2socks\tun2socks.exe
+    # вместе с wintun.dll.
+    foreach ($name in @("net67", "winws", "winws2", "amneziawg", "awg", "xray", "tun2socks")) {
         Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host ("      stopping process " + $_.ProcessName)
             Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
@@ -125,7 +131,7 @@ if (Test-Path $Artifact) {
         $locked | Select-Object -First 5 | ForEach-Object { Write-Host ("  " + $_.FullName) }
         Write-Host ""
         Write-Host "Something still holds them. From an elevated prompt:" -ForegroundColor Yellow
-        Write-Host "  taskkill /F /IM net67.exe /IM winws.exe /IM winws2.exe /IM amneziawg.exe /IM xray.exe"
+        Write-Host "  taskkill /F /IM net67.exe /IM winws.exe /IM winws2.exe /IM amneziawg.exe /IM xray.exe /IM tun2socks.exe"
         Write-Host "  sc stop Monkey"
         Write-Host "  sc delete Monkey"
         Write-Host "  Get-Service AmneziaWG* | ForEach-Object { sc.exe delete `$_.Name }"
