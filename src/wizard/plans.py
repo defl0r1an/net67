@@ -13,7 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from log.log import log
 from oneclick.plans import OneClickRequest
+
+#: Как называется профиль прямой записи в hosts. Совпадает с
+#: hosts/defaults.py: два написания одного имени разошлись бы.
+DIRECT_HOSTS_PROFILE = "hosts"
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +140,271 @@ SERVICE_CHOICES: tuple[ServiceChoice, ...] = (
 
 _CHOICE_BY_KEY = {choice.key: choice for choice in SERVICE_CHOICES}
 
+
+@dataclass(frozen=True, slots=True)
+class HostsGroup:
+    """Галочка на экране «Что должно работать без VPN».
+
+    Своих доменов не держит и по возможности не держит даже имён: список
+    сервисов разрешается против живого каталога при каждом обращении.
+    Захардкоженный список — это второй каталог, который расходится с
+    первым молча. Так уже вышло: в мастере стояло пять нейросетей, а в
+    каталоге их десять, и Grok с Windsurf в hosts не попадали никогда.
+    """
+
+    key: str
+    title: str
+    #: Примеры под заголовком, мелким шрифтом.
+    examples: str
+    default_enabled: bool = False
+    #: Явные имена сервисов каталога — для групп, которых каталог не знает.
+    services: tuple[str, ...] = ()
+    #: Брать раздел «ИИ» целиком, той же функцией, что рисует страницу.
+    from_ai_section: bool = False
+    #: Забирать всё, что не досталось другим группам.
+    takes_the_rest: bool = False
+    #: Домены зашиты в исходниках, каталог для группы не нужен.
+    source_domains: bool = False
+
+
+#: Общая приписка под всеми галочками.
+#:
+#: Одна на экран, а не по строке у каждой рискованной категории.
+#: Повторённая дважды, она читается как ругань на конкретный пункт и
+#: пугает сильнее, чем следует; сказанная один раз внизу — это условие
+#: сделки, одинаковое для всего списка.
+HOSTS_CAUTION_NOTE = (
+    "Со временем что-то из выбранного может перестать открываться: "
+    "адреса сервисов меняются, а записанные в hosts — нет. Мы следим "
+    "за списками и обновляем их с новыми версиями программы."
+)
+
+#: Галочки экрана «Что должно работать без VPN».
+#:
+#: Шесть на весь каталог из семи десятков сервисов. Последняя группа
+#: забирает остаток, поэтому потерять сервис нельзя: добавили новый в
+#: каталог — он сразу попал в «Остальное», а не исчез из мастера.
+HOSTS_GROUPS: tuple[HostsGroup, ...] = (
+    HostsGroup(
+        key="ai",
+        title="Нейросети",
+        examples="ChatGPT, Claude, Gemini, Grok, Copilot и остальные",
+        default_enabled=True,
+        from_ai_section=True,
+    ),
+    HostsGroup(
+        key="social",
+        title="Соцсети и мессенджеры",
+        examples="Instagram, Telegram, Discord, WhatsApp, X, TikTok",
+        default_enabled=True,
+        services=(
+            "Instagram",
+            "Telegram (работает только веб-версия)",
+            "WhatsApp (работает обход если есть IPv6)",
+            "Discord",
+            "Решение от Flowseal для стабильной работы голосовых серверов в Discord",
+            "x.com / Twitter",
+            "TikTok",
+            "Badoo",
+            "Guilded",
+            "Truth Social",
+            "Tuta",
+            "Patreon",
+        ),
+    ),
+    HostsGroup(
+        key="work",
+        title="Работа и разработка",
+        examples="JetBrains, GitHub, Notion, Canva, DeepL, TeamViewer, Autodesk",
+        services=(
+            "JetBrains",
+            "GitHub",
+            "Notion",
+            "Canva",
+            "DeepL",
+            "TeamViewer",
+            "Linear.app",
+            "Tableau",
+            "Autodesk",
+            "SketchUp",
+            "Oracle",
+            "Broadcom",
+            "WorkOS",
+            "Posthog",
+            "Make",
+            "Framer",
+            "Parsec",
+            "Tailscale",
+            "Dell",
+            "Intel",
+            "AMD",
+            "Nvidia",
+            "Xerox",
+            "Elgato",
+            "Dyson",
+            "Fitbit",
+            "Naukri",
+            "Square",
+            "Render",
+            "ntc.party (включить обход по IPv4)",
+        ),
+    ),
+    HostsGroup(
+        key="media",
+        title="Музыка, видео и развлечения",
+        examples="Spotify, Twitch, YouTube, Deezer, торренты, манга",
+        services=(
+            "Spotify",
+            "Deezer",
+            "Twitch",
+            "YouTube (иногда может не работать с ним! Отключите тумблер если YouTube не работает с пресетами)",
+            "MangaLib",
+            "Rutor",
+            "FMHY",
+            "Chess",
+            "Supercell",
+            "Imgur",
+            "Web Archive",
+            "Strava",
+        ),
+    ),
+    HostsGroup(
+        key="rest",
+        title="Остальное из каталога",
+        examples="Погода, поиск, почта и всё, что не попало в группы выше",
+        takes_the_rest=True,
+    ),
+    HostsGroup(
+        key="adobe",
+        title="Программы Adobe",
+        examples="Блокирует серверы проверки лицензий Photoshop, Illustrator и остальных",
+        source_domains=True,
+    ),
+)
+
+_HOSTS_GROUP_BY_KEY = {group.key: group for group in HOSTS_GROUPS}
+
+
+def catalog_services() -> tuple[str, ...]:
+    """Все сервисы каталога. Пустой кортеж, если каталог недоступен."""
+    try:
+        from hosts.proxy_domains import get_all_services
+
+        return tuple(str(name) for name in (get_all_services() or ()) if str(name).strip())
+    except Exception:
+        return ()
+
+
+def _is_ai(name: str) -> bool:
+    """Тот же признак «нейросеть», что и на странице «Сервисы».
+
+    Отдельного списка здесь нет намеренно: раздел «ИИ» на странице и
+    галочка «Нейросети» в мастере обязаны означать одно и то же.
+    """
+    try:
+        from hosts.page_plans import is_ai_service
+
+        return bool(is_ai_service(name))
+    except Exception:
+        return False
+
+
+def group_services(group_key: str) -> tuple[str, ...]:
+    """Сервисы каталога, которые включает одна галочка."""
+    group = _HOSTS_GROUP_BY_KEY.get(str(group_key))
+    if group is None or group.source_domains:
+        return ()
+
+    services = catalog_services()
+    if group.from_ai_section:
+        return tuple(name for name in services if _is_ai(name))
+
+    if group.takes_the_rest:
+        claimed = set()
+        for other in HOSTS_GROUPS:
+            if other.key == group.key or other.source_domains:
+                continue
+            claimed.update(group_services(other.key))
+        return tuple(name for name in services if name not in claimed)
+
+    known = set(services)
+    return tuple(name for name in group.services if name in known)
+
+
+def default_hosts_groups() -> frozenset[str]:
+    """Что отмечено на экране при открытии.
+
+    Совпадает с умолчанием hosts/defaults.py, и это не совпадение: два
+    места, решающие «что включено сразу», обязаны говорить одно и то же.
+    """
+    return frozenset(g.key for g in HOSTS_GROUPS if g.default_enabled)
+
+
+def normalize_hosts_groups(keys) -> frozenset[str]:
+    """Отбрасывает незнакомые ключи групп."""
+    return frozenset(str(k) for k in keys or () if str(k) in _HOSTS_GROUP_BY_KEY)
+
+
+def hosts_service_profiles(group_keys) -> dict[str, str]:
+    """Отображение «сервис каталога -> профиль» по ответу мастера.
+
+    Именно в таком виде выбор хранится и показывается на странице
+    «Сервисы»: переключатели и колонка «Профиль» читают его.
+    """
+    try:
+        from hosts.proxy_domains import get_service_available_dns_profiles
+    except Exception:
+        return {}
+
+    out: dict[str, str] = {}
+    for key in sorted(normalize_hosts_groups(group_keys)):
+        for service in group_services(key):
+            try:
+                available = list(get_service_available_dns_profiles(service) or [])
+            except Exception:
+                available = []
+            if not available:
+                continue
+            if PREFERRED_DNS_PROFILE in available:
+                out[service] = PREFERRED_DNS_PROFILE
+                continue
+
+            out[service] = available[0]
+            # Сервисы с прямыми записями сюда попадают штатно: у них
+            # профиль один и называется иначе. А вот сервис с подменой
+            # DNS без xbox_dns — расхождение каталога с тем, что здесь
+            # написано, и молчать о нём нельзя.
+            if len(available) > 1 or available[0] != DIRECT_HOSTS_PROFILE:
+                log(
+                    f"{service}: нет профиля {PREFERRED_DNS_PROFILE}, взят {available[0]}",
+                    "⚠ WARNING",
+                )
+    return out
+
+
+def hosts_entries_for_groups(group_keys) -> dict[str, str]:
+    """Записи hosts по ответу мастера."""
+    selected = normalize_hosts_groups(group_keys)
+    entries: dict[str, str] = {}
+
+    if "adobe" in selected:
+        try:
+            from hosts.adobe_domains import ADOBE_DOMAINS
+
+            entries.update(ADOBE_DOMAINS)
+        except Exception:
+            pass
+
+    for service in sorted(hosts_service_profiles(selected)):
+        for host, ip in _catalog_rows(service):
+            host = str(host or "").strip()
+            ip = str(ip or "").strip()
+            if host and ip:
+                entries[host] = ip
+
+    return entries
+
+
 #: Проверяем хотя бы один общедоступный адрес, даже если пользователь
 #: не отметил ничего: иначе диагностике не с чем работать.
 _FALLBACK_PROBE_URL = "https://www.youtube.com"
@@ -211,9 +481,16 @@ def _catalog_rows(catalog_service: str) -> list[tuple[str, str]]:
         return []
 
 
-#: Профиль DNS, который ставим по умолчанию. Пользователь просил
-#: приоритет именно на него; если сервис его не поддерживает, берём
-#: первый доступный из каталога.
+#: Профиль DNS для всех сервисов, выбранных в мастере.
+#:
+#: Не «по возможности», а всегда, когда сервис его поддерживает. Разные
+#: резолверы отдают разные адреса, и набор из четырёх профилей вперемешку
+#: — это четыре разных набора адресов в одном файле hosts, которые потом
+#: устаревают вразнобой. Один профиль на всех делает поломку понятной:
+#: перестало работать — значит устарел он.
+#:
+#: Сервисам с прямыми записями в hosts подмена не нужна вовсе: у них
+#: xbox_dns нет, и там берётся единственный доступный профиль.
 PREFERRED_DNS_PROFILE = "xbox_dns"
 
 
@@ -240,9 +517,21 @@ def build_hosts_service_profiles(selection) -> dict[str, str]:
                 available = []
             if not available:
                 continue
-            out[service] = (
-                PREFERRED_DNS_PROFILE if PREFERRED_DNS_PROFILE in available else available[0]
-            )
+            if PREFERRED_DNS_PROFILE in available:
+                out[service] = PREFERRED_DNS_PROFILE
+                continue
+
+            out[service] = available[0]
+            # Сервисы с прямыми записями сюда попадают штатно: у них
+            # профиль один и называется иначе. А вот сервис с подменой
+            # DNS, у которого нет xbox_dns, — это расхождение каталога с
+            # тем, что здесь написано, и молчать о нём нельзя.
+            if len(available) > 1 or available[0] != DIRECT_HOSTS_PROFILE:
+                log(
+                    f"{service}: нет профиля {PREFERRED_DNS_PROFILE}, "
+                    f"взят {available[0]}",
+                    "⚠ WARNING",
+                )
     return out
 
 
@@ -277,14 +566,29 @@ def build_hosts_entries(selection) -> dict[str, str]:
 def build_oneclick_request(
     selection,
     *,
+    hosts_groups=None,
     allow_dns_fix: bool = True,
     run_selfcheck: bool = True,
 ) -> OneClickRequest:
-    """Собирает запрос для оркестратора из ответов мастера."""
+    """Собирает запрос для оркестратора из ответов мастера.
+
+    ``hosts_groups`` — ответ с экрана «Что должно работать без VPN».
+    Он отвечает только за записи в hosts; подбор стратегии и прокси
+    Telegram по-прежнему считаются по всему набору категорий, потому
+    что обход включается целиком и выбирать там нечего.
+
+    Не передали — работает как раньше, по общему выбору. Так старые
+    вызовы и тесты остаются рабочими.
+    """
     selected = normalize_selection(selection)
+    entries = (
+        build_hosts_entries(selected)
+        if hosts_groups is None
+        else hosts_entries_for_groups(hosts_groups)
+    )
     return OneClickRequest(
         services=selected,
-        hosts_entries=build_hosts_entries(selected),
+        hosts_entries=entries,
         allow_dns_fix=allow_dns_fix,
         run_selfcheck=run_selfcheck,
         needs_telegram_proxy=any(
@@ -356,18 +660,29 @@ class WizardStep:
     subtitle: str
 
 
-#: Экран «Чем вы пользуетесь?» убран: обходы включаются все сразу,
-#: и отвечать на вопрос было незачем — результат не менялся.
+#: Экран «Чем вы пользуетесь?» когда-то убрали, и правильно: обходы
+#: включаются все сразу, ответ ни на что не влиял.
 #:
-#: А вот провайдер на результат влияет: оборудование фильтрации у них
-#: разное, и стратегия, работающая на одном, на другом может не дать
-#: ничего. Ответ выбирает пресет, с которого начать; что подойдёт на
-#: самом деле, показывает следующий экран с проверкой.
+#: Вернулся он с другим вопросом и с настоящей работой. Обход и записи
+#: в hosts — разные механизмы: обход лечит блокировку у провайдера,
+#: hosts лечит отказ по стране на стороне самого сервиса. Первое можно
+#: включить всем и сразу, второе нельзя: подмена адреса стоит денег, и
+#: платит за неё тот, кому сервис и так открывался.
+#:
+#: Провайдер на результат влияет отдельно: оборудование фильтрации у
+#: них разное, и стратегия, работающая на одном, на другом может не
+#: дать ничего. Ответ выбирает пресет, с которого начать; что подойдёт
+#: на самом деле, показывает следующий экран с проверкой.
 WIZARD_STEPS: tuple[WizardStep, ...] = (
     WizardStep(
         key="provider",
         title="Какой у вас провайдер?",
         subtitle="От него зависит, какие настройки обхода взять за основу",
+    ),
+    WizardStep(
+        key="hosts",
+        title="Что должно работать без VPN?",
+        subtitle="Эти сервисы закрывают доступ сами, по стране — обход DPI им не поможет",
     ),
     WizardStep(
         key="detect",

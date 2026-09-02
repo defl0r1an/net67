@@ -12,8 +12,15 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
-from qfluentwidgets import BodyLabel, ComboBox, StrongBodyLabel, SwitchButton, TitleLabel
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from qfluentwidgets import (
+    BodyLabel,
+    CheckBox,
+    ComboBox,
+    StrongBodyLabel,
+    SwitchButton,
+    TitleLabel,
+)
 
 from log.log import log
 from ui.accessibility import set_control_accessibility
@@ -21,8 +28,11 @@ from ui.fluent_dialog import MessageBoxBase
 from ui.theme import get_theme_tokens
 from provider.catalog import PROVIDERS, UNKNOWN, describe_choice
 from wizard.plans import (
+    HOSTS_CAUTION_NOTE,
+    HOSTS_GROUPS,
     WIZARD_STEPS,
     build_probe_urls,
+    default_hosts_groups,
     default_selection,
     is_last_step,
     next_step_index,
@@ -118,6 +128,10 @@ class WizardDialog(MessageBoxBase):
         self._step = 0
         self._provider = UNKNOWN
         self._selection = set(default_selection())
+        #: Ответ экрана «Что должно работать без VPN». Отдельно от
+        #: _selection: тот отвечает за подбор стратегии и включается
+        #: целиком, а этот решает, что записать в hosts.
+        self._hosts_groups = set(default_hosts_groups())
         self._detect_worker: _DetectWorker | None = None
         self._detect_done = False
         self._checked = 0
@@ -159,6 +173,7 @@ class WizardDialog(MessageBoxBase):
         self.viewLayout.addSpacing(6)
         self.viewLayout.addWidget(self.progress_hint)
 
+        self._build_hosts_page()
         self._build_provider_page()
         self._build_detect_page()
         self._build_startup_page()
@@ -171,6 +186,108 @@ class WizardDialog(MessageBoxBase):
         self.cancelButton.clicked.connect(self._on_back)
 
         self.widget.setMinimumWidth(520)
+
+    def _build_hosts_page(self) -> None:
+        """Галочки «что должно работать без VPN».
+
+        Шесть категорий, а не список сервисов: у каждого человека он
+        свой, а механизм один. Под заголовком — примеры мелким шрифтом,
+        иначе «Рабочие сервисы» не значит ничего.
+        """
+        tokens = get_theme_tokens()
+
+        self.hosts_page = QWidget(self.body)
+        layout = QVBoxLayout(self.hosts_page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        self._hosts_checks = {}
+        for group in HOSTS_GROUPS:
+            row = QVBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(2)
+
+            check = CheckBox(group.title, self.hosts_page)
+            check.setChecked(group.key in self._hosts_groups)
+            check.toggled.connect(
+                lambda checked, key=group.key: self._on_hosts_group_toggled(key, checked)
+            )
+            row.addWidget(check)
+
+            examples = QLabel(group.examples, self.hosts_page)
+            examples.setWordWrap(True)
+            examples.setStyleSheet(
+                f"QLabel {{ color: {tokens.fg_muted}; font-size: 12px; }}"
+            )
+            # Отступ под галочку, чтобы примеры читались как её подпись,
+            # а не как отдельная строка списка.
+            examples.setContentsMargins(28, 0, 0, 0)
+            row.addWidget(examples)
+
+            set_control_accessibility(
+                check,
+                name=group.title,
+                description=group.examples,
+            )
+            self._hosts_checks[group.key] = check
+            layout.addLayout(row)
+
+        layout.addWidget(self._build_hosts_caution())
+        self.body_layout.addWidget(self.hosts_page)
+
+    def _build_hosts_caution(self) -> QFrame:
+        """Жёлтая рамка с предупреждением под списком.
+
+        Своего цвета для предупреждений в наборе токенов нет, и это не
+        повод его выдумывать: янтарный тут задан прямо, но так, чтобы
+        держаться на обеих темах. Рамка и подложка — с прозрачностью,
+        они ложатся на любой фон; у текста два значения, потому что
+        одно и то же жёлтое не может быть читаемым и на белом, и на
+        чёрном.
+        """
+        tokens = get_theme_tokens()
+        text_color = "#8a6100" if tokens.is_light else "#e3ba5e"
+        border = "rgba(214, 160, 20, 0.55)"
+        background = "rgba(214, 160, 20, 0.10)"
+
+        box = QFrame(self.hosts_page)
+        box.setObjectName("hostsCaution")
+        box.setStyleSheet(
+            "QFrame#hostsCaution {"
+            f" border: 1px solid {border};"
+            f" background: {background};"
+            " border-radius: 4px; }"
+        )
+
+        row = QHBoxLayout(box)
+        row.setContentsMargins(12, 10, 12, 10)
+        row.setSpacing(10)
+
+        # Знак берём текстовым, без селектора эмодзи: с ним Windows
+        # рисует цветную картинку и наш цвет к ней не применяется.
+        sign = QLabel("\u26a0", box)
+        sign.setStyleSheet(
+            f"QLabel {{ color: {text_color}; font-size: 15px; border: none;"
+            " background: transparent; }"
+        )
+        sign.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        row.addWidget(sign)
+
+        note = QLabel(HOSTS_CAUTION_NOTE, box)
+        note.setWordWrap(True)
+        note.setStyleSheet(
+            f"QLabel {{ color: {text_color}; font-size: 12px; border: none;"
+            " background: transparent; }"
+        )
+        row.addWidget(note, 1)
+
+        return box
+
+    def _on_hosts_group_toggled(self, key: str, checked: bool) -> None:
+        if checked:
+            self._hosts_groups.add(key)
+        else:
+            self._hosts_groups.discard(key)
 
     def _build_provider_page(self) -> None:
         self.provider_page = QWidget(self.body)
@@ -293,6 +410,7 @@ class WizardDialog(MessageBoxBase):
         self.title_label.setText(step.title)
         self.subtitle_label.setText(step.subtitle)
 
+        self.hosts_page.setVisible(step.key == "hosts")
         self.provider_page.setVisible(step.key == "provider")
         self.detect_page.setVisible(step.key == "detect")
         self.startup_page.setVisible(step.key == "startup")
@@ -408,59 +526,21 @@ class WizardDialog(MessageBoxBase):
     # ──────────────────────────────────────────────────────────────────
 
     def _animate_step(self, *, forward: bool) -> None:
-        """Новый экран въезжает сбоку и проявляется.
-
-        Двигаем не сам виджет, а отступы его контейнера. Страницы лежат
-        в раскладке, и заданная вручную позиция была бы сброшена первым
-        же её пересчётом — а он случается от чего угодно, вплоть до
-        смены текста кнопки. Отступы раскладка уважает, поэтому такой
-        сдвиг переживает пересчёт.
+        """Новый экран приезжает сбоку и проявляется.
 
         Направление читается: вперёд — экран приходит справа, назад —
         слева. Без этого переход есть, а куда идём, непонятно.
+
+        Движение живёт в эффекте отрисовки, а не в отступах раскладки.
+        Раньше сдвиг делался через setContentsMargins, и это заставляло
+        Qt пересчитывать геометрию тела диалога на каждом кадре — вместе
+        со всеми галочками, комбобоксом и рамкой предупреждения. Плюс
+        две отдельные анимации, сдвиг и прозрачность, которые обязаны
+        были совпасть по времени, но ничем не были связаны.
         """
-        from PyQt6.QtCore import QEasingCurve, QVariantAnimation
-        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from ui.reveal import slide_in
 
-        from ui.animation_policy import start_managed_animation
-
-        shift = 48
-
-        def set_shift(value) -> None:
-            offset = max(0, int(value))
-            if forward:
-                self.body_layout.setContentsMargins(offset, 0, 0, 0)
-            else:
-                self.body_layout.setContentsMargins(0, 0, offset, 0)
-
-        slide = QVariantAnimation(self)
-        slide.setStartValue(shift)
-        slide.setEndValue(0)
-        slide.setDuration(220)
-        slide.setEasingCurve(QEasingCurve.Type.OutCubic)
-        slide.valueChanged.connect(set_shift)
-        slide.finished.connect(lambda: self.body_layout.setContentsMargins(0, 0, 0, 0))
-
-        effect = QGraphicsOpacityEffect(self.body)
-        self.body.setGraphicsEffect(effect)
-        fade = QVariantAnimation(self)
-        fade.setStartValue(0.0)
-        fade.setEndValue(1.0)
-        fade.setDuration(220)
-        fade.valueChanged.connect(lambda value: effect.setOpacity(float(value)))
-        # Эффект снимаем после показа: он держит отдельный слой отрисовки
-        # и на нём заметно дороже перерисовывать содержимое.
-        fade.finished.connect(lambda: self.body.setGraphicsEffect(None))
-
-        self._step_animations = [slide, fade]
-        for animation in self._step_animations:
-            start_managed_animation(animation)
-
-        if slide.duration() <= 0:
-            # Анимации отключены человеком: показываем сразу и начисто.
-            set_shift(0)
-            effect.setOpacity(1.0)
-            self.body.setGraphicsEffect(None)
+        slide_in(self.body, dx=48 if forward else -48)
 
     def _finish(self) -> None:
         from wizard.apply import apply_wizard
@@ -480,6 +560,7 @@ class WizardDialog(MessageBoxBase):
 
         result = apply_wizard(
             selection=self._selection,
+            hosts_groups=self._hosts_groups,
             autostart_with_windows=self.autostart_switch.isChecked(),
             minimize_to_tray=self.tray_switch.isChecked(),
         )

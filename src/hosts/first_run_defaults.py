@@ -34,7 +34,25 @@ DEFAULTS_VERSION = 3
 
 
 def is_needed() -> bool:
-    """Нужно ли применять умолчания."""
+    """Нужно ли применять умолчания при запуске.
+
+    Пока мастер первого запуска не пройден — не нужно. Он спрашивает,
+    что должно работать без VPN, и сам применяет ответ; сработай этот
+    шаг раньше, он записал бы в hosts весь каталог, а ответ человека
+    лёг бы поверх или не лёг вовсе — как повезёт по времени. Ровно из-за
+    этого галочки в мастере ничего не меняли на странице «Сервисы».
+
+    Тем, кто мастер уже прошёл, всё работает как прежде: сверка версии.
+    """
+    try:
+        from settings.store import get_wizard_completed
+
+        if not bool(get_wizard_completed()):
+            return False
+    except Exception:
+        # Флага не добыли — ведём себя как раньше и решаем по версии.
+        pass
+
     try:
         from settings.store import get_hosts_defaults_version
 
@@ -44,8 +62,17 @@ def is_needed() -> bool:
         return False
 
 
-def apply_now() -> tuple[bool, str]:
-    """Записывает умолчания в hosts. Возвращает (успех, сообщение)."""
+def apply_now(selection: dict | None = None) -> tuple[bool, str]:
+    """Записывает выбор сервисов в hosts. Возвращает (успех, сообщение).
+
+    ``selection`` — готовое отображение «сервис -> профиль». Его передаёт
+    мастер первого запуска по ответам человека. Не передали — берём
+    умолчания каталога, как было.
+
+    Писатель в системный файл остаётся один и тот же. Мастер не пишет
+    сам, а зовёт сюда: два писателя в hosts — это гонка, где результат
+    зависит от того, кто допишет последним.
+    """
     try:
         from hosts.defaults import load_default_selection
         from hosts.public import (
@@ -58,7 +85,10 @@ def apply_now() -> tuple[bool, str]:
         return (False, f"модули hosts недоступны: {exc}")
 
     try:
-        selection = load_default_selection()
+        if selection is None:
+            selection = load_default_selection()
+        else:
+            selection = dict(selection)
     except Exception as exc:
         return (False, f"каталог сервисов не прочитан: {exc}")
 
@@ -91,13 +121,18 @@ def apply_now() -> tuple[bool, str]:
     return (True, f"включено сервисов: {len(selection)}")
 
 
-def apply_in_background() -> threading.Thread | None:
-    """Запускает применение умолчаний, если оно ещё не выполнялось."""
-    if not is_needed():
+def apply_in_background(selection: dict | None = None) -> threading.Thread | None:
+    """Запускает применение в отдельном потоке.
+
+    С ``selection`` — по ответам мастера, и тогда проверка ``is_needed``
+    не спрашивается: мастер только что закончился, применить ответ надо
+    в любом случае. Без него — обычный однократный шаг при запуске.
+    """
+    if selection is None and not is_needed():
         return None
 
     def _run() -> None:
-        ok, message = apply_now()
+        ok, message = apply_now(selection)
         if ok:
             log(f"Сервисы hosts включены по умолчанию: {message}", "INFO")
         else:

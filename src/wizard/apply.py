@@ -16,6 +16,7 @@ from wizard.plans import (
     build_oneclick_request,
     build_hosts_service_profiles,
     build_settings_plan,
+    hosts_service_profiles,
     normalize_selection,
 )
 
@@ -69,26 +70,29 @@ def _apply_gui_autostart(enabled: bool) -> str:
 
 
 def _apply_hosts_entries(service_profiles: dict) -> str:
-    """Мастер больше не пишет в hosts сам.
+    """Применяет выбор сервисов, сделанный на экране мастера.
 
-    Раньше здесь применялся выбор категорий — подмножество каталога. Но
-    теперь после установки включается весь каталог сервисов, и делает это
-    hosts.first_run_defaults в отдельном потоке при запуске.
+    Раньше здесь была заглушка: мастер не писал в hosts вовсе, потому
+    что весь каталог всё равно включал hosts.first_run_defaults при
+    запуске. Пока экрана с вопросом не было, это работало. Как только
+    вопрос вернулся, получилось хуже некуда — человек снимал галочки,
+    жал «Готово», открывал «Сервисы» и видел там включённым всё подряд.
+    Ответ никуда не девался, его просто некому было применить.
 
-    Два писателя в один системный файл — гарантированная гонка: поток с
-    умолчаниями и завершение мастера легко попадают в одно и то же окно
-    времени, а результат зависит от того, кто допишет последним. Поэтому
-    здесь остаётся только проверка, что однократный шаг вообще запланирован.
+    Писатель в системный файл по-прежнему один. Мастер не пишет сам, а
+    зовёт того же самого — с готовым выбором вместо умолчаний. Двух
+    писателей в hosts быть не должно: они попадают в одно окно времени,
+    и побеждает тот, кто допишет последним.
+
+    В фоне, а не здесь: запись в системный файл занимает заметное время,
+    а мы на потоке интерфейса и держим открытым последний экран мастера.
     """
-    _ = service_profiles
     try:
-        from hosts.first_run_defaults import is_needed
+        from hosts.first_run_defaults import apply_in_background
 
-        if is_needed():
-            # Шаг ещё впереди — предупреждать человека не о чем.
-            return ""
+        apply_in_background(service_profiles)
     except Exception as exc:
-        return f"Не удалось проверить настройку сервисов: {exc}"
+        return f"Не удалось настроить сервисы hosts: {exc}"
     return ""
 
 
@@ -125,6 +129,7 @@ def build_default_writers() -> WizardWriters:
 def apply_wizard(
     *,
     selection,
+    hosts_groups=None,
     autostart_with_windows: bool,
     minimize_to_tray: bool,
     writers: WizardWriters | None = None,
@@ -133,6 +138,12 @@ def apply_wizard(
 
     Флаг завершения выставляется последним: если запись настроек упала,
     мастер должен открыться снова, а не считаться пройденным.
+
+    ``hosts_groups`` — ответ экрана «Что должно работать без VPN».
+    Раньше записи hosts выводились из общего выбора категорий, а тот
+    всегда был полным: экран с вопросом убрали, и в hosts попадало всё
+    подряд, включая сервисы, которым подмена адреса скорее вредит.
+    Не передали — поведение прежнее.
     """
     writers = writers or build_default_writers()
     selected = normalize_selection(selection)
@@ -140,7 +151,7 @@ def apply_wizard(
         autostart_with_windows=autostart_with_windows,
         minimize_to_tray=minimize_to_tray,
     )
-    request = build_oneclick_request(selected)
+    request = build_oneclick_request(selected, hosts_groups=hosts_groups)
 
     warnings: list[str] = []
     try:
@@ -167,7 +178,12 @@ def apply_wizard(
         # Записи hosts применяем сразу, а не откладываем до «Включить».
         # Иначе человек отмечает «Нейросети», открывает редактор hosts и
         # видит там пусто — выбор как будто не сохранился.
-        hosts_problem = writers.apply_hosts(build_hosts_service_profiles(selected))
+        profiles = (
+            build_hosts_service_profiles(selected)
+            if hosts_groups is None
+            else hosts_service_profiles(hosts_groups)
+        )
+        hosts_problem = writers.apply_hosts(profiles)
         if hosts_problem:
             warnings.append(str(hosts_problem))
 
