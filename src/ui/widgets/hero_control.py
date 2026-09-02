@@ -130,6 +130,27 @@ class HeroControlCard(QWidget):
 #: Размер значка внутри круглой кнопки.
 HERO_ICON_SIZE = 32
 
+#: Сколько едет цвет круга при смене состояния.
+#:
+#: Короче оборота значка (520 мс) намеренно: цвет должен договорить
+#: раньше, чем закончится проворот, иначе два движения спорят за
+#: внимание и переключение выглядит суетливым.
+HERO_COLOR_MS = 280
+
+#: Полный цикл «дыхания» круга, пока обход работает.
+#:
+#: Медленно намеренно. Быстрая пульсация на главном элементе экрана
+#: читается как тревога, а нужно противоположное — «всё идёт, ничего
+#: делать не надо».
+HERO_PULSE_MS = 2600
+
+#: Насколько должно измениться дыхание, чтобы перерисовывать круг.
+#:
+#: Дыхание идёт всё время работы обхода — часами. Без порога кнопка
+#: перерисовывалась бы шестьдесят раз в секунду ради разницы, которой
+#: на глаз нет.
+HERO_PULSE_STEP = 0.02
+
 
 def centering_size_hint_width(*, size: int = HERO_BUTTON_SIZE, icon_size: int = HERO_ICON_SIZE) -> int:
     """Ширина подсказки размера, при которой значок встаёт по центру.
@@ -155,8 +176,10 @@ def make_round_button_class(base_cls):
     Рисуем сами, а не таблицей стилей. Плоский круг одного цвета человек
     назвал монотонным, и он прав: главный элемент экрана не отличался от
     обычной кнопки ничем, кроме размера. Здесь у круга есть заливка с
-    переходом сверху вниз, кольцо по краю и значок, который
-    проворачивается при переключении.
+    переходом сверху вниз, светящийся кант по верхней кромке, кольцо по
+    краю, ореол за кольцом, медленное дыхание на работающем обходе и
+    значок, который проворачивается при переключении — вместе с бликом,
+    обегающим кольцо.
     """
 
     class _RoundButton(base_cls):
@@ -166,6 +189,23 @@ def make_round_button_class(base_cls):
             self._net67_fill = "#42454d"
             self._net67_ring = "#a8a8a8"
             self._net67_glow = 0.0
+            self._net67_pulse = 0.0
+            # Показываемый цвет отдельно от заданного.
+            #
+            # `_net67_fill` — куда идём, `_shown` — где сейчас. Раньше
+            # они были одним значением, и смена состояния меняла круг
+            # мгновенно: только что серый, уже синий. Кадра перехода не
+            # было, и главная кнопка экрана переключалась беднее, чем
+            # тумблер в настройках.
+            #
+            # Разделение нужно ещё и для проверок: они читают заданный
+            # цвет сразу после смены состояния и ждать анимацию не должны.
+            self._net67_fill_shown = None
+            self._net67_ring_shown = None
+            self._net67_color_animation = None
+            self._net67_color_target = None
+            self._net67_pulse_animation = None
+            self._net67_pulse_wanted = False
 
         def minimumSizeHint(self):
             from PyQt6.QtCore import QSize
@@ -178,46 +218,266 @@ def make_round_button_class(base_cls):
             self.update()
 
         def set_hero_colors(self, *, fill: str, ring: str) -> None:
+            """Задаёт цвет круга. Показываемый доезжает до него плавно."""
+            from PyQt6.QtGui import QColor
+
             self._net67_fill = str(fill)
             self._net67_ring = str(ring)
-            self.update()
+
+            target_key = (self._net67_fill, self._net67_ring)
+            if (
+                target_key == self._net67_color_target
+                and self._net67_color_animation is not None
+            ):
+                # Тот же цвет во время перехода к нему. Приходит на каждом
+                # кадре просадки круга под нажатием: она пересчитывает
+                # цвет заново. Перезапуск здесь растягивал бы переход
+                # бесконечно, пока палец на кнопке.
+                return
+            self._net67_color_target = target_key
+
+            target_fill = QColor(self._net67_fill)
+            target_ring = QColor(self._net67_ring)
+            start_fill = self._net67_fill_shown or target_fill
+            start_ring = self._net67_ring_shown or target_ring
+
+            def _snap() -> None:
+                self._net67_fill_shown = target_fill
+                self._net67_ring_shown = target_ring
+                self._net67_color_animation = None
+                self.update()
+
+            if start_fill == target_fill and start_ring == target_ring:
+                _snap()
+                return
+
+            try:
+                from PyQt6.QtCore import QEasingCurve, QVariantAnimation
+
+                from ui.animation_policy import (
+                    are_animations_enabled,
+                    start_managed_animation,
+                )
+            except Exception:
+                _snap()
+                return
+
+            if not are_animations_enabled():
+                _snap()
+                return
+
+            previous = self._net67_color_animation
+            if previous is not None:
+                # Второе переключение до конца первого: старую анимацию
+                # надо снять, иначе два обработчика тянут цвет в разные
+                # стороны и круг мерцает.
+                try:
+                    previous.stop()
+                except Exception:
+                    pass
+
+            def _mix(first, second, ratio):
+                return QColor(
+                    int(round(first.red() + (second.red() - first.red()) * ratio)),
+                    int(round(first.green() + (second.green() - first.green()) * ratio)),
+                    int(round(first.blue() + (second.blue() - first.blue()) * ratio)),
+                )
+
+            def _step(value):
+                ratio = float(value)
+                self._net67_fill_shown = _mix(start_fill, target_fill, ratio)
+                self._net67_ring_shown = _mix(start_ring, target_ring, ratio)
+                self.update()
+
+            animation = QVariantAnimation(self)
+            animation.setStartValue(0.0)
+            animation.setEndValue(1.0)
+            animation.setDuration(HERO_COLOR_MS)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            animation.valueChanged.connect(_step)
+            animation.finished.connect(_snap)
+            self._net67_color_animation = animation
+            start_managed_animation(animation)
+            if animation.duration() <= 0:
+                _snap()
 
         def set_glow(self, value: float) -> None:
             """Насколько ярко светится кольцо: 0 — покой, 1 — вспышка."""
             self._net67_glow = max(0.0, min(1.0, float(value)))
             self.update()
 
+        # ── дыхание работающего обхода ───────────────────────────────
+        def set_pulse(self, value: float) -> None:
+            self._net67_pulse = max(0.0, min(1.0, float(value)))
+            self.update()
+
+        def start_pulse(self) -> None:
+            """Круг начинает медленно дышать: обход работает.
+
+            Статичная кнопка одинаково выглядит и когда обход поднят, и
+            когда программа зависла на полпути. Живое движение — самый
+            дешёвый способ показать, что всё идёт.
+            """
+            self._net67_pulse_wanted = True
+            self._sync_pulse()
+
+        def stop_pulse(self) -> None:
+            self._net67_pulse_wanted = False
+            self._sync_pulse()
+
+        def _sync_pulse(self) -> None:
+            """Держит анимацию дыхания в согласии с состоянием и видимостью."""
+            running = self._net67_pulse_animation is not None
+            wanted = bool(self._net67_pulse_wanted) and not self.isHidden()
+
+            if wanted and not running:
+                self._start_pulse_animation()
+            elif not wanted and running:
+                self._stop_pulse_animation()
+
+        def _start_pulse_animation(self) -> None:
+            try:
+                from PyQt6.QtCore import QEasingCurve, QVariantAnimation
+
+                from ui.animation_policy import (
+                    are_animations_enabled,
+                    start_managed_animation,
+                )
+            except Exception:
+                return
+
+            if not are_animations_enabled():
+                return
+
+            animation = QVariantAnimation(self)
+            animation.setStartValue(0.0)
+            animation.setKeyValueAt(0.5, 1.0)
+            animation.setEndValue(0.0)
+            animation.setDuration(HERO_PULSE_MS)
+            animation.setEasingCurve(QEasingCurve.Type.InOutSine)
+            # Бесконечно: дыхание живёт ровно столько, сколько работает
+            # обход, и останавливается сменой состояния, а не таймером.
+            animation.setLoopCount(-1)
+            animation.valueChanged.connect(self._on_pulse_value)
+            self._net67_pulse_animation = animation
+            start_managed_animation(animation)
+            if animation.duration() <= 0:
+                self._stop_pulse_animation()
+
+        def _stop_pulse_animation(self) -> None:
+            animation = self._net67_pulse_animation
+            self._net67_pulse_animation = None
+            if animation is not None:
+                try:
+                    animation.stop()
+                except Exception:
+                    pass
+            if self._net67_pulse:
+                self._net67_pulse = 0.0
+                self.update()
+
+        def _on_pulse_value(self, value) -> None:
+            target = max(0.0, min(1.0, float(value)))
+            if abs(target - self._net67_pulse) < HERO_PULSE_STEP:
+                return
+            self._net67_pulse = target
+            self.update()
+
+        def showEvent(self, event):  # noqa: N802 (сигнатура Qt)
+            super().showEvent(event)
+            self._sync_pulse()
+
+        def hideEvent(self, event):  # noqa: N802 (сигнатура Qt)
+            # Дышать за свёрнутым окном — греть процессор впустую.
+            # Состояние при этом не теряется: вернут окно — вернётся
+            # и дыхание, потому что решение хранится отдельно от
+            # самой анимации.
+            super().hideEvent(event)
+            self._sync_pulse()
+
+        # ── отрисовка ────────────────────────────────────────────────
         def paintEvent(self, event):  # noqa: N802 (сигнатура Qt)
             from PyQt6.QtCore import QPointF, QRectF, Qt
-            from PyQt6.QtGui import QColor, QPainter, QPen, QRadialGradient
+            from PyQt6.QtGui import (
+                QBrush,
+                QColor,
+                QConicalGradient,
+                QPainter,
+                QPen,
+                QRadialGradient,
+            )
 
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
             rect = QRectF(self.rect()).adjusted(3.0, 3.0, -3.0, -3.0)
-            base = QColor(self._net67_fill)
+            # Рисуем показываемый цвет, а не заданный: между ними и живёт
+            # переход. До первой смены состояния показываемого ещё нет.
+            base = QColor(self._net67_fill_shown or QColor(self._net67_fill))
+            ring_color = QColor(self._net67_ring_shown or QColor(self._net67_ring))
+            breath = self._net67_pulse
+            glow = self._net67_glow
+
+            # Ореол за кольцом. Узкий — шире негде, круг занимает виджет
+            # почти целиком, — но он снимает ощущение наклейки: у кнопки
+            # появляется край, а не вырезанная граница.
+            halo = QColor(ring_color)
+            halo.setAlphaF(min(1.0, 0.10 + 0.18 * breath + 0.30 * glow))
+            transparent = QColor(halo.red(), halo.green(), halo.blue(), 0)
+            aura = QRadialGradient(rect.center(), rect.width() * 0.5 + 3.0)
+            aura.setColorAt(0.86, transparent)
+            aura.setColorAt(0.94, halo)
+            aura.setColorAt(1.0, transparent)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(aura)
+            painter.drawEllipse(QRectF(self.rect()))
 
             # Заливка со смещённым бликом: круг перестаёт быть плоским
-            # пятном и читается как объём.
+            # пятном и читается как объём. Дыхание подмешивается в силу
+            # блика, а не в цвет — иначе на работающем обходе менялся бы
+            # сам акцент приложения.
             gradient = QRadialGradient(
                 QPointF(rect.center().x(), rect.top() + rect.height() * 0.28),
                 rect.width() * 0.95,
             )
-            gradient.setColorAt(0.0, base.lighter(128))
+            gradient.setColorAt(0.0, base.lighter(122 + int(round(20 * breath))))
             gradient.setColorAt(0.55, base)
             gradient.setColorAt(1.0, base.darker(125))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(gradient)
             painter.drawEllipse(rect)
 
+            # Светлый кант по верхней кромке изнутри. Одна дуга, а круг
+            # из нарисованного пятна становится похож на предмет.
+            rim = QColor(255, 255, 255)
+            rim.setAlphaF(0.14 + 0.12 * breath)
+            painter.setPen(QPen(rim, 1.4))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawArc(rect.adjusted(2.4, 2.4, -2.4, -2.4), 35 * 16, 110 * 16)
+
             # Кольцо по краю. При нажатии оно вспыхивает — это и есть
             # тот отклик, которого человек не находил.
-            ring = QColor(self._net67_ring)
-            ring.setAlphaF(0.35 + 0.65 * self._net67_glow)
-            pen = QPen(ring, 2.0 + 2.0 * self._net67_glow)
-            painter.setPen(pen)
+            ring = QColor(ring_color)
+            ring.setAlphaF(min(1.0, 0.35 + 0.12 * breath + 0.53 * glow))
+            ring_rect = rect.adjusted(1.0, 1.0, -1.0, -1.0)
+            painter.setPen(QPen(ring, 2.0 + 2.0 * glow))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(rect.adjusted(1.0, 1.0, -1.0, -1.0))
+            painter.drawEllipse(ring_rect)
+
+            # Блик, обегающий кольцо вместе с проворотом значка. Своей
+            # анимации у него нет — он берёт угол у прокрута, поэтому
+            # появляется ровно на переключении и гаснет вместе с ним.
+            spin = self._net67_spin % 360.0
+            if spin:
+                sweep = QConicalGradient(ring_rect.center(), -spin)
+                spark = QColor(255, 255, 255, 200)
+                faded = QColor(255, 255, 255, 0)
+                sweep.setColorAt(0.0, spark)
+                sweep.setColorAt(0.16, faded)
+                sweep.setColorAt(0.84, faded)
+                sweep.setColorAt(1.0, spark)
+                painter.setPen(QPen(QBrush(sweep), 2.6))
+                painter.drawEllipse(ring_rect)
 
             icon = self.icon()
             if icon is not None and not icon.isNull():
@@ -359,6 +619,8 @@ def build_hero_control_card(
 
 __all__ = [
     "HERO_BUTTON_SIZE",
+    "HERO_COLOR_MS",
+    "HERO_PULSE_MS",
     "TITLE_BUSY",
     "TITLE_RUNNING",
     "TITLE_STOPPED",
