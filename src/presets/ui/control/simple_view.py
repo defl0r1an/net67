@@ -226,65 +226,49 @@ def _pin_content_to_top(page) -> None:
         log(f"[SIMPLE] не удалось прижать содержимое к верху: {exc}", "DEBUG")
 
 
-#: Длительность появления одного блока настроек.
-REVEAL_MS = 220
-
-#: Задержка между соседними блоками.
-#:
-#: Они проявляются сверху вниз, а не разом: очередь показывает, что
-#: раскрылось именно то, что было спрятано, и куда смотреть.
-REVEAL_STAGGER_MS = 55
-
-
 def _reveal(widgets) -> None:
     """Проявляет блоки, которых на экране не было.
 
-    Прозрачностью, а не движением. Блоки стоят в раскладке, и сдвиг
-    пришлось бы делать отступами — а это пересчёт всей страницы на
-    каждом кадре, и страница настроек для этого слишком тяжёлая.
+    Само движение живёт в ui/reveal.py и одинаково для всех мест, где
+    что-то появляется. Раньше здесь была своя анимация — только
+    прозрачность, без сдвига, и очередь по порядку объявления списков,
+    а не по расположению на экране. Волна из этого не складывалась.
+    """
+    from ui.reveal import reveal_widgets
+
+    reveal_widgets(widgets)
+
+
+def _conceal(widgets, on_finished) -> bool:
+    """Убирает блоки волной. False — ухода не будет, прячьте сами.
+
+    Само движение живёт в ui/reveal.py, рядом с появлением: это одна
+    пара, и разводить её по двум местам значит однажды поменять только
+    половину.
     """
     try:
-        from PyQt6.QtCore import QEasingCurve, QTimer, QVariantAnimation
-        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from ui.reveal import conceal_widgets
 
-        from ui.animation_policy import are_animations_enabled, start_managed_animation
+        return bool(conceal_widgets(widgets, on_finished=on_finished))
+    except Exception as exc:
+        log(f"[SIMPLE] уход блоков не запущен: {exc}", "DEBUG")
+        return False
+
+
+def _stop_pending_motion(page) -> None:
+    """Снимает незаконченные появления и уходы со всех переключаемых блоков.
+
+    Без этого быстрое переключение туда-обратно оставляло следы: уход,
+    начатый в прошлый раз, доводил дело до конца и прятал строку,
+    которую только что показали.
+    """
+    try:
+        from ui.reveal import stop_motion
     except Exception:
         return
 
-    if not are_animations_enabled():
-        return
-
-    for order, widget in enumerate(widgets):
-        try:
-            effect = QGraphicsOpacityEffect(widget)
-            effect.setOpacity(0.0)
-            widget.setGraphicsEffect(effect)
-
-            animation = QVariantAnimation(widget)
-            animation.setStartValue(0.0)
-            animation.setEndValue(1.0)
-            animation.setDuration(REVEAL_MS)
-            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-            animation.valueChanged.connect(
-                lambda value, target=effect: target.setOpacity(float(value))
-            )
-            # Эффект снимаем после показа: он рисует блок в отдельный
-            # слой, и оставленный навсегда удорожает каждую перерисовку.
-            animation.finished.connect(
-                lambda target=widget: target.setGraphicsEffect(None)
-            )
-        except Exception as exc:
-            log(f"[SIMPLE] блок не проявлен: {exc}", "DEBUG")
-            continue
-
-        widget._simple_view_reveal = animation
-        delay = order * REVEAL_STAGGER_MS
-        if delay <= 0:
-            start_managed_animation(animation)
-        else:
-            QTimer.singleShot(
-                delay, lambda target=animation: start_managed_animation(target)
-            )
+    for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
+        stop_motion(getattr(page, attr, None))
 
 
 def attach_theme_switch(page) -> None:
@@ -355,47 +339,23 @@ def _attach_advanced_button_disabled(page, window) -> None:
         pass
 
 
-def apply_simple_view(page, advanced: bool | None = None) -> None:
-    """Показывает или прячет расширенные разделы страницы управления."""
-    if advanced is None:
-        try:
-            from ui.navigation.schema import is_advanced_mode_enabled
+def _switch_extra_controls(page, visible: bool) -> list:
+    """Показывает то, что нужно только в простом виде, и правит сводку.
 
-            advanced = bool(is_advanced_mode_enabled())
-        except Exception:
-            advanced = True
-
-    visible = bool(advanced)
-
-    # Что именно появляется — нужно знать до показа: анимируем только
-    # то, чего на экране не было. Уже видимое проявлять заново значит
-    # моргать им на ровном месте.
-    appearing = []
-    if visible:
-        for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
-            widget = getattr(page, attr, None)
-            if widget is not None and widget.isHidden():
-                appearing.append(widget)
-
-    for attr in HIDDEN_IN_SIMPLE_VIEW:
-        _set_visible(page, attr, visible)
-    for attr in HIDDEN_SETTING_ROWS:
-        _set_visible(page, attr, visible)
-
-    # Показать строку мало — группе надо пересчитать высоту.
-    #
-    # SettingCardGroup держит фиксированную высоту, посчитанную по своим
-    # строкам. Пересчёт запускает фильтр событий, но он висит на самой
-    # группе и ловит только её события: добавление и удаление детей да
-    # собственный Show. Смена видимости строки — событие ребёнка, до
-    # группы оно не доходит.
-    #
-    # Отсюда и жалоба «при первом переходе в расширенный вид съедается
-    # настройка»: строки уже видимы, а группа осталась ростом с простой
-    # вид и просто обрезает их снизу. Возврат на вкладку показывает
-    # группу заново, Show доходит до фильтра, высота пересчитывается —
-    # и всё «чинится само».
-    _refresh_setting_group_heights(page)
+    Возвращает то, что этим переключением появилось, — чтобы вызывающий
+    показал его тем же движением, что и остальное. Возникающая из ничего
+    кнопка «Расширенный вид» посреди только что улёгшейся страницы
+    выглядит как недорисованный кадр.
+    """
+    extras = []
+    for attr in (
+        "_simple_view_advanced_btn",
+        "_simple_view_theme_card",
+        "_simple_view_theme_title",
+    ):
+        widget = getattr(page, attr, None)
+        if widget is not None and widget.isHidden() and not visible:
+            extras.append(widget)
 
     # Выбор темы и кнопка перехода нужны только там, где нет панели.
     _set_visible(page, "_simple_view_advanced_btn", not visible)
@@ -419,10 +379,122 @@ def apply_simple_view(page, advanced: bool | None = None) -> None:
         except Exception as exc:
             log(f"[SIMPLE] плитка сводки {attr}: {exc}", "DEBUG")
 
+    return extras
+
+
+def _activate_layout(page) -> None:
+    """Даёт раскладке отработать до замера координат.
+
+    setVisible() только помечает виджет видимым, а место ему Qt выделяет
+    следующим проходом раскладки. Спросить координаты раньше — получить
+    нули у всех и произвольную очередь вместо волны.
+    """
+    try:
+        layout = getattr(page, "vBoxLayout", None) or page.layout()
+        if layout is not None:
+            layout.activate()
+    except Exception as exc:
+        log(f"[SIMPLE] раскладка не пересчитана перед показом: {exc}", "DEBUG")
+
+
+def _close_up_layout(page, visible: bool) -> None:
+    """Смыкает раскладку после того, как видимость строк устоялась.
+
+    Показать строку мало — группе надо пересчитать высоту.
+
+    SettingCardGroup держит фиксированную высоту, посчитанную по своим
+    строкам. Пересчёт запускает фильтр событий, но он висит на самой
+    группе и ловит только её события: добавление и удаление детей да
+    собственный Show. Смена видимости строки — событие ребёнка, до
+    группы оно не доходит.
+
+    Отсюда и жалоба «при первом переходе в расширенный вид съедается
+    настройка»: строки уже видимы, а группа осталась ростом с простой
+    вид и просто обрезает их снизу. Возврат на вкладку показывает
+    группу заново, Show доходит до фильтра, высота пересчитывается —
+    и всё «чинится само».
+    """
+    _refresh_setting_group_heights(page)
+    extras = _switch_extra_controls(page, visible)
     _collapse_dangling_spacings(page, visible)
 
-    if appearing:
-        _reveal(appearing)
+    if extras:
+        _activate_layout(page)
+        _reveal(extras)
+
+
+def apply_simple_view(page, advanced: bool | None = None, *, on_settled=None) -> None:
+    """Показывает или прячет расширенные разделы страницы управления.
+
+    ``on_settled`` зовётся, когда вид улёгся: блоки уехали, раскладка
+    сомкнулась. Через него окно меняет размер — после волны, а не до
+    неё. Раньше окно схлопывалось первым, и волна доигрывала уже внутри
+    маленького окна, за его краем.
+    """
+    if advanced is None:
+        try:
+            from ui.navigation.schema import is_advanced_mode_enabled
+
+            advanced = bool(is_advanced_mode_enabled())
+        except Exception:
+            advanced = True
+
+    visible = bool(advanced)
+
+    # Незаконченное движение снимаем первым делом: уход, начатый прошлым
+    # переключением, иначе доведёт дело до конца и спрячет строку,
+    # которую это переключение только что показало.
+    _stop_pending_motion(page)
+
+    # Что именно появляется или уходит — нужно знать до смены видимости:
+    # анимируем только то, что на экране меняется. Уже видимое проявлять
+    # заново значит моргать им на ровном месте.
+    changing = []
+    for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
+        widget = getattr(page, attr, None)
+        if widget is None:
+            continue
+        if bool(widget.isHidden()) == visible:
+            changing.append(widget)
+
+    def _settled() -> None:
+        _close_up_layout(page, visible)
+        if on_settled is not None:
+            try:
+                on_settled()
+            except Exception as exc:
+                log(f"[SIMPLE] шаг после укладки вида не выполнен: {exc}", "DEBUG")
+
+    # Волну показываем только на видимой странице.
+    #
+    # Переход в простой вид уводит на главную, и страница управления
+    # может быть не той, что на экране. Анимировать невидимое незачем, а
+    # ждать её конца — значит на полсекунды отложить то, что подвешено
+    # на on_settled: размер окна менялся бы с необъяснимой задержкой.
+    try:
+        on_screen = bool(page.isVisible())
+    except Exception:
+        on_screen = False
+
+    if not visible:
+        # Уход. Прячет каждый блок сам, в конце его пути, и только потом
+        # смыкает раскладку — иначе группы схлопнутся под ещё уезжающими
+        # строками, и красивого ухода никто не увидит.
+        if on_screen and _conceal(changing, _settled):
+            return
+
+        for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
+            _set_visible(page, attr, visible)
+        _settled()
+        return
+
+    for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
+        _set_visible(page, attr, visible)
+    _settled()
+
+    if changing and on_screen:
+        _activate_layout(page)
+        _reveal(changing)
 
 
 __all__ = [
