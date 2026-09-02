@@ -212,7 +212,29 @@ class VpnPage(BasePage):
         self._sync_warning_label(self._tab)
         self._sync_refresh_button()
         self._clear_stale_system_proxy()
+        self._clear_stale_tunnel()
         self._reload_profiles()
+
+    def _clear_stale_tunnel(self) -> None:
+        """Снимает следы туннеля, оставшиеся от прошлого запуска.
+
+        Рядом с уборкой системного прокси и по той же причине: сеанс,
+        который не попрощался, оставляет за собой работающий tun2socks и
+        постоянный маршрут в исчезнувший шлюз.
+
+        Место не идеальное. Уборка случается при построении страницы VPN,
+        то есть только если человек на неё зашёл, — а брошенный процесс
+        мешает и тому, кто туда не заходит: он держит файлы поставки и
+        не даёт обновиться. Правильное место — стартовый контур
+        приложения, но там уборки прокси тоже нет, и разносить их по
+        разным местам хуже, чем оставить обе здесь.
+        """
+        try:
+            from vpn.link_runtime import clear_stale_tunnel
+
+            clear_stale_tunnel()
+        except Exception as exc:
+            log(f"Проверка следов туннеля при запуске: {exc}", "DEBUG")
 
     def _clear_stale_system_proxy(self) -> None:
         """Снимает прокси, оставшийся от прошлого запуска.
@@ -653,17 +675,51 @@ class VpnPage(BasePage):
         # QtGui подтягивается здесь, а не наверху файла: модуль страницы
         # читают проверки, которым окно не нужно, а QtGui тянет за собой
         # графические библиотеки системы и падает там, где их нет.
+        from PyQt6.QtCore import QSize
         from PyQt6.QtCore import Qt as _Qt
-        from PyQt6.QtGui import QColor
         from PyQt6.QtWidgets import QListWidgetItem
 
-        item = QListWidgetItem(f"{'▸' if collapsed else '▾'}  {text}")
+        from ui.theme import token_to_qcolor
+
+        tokens = get_theme_tokens()
+
+        item = QListWidgetItem(f"{'▸' if collapsed else '▾'}   {text}")
         item.setFlags(_Qt.ItemFlag.ItemIsEnabled)
         item.setData(_GROUP_KEY_ROLE, key)
+
+        # Заголовок группы — не строка списка, а полка над строками.
+        # Поэтому он крупнее соседей, а не только жирнее: одной жирности
+        # мало, когда под ним два десятка пунктов такого же размера.
         font = item.font()
         font.setBold(True)
+        size = font.pointSizeF()
+        if size > 0:
+            font.setPointSizeF(size + 0.5)
         item.setFont(font)
-        item.setForeground(QColor(get_theme_tokens().fg_muted))
+
+        # Цвет получается разбором токена, а не QColor(строка).
+        #
+        # Токены темы написаны для таблиц стилей и выглядят как
+        # `rgba(255, 255, 255, 0.65)`. QColor такую запись не понимает,
+        # молчит и отдаёт недействительный цвет, который рисуется чёрным.
+        # На светлой теме это сходило с рук, на тёмной заголовок
+        # подписки исчезал совсем: чёрный по чёрному.
+        #
+        # Берём `fg`, а не `fg_muted`: приглушать стоит подробности, а не
+        # название подписки с остатком трафика и сроком. Ради них сюда и
+        # смотрят.
+        item.setForeground(token_to_qcolor(tokens.fg))
+
+        # Тонкая подложка вместо разделительной черты: она отделяет
+        # группу от предыдущей, не добавляя в список лишний элемент.
+        item.setBackground(token_to_qcolor(tokens.surface_bg))
+
+        # Воздух сверху и снизу. Без него полка липнет к первой строке
+        # под собой, и разделение пропадает.
+        hint = item.sizeHint()
+        if hint.isValid():
+            item.setSizeHint(QSize(hint.width(), hint.height() + 14))
+
         item.setToolTip("Нажмите, чтобы свернуть или развернуть группу")
         return item
 

@@ -38,6 +38,8 @@ from vpn.tun_mode import (
     build_route_cleanup_commands,
     build_route_commands,
     build_tun2socks_command,
+    build_tunnel_route_cleanup_commands,
+    tun2socks_path,
 )
 
 
@@ -147,24 +149,8 @@ def _drain_output(process: subprocess.Popen, sink: deque) -> None:
         pass
 
 
-def _console_encoding() -> str:
-    """Кодировка, в которой печатают консольные утилиты Windows.
-
-    route и netsh пишут в OEM-кодировке — на русской Windows это cp866.
-    Python при ``text=True`` берёт кодировку локали, то есть ANSI cp1251.
-    Байта 0x98 в cp1251 нет вовсе, и первая же русская буква в ответе
-    утилиты роняла поток чтения вывода:
-
-        File "subprocess.py", line 1614, in _readerthread
-        UnicodeDecodeError: 'charmap' codec can't decode byte 0x98
-
-    Наружу это выглядело не так, как читалось в отчёте. Падал поток, а не
-    вызов: ``subprocess.run`` возвращался с пустым выводом, и
-    ``default_gateway()`` честно докладывал, что шлюза нет, — на любой
-    русской системе, всегда. При ``needs_server_exception`` это обрывало
-    подключение сообщением «не удалось определить шлюз провайдера», хотя
-    шлюз был на месте. Плюс отчёт о падении на каждое «Подключить».
-    """
+def _oem_encoding() -> str:
+    """Кодовая страница консоли Windows. На русской системе — cp866."""
     try:
         import ctypes
 
@@ -172,6 +158,37 @@ def _console_encoding() -> str:
     except Exception:
         # Не Windows или урезанный ctypes — тогда utf-8 не хуже прочего.
         return "utf-8"
+
+
+def _decode_console(raw: bytes) -> str:
+    """Расшифровывает вывод консольной программы.
+
+    Одной кодировки на всех не хватает, и это проверено байтами:
+    ``route`` печатает в OEM (на русской Windows cp866), а ``netsh`` —
+    в UTF-8. В журнале это выглядело так, что ответы route читались
+    нормально, а ответы netsh превращались в «ЧЛ DNS-БАА АВВ ААВ».
+
+    Порядок проб не произволен. UTF-8 — кодировка строгая: неверная
+    последовательность вызывает ошибку, и подделать её текстом в cp866
+    почти невозможно. Кириллица в cp866 занимает байты 0x80-0xAF, а они
+    в UTF-8 могут быть только продолжением, которому нужен ведущий байт.
+    Поэтому сначала пробуем UTF-8, а OEM оставляем на случай отказа.
+    Чистый ASCII разбирается одинаково обеими, так что для английской
+    системы разницы нет.
+
+    Читаем байты, а не текст, ещё и поэтому: ``subprocess`` с
+    ``text=True`` декодирует вывод в отдельном потоке, и ошибка там не
+    возвращается вызывающему, а роняет поток. Именно так неверная
+    кодировка обходилась в отчёт о падении вместо пустой строки.
+    """
+    if not raw:
+        return ""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # Один неожиданный байт не должен стоить нам всего вывода:
+        # из него нужны IP-адреса и имя адаптера, а это ASCII.
+        return raw.decode(_oem_encoding(), errors="replace")
 
 
 def _run(command: list[str], *, check: bool = True) -> tuple[int, str]:
@@ -186,11 +203,6 @@ def _run(command: list[str], *, check: bool = True) -> tuple[int, str]:
         completed = subprocess.run(
             command,
             capture_output=True,
-            text=True,
-            encoding=_console_encoding(),
-            # Один неожиданный байт не должен стоить нам всего вывода:
-            # из него нужны IP-адреса и имя адаптера, а это ASCII.
-            errors="replace",
             timeout=15,
             creationflags=creation_flags,
         )
@@ -199,7 +211,9 @@ def _run(command: list[str], *, check: bool = True) -> tuple[int, str]:
             raise TunModeError(f"Не удалось выполнить {command[0]}: {exc}") from exc
         return (-1, str(exc))
 
-    output = f"{completed.stdout}\n{completed.stderr}".strip()
+    output = (
+        f"{_decode_console(completed.stdout)}\n{_decode_console(completed.stderr)}"
+    ).strip()
     if check and completed.returncode != 0:
         raise TunModeError(f"{' '.join(command[:3])} завершилась с кодом {completed.returncode}: {output[:200]}")
     return (completed.returncode, output)
@@ -297,7 +311,7 @@ def _spawn_tun2socks(plan: TunPlan) -> subprocess.Popen:
 
     # tun2socks написан на Go и печатает в UTF-8 независимо от кодовой
     # страницы консоли — в отличие от route и netsh, которым нужен OEM.
-    # Поэтому кодировка тут задана явно, а не через _console_encoding().
+    # Поэтому кодировка тут задана явно, а не подбором, как в _run().
     return subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -307,6 +321,75 @@ def _spawn_tun2socks(plan: TunPlan) -> subprocess.Popen:
         errors="replace",
         creationflags=creation_flags,
     )
+
+
+def _kill_orphan_tun2socks() -> int:
+    """Снимает процессы tun2socks, оставшиеся от прошлого запуска.
+
+    Бьём по пути к файлу, а не по имени. Имя `tun2socks` носит десяток
+    чужих клиентов, и снять чужой процесс значит оборвать человеку
+    работающий VPN другого приложения. Наш лежит в поставке, и это
+    единственный надёжный признак.
+    """
+    try:
+        import psutil
+    except Exception:
+        return 0
+
+    try:
+        ours = tun2socks_path().resolve()
+    except Exception:
+        return 0
+
+    killed = 0
+    for process in psutil.process_iter(["name", "exe"]):
+        try:
+            name = str(process.info.get("name") or "").lower()
+            if "tun2socks" not in name:
+                continue
+            exe = process.info.get("exe")
+            if not exe or Path(exe).resolve() != ours:
+                continue
+            process.kill()
+            killed += 1
+        except Exception:
+            # Процесс мог исчезнуть сам, или прав не хватило. И то и
+            # другое — не повод прекращать обход остальных.
+            continue
+    return killed
+
+
+def clear_stale() -> None:
+    """Убирает следы туннеля, оставшиеся от прошлого запуска.
+
+    Приложение закрывают не только по-людски: из диспетчера задач, по
+    падению, по выключению машины. Штатное сворачивание туннеля тогда не
+    выполняется, и остаются два следа.
+
+    Процесс tun2socks переживает своего родителя. Он продолжает держать
+    адаптер и файлы поставки: сборка падала на «Artifact folder is
+    locked» именно из-за него, а в журнале каждого запуска висело
+    `Removed orphaned adapter "net67 1"` — брошенные адаптеры копились.
+
+    Маршрут по умолчанию через 10.67.0.1 ставит netsh вместе с адресом,
+    и ставит постоянным — перезагрузка его не убирает. Пока адаптера
+    нет, он неактивен и вреда не делает, но накапливается в постоянной
+    таблице от запуска к запуску.
+
+    Зовётся при старте приложения, рядом с `system_proxy.clear_stale()`:
+    задача та же — прибрать за сеансом, который не попрощался.
+    """
+    killed = _kill_orphan_tun2socks()
+    if killed:
+        log(f"Снято брошенных процессов tun2socks: {killed}", _LOG)
+
+    removed = 0
+    for command in build_tunnel_route_cleanup_commands():
+        code, answer = _run(command, check=False)
+        if code == 0 and not _route_failed(answer):
+            removed += 1
+    if removed:
+        log(f"Снято маршрутов от прошлого сеанса: {removed}", _LOG)
 
 
 def _log_route_summary(plan: TunPlan) -> None:
@@ -446,6 +529,7 @@ __all__ = [
     "ADAPTER_WAIT_SECONDS",
     "TunSession",
     "adapter_exists",
+    "clear_stale",
     "default_gateway",
     "start",
     "stop",

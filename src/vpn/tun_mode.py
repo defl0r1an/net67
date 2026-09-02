@@ -403,12 +403,37 @@ def build_route_commands(plan: TunPlan, *, default_gateway: str) -> list[list[st
     return commands
 
 
+def build_tunnel_route_cleanup_commands(gateway_ip: str = TUN_GATEWAY) -> list[list[str]]:
+    """Снятие маршрутов, ведущих в наш собственный шлюз туннеля.
+
+    Отдельно от остальной очистки, потому что этим командам не нужен
+    план: они опознают свои маршруты по адресу `10.67.0.1`, которого
+    в системе больше ни у кого нет. Значит их можно выполнить и при
+    запуске приложения, когда о прошлом сеансе ничего не известно.
+
+    Третья строка — про маршрут, которого мы не добавляли. Его ставит
+    `netsh interface ip set address` вместе со шлюзом, и ставит
+    **постоянным**: он лежит в разделе постоянных маршрутов и переживает
+    перезагрузку. Прежняя очистка снимала только две половинки, а этот
+    оставался и копился от запуска к запуску.
+    """
+    gateway = str(gateway_ip or TUN_GATEWAY)
+    return [
+        ["route", "delete", "0.0.0.0", "mask", "128.0.0.0", gateway],
+        ["route", "delete", "128.0.0.0", "mask", "128.0.0.0", gateway],
+        ["route", "delete", "0.0.0.0", "mask", "0.0.0.0", gateway],
+    ]
+
+
 def build_route_cleanup_commands(plan: TunPlan) -> list[list[str]]:
     """Снятие маршрутов. Исключение для сервера убирается последним."""
-    commands = [
-        ["route", "delete", "0.0.0.0", "mask", "128.0.0.0", plan.gateway_ip],
-        ["route", "delete", "128.0.0.0", "mask", "128.0.0.0", plan.gateway_ip],
-    ]
+    commands = build_tunnel_route_cleanup_commands(plan.gateway_ip)
+
+    # Маршруты в обход туннеля — локальные сети и адреса сервера — ведут
+    # в шлюз провайдера, то есть туда же, куда трафик пошёл бы и без
+    # туннеля. Оставшись после сбоя, они не ломают ничего, поэтому в
+    # очистку по следам прошлого сеанса не попадают: там мы не знаем
+    # адреса шлюза и удаляли бы вслепую чужие записи.
     for network, mask in LOCAL_NETWORKS:
         commands.append(["route", "delete", network, "mask", mask])
     for server_ip in plan.server_ips:
@@ -447,6 +472,7 @@ __all__ = [
     "build_plan",
     "build_route_cleanup_commands",
     "build_route_commands",
+    "build_tunnel_route_cleanup_commands",
     "build_tun2socks_command",
     "check_available",
     "describe_mode",
