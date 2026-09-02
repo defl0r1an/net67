@@ -135,6 +135,53 @@ def invalidate_theme_tokens_cache() -> None:
     _THEME_TOKENS_CACHE.clear()
 
 
+def token_to_qcolor(value: str):
+    """Превращает цветовой токен темы в QColor.
+
+    Токены написаны для таблиц стилей, и почти все они выглядят как
+    ``rgba(255, 255, 255, 0.65)``. Такую запись понимает Qt Style Sheets,
+    но не понимает сам QColor: его строковый конструктор знает `#rrggbb`,
+    `#aarrggbb` и названия цветов SVG — и ничего больше.
+
+    Передать токен в QColor напрямую — ошибка без сообщения. Qt не
+    ругается, а молча отдаёт недействительный цвет, который рисуется
+    чёрным. На светлой теме это сходит с рук, потому что чёрный там и
+    нужен. На тёмной получается чёрный по чёрному: текст на месте,
+    выделяется мышью, копируется — и не виден. Ровно так пропал
+    заголовок группы подписок в списке серверов.
+
+    Поэтому разбор здесь, а не по месту: токены пишутся один раз, а
+    отдавать их в QColor будут ещё много где.
+    """
+    from PyQt6.QtGui import QColor
+
+    text = str(value or "").strip()
+    if text.startswith("rgb"):
+        inside = text[text.find("(") + 1 : text.rfind(")")]
+        parts = [p.strip() for p in inside.split(",") if p.strip()]
+        if len(parts) >= 3:
+            try:
+                r, g, b = (int(float(p)) for p in parts[:3])
+                # Прозрачность в токенах дробная, в QColor — 0..255.
+                a = int(round(float(parts[3]) * 255)) if len(parts) > 3 else 255
+                return QColor(
+                    max(0, min(255, r)),
+                    max(0, min(255, g)),
+                    max(0, min(255, b)),
+                    max(0, min(255, a)),
+                )
+            except ValueError:
+                pass
+
+    color = QColor(text)
+    if color.isValid():
+        return color
+
+    # Лучше заметная ошибка, чем невидимый текст: чёрный по чёрному
+    # ищут глазами, а розовое видно сразу.
+    return QColor("#ff00ff")
+
+
 def _get_qfluent_themecolor() -> tuple[int, int, int] | None:
     """Returns the current qfluentwidgets theme accent as (r, g, b), or None."""
     try:
@@ -1342,6 +1389,25 @@ class ThemeManager:
                 return
 
             clean = _normalize_theme_name(theme_name)
+
+            # Переход между темами прикрываем снимком старого вида.
+            #
+            # Тема применяется не одним действием: свои виджеты
+            # qfluentwidgets перекрашивает сразу, а локальные стили
+            # страниц догоняют через цикл событий и по одной. В этом
+            # промежутке окно успевало побывать наполовину светлым,
+            # наполовину тёмным.
+            #
+            # Только на настоящей смене темы. Тот же самый режим
+            # применяется и при обновлении акцента, и на старте — там
+            # прикрывать нечего.
+            if clean != _normalize_theme_name(self.current_theme or ""):
+                try:
+                    from ui.theme_crossfade import crossfade_theme_change
+
+                    crossfade_theme_change(self.widget)
+                except Exception:
+                    pass
 
             # Sync qfluentwidgets dark/light mode — updates all native widgets.
             _sync_theme_mode_to_qfluent(clean, window=self.widget)
