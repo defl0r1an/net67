@@ -213,15 +213,16 @@
 --payload=tls_client_hello
 --lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
 
---new
-
---name=Steam
---filter-tcp=80,443
---hostlist=lists/steam.txt
---out-range=-d8
---payload=tls_client_hello
---lua-desync=fake:blob=fake_default_tls:tcp_flags_unset=ack:tls_mod=rnd,rndsni,padencap
---lua-desync=fakeddisorder:pos=midsld:tcp_flags_unset=ack
+# Профиль Steam убран из пресета по умолчанию.
+#
+# Обход клиенту Steam не нужен: магазин и загрузки работают без него,
+# а лишний профиль в цепочке — это лишние правила на каждый пакет
+# порта 443 и ещё один список доменов в памяти движка.
+#
+# Тумблера для него нет и быть не может: пресет — это цепочка правил,
+# а не список галок. Кому Steam понадобится, копирует пресет в свои и
+# дописывает профиль обратно; список доменов lists/steam.txt для этого
+# остаётся в поставке. Есть он и в некоторых других готовых пресетах.
 
 --new
 
