@@ -37,6 +37,41 @@ _PAINTED_CLASSES = ("SettingCard", "CardWidget", "SimpleCardWidget")
 _PATCH_FLAG = "_net67_card_paint"
 
 
+#: Классы библиотеки, найденные один раз.
+#:
+#: Раньше и группа, и список «рисующих себя» классов доставались через
+#: getattr на каждую отрисовку каждой строки. Классы за время работы
+#: программы не меняются, а отрисовок — тысячи в секунду при изменении
+#: размера окна.
+_RESOLVED: dict = {}
+
+
+def _group_class():
+    if "group" not in _RESOLVED:
+        try:
+            import qfluentwidgets
+
+            _RESOLVED["group"] = qfluentwidgets.SettingCardGroup
+        except Exception:
+            _RESOLVED["group"] = None
+    return _RESOLVED["group"]
+
+
+def _painted_classes() -> tuple:
+    if "painted" not in _RESOLVED:
+        try:
+            import qfluentwidgets
+        except Exception:
+            _RESOLVED["painted"] = ()
+        else:
+            _RESOLVED["painted"] = tuple(
+                cls
+                for cls in (getattr(qfluentwidgets, name, None) for name in _PAINTED_CLASSES)
+                if cls is not None
+            )
+    return _RESOLVED["painted"]
+
+
 def _card_colors():
     """Цвета карточки под текущую тему приложения."""
     from qfluentwidgets import isDarkTheme
@@ -52,11 +87,8 @@ def _group_position(card) -> tuple[bool, bool, bool]:
     Возвращает (в группе, первая, последняя). Не в группе — значит
     самостоятельная карточка, и рисуется она отдельным блоком.
     """
-    try:
-        import qfluentwidgets
-
-        group_cls = qfluentwidgets.SettingCardGroup
-    except Exception:
+    group_cls = _group_class()
+    if group_cls is None:
         return (False, True, True)
 
     parent = card.parent()
@@ -72,11 +104,7 @@ def _group_position(card) -> tuple[bool, bool, bool]:
     # и переключатель считал себя единственным в группе. На экране он
     # оказывался отдельной карточкой с зазором под общей — человек
     # ткнул стрелкой ровно в этот шов.
-    painted = tuple(
-        cls
-        for cls in (getattr(qfluentwidgets, name, None) for name in _PAINTED_CLASSES)
-        if cls is not None
-    )
+    painted = _painted_classes()
 
     try:
         siblings = [
@@ -196,7 +224,7 @@ def _make_paint_event():
     обрезка: путь пересекается с собственным прямоугольником строки.
     """
     from PyQt6.QtCore import QRectF, Qt
-    from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
+    from PyQt6.QtGui import QColor, QPainter, QPen
 
     from shell.theme import CARD_RADIUS
 
@@ -236,11 +264,21 @@ def _make_paint_event():
             if not last:
                 grown.setBottom(rect.bottom() + radius)
 
-            path = QPainterPath()
-            path.addRoundedRect(grown, radius, radius)
-            clip = QPainterPath()
-            clip.addRect(rect)
-            painter.drawPath(path.intersected(clip))
+            # Обрезка областью, а не пересечением путей.
+            #
+            # Пересечение — булева операция над многоугольниками, и она
+            # стоила больше половины всей отрисовки страницы: замер на
+            # сорока строках дал 3.65 мс на кадр против 1.60 мс без неё.
+            # Видно это было там, где кадров нужно много: разворот окна
+            # на весь экран шёл рывками.
+            #
+            # Результат тот же до пикселя. Обрезаемые края — верхний и
+            # нижний — совпадают с границами самой строки, то есть режутся
+            # по прямой, где сглаживать нечего.
+            painter.save()
+            painter.setClipRect(rect)
+            painter.drawRoundedRect(grown, radius, radius)
+            painter.restore()
 
         # Черта между строками. У последней её нет: она рисовалась бы по
         # самому краю карточки и читалась как обрезка.
