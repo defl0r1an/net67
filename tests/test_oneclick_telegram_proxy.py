@@ -8,6 +8,17 @@ Telegram», а после нажатия «Повторить» прокси о�
   её True означает «отправлено», а не «работает»;
 * она возвращает False, если прокси уже запущен, и это принималось за
   неудачу.
+
+Потом та же надпись вернулась по третьей причине, и она глубже обеих.
+Шаг попадает в план по настройке «Прокси Telegram вместе с обходом», а
+start_proxy_if_enabled_async спрашивает совсем другой тумблер — тот, что
+на странице прокси. Включена первая, выключен второй — и запуск молча не
+делал ничего: ожидание досиживало свои секунды, шаг падал, обход
+откатывался целиком. Поднять прокси получалось только с его страницы,
+где тумблер включают заодно.
+
+Поэтому шаг больше не спрашивает чужой тумблер, а поднимает прокси по
+текущим настройкам напрямую.
 """
 
 from __future__ import annotations
@@ -31,6 +42,34 @@ def _function(name: str) -> ast.FunctionDef:
         if isinstance(node, ast.FunctionDef) and node.name == name:
             return node
     raise AssertionError(f"в deps.py нет функции {name}")
+
+
+def _function_code(name: str) -> str:
+    """Тело функции без описания.
+
+    Описание читать нельзя: оно рассказывает, что отсюда убрано, — и
+    поиск по слову находил бы сам рассказ о запрете.
+    """
+    body = list(_function(name).body)
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        if isinstance(body[0].value.value, str):
+            body = body[1:]
+    return "\n".join(ast.unparse(statement) for statement in body)
+
+
+def _module_constant(name: str):
+    """Значение константы модуля без его импорта.
+
+    Файл проверок намеренно не тянет deps.py целиком: тот тащит за собой
+    Windows-зависимости, которых на машине проверок может не быть.
+    """
+    tree = ast.parse(DEPS.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == name:
+                    return ast.literal_eval(node.value)
+    raise AssertionError(f"в deps.py нет константы {name}")
 
 
 class TelegramProxyStepTests(unittest.TestCase):
@@ -61,11 +100,31 @@ class TelegramProxyStepTests(unittest.TestCase):
         self.assertIn("consume_auto_deeplink_request", source)
 
     def test_wait_is_bounded(self) -> None:
-        """Ждём поднятия слушателя, но не бесконечно."""
-        source = ast.unparse(_function("_start_telegram_proxy"))
+        """Ждём поднятия слушателя, но не бесконечно.
 
-        self.assertIn("monotonic", source)
-        self.assertIn("5.0", source)
+        Числа в самом шаге больше нет: запуск теперь блокирующий и
+        отвечает сам, а здесь остаётся только добавка на случай, когда
+        он не дождался, а слушатель поднялся мгновением позже.
+        """
+        code = _function_code("_start_telegram_proxy")
+        grace = _module_constant("PROXY_START_GRACE_SECONDS")
+
+        self.assertIn("monotonic", code)
+        self.assertIn("PROXY_START_GRACE_SECONDS", code)
+        self.assertGreater(grace, 0.0)
+        self.assertLess(grace, 30.0)
+
+    def test_step_does_not_consult_the_page_toggle(self) -> None:
+        """Тумблер на странице прокси — другая настройка, чем та, что завела шаг сюда.
+
+        Пока шаг спрашивал её, включённая «прокси вместе с обходом» при
+        выключенном тумблере страницы означала «ждать пять секунд и
+        уронить весь обход».
+        """
+        code = _function_code("_start_telegram_proxy")
+
+        self.assertIn("start_proxy_with_settings", code)
+        self.assertNotIn("start_proxy_if_enabled_async", code)
 
 
 class HostsStepTypeTests(unittest.TestCase):

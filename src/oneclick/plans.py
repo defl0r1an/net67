@@ -124,15 +124,30 @@ def build_rollback_plan(results: list[StepResult]) -> tuple[StepKey, ...]:
     return tuple(rollback)
 
 
-def build_disable_plan() -> tuple[StepKey, ...]:
+def build_disable_plan(*, owns_telegram_proxy: bool = True) -> tuple[StepKey, ...]:
     """Что делает повторное нажатие.
 
     Останавливаем только обратимое. hosts и DNS намеренно не трогаем:
     разблокировка сервисов — отдельная настройка пользователя, и терять
     её при каждом выключении неправильно. Для отката есть отдельная
     кнопка в расширенных настройках.
+
+    ``owns_telegram_proxy`` — та же настройка, по которой прокси попадает
+    в план включения. Прокси Telegram здесь той же породы, что hosts: он
+    живёт на своей странице, со своим тумблером, и человек включает его
+    там сам.
+
+    Раньше выключение снимало прокси всегда, а включение поднимало его
+    только с разрешающей настройкой. Асимметрия и давала то, чего никто
+    не мог объяснить: человек включал прокси у себя, один раз выключал
+    обход — и прокси пропадал, а «Включить обход» его больше не
+    возвращал. Снимаем ровно то, что сами и подняли.
     """
-    return (StepKey.TELEGRAM_PROXY, StepKey.DPI)
+    steps: list[StepKey] = []
+    if owns_telegram_proxy:
+        steps.append(StepKey.TELEGRAM_PROXY)
+    steps.append(StepKey.DPI)
+    return tuple(steps)
 
 
 def summarize(results: list[StepResult]) -> OneClickOutcome:

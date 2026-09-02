@@ -18,6 +18,7 @@ from telegram_proxy.runtime.commands import (
     run_diagnostics,
     set_enabled,
     start_proxy_if_enabled_async,
+    start_proxy_with_settings,
 )
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "run_diagnostics",
     "set_enabled",
     "start_proxy_if_enabled_async",
+    "start_proxy_with_settings",
 ]

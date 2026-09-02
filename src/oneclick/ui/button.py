@@ -124,10 +124,20 @@ class _OneClickWorker(QThread):
             )
             runner = OneClickRunner(deps)
 
+            # Запрос читается и на выключение — ради одного поля.
+            #
+            # «Одна кнопка» снимает прокси Telegram только тогда, когда
+            # сама же его и поднимает. Иначе выключение обхода убивало
+            # прокси, включённый человеком на его собственной странице,
+            # и вернуть его было нечем.
+            request = build_request_from_settings()
+
             if self._enable:
-                outcome = runner.enable(build_request_from_settings())
+                outcome = runner.enable(request)
             else:
-                outcome = runner.disable()
+                outcome = runner.disable(
+                    owns_telegram_proxy=request.needs_telegram_proxy
+                )
 
             self.finished_with.emit(outcome.state, outcome.message)
         except Exception as exc:
@@ -442,6 +452,18 @@ class OneClickButton(QWidget):
         # из подписи.
         self._apply_button_colour(state, tokens)
         self._sync_uptime_for_state(state)
+
+        # Дыхание круга живёт ровно на работающем обходе. Статичная
+        # кнопка выглядит одинаково и когда обход поднят, и когда
+        # запуск застрял на полпути; медленное движение — самый
+        # дешёвый способ показать, что всё идёт само.
+        try:
+            if state is OneClickState.RUNNING:
+                self.button.start_pulse()
+            else:
+                self.button.stop_pulse()
+        except Exception:
+            pass
 
         # Проворот на каждом переходе «работает — не работает»: именно
         # он сообщает, что нажатие сделало своё дело.

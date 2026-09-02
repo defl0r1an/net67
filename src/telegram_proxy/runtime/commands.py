@@ -49,6 +49,46 @@ def start_proxy_if_enabled_async() -> bool:
     return bool(_start_proxy_if_enabled_async())
 
 
+def start_proxy_with_settings() -> bool:
+    """Поднимает прокси по текущим настройкам, не глядя на его тумблер.
+
+    Отличие от start_proxy_if_enabled_async — в том, кто решает. Та
+    спрашивает `telegram_proxy.enabled`, то есть тумблер на странице
+    прокси, и уходит ни с чем, если он выключен. Здесь решение уже
+    принято вызывающим: включение обхода поднимает прокси по своей
+    настройке «Прокси Telegram вместе с обходом», и переспрашивать
+    другой тумблер незачем — на этом расхождении шаг и застревал.
+
+    Тумблер не только не читается, но и не пишется: включить прокси
+    насовсем — отдельное решение человека.
+
+    Блокирующая, в отличие от соседки: возвращает, поднялся ли
+    слушатель, а не «запуск отправлен». Внутри start_proxy ждёт
+    появления слушателя сам, поэтому отдельного ожидания снаружи не
+    нужно.
+    """
+    manager = get_proxy_manager()
+    if manager.is_running:
+        return True
+
+    config = get_start_config()
+    return bool(
+        manager.start_proxy(
+            port=config.port,
+            mode=config.mode,
+            host=config.host,
+            upstream_config=config.upstream_config,
+            cloudflare_config=config.cloudflare_config,
+            mtproxy_secret=config.mtproxy_secret,
+            dc_endpoint_overrides=config.dc_endpoint_overrides,
+            pool_size=config.pool_size,
+            buffer_kb=config.buffer_kb,
+            fake_tls_domain=config.fake_tls_domain,
+            proxy_protocol=config.proxy_protocol,
+        )
+    )
+
+
 def get_start_config() -> TelegramProxyStartConfig:
     from settings.store import (
         get_tg_proxy_buffer_kb,

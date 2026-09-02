@@ -142,6 +142,20 @@ class OneClickRunner:
                     self._set_state(OneClickState.PREPARING, note)
 
                 ok, message = deps.start_telegram_proxy()
+                if not ok:
+                    # Не поднявшийся прокси — не повод выключать обход.
+                    #
+                    # Раньше это была ошибка шага, а значит откат всего
+                    # включения: winws поднимался и тут же снимался, и
+                    # человек оставался вообще без обхода из-за
+                    # мессенджера. Обход работает и без прокси, поэтому
+                    # тут то же решение, что и на непущенном Telegram
+                    # выше: пропуск с объяснением, а не падение.
+                    note = message or "Прокси для Telegram не поднялся"
+                    return (
+                        StepResult(key, ok=True, message=note, skipped=True, note=note),
+                        (),
+                    )
                 return StepResult(key, ok=ok, message=message), ()
 
             if key is StepKey.HOSTS:
@@ -196,11 +210,17 @@ class OneClickRunner:
     # Выключение
     # ──────────────────────────────────────────────────────────────────
 
-    def disable(self) -> OneClickOutcome:
+    def disable(self, *, owns_telegram_proxy: bool = True) -> OneClickOutcome:
+        """Выключение. ``owns_telegram_proxy`` — та же настройка, что и при включении.
+
+        Значение приходит снаружи, а не читается здесь: оркестратор не
+        обращается к настройкам, иначе его нельзя было бы проверить без
+        Windows и файла настроек.
+        """
         results: list[StepResult] = []
         deps = self._deps
 
-        for key in build_disable_plan():
+        for key in build_disable_plan(owns_telegram_proxy=owns_telegram_proxy):
             try:
                 if key is StepKey.TELEGRAM_PROXY:
                     ok, message = deps.stop_telegram_proxy()
