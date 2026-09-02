@@ -138,6 +138,27 @@ def _slide_navigation_panel(window, *, expanding: bool) -> None:
         log(f"[NAV] панель не анимирована: {exc}", "DEBUG")
 
 
+def _resize_window_for_mode(window, advanced: bool) -> None:
+    """Меняет размер окна под режим — плавно, если это возможно.
+
+    Анимация отказывается работать на развёрнутом окне и при
+    выключенных анимациях. Отказ обязан не остаться без последствий:
+    размер тогда ставится сразу, как было раньше, иначе окно осталось бы
+    от прежнего режима.
+    """
+    try:
+        from ui.window_mode_geometry import (
+            animate_window_size_for_mode,
+            apply_window_size_for_mode,
+        )
+
+        if animate_window_size_for_mode(window, advanced):
+            return
+        apply_window_size_for_mode(window, advanced)
+    except Exception as exc:
+        log(f"[NAV] не удалось подогнать размер окна под режим: {exc}", "DEBUG")
+
+
 def toggle_advanced_mode(window) -> None:
     """Переключает режим и перерисовывает сайдбар.
 
@@ -198,25 +219,43 @@ def toggle_advanced_mode(window) -> None:
 
     # Простому виду хватает окна вдвое меньше: одна страница и два
     # пункта в боковой панели.
-    try:
-        from ui.window_mode_geometry import apply_window_size_for_mode
-
-        apply_window_size_for_mode(window, next_value)
-    except Exception as exc:
-        log(f"[NAV] не удалось подогнать размер окна под режим: {exc}", "DEBUG")
+    #
+    # Порядок здесь не косметика. Растёт окно до содержимого, сжимается
+    # после него. Раньше размер менялся в обе стороны до волны блоков: в
+    # простой вид окно схлопывалось первым, и волна доигрывала уже
+    # внутри маленького окна, за его краем, — то есть её никто не видел.
+    if next_value:
+        _resize_window_for_mode(window, True)
 
     # На странице управления в простом виде остаются только кнопка,
     # состояние и автозапуск.
+    shrink_handed_over = False
     try:
         from presets.ui.control.simple_view import apply_simple_view
         from ui.window_ui_session import get_window_ui_session
 
         session = get_window_ui_session(window)
         for page in list(getattr(session, "pages", {}).values()) if session else []:
-            if hasattr(page, "control_card_card"):
+            if not hasattr(page, "control_card_card"):
+                continue
+            if next_value or shrink_handed_over:
                 apply_simple_view(page, next_value)
+                continue
+            # Сжатие окна подвешиваем на первую же страницу управления.
+            # Их в окне одна, но сжать окно дважды — значит запустить
+            # вторую анимацию поверх первой.
+            apply_simple_view(
+                page,
+                next_value,
+                on_settled=lambda: _resize_window_for_mode(window, False),
+            )
+            shrink_handed_over = True
     except Exception as exc:
         log(f"[NAV] не удалось перестроить страницу под режим: {exc}", "DEBUG")
+
+    if not next_value and not shrink_handed_over:
+        # Страницы управления в окне нет — ждать нечего и некого.
+        _resize_window_for_mode(window, False)
 
     if not next_value:
         _return_to_entry_page(window, method)
