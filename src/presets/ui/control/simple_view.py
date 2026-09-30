@@ -255,20 +255,28 @@ def _conceal(widgets, on_finished) -> bool:
         return False
 
 
-def _stop_pending_motion(page) -> None:
-    """Снимает незаконченные появления и уходы со всех переключаемых блоков.
+def _settle_motion_outside(page, moving) -> None:
+    """Снимает незаконченное движение со всех, кроме тех, кого сейчас двинут.
 
-    Без этого быстрое переключение туда-обратно оставляло следы: уход,
-    начатый в прошлый раз, доводил дело до конца и прятал строку,
-    которую только что показали.
+    Раньше движение снималось со всех подряд, и это убивало прерывание:
+    блок, пойманный на середине ухода, терял свой слой вместе с
+    прогрессом и следующее движение начинал с нуля — тот самый рывок.
+
+    Тем, кого сейчас двинут, слой оставляем: по нему новое движение
+    понимает, откуда продолжать. Остальным снимаем, иначе блок,
+    оставшийся на полпути, навсегда замрёт полупрозрачным.
     """
     try:
         from ui.reveal import stop_motion
     except Exception:
         return
 
+    keep = {id(widget) for widget in moving}
     for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
-        stop_motion(getattr(page, attr, None))
+        widget = getattr(page, attr, None)
+        if widget is None or id(widget) in keep:
+            continue
+        stop_motion(widget)
 
 
 def attach_theme_switch(page) -> None:
@@ -441,21 +449,26 @@ def apply_simple_view(page, advanced: bool | None = None, *, on_settled=None) ->
 
     visible = bool(advanced)
 
-    # Незаконченное движение снимаем первым делом: уход, начатый прошлым
-    # переключением, иначе доведёт дело до конца и спрячет строку,
-    # которую это переключение только что показало.
-    _stop_pending_motion(page)
-
     # Что именно появляется или уходит — нужно знать до смены видимости:
     # анимируем только то, что на экране меняется. Уже видимое проявлять
     # заново значит моргать им на ровном месте.
+    #
+    # Блок в движении считается меняющимся всегда, даже если его текущая
+    # видимость уже совпадает с нужной. Уезжающая строка ещё видима, и
+    # по одной видимости переключение обратно сочло бы её «уже на
+    # месте»: движение доехало бы до конца и спрятало её.
     changing = []
     for attr in (*HIDDEN_IN_SIMPLE_VIEW, *HIDDEN_SETTING_ROWS):
         widget = getattr(page, attr, None)
         if widget is None:
             continue
-        if bool(widget.isHidden()) == visible:
+        in_motion = getattr(widget, "_reveal_animation", None) is not None
+        if in_motion or bool(widget.isHidden()) == visible:
             changing.append(widget)
+
+    # Остальным движение снимаем, этим — оставляем: по оставленному слою
+    # новое движение понимает, откуда продолжать.
+    _settle_motion_outside(page, changing)
 
     def _settled() -> None:
         _close_up_layout(page, visible)

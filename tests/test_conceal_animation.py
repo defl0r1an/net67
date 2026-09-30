@@ -200,8 +200,12 @@ class SimpleViewWiringTests(unittest.TestCase):
             PROJECT_SRC / "presets" / "ui" / "control" / "simple_view.py"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("conceal_widgets", source)
-        self.assertIn("_stop_pending_motion", source)
+        self.assertIn("conceal_widgets", source, "уход не вызывается со страницы")
+        self.assertIn(
+            "_settle_motion_outside",
+            source,
+            "незаконченное движение больше никто не снимает",
+        )
 
     def test_layout_closes_up_after_the_wave(self) -> None:
         """Сомкни раскладку раньше — группы схлопнутся под уезжающими строками."""

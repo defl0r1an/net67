@@ -80,13 +80,31 @@ REVEAL_RISE_PX = 14
 #: превращается в ожидание.
 CONCEAL_MS = 280
 
+#: Наименьшая длительность подхваченного движения.
+#:
+#: Остаток пути бывает в несколько процентов, и пропорциональная
+#: длительность превращается в мигание. Ниже этого порога движение уже
+#: не читается как движение.
+MIN_TAKEOVER_MS = 90
+
+#: Готовый класс эффекта, см. _effect_class.
+_EFFECT_CLASS = None
+
 
 def _effect_class():
     """Класс эффекта. Собирается лениво: наверху модуля QtWidgets не нужен.
 
     Модуль читают проверки, которым окно ни к чему, а QtWidgets тянет за
     собой графические библиотеки системы и падает там, где их нет.
+
+    И собирается один раз. Новый класс на каждый вызов означал бы, что
+    isinstance не узнаёт слой, поставленный прошлым движением, — а
+    именно по нему подхват понимает, откуда продолжать.
     """
+    global _EFFECT_CLASS
+    if _EFFECT_CLASS is not None:
+        return _EFFECT_CLASS
+
     from PyQt6.QtCore import QPoint, Qt
     from PyQt6.QtWidgets import QGraphicsEffect
 
@@ -146,7 +164,62 @@ def _effect_class():
             )
             painter.restore()
 
+    _EFFECT_CLASS = SlideFadeEffect
     return SlideFadeEffect
+
+
+def _takeover(widget, effect_cls, *, dx: int, dy: int, default: float):
+    """Готовит слой движения, подхватывая начатое.
+
+    Возвращает (слой, откуда ехать, подхват ли это).
+
+    Главное правило прерывания: новое движение начинается с того
+    значения, которое сейчас на экране. Поэтому уже стоящий слой не
+    снимается, а переиспользуется вместе со своим прогрессом — снять
+    его значит вернуть блок в начало пути, то есть сделать ровно тот
+    рывок, от которого всё и затевалось.
+    """
+    animation = getattr(widget, "_reveal_animation", None)
+    # Поле обнуляем до остановки: по нему отложенный старт понимает, что
+    # его уже не ждут.
+    try:
+        widget._reveal_animation = None
+    except Exception:
+        pass
+    if animation is not None:
+        try:
+            animation.stop()
+        except Exception:
+            pass
+
+    existing = None
+    try:
+        existing = widget.graphicsEffect()
+    except Exception:
+        existing = None
+
+    if isinstance(existing, effect_cls):
+        try:
+            return existing, float(existing.progress()), True
+        except Exception:
+            pass
+
+    effect = effect_cls(widget, dx, dy)
+    effect.setProgress(default)
+    widget.setGraphicsEffect(effect)
+    return effect, float(default), False
+
+
+def _takeover_duration(full_ms: int, distance: float) -> int:
+    """Длительность на оставшийся кусок пути.
+
+    Пропорция, а не полная длительность: иначе подхваченный на девяти
+    десятых блок ползёт последние пиксели столько же, сколько ехал бы
+    весь путь. Скорость при этом остаётся примерно прежней, и шва на
+    месте подхвата не видно.
+    """
+    remaining = max(0.0, min(1.0, float(distance)))
+    return max(int(MIN_TAKEOVER_MS), int(round(int(full_ms) * remaining)))
 
 
 def _start_if_current(widget, animation) -> None:
@@ -230,14 +303,18 @@ def reveal_widgets(
 
     for order, widget in enumerate(order_by_position(widgets)):
         try:
-            effect = effect_cls(widget, 0, distance)
-            effect.setProgress(0.0)
-            widget.setGraphicsEffect(effect)
+            effect, start, caught = _takeover(
+                widget, effect_cls, dx=0, dy=distance, default=0.0
+            )
+            if start >= 1.0:
+                # Блок уже на месте: ехать некуда, слой только мешает.
+                widget.setGraphicsEffect(None)
+                continue
 
             animation = QVariantAnimation(widget)
-            animation.setStartValue(0.0)
+            animation.setStartValue(start)
             animation.setEndValue(1.0)
-            animation.setDuration(int(duration_ms))
+            animation.setDuration(_takeover_duration(duration_ms, 1.0 - start))
             # OutCubic тормозит к концу: блок подъезжает к месту, а не
             # прилетает в него. Пружинящие кривые пробовать не стоит —
             # на списке настроек перелёт читается как дрожь.
@@ -255,7 +332,10 @@ def reveal_widgets(
             continue
 
         widget._reveal_animation = animation
-        delay = min(order, int(stagger_limit)) * int(stagger_ms)
+        # Подхваченный блок в очередь не встаёт. Он уже в движении, и
+        # задержка означала бы, что он замирает в воздухе и ждёт своей
+        # очереди — пауза посреди движения заметнее, чем сбитая волна.
+        delay = 0 if caught else min(order, int(stagger_limit)) * int(stagger_ms)
         if delay <= 0:
             start_managed_animation(animation)
         else:
@@ -339,16 +419,19 @@ def conceal_widgets(
 
     for order, widget in enumerate(ordered):
         try:
-            stop_motion(widget)
-
-            effect = effect_cls(widget, 0, distance)
-            effect.setProgress(1.0)
-            widget.setGraphicsEffect(effect)
+            effect, start, caught = _takeover(
+                widget, effect_cls, dx=0, dy=distance, default=1.0
+            )
+            if start <= 0.0:
+                # Блок уже уехал: остаётся только спрятать.
+                _finish_conceal(widget)
+                started += 1
+                continue
 
             animation = QVariantAnimation(widget)
-            animation.setStartValue(1.0)
+            animation.setStartValue(start)
             animation.setEndValue(0.0)
-            animation.setDuration(int(duration_ms))
+            animation.setDuration(_takeover_duration(duration_ms, start))
             # InCubic — зеркало появления: трогается медленно, уходит
             # быстро. OutCubic здесь давал бы долгий хвост у самого
             # исчезновения, и блок словно залипал бы на месте.
@@ -364,7 +447,8 @@ def conceal_widgets(
             continue
 
         widget._reveal_animation = animation
-        delay = min(order, int(stagger_limit)) * int(stagger_ms)
+        # Подхваченный блок в очередь не встаёт, см. появление выше.
+        delay = 0 if caught else min(order, int(stagger_limit)) * int(stagger_ms)
         last_delay = max(last_delay, delay)
         started += 1
         if delay <= 0:
@@ -465,6 +549,7 @@ def slide_in(
 
 __all__ = [
     "CONCEAL_MS",
+    "MIN_TAKEOVER_MS",
     "REVEAL_MS",
     "REVEAL_RISE_PX",
     "REVEAL_STAGGER_LIMIT",
