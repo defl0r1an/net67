@@ -177,6 +177,33 @@ def stop() -> None:
         log(f"Не удалось остановить документацию: {exc}", "DEBUG")
 
 
+def page_url(page: str) -> str:
+    """Адрес статьи вики на локальном сервере; пустая строка — вики нет.
+
+    ``page`` — как в ссылках самой вики: ``presets`` или ``presets#фейки``.
+    Нужна туру: у исходного проекта кнопка «Подробнее в вики» вела на его
+    сайт, у нас — на ту же вики, что едет со сборкой. Она работает без
+    интернета и всегда совпадает с установленной версией программы.
+    """
+    if not is_available():
+        return ""
+    path, _, anchor = str(page or "").strip().lstrip("/").partition("#")
+    # Статьи нет в собранном сайте — нет и ссылки. Так было с первой
+    # сборкой после новых статей: их написали в wiki/content, а сайт не
+    # пересобрали, и 33 шага тура из 54 открывали «404 File not found».
+    if path and not (docs_root() / f"{path}.html").is_file():
+        return ""
+    base = start()
+    if not base:
+        return ""
+    from urllib.parse import quote
+
+    url = base + quote(path, safe="/")
+    if anchor:
+        url += "#" + quote(anchor, safe="-")
+    return url
+
+
 def open_in_browser() -> tuple[bool, str]:
     """Поднимает сайт и открывает его в браузере.
 
