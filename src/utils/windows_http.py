@@ -405,7 +405,7 @@ def https_request(
 
     try:
         session = _open(
-            _WinHttpOpen("ZapretGUI-Diagnostics/1.0", WINHTTP_ACCESS_TYPE_NO_PROXY, None, None, 0)
+            _WinHttpOpen("net67-Diagnostics/1.0", WINHTTP_ACCESS_TYPE_NO_PROXY, None, None, 0)
         )
         if not session:
             return _fail()

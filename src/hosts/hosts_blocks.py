@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-BLOCK_ZAPRETGUI = "zapretgui"
+BLOCK_NET67 = "net67"
 BLOCK_TELEGRAM = "telegram"
 BLOCK_MAX = "max"
 BLOCK_STATE_MEDIA = "state_media"
@@ -17,7 +17,7 @@ BLOCK_ADOBE = "adobe"
 BLOCK_USER = "user"
 
 BLOCK_ORDER = (
-    BLOCK_ZAPRETGUI,
+    BLOCK_NET67,
     BLOCK_TELEGRAM,
     BLOCK_MAX,
     BLOCK_STATE_MEDIA,
@@ -34,8 +34,8 @@ BLOCK_ORDER = (
 # считались бы строками пользователя, и «Применить» дописал бы второй
 # блок рядом со старым.
 _BEGIN_END_MARKERS = {
-    "# >>> net67:hosts managed begin >>>": ("# <<< net67:hosts managed end <<<", BLOCK_ZAPRETGUI),
-    "# >>> zapretgui:hosts managed begin >>>": ("# <<< zapretgui:hosts managed end <<<", BLOCK_ZAPRETGUI),
+    "# >>> net67:hosts managed begin >>>": ("# <<< net67:hosts managed end <<<", BLOCK_NET67),
+    "# >>> zapretgui:hosts managed begin >>>": ("# <<< zapretgui:hosts managed end <<<", BLOCK_NET67),
     "# MAX BLOCKED BY net67": ("# END MAX BLOCK", BLOCK_MAX),
     "# MAX BLOCKED BY ZAPRET GUI": ("# END MAX BLOCK", BLOCK_MAX),
     "# >>> net67:russian-state-media-block begin >>>": (
@@ -172,7 +172,7 @@ __all__ = [
     "BLOCK_STATE_MEDIA",
     "BLOCK_TELEGRAM",
     "BLOCK_USER",
-    "BLOCK_ZAPRETGUI",
+    "BLOCK_NET67",
     "HostsBlock",
     "classify_hosts_line",
     "is_mapping_line",

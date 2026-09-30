@@ -16,7 +16,7 @@ from hosts.hosts_blocks import (
     BLOCK_STATE_MEDIA,
     BLOCK_TELEGRAM,
     BLOCK_USER,
-    BLOCK_ZAPRETGUI,
+    BLOCK_NET67,
     ROLE_BLANK,
     ROLE_COMMENT,
     ROLE_MARKER,
@@ -42,7 +42,7 @@ def is_dark_text_theme(theme: SyntaxTheme) -> bool:
 
 
 def owner_color(kind: str | None, theme: SyntaxTheme) -> QColor:
-    if kind == BLOCK_ZAPRETGUI:
+    if kind == BLOCK_NET67:
         return QColor(theme.accent)
     if kind in _OWNER_COLORS:
         dark, light = _OWNER_COLORS[kind]
@@ -57,7 +57,7 @@ class HostsSyntaxHighlighter(BaseSyntaxHighlighter):
         super()._rebuild_formats()
         theme = self.theme
         self._owner_formats: dict[tuple[str | None, str], QTextCharFormat] = {}
-        for kind in (BLOCK_ZAPRETGUI, BLOCK_TELEGRAM, BLOCK_MAX, BLOCK_STATE_MEDIA, BLOCK_ADOBE, BLOCK_USER, None):
+        for kind in (BLOCK_NET67, BLOCK_TELEGRAM, BLOCK_MAX, BLOCK_STATE_MEDIA, BLOCK_ADOBE, BLOCK_USER, None):
             color = owner_color(kind, theme)
             entry = QTextCharFormat()
             entry.setForeground(color)

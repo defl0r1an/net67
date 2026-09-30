@@ -5488,7 +5488,7 @@ TEXTS.update(TEXTS_ONBOARDING)
 
 #: Тексты страницы hosts (плитки) и файла hosts.
 #:
-#: Взяты из исходного проекта вместе со страницей; «ZapretGUI» в них
+#: Взяты из исходного проекта вместе со страницей; его название в них
 #: заменено на net67. Ставятся поверх общего словаря: там они пришли
 #: слиянием как есть, с чужим названием.
 TEXTS_HOSTS_PAGE_V2: dict[str, dict[str, str]] = {
@@ -5704,7 +5704,7 @@ TEXTS_HOSTS_PAGE_V2: dict[str, dict[str, str]] = {
         'ru': 'Ваши строки',
         'en': 'Your lines',
     },
-    'page.hosts_file.owner.zapretgui': {
+    'page.hosts_file.owner.net67': {
         'ru': 'net67',
         'en': 'net67',
     },

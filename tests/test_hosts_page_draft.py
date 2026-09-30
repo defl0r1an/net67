@@ -19,7 +19,7 @@ from hosts.hosts_blocks import (
     BLOCK_MAX,
     BLOCK_TELEGRAM,
     BLOCK_USER,
-    BLOCK_ZAPRETGUI,
+    BLOCK_NET67,
     parse_hosts_blocks,
 )
 from hosts.page_snapshot import (
@@ -142,7 +142,7 @@ class HostsBlocksParseTests(unittest.TestCase):
 
         blocks = {block.kind: block.lines for block in parse_hosts_blocks(text)}
 
-        self.assertEqual(blocks[BLOCK_ZAPRETGUI], ("2.2.2.2 managed.example",))
+        self.assertEqual(blocks[BLOCK_NET67], ("2.2.2.2 managed.example",))
         self.assertEqual(blocks[BLOCK_TELEGRAM], ("127.0.0.1 web.telegram.org",))
         self.assertEqual(blocks[BLOCK_MAX], ("0.0.0.0 max.ru",))
         # У блока Adobe нет строки конца: он кончается на первой пустой строке.
@@ -152,7 +152,7 @@ class HostsBlocksParseTests(unittest.TestCase):
     def test_managed_block_keeps_every_address_of_a_domain(self) -> None:
         snapshot = _snapshot(_written_block({"Alpha": "p2"}))
 
-        block = snapshot.block(BLOCK_ZAPRETGUI)
+        block = snapshot.block(BLOCK_NET67)
         self.assertEqual(block.lines, ("1.1.1.1 alpha.example", "2.2.2.2 alpha.example"))
 
 
@@ -181,10 +181,10 @@ class HostsLineClassifierTests(unittest.TestCase):
             result,
             [
                 (None, ROLE_COMMENT),
-                (BLOCK_ZAPRETGUI, ROLE_MARKER),
-                (BLOCK_ZAPRETGUI, ROLE_COMMENT),
-                (BLOCK_ZAPRETGUI, ROLE_ENTRY),
-                (BLOCK_ZAPRETGUI, ROLE_MARKER),
+                (BLOCK_NET67, ROLE_MARKER),
+                (BLOCK_NET67, ROLE_COMMENT),
+                (BLOCK_NET67, ROLE_ENTRY),
+                (BLOCK_NET67, ROLE_MARKER),
                 (BLOCK_ADOBE, ROLE_MARKER),
                 (BLOCK_ADOBE, ROLE_ENTRY),
                 (None, ROLE_BLANK),
@@ -793,8 +793,8 @@ class HostsFilePageTests(unittest.TestCase):
 
         managed, user = color_of(2), color_of(4)
         self.assertNotEqual(managed, user)
-        self.assertEqual(managed, highlighter.format_for(BLOCK_ZAPRETGUI, "entry").foreground().color().name())
-        self.assertEqual(page.legend[BLOCK_ZAPRETGUI].label.text(), "net67: 1")
+        self.assertEqual(managed, highlighter.format_for(BLOCK_NET67, "entry").foreground().color().name())
+        self.assertEqual(page.legend[BLOCK_NET67].label.text(), "net67: 1")
         self.assertEqual(page.legend[BLOCK_USER].label.text(), "Ваши строки: 1")
 
     def test_editing_enables_save_and_revert_restores_text(self) -> None:
@@ -815,7 +815,7 @@ class HostsFilePageTests(unittest.TestCase):
         self.assertFalse(page.save_button.isEnabled())
         self.assertTrue(page.notice_card.isVisible())
 
-    def test_saving_edited_zapretgui_block_warns_about_apply(self) -> None:
+    def test_saving_edited_net67_block_warns_about_apply(self) -> None:
         page = self._page()
         page.editor.setPlainText(self.TEXT.replace("2.2.2.2", "9.9.9.9"))
         text = page.editor.toPlainText()

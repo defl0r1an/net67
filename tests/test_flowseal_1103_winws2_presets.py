@@ -98,7 +98,9 @@ OLD_PORT_SHA256 = {
     "general ALT7 1.9.9 (game filter).txt": "3748933ba3661fdc091c7fdfe163ce893e176337112d580d7a9650dadbfa5ebd",
     "general ALT8 1.9.9 (game filter).txt": "d939523e47f0dff0c8d2e286c10e4146cf2a7ca2a9e8eac3206b82349f1e2e54",
     "general ALT9 1.9.9 (game filter).txt": "441d4f8e820e677034a77b019e4f0d28c451c9087c1a0f4ced40242ce8640563",
-    "general EXP 1.10.0 (game filter).txt": "7b4f4ba3e7296e599dcafde3a7e8f86500f108be8a980e05afe81fee4682b663",
+    # Сумма сменилась намеренно: в строке Description «ZapretGUI» заменено
+    # на net67, как во всех пресетах. Остальной текст файла прежний.
+    "general EXP 1.10.0 (game filter).txt": "6c25615c1b0b8762a2df64ea8b9b4b606423696cf4e17f7aa21b18d1e56fbc19",
     "general FAKE TLS AUTO 1.9.9 (game filter).txt": "7b6b3b08f425941f154871276984aa938c3e16d8ed7356791d1729b23e14a875",
     "general FAKE TLS AUTO ALT 1.9.9 (game filter).txt": "a2f3a01cd8dd275056813c7caafc7c6e56dbd4232cb1750daf7de11fb6df3edc",
     "general FAKE TLS AUTO ALT2 1.9.9 (game filter).txt": "5e56662a0738f89cf42f4aeb58f57dd0d70cca3574fdf0d54bd15973dd004200",
@@ -178,7 +180,7 @@ class Flowseal1103Winws2PresetTests(unittest.TestCase):
                 self.assertEqual(lines[1], "# BuiltinVersion: 2.42")
                 self.assertRegex(lines[2], r"^# IconColor: #[0-9a-f]{6}([0-9a-f]{2})?$")
                 self.assertTrue(lines[3].startswith(f"# Description: Flowseal {_V} "))
-                self.assertTrue(lines[3].endswith(", adapted to ZapretGUI profiles"))
+                self.assertTrue(lines[3].endswith(", adapted to net67 profiles"))
 
     def test_no_batch_or_winws1_syntax(self) -> None:
         for name in NEW_FILES:

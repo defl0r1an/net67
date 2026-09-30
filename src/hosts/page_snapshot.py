@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 
-from hosts.hosts_blocks import BLOCK_ZAPRETGUI, HostsBlock, mapping_domains, parse_hosts_blocks
+from hosts.hosts_blocks import BLOCK_NET67, HostsBlock, mapping_domains, parse_hosts_blocks
 
 
 CATEGORY_DIRECT = "direct"
@@ -66,7 +66,7 @@ class HostsPageSnapshot:
 def _managed_domain_ip_map(blocks: list[HostsBlock]) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for block in blocks:
-        if block.kind != BLOCK_ZAPRETGUI:
+        if block.kind != BLOCK_NET67:
             continue
         for line in block.lines:
             parts = line.partition("#")[0].split()

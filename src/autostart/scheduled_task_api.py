@@ -200,7 +200,7 @@ def create_or_update_autostart_task(
         with tempfile.NamedTemporaryFile(
             mode="wb",
             suffix=".xml",
-            prefix="zapretgui-autostart-",
+            prefix="net67-autostart-",
             delete=False,
         ) as temporary:
             temporary.write(task_xml)

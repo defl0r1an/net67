@@ -29,7 +29,7 @@ from hosts.hosts_blocks import (
     BLOCK_STATE_MEDIA,
     BLOCK_TELEGRAM,
     BLOCK_USER,
-    BLOCK_ZAPRETGUI,
+    BLOCK_NET67,
     parse_hosts_blocks,
 )
 from hosts.ui.hosts_syntax import HostsSyntaxHighlighter, owner_color
@@ -45,7 +45,7 @@ from ui.theme_semantic import get_semantic_palette
 
 
 _OWNER_TITLES = {
-    BLOCK_ZAPRETGUI: ("page.hosts_file.owner.zapretgui", "net67"),
+    BLOCK_NET67: ("page.hosts_file.owner.net67", "net67"),
     BLOCK_TELEGRAM: ("page.hosts_file.owner.telegram", "Telegram Proxy"),
     BLOCK_MAX: ("page.hosts_file.owner.max", "Блокировка MAX"),
     BLOCK_STATE_MEDIA: ("page.hosts_file.owner.state_media", "Блокировка госСМИ"),
@@ -419,7 +419,7 @@ class HostsFilePage(BasePage):
             key, default = _OWNER_TITLES[kind]
             chip.set_state(title=self._tr(key, default), count=counts.get(kind, 0), color=owner_color(kind, theme))
             # Пустые блоки не показываем, кроме ваших строк и net67.
-            chip.setVisible(bool(counts.get(kind)) or kind in (BLOCK_ZAPRETGUI, BLOCK_USER))
+            chip.setVisible(bool(counts.get(kind)) or kind in (BLOCK_NET67, BLOCK_USER))
 
     def _render_buttons(self) -> None:
         dirty = self.is_dirty()
@@ -434,7 +434,7 @@ def _owner_counts(text: str) -> dict[str, int]:
 
 def _managed_lines(text: str) -> tuple[str, ...]:
     for block in parse_hosts_blocks(text):
-        if block.kind == BLOCK_ZAPRETGUI:
+        if block.kind == BLOCK_NET67:
             return block.lines
     return ()
 

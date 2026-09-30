@@ -114,7 +114,7 @@ def resolve_hostname_via_doh(
                 params={"name": host, "type": "A"},
                 headers={
                     "Accept": "application/dns-json",
-                    "User-Agent": "ZapretGUI-Secure-DNS/1.0",
+                    "User-Agent": "net67-Secure-DNS/1.0",
                 },
                 timeout=query_timeout,
                 verify=True,

@@ -249,7 +249,7 @@ def _validate_exported_list_file(file_name: str, kind: str, text: str) -> None:
 
 def _read_portable_archive(path: Path, *, expected_engine: str) -> tuple[str, tuple[PortableListFile, ...]]:
     if not zipfile.is_zipfile(path):
-        raise ValueError("Файл ZIP повреждён или не является архивом пресета ZapretGUI.")
+        raise ValueError("Файл ZIP повреждён или не является архивом пресета net67.")
     with zipfile.ZipFile(path, "r") as archive:
         file_members = [item for item in archive.infolist() if not item.is_dir()]
         members = {item.filename: item for item in file_members}
@@ -275,7 +275,7 @@ def _read_portable_archive(path: Path, *, expected_engine: str) -> tuple[str, tu
         except (TypeError, ValueError) as exc:
             raise ValueError("В ZIP неверная версия формата пресета.") from exc
         if manifest.get("format") != ARCHIVE_FORMAT or archive_version != ARCHIVE_VERSION:
-            raise ValueError("Этот ZIP имеет неизвестный формат пресета ZapretGUI.")
+            raise ValueError("Этот ZIP имеет неизвестный формат пресета net67.")
         archive_engine = str(manifest.get("engine") or "").strip().lower()
         if archive_engine != str(expected_engine or "").strip().lower():
             raise ValueError("Архив создан для другого режима Zapret.")

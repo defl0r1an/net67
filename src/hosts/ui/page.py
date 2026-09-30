@@ -38,7 +38,7 @@ from qfluentwidgets import (
 
 from app.ui_texts import tr as tr_catalog
 from hosts.draft import MIXED, HostsDraft
-from hosts.hosts_blocks import BLOCK_ZAPRETGUI
+from hosts.hosts_blocks import BLOCK_NET67
 from hosts.page_snapshot import CATEGORY_AI, CATEGORY_DIRECT, CATEGORY_OTHER, HostsPageSnapshot
 from hosts.ui.profile_icons import profile_icon
 from hosts.ui.services_tiles import HostsChoice, HostsTile, HostsTilesGrid, split_service_title
@@ -554,7 +554,7 @@ class HostsPage(BasePage):
             return
         for entry in draft.snapshot.services:
             draft.set(entry.name, None)
-        block = draft.snapshot.block(BLOCK_ZAPRETGUI)
+        block = draft.snapshot.block(BLOCK_NET67)
         self._render_changes()
         # Запись и тогда, когда всё уже выключено: уберутся лишние строки блока.
         self._commit(force=block is not None)
@@ -596,7 +596,7 @@ class HostsPage(BasePage):
             services, lines = 0, 0
             title = self._tr("page.hosts.loading", "Загрузка…")
         else:
-            block = snapshot.block(BLOCK_ZAPRETGUI)
+            block = snapshot.block(BLOCK_NET67)
             lines = block.count if block is not None else 0
             services = sum(1 for entry in snapshot.services if entry.current)
             title = (

@@ -1,7 +1,7 @@
 # Preset: general ALT8 1.10.3 (game filter)
 # BuiltinVersion: 2.42
 # IconColor: #e6c300ff
-# Description: Flowseal 1.10.3 ALT8, adapted to ZapretGUI profiles
+# Description: Flowseal 1.10.3 ALT8, adapted to net67 profiles
 
 --lua-init=@lua/zapret-lib.lua
 --lua-init=@lua/zapret-antidpi.lua
