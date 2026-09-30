@@ -36,6 +36,31 @@ def _qt_slot_excepthook(exc_type, exc, tb) -> None:
 sys.excepthook = _qt_slot_excepthook
 
 
+def pytest_configure(config):
+    """Файл hosts на время тестов — временный, а не системный.
+
+    Тест мастера звал настоящий `_apply_hosts_entries`, тот запускал
+    фоновый поток записи, и поток отрабатывал уже в чужом тесте —
+    в `C:\\Windows\\System32\\drivers\\etc\\hosts` того, кто гоняет
+    тесты у себя. У владельца через этот файл идёт связь с
+    нейросетями: прогон тестов мог молча её отрезать. Поймано
+    сторожем, который запрещал запись в системный hosts на время
+    прогона.
+
+    Подмена одна на всех: каждый писатель (HostsManager, страница
+    Telegram, «одна кнопка») берёт путь из `hosts.hosts.HOSTS_PATH`
+    в момент записи. Здесь, до сбора тестов, — чтобы и фоновые
+    потоки, пережившие свой тест, писали во временный файл.
+    """
+    import tempfile
+
+    from hosts import hosts as hosts_module
+
+    path = Path(tempfile.mkdtemp(prefix="net67-tests-hosts-")) / "hosts"
+    path.write_text("127.0.0.1 localhost\n", encoding="utf-8")
+    hosts_module.HOSTS_PATH = path
+
+
 _SESSION_EXIT_STATUS = {"status": 0}
 
 

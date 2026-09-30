@@ -206,13 +206,19 @@ class OneShotTests(unittest.TestCase):
         from settings import store as settings_store
 
         original = settings_store.get_hosts_defaults_version
+        original_wizard = settings_store.get_wizard_completed
         try:
+            # Версию умолчаний сверяют только после мастера. На чистой
+            # машине, где гоняют тесты, мастер не пройден, и без этой
+            # подмены проверка до версии не доходила вовсе.
+            settings_store.get_wizard_completed = lambda: True
             settings_store.get_hosts_defaults_version = lambda: module.DEFAULTS_VERSION
             self.assertFalse(module.is_needed())
             settings_store.get_hosts_defaults_version = lambda: 0
             self.assertTrue(module.is_needed())
         finally:
             settings_store.get_hosts_defaults_version = original
+            settings_store.get_wizard_completed = original_wizard
 
     def test_old_broken_defaults_are_rewritten_once(self) -> None:
         """У кого стоит версия 1 — блок hosts надо переписать.
@@ -226,11 +232,14 @@ class OneShotTests(unittest.TestCase):
         from settings import store as settings_store
 
         original = settings_store.get_hosts_defaults_version
+        original_wizard = settings_store.get_wizard_completed
         try:
+            settings_store.get_wizard_completed = lambda: True
             settings_store.get_hosts_defaults_version = lambda: 1
             self.assertTrue(module.is_needed())
         finally:
             settings_store.get_hosts_defaults_version = original
+            settings_store.get_wizard_completed = original_wizard
 
         self.assertGreater(module.DEFAULTS_VERSION, 2)
 
@@ -260,23 +269,33 @@ class OneShotTests(unittest.TestCase):
             module.is_needed = original
 
 
-class WizardDoesNotWriteHostsTests(unittest.TestCase):
-    def test_wizard_hosts_step_is_a_no_op(self) -> None:
+class WizardWritesThroughTheOnlyWriterTests(unittest.TestCase):
+    def test_wizard_hands_selection_to_the_only_writer(self) -> None:
         """Два писателя в один системный файл — гонка.
 
         Мастер закрывается примерно тогда же, когда отрабатывает поток с
         умолчаниями. Раньше оба писали в hosts, и результат зависел от
-        того, кто допишет последним.
+        того, кто допишет последним. Теперь мастер сам не пишет, а
+        отдаёт ответ тому же потоку.
+
+        Прежняя версия теста называлась «шаг мастера ничего не делает»
+        и звала его по-настоящему — а шаг давно запускает запись. Поток
+        отрабатывал в чужом тесте и переписывал системный hosts.
+        Поэтому писатель здесь подменён.
         """
         import inspect
+        from unittest.mock import patch
 
         from wizard import apply as wizard_apply
 
         source = inspect.getsource(wizard_apply._apply_hosts_entries)
-
         self.assertNotIn("apply_service_profiles", source)
         self.assertNotIn("apply_domain_ip_entries", source)
-        self.assertEqual(wizard_apply._apply_hosts_entries({"Discord": "hosts"}), "")
+
+        with patch("hosts.first_run_defaults.apply_in_background") as writer:
+            self.assertEqual(wizard_apply._apply_hosts_entries({"Discord": "hosts"}), "")
+
+        writer.assert_called_once_with({"Discord": "hosts"})
 
 
 if __name__ == "__main__":
