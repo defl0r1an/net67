@@ -1301,6 +1301,29 @@ class UpdatePageRuntime(QObject):
             self._start_update_installer_stage()
 
     def _start_update_installer_stage(self) -> None:
+        """Сначала надпись «закроюсь и открою сам», потом установщик.
+
+        Раньше программа закрывалась молча, и её открывали снова посреди
+        установки — см. updater/ui/closing_notice.py.
+        """
+        handoff = self._download_state.handoff
+        if handoff is None:
+            self._fail_update_pipeline("Установщик не подготовлен")
+            return
+        try:
+            from updater.ui.closing_notice import UPDATE_CLOSING_NOTICE_LEAD_MS, show_update_closing_notice
+
+            self._closing_notice = show_update_closing_notice(self._view, str(getattr(handoff, "version", "") or ""))
+        except Exception as exc:
+            # Без надписи обновление всё равно ставится — хуже не ставить его.
+            log(f"Надпись о закрытии на обновление не показана: {exc}", "WARNING")
+            self._launch_update_installer()
+            return
+        QTimer.singleShot(UPDATE_CLOSING_NOTICE_LEAD_MS, self._launch_update_installer)
+
+    def _launch_update_installer(self) -> None:
+        if self._cleanup_in_progress:
+            return
         handoff = self._download_state.handoff
         if handoff is None:
             self._fail_update_pipeline("Установщик не подготовлен")
@@ -1333,6 +1356,16 @@ class UpdatePageRuntime(QObject):
         if self._cleanup_in_progress:
             return
         message = str(error or "Не удалось установить обновление")
+        # Через __dict__: у QObject-наследника getattr на незаданном
+        # атрибуте уходит в C++ и падает, если объект собран без __init__.
+        notice = self.__dict__.get("_closing_notice")
+        if notice is not None:
+            # Обещали закрыться и открыться — не вышло: обещание снимаем.
+            self._closing_notice = None
+            try:
+                notice.close()
+            except RuntimeError:
+                pass
         self._view.mark_update_download_failed(message)
         self._on_download_failed(message)
         self._download_state.is_installing = False

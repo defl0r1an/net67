@@ -43,6 +43,34 @@ def handle_update_mode(argv: list[str] | None = None) -> None:
             pass
 
 
+def _respect_running_setup(args: list[str]) -> None:
+    """Не мешает идущей установке обновления.
+
+    Установщик убивает net67.exe и заменяет файлы. Открытый в это время
+    net67 держит свой exe: установка с /SUPPRESSMSGBOXES срывалась молча,
+    и оставалась полуобновлённая папка — «много что ломается». Поэтому,
+    пока держится мьютекс установщика, открытый вручную net67 выходит
+    сразу — до запроса прав и до Qt, чтобы не держать файлы. Надпись
+    перед закрытием на обновление просит не открывать программу, а
+    установщик в конце откроет её сам — с --after-update, и такой
+    запуск дожидается конца установки, а не выходит.
+    """
+    from startup.single_instance import AFTER_UPDATE_ARG, setup_is_running, wait_for_setup_to_finish
+
+    try:
+        running = setup_is_running()
+    except Exception:
+        return
+    if not running:
+        return
+    if AFTER_UPDATE_ARG in args:
+        if not wait_for_setup_to_finish():
+            log("Установщик не закончил за 90 с — открываюсь всё равно", "WARNING")
+        return
+    log("Идёт установка обновления — этот запуск выходит, net67 откроется сам", "INFO")
+    sys.exit(0)
+
+
 def shell_bootstrap(argv: list[str] | None = None) -> bool:
     args = list(argv or sys.argv)
 
@@ -53,6 +81,8 @@ def shell_bootstrap(argv: list[str] | None = None) -> bool:
     if "--update" in args and len(args) > 3:
         handle_update_mode(args)
         sys.exit(0)
+
+    _respect_running_setup(args)
 
     start_in_tray = "--tray" in args
 

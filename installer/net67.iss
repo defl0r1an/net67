@@ -59,6 +59,11 @@ UninstallDisplayName={#AppName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+; Мьютекс всё время работы установщика. net67, открытый вручную посреди
+; установки, видит его и сразу выходит, не держа файлы (main/shell.py,
+; _respect_running_setup): раньше открытая программа срывала замену
+; файлов молча — /SUPPRESSMSGBOXES.
+SetupMutex=net67SetupRunning,Global\net67SetupRunning
 CloseApplications=yes
 CloseApplicationsFilter=*.exe,*.dll
 RestartApplications=no
@@ -124,6 +129,14 @@ Name: "{autodesktop}\{#AppName}";  Filename: "{app}\_internal\{#AppExeName}"; Wo
 ; поднять UAC-запрос и запустить программу как надо.
 Filename: "{app}\_internal\{#AppExeName}"; Description: "Запустить {#AppName}"; \
   WorkingDir: "{app}\_internal"; Flags: nowait postinstall skipifsilent shellexec
+
+; Автообновление из программы идёт с /VERYSILENT, и строка выше с
+; skipifsilent его пропускает: после обновления net67 не открывался, со
+; стороны — «молча закрылся». Здесь он открывается сам. --after-update:
+; установщик в этот момент ещё держит свой мьютекс, и без флага запуск
+; принял бы себя за ручной посреди установки и вышел.
+Filename: "{app}\_internal\{#AppExeName}"; Parameters: "--after-update"; \
+  WorkingDir: "{app}\_internal"; Flags: nowait shellexec; Check: IsAutoUpdate
 
 ; Автозапуск ставим задачей планировщика, а не ключом реестра Run:
 ; приложению нужны права администратора, а задача с RunLevel=Highest
@@ -198,6 +211,21 @@ begin
 
   { Диспетчер служб отпускает файл не сразу после delete. }
   Sleep(2000);
+end;
+
+{ Запуск из программы при автообновлении: updater/update_pipeline.py
+  передаёт /AUTOUPDATE. }
+function IsAutoUpdate(): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/AUTOUPDATE') = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

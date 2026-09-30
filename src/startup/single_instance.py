@@ -45,6 +45,39 @@ def create_mutex(name: str):
     return handle, already_running
 
 
+#: Мьютекс, который держит установщик net67 всё время работы
+#: (SetupMutex в installer/net67.iss). Global\ — для другого сеанса.
+SETUP_MUTEX_NAMES = ("net67SetupRunning", "Global\\net67SetupRunning")
+
+#: Аргумент, с которым установщик сам открывает net67 после обновления.
+AFTER_UPDATE_ARG = "--after-update"
+
+_SYNCHRONIZE = 0x00100000
+
+
+def setup_is_running(names=SETUP_MUTEX_NAMES) -> bool:
+    """Идёт ли сейчас установка net67 (держит ли кто-то мьютекс установщика)."""
+    kernel32 = _kernel32()
+    for name in names:
+        handle = kernel32.OpenMutexW(_SYNCHRONIZE, False, name)
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+    return False
+
+
+def wait_for_setup_to_finish(*, timeout_s: float = 90.0, poll_s: float = 0.25, is_running=setup_is_running) -> bool:
+    """Ждёт, пока установщик закончит. True — закончил, False — не дождались."""
+    import time
+
+    deadline = time.monotonic() + max(0.0, float(timeout_s))
+    while is_running():
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(poll_s)
+    return True
+
+
 def release_mutex(handle):
     if handle:
         kernel32 = _kernel32()
