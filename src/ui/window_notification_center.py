@@ -13,6 +13,11 @@ from ui.notification_inbox import NotificationInbox, routes_to_inbox
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 from ui.window_notification_actions import WindowNotificationActionHandler, WindowNotificationRuntimeActions
 
+#: Сколько после закрытия панели нажатием на колокольчик щелчок по нему
+#: считается тем же нажатием. Обычный щелчок длится около 0,1 с; с
+#: запасом на медленную руку, но не столько, чтобы съесть следующий.
+INBOX_TOGGLE_WINDOW_S = 0.6
+
 
 GLOBAL_ERROR_DEDUPE_WINDOW_MS = 15000
 
@@ -64,6 +69,8 @@ class WindowNotificationCenter(QObject):
         self.inbox = NotificationInbox()
         self._bell = None
         self._inbox_panel = None
+        self._inbox_motion = None
+        self._inbox_closed_by_bell_at = 0.0
         self._action_handler = WindowNotificationActionHandler(
             notify=self.notify,
             runtime_actions=runtime_actions,
@@ -825,11 +832,20 @@ class WindowNotificationCenter(QObject):
             self._bell = None
 
     def open_inbox_panel(self) -> None:
+        from ui.popup_motion import PopupMotion
         from ui.widgets.notification_bell import NotificationPanel
 
         bell = self._bell
         if bell is None:
             return
+        # Этот щелчок — отпускание того же нажатия, что только что закрыло
+        # панель: человек выключал её колокольчиком, открывать заново нельзя.
+        # Срок — на случай, если нажатие увели с кнопки и щелчка не было.
+        closed_at, self._inbox_closed_by_bell_at = self._inbox_closed_by_bell_at, 0.0
+        if closed_at and time.monotonic() - closed_at < INBOX_TOGGLE_WINDOW_S:
+            return
+        if self._inbox_motion is None:
+            self._inbox_motion = PopupMotion(bell.window())
         panel = NotificationPanel(
             self.inbox,
             build_action=self._action_handler.build_action_callback,
@@ -837,12 +853,28 @@ class WindowNotificationCenter(QObject):
             parent=bell.window(),
         )
         self._inbox_panel = panel
-        panel.show_under(bell)
+        panel.closing.connect(lambda by_bell, p=panel: self._on_inbox_panel_closing(p, by_bell))
+        panel.show_under(bell, self._inbox_motion)
         # Открыл список — значит, увидел: счётчик гаснет сразу, а не
         # по каждой записи. Иначе он превращается в долг, который
         # надо разгребать.
         self.inbox.mark_all_read()
         self._sync_bell()
+
+    def _on_inbox_panel_closing(self, panel, by_bell: bool) -> None:
+        from ui.widgets.notification_bell import anchor_point
+
+        if by_bell:
+            self._inbox_closed_by_bell_at = time.monotonic()
+        bell = self._bell
+        motion = self._inbox_motion
+        if motion is None or bell is None:
+            return
+        try:
+            motion.close(panel, anchor_point(bell))
+        except RuntimeError:
+            # Окно закрывается целиком — уводить панель некуда.
+            pass
 
     def _present_notification(self, payload: dict) -> None:
         # Фоновое не всплывает, а копится за колокольчиком. Без

@@ -8,8 +8,8 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from PyQt6.QtCore import QPoint, QRectF, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter
+from PyQt6.QtCore import QPoint, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QCursor, QFont, QPainter
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 
 from ui.notification_inbox import InboxEntry, NotificationInbox
 
-__all__ = ["NotificationBell", "NotificationPanel"]
+__all__ = ["NotificationBell", "NotificationPanel", "anchor_point"]
 
 #: Размер кнопки. Под высоту строки заголовка, как у кнопок окна.
 BELL_SIZE = QSize(34, 28)
@@ -158,6 +158,14 @@ class _EntryCloser:
 class NotificationPanel(QFrame):
     """Всплывающий список под колокольчиком."""
 
+    #: Панель закрывается. Флаг — закрыло ли её нажатие на колокольчик.
+    #:
+    #: Нажатие мимо всплывающего окна Qt сначала закрывает его, а потом
+    #: отдаёт тому, что под курсором. Нажатие на колокольчик при открытой
+    #: панели закрывало её и тут же открывало заново: переключатель не
+    #: выключался. По флагу окно пропускает этот щелчок.
+    closing = pyqtSignal(bool)
+
     def __init__(
         self,
         inbox: NotificationInbox,
@@ -181,6 +189,7 @@ class NotificationPanel(QFrame):
         # углы выходили острыми. Фон и рамку рисует paintEvent.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._inbox = inbox
+        self._anchor: QWidget | None = None
         self._build_action = build_action
         self._on_changed = on_changed
         self.setFixedWidth(PANEL_WIDTH)
@@ -362,11 +371,32 @@ class NotificationPanel(QFrame):
         self._on_changed()
         self._rebuild()
 
-    def show_under(self, anchor: QWidget) -> None:
+    def show_under(self, anchor: QWidget, motion=None) -> None:
+        self._anchor = anchor
         point = anchor.mapToGlobal(QPoint(anchor.width() - self.width(), anchor.height() + 6))
         screen = anchor.screen()
         if screen is not None:
             area = screen.availableGeometry()
             point.setX(max(area.left() + 8, min(point.x(), area.right() - self.width() - 8)))
         self.move(point)
-        self.show()
+        if motion is None:
+            self.show()
+            return
+        motion.open(self, anchor_point(anchor))
+
+    def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        anchor = self._anchor
+        by_anchor = False
+        try:
+            if anchor is not None:
+                by_anchor = anchor.rect().contains(anchor.mapFromGlobal(QCursor.pos()))
+        except RuntimeError:
+            # Окно закрывается целиком, колокольчик уже удалён.
+            by_anchor = False
+        self.closing.emit(by_anchor)
+        super().closeEvent(event)
+
+
+def anchor_point(anchor: QWidget) -> QPoint:
+    """Точка на экране, из которой панель растёт и куда уходит: низ колокольчика."""
+    return anchor.mapToGlobal(QPoint(anchor.width() // 2, anchor.height()))
