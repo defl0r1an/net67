@@ -1,8 +1,8 @@
 {
   "name": "Web Archive",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.archive",
+  "icon_color": "#9E9E9E",
   "sort_order": 84,
   "domains": [
     {

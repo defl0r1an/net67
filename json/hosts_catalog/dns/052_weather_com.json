@@ -1,8 +1,8 @@
 {
   "name": "Weather.com",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.cloud-sun",
+  "icon_color": "#1E6FD9",
   "sort_order": 83,
   "domains": [
     {

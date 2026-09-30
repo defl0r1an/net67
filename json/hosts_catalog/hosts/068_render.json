@@ -1,8 +1,8 @@
 {
   "name": "Render",
   "category": "direct",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.server",
+  "icon_color": "#46E3B7",
   "sort_order": 103,
   "hosts": [
     {

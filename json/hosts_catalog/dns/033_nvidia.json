@@ -1,8 +1,8 @@
 {
   "name": "Nvidia",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.microchip",
+  "icon_color": "#76B900",
   "sort_order": 64,
   "domains": [
     {

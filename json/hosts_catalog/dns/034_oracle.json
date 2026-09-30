@@ -1,8 +1,8 @@
 {
   "name": "Oracle",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.database",
+  "icon_color": "#F80000",
   "sort_order": 65,
   "domains": [
     {

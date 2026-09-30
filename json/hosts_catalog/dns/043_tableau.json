@@ -1,8 +1,8 @@
 {
   "name": "Tableau",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.chart-bar",
+  "icon_color": "#E97627",
   "sort_order": 74,
   "domains": [
     {

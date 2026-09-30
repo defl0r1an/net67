@@ -1,8 +1,8 @@
 {
   "name": "Fitbit",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.heartbeat",
+  "icon_color": "#00B0B9",
   "sort_order": 47,
   "domains": [
     {

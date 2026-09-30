@@ -1,8 +1,8 @@
 {
   "name": "Qwant",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.search",
+  "icon_color": "#5C97FF",
   "sort_order": 69,
   "domains": [
     {

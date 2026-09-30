@@ -1,8 +1,8 @@
 {
   "name": "Tria.ge",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.bug",
+  "icon_color": "#E74C3C",
   "sort_order": 78,
   "domains": [
     {

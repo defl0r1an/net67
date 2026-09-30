@@ -1,8 +1,8 @@
 {
   "name": "Xerox",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.print",
+  "icon_color": "#E3001B",
   "sort_order": 87,
   "domains": [
     {

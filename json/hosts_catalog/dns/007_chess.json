@@ -1,8 +1,8 @@
 {
   "name": "Chess",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.chess-knight",
+  "icon_color": "#81B64C",
   "sort_order": 38,
   "domains": [
     {

@@ -1,8 +1,8 @@
 {
   "name": "Framer",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.shapes",
+  "icon_color": "#0055FF",
   "sort_order": 49,
   "domains": [
     {

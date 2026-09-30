@@ -1,8 +1,8 @@
 {
   "name": "Guilded",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.shield-alt",
+  "icon_color": "#F5C400",
   "sort_order": 53,
   "domains": [
     {

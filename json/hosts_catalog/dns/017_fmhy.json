@@ -1,8 +1,8 @@
 {
   "name": "FMHY",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.book-open",
+  "icon_color": "#7B68EE",
   "sort_order": 48,
   "domains": [
     {

@@ -1,8 +1,8 @@
 {
   "name": "Truth Social",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.comment-dots",
+  "icon_color": "#5448EE",
   "sort_order": 79,
   "domains": [
     {

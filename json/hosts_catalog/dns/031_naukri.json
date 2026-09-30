@@ -1,8 +1,8 @@
 {
   "name": "Naukri",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.briefcase",
+  "icon_color": "#4A90E2",
   "sort_order": 62,
   "domains": [
     {

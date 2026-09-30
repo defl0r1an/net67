@@ -1,8 +1,8 @@
 {
   "name": "WorkOS",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.key",
+  "icon_color": "#6363F1",
   "sort_order": 86,
   "domains": [
     {

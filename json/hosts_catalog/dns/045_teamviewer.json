@@ -1,8 +1,8 @@
 {
   "name": "TeamViewer",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.desktop",
+  "icon_color": "#0E8EE9",
   "sort_order": 76,
   "domains": [
     {

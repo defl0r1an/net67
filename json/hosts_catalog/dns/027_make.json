@@ -1,8 +1,8 @@
 {
   "name": "Make",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.project-diagram",
+  "icon_color": "#6D00CC",
   "sort_order": 58,
   "domains": [
     {

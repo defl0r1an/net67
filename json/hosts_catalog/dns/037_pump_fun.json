@@ -1,8 +1,8 @@
 {
   "name": "Pump.fun",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.coins",
+  "icon_color": "#54D38F",
   "sort_order": 68,
   "domains": [
     {

@@ -1,8 +1,8 @@
 {
   "name": "Dell",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.laptop",
+  "icon_color": "#007DB8",
   "sort_order": 43,
   "domains": [
     {

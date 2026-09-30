@@ -1,8 +1,8 @@
 {
   "name": "GitHub Copilot",
   "category": "ai",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5b.github",
+  "icon_color": "#8957E5",
   "sort_order": 89,
   "domains": [
     {

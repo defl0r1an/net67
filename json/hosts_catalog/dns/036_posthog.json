@@ -1,8 +1,8 @@
 {
   "name": "Posthog",
   "category": "other",
-  "icon": "fa5s.globe",
-  "icon_color": null,
+  "icon": "fa5s.chart-line",
+  "icon_color": "#F54E00",
   "sort_order": 67,
   "domains": [
     {
