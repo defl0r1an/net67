@@ -9,6 +9,140 @@ from unittest.mock import patch
 
 
 class ListsStartupContractTests(unittest.TestCase):
+    def test_embedded_ipset_all_is_flowseal_full_list(self) -> None:
+        """Встроенная основа ipset-all = полный список Flowseal (.service/ipset-service.txt):
+        без повторов, с нормализованными сетями, отсортирована: сначала IPv4, потом IPv6."""
+        from lists.core.embedded_defaults import get_ipset_all_base_text
+
+        text = get_ipset_all_base_text()
+        self.assertFalse(text.endswith("\n"))
+        lines = text.split("\n")
+        networks = [ipaddress.ip_network(line, strict=True) for line in lines]
+
+        self.assertEqual(len(lines), 33048)
+        self.assertEqual(len(set(lines)), len(lines))
+        self.assertEqual([str(network) for network in networks], lines)
+        self.assertEqual(
+            networks,
+            sorted(networks, key=lambda net: (net.version, net.network_address, net.prefixlen)),
+        )
+        for expected_network in ("1.118.3.0/24", "1.178.24.0/21", "2001:218::/32", "2c0f:fc00:b011::/48"):
+            self.assertIn(expected_network, lines)
+
+    def test_embedded_ipset_ru_keeps_as12389_rostelecom_networks(self) -> None:
+        from lists.core.embedded_defaults import get_ipset_ru_base_text
+
+        lines = get_ipset_ru_base_text().splitlines()
+        marker = "# https://ipinfo.io/AS12389 Rostelecom gosuslugi"
+        marker_index = lines.index(marker)
+        next_section_index = next(
+            index
+            for index in range(marker_index + 1, len(lines))
+            if lines[index].startswith("#")
+        )
+        section_entries = {
+            line.strip()
+            for line in lines[marker_index + 1 : next_section_index]
+            if line.strip()
+        }
+
+        self.assertEqual(lines[next_section_index], "# ozon")
+        self.assertEqual(len(section_entries), 400)
+        for expected_network in (
+            "5.136.0.0/13",
+            "95.167.0.0/16",
+            "188.128.0.0/17",
+            "188.254.0.0/17",
+        ):
+            self.assertIn(expected_network, section_entries)
+            self.assertEqual(
+                str(ipaddress.ip_network(expected_network, strict=True)),
+                expected_network,
+            )
+
+    def test_embedded_ipset_ru_contains_yandex_networks_as13238(self) -> None:
+        from lists.core.embedded_defaults import get_ipset_ru_base_text
+
+        expected = (
+            "95.108.128.0/17",
+            "5.45.192.0/18",
+            "5.255.192.0/18",
+            "37.9.64.0/18",
+            "37.140.128.0/18",
+            "77.88.0.0/18",
+            "93.158.128.0/18",
+            "141.8.128.0/18",
+            "84.252.160.0/19",
+            "87.250.224.0/19",
+            "178.154.128.0/19",
+            "178.154.160.0/19",
+            "213.180.192.0/19",
+            "92.255.112.0/20",
+            "5.45.202.0/24",
+            "5.45.205.0/24",
+            "5.45.215.0/24",
+            "5.255.197.0/24",
+            "5.255.255.0/24",
+            "37.9.64.0/24",
+            "37.9.87.0/24",
+            "37.9.112.0/24",
+            "77.88.8.0/24",
+            "77.88.44.0/24",
+            "77.88.55.0/24",
+            "87.250.247.0/24",
+            "87.250.255.0/24",
+            "178.154.131.0/24",
+            "185.32.187.0/24",
+            "213.180.199.0/24",
+            "2a02:6b8::/29",
+            "2a02:6b8::/32",
+            "2a02:6b8:4::/48",
+            "2a02:6b8:5::/48",
+            "2a02:6b8:6::/48",
+            "2a02:6b8:8::/48",
+            "2a02:6b8:a::/48",
+            "2a02:6b8:b::/48",
+            "2a02:6b8:c::/48",
+            "2a02:6b8:d::/48",
+            "2a02:6b8:e::/48",
+            "2a02:6b8:20::/48",
+            "2a02:6b8:21::/48",
+            "2a02:6b8:22::/48",
+            "2a02:6b8:23::/48",
+            "2a02:6b8:215::/48",
+        )
+        lines = get_ipset_ru_base_text().splitlines()
+        marker_index = lines.index("# https://ipinfo.io/AS13238")
+        next_section_index = next(
+            index
+            for index in range(marker_index + 1, len(lines))
+            if lines[index].startswith("#")
+        )
+        section_entries = tuple(lines[marker_index + 1 : next_section_index])
+
+        self.assertEqual(section_entries, expected)
+        for entry in expected:
+            self.assertEqual(str(ipaddress.ip_network(entry, strict=True)), entry)
+
+    def test_embedded_ipset_ru_contains_gemotest_network_as205567(self) -> None:
+        from lists.core.embedded_defaults import get_ipset_ru_base_text
+
+        network = "185.11.199.0/24"
+        lines = get_ipset_ru_base_text().splitlines()
+        entries = {
+            line.strip()
+            for line in lines
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+
+        self.assertIn("# https://ipinfo.io/AS205567", lines)
+        self.assertLess(
+            lines.index("# https://ipinfo.io/AS205567"),
+            lines.index("# DNS"),
+        )
+        self.assertIn(network, entries)
+        self.assertEqual(str(ipaddress.ip_network(network, strict=True)), network)
+
     def test_embedded_ipset_ru_contains_storm_networks_as43298(self) -> None:
         from lists.core.embedded_defaults import get_ipset_ru_base_text
 
@@ -93,6 +227,35 @@ class ListsStartupContractTests(unittest.TestCase):
                 self.assertTrue(file_manager.ensure_required_files_fast())
 
             self.assertEqual((lists_root / "tiktok.txt").read_text(encoding="utf-8"), "tiktok.com\n")
+
+    def test_fast_required_files_check_replaces_updated_ipset_ru_base(self) -> None:
+        from lists import file_manager
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lists_root = Path(tmp)
+            base_dir = lists_root / "base"
+            user_dir = lists_root / "user"
+            base_dir.mkdir()
+            user_dir.mkdir()
+            for name in ("other.txt", "ipset-all.txt"):
+                (lists_root / name).write_text("ready\n", encoding="utf-8")
+            (base_dir / "ipset-ru.txt").write_text("2.2.2.0/24\n", encoding="utf-8")
+            (user_dir / "ipset-ru.txt").write_text("9.9.9.9\n", encoding="utf-8")
+            (lists_root / "ipset-ru.txt").write_text(
+                "1.1.1.0/24\n9.9.9.9\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(file_manager, "LISTS_FOLDER", str(lists_root)),
+                patch.object(file_manager, "ensure_required_files", side_effect=AssertionError("unexpected full rebuild")),
+            ):
+                self.assertTrue(file_manager.ensure_required_files_fast())
+
+            self.assertEqual(
+                (lists_root / "ipset-ru.txt").read_text(encoding="utf-8"),
+                "2.2.2.0/24\n9.9.9.9\n",
+            )
 
     def test_fast_required_files_check_skips_unreferenced_user_only_lists(self) -> None:
         from lists import file_manager

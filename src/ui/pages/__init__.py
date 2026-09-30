@@ -27,7 +27,6 @@ _PAGE_EXPORTS: dict[str, tuple[str, str]] = {
     "LogsPage": ("log.ui.page", "LogsPage"),
     "BlockcheckPage": ("blockcheck.ui.page", "BlockcheckPage"),
     "ServersPage": ("updater.ui.page", "ServersPage"),
-    "ConnectionTestPage": ("diagnostics.ui.page", "ConnectionTestPage"),
 }
 
 __all__ = list(_PAGE_EXPORTS)

@@ -14,6 +14,7 @@ GUI_ROOTS = (
     SRC_ROOT / "diagnostics" / "ui",
     SRC_ROOT / "dns" / "ui",
     SRC_ROOT / "donater" / "ui",
+    SRC_ROOT / "fakes" / "ui",
     SRC_ROOT / "hosts" / "ui",
     SRC_ROOT / "log" / "ui",
     SRC_ROOT / "orchestra" / "ui",
@@ -37,7 +38,9 @@ GUI_SHELL_PATTERNS = (
     "ui/workflows/**/*.py",
     "main/window_*.py",
     "orchestra/page_runtime.py",
-    "updater/update_page_runtime.py",
+    "updater/check/service.py",
+    "updater/download/service.py",
+    "updater/page_actions.py",
 )
 
 ALLOWED_PROCESS_EVENTS_FILES = {
@@ -55,6 +58,8 @@ ALLOWED_EDITOR_TEXT_READS = {
     "presets/ui/common/raw_preset_text_editor.py:current_text:toPlainText()",
     "profile/ui/profile_setup_page.py:_current_list_file_text:toPlainText()",
     "profile/ui/profile_setup_page.py:_current_raw_profile_text:toPlainText()",
+    # Редактор файла hosts: текст читается только по нажатию «Сохранить».
+    "hosts/ui/file_page.py:_current_editor_text:toPlainText()",
 }
 
 FORBIDDEN_IMPORT_ROOTS = {

@@ -26,7 +26,7 @@ class StrategyVisual:
 _UNKNOWN_TECHNIQUE = StrategyTechniqueVisual(
     key="custom",
     label="Своя",
-    icon_name="ri.question-line",
+    icon_name="fa5s.question",
     color="#9aa6b2",
     description="готовая стратегия не распознана по --lua-desync",
 )
@@ -35,80 +35,172 @@ _TECHNIQUES: dict[str, StrategyTechniqueVisual] = {
     "fake": StrategyTechniqueVisual(
         key="fake",
         label="Fake",
-        icon_name="ri.magic-line",
+        icon_name="fa5s.magic",
         color="#ff6b6b",
         description="подмена пакета",
     ),
     "split": StrategyTechniqueVisual(
         key="split",
         label="Split",
-        icon_name="ri.scissors-cut-line",
+        icon_name="fa5s.cut",
         color="#f59e0b",
         description="разделение данных",
     ),
     "multisplit": StrategyTechniqueVisual(
         key="multisplit",
         label="MultiSplit",
-        icon_name="ri.split-cells-horizontal",
+        icon_name="fa5s.columns",
         color="#4cc2ff",
         description="несколько точек разделения данных",
     ),
     "disorder": StrategyTechniqueVisual(
         key="disorder",
         label="Disorder",
-        icon_name="ri.shuffle-line",
+        icon_name="fa5s.random",
         color="#58d17a",
         description="перестановка частей данных",
     ),
     "multidisorder": StrategyTechniqueVisual(
         key="multidisorder",
         label="MultiDisorder",
-        icon_name="ri.shuffle-line",
+        icon_name="fa5s.random",
         color="#58d17a",
         description="перестановка нескольких частей данных",
     ),
     "syndata": StrategyTechniqueVisual(
         key="syndata",
         label="Syndata",
-        icon_name="ri.database-2-line",
+        icon_name="fa5s.database",
         color="#aeb8c5",
         description="добавление данных в SYN",
     ),
     "send": StrategyTechniqueVisual(
         key="send",
         label="Send",
-        icon_name="ri.send-plane-2-line",
+        icon_name="fa5s.paper-plane",
         color="#76d0ff",
         description="дополнительная отправка данных",
     ),
     "udplen": StrategyTechniqueVisual(
         key="udplen",
         label="UDPLen",
-        icon_name="ri.ruler-line",
+        icon_name="fa5s.ruler",
         color="#b58cff",
         description="изменение длины UDP-пакета",
     ),
     "oob": StrategyTechniqueVisual(
         key="oob",
         label="OOB",
-        icon_name="ri.external-link-line",
+        icon_name="fa5s.external-link-alt",
         color="#ff78b7",
         description="отправка out-of-band данных",
     ),
     "tcpseg": StrategyTechniqueVisual(
         key="tcpseg",
         label="TCPSeg",
-        icon_name="ri.git-branch-line",
+        icon_name="fa5s.code-branch",
         color="#f6c945",
         description="изменение TCP-сегментации",
     ),
     "pass": StrategyTechniqueVisual(
         key="pass",
         label="Pass",
-        icon_name="ri.subtract-line",
+        icon_name="fa5s.minus",
         color="#8f9aa6",
         description="строка без активного desync-действия",
     ),
+    "hostfakesplit": StrategyTechniqueVisual(
+        key="hostfakesplit",
+        label="HostFakeSplit",
+        icon_name="fa5s.user-secret",
+        color="#ff8f5a",
+        description="разделение по имени сайта с поддельным именем между частями",
+    ),
+    "fakedsplit": StrategyTechniqueVisual(
+        key="fakedsplit",
+        label="FakedSplit",
+        icon_name="fa5s.clone",
+        color="#ffa94d",
+        description="разделение данных с поддельными копиями частей",
+    ),
+    "fakeddisorder": StrategyTechniqueVisual(
+        key="fakeddisorder",
+        label="FakedDisorder",
+        icon_name="fa5s.random",
+        color="#8bd450",
+        description="перестановка частей данных с поддельными копиями",
+    ),
+    "fakemultisplit": StrategyTechniqueVisual(
+        key="fakemultisplit",
+        label="FakeMultiSplit",
+        icon_name="fa5s.layer-group",
+        color="#6fb8ff",
+        description="несколько точек разделения с поддельными частями",
+    ),
+    "fakemultidisorder": StrategyTechniqueVisual(
+        key="fakemultidisorder",
+        label="FakeMultiDisorder",
+        icon_name="fa5s.random",
+        color="#7fd99a",
+        description="перестановка нескольких частей с поддельными частями",
+    ),
+    "drop": StrategyTechniqueVisual(
+        key="drop",
+        label="Drop",
+        icon_name="fa5s.ban",
+        color="#e5484d",
+        description="отбрасывание пакета",
+    ),
+    "wssize": StrategyTechniqueVisual(
+        key="wssize",
+        label="WSSize",
+        icon_name="fa5s.compress-arrows-alt",
+        color="#5eead4",
+        description="уменьшение TCP-окна, чтобы сервер отвечал мелкими частями",
+    ),
+    "pktmod": StrategyTechniqueVisual(
+        key="pktmod",
+        label="PktMod",
+        icon_name="fa5s.sliders-h",
+        color="#c4a7ff",
+        description="изменение полей текущего пакета",
+    ),
+    "tamper": StrategyTechniqueVisual(
+        key="tamper",
+        label="Tamper",
+        icon_name="fa5s.pen",
+        color="#e0b86b",
+        description="изменение содержимого пакета без разделения",
+    ),
+}
+
+# Точные имена стандартных функций --lua-desync (zapret-lib.lua / zapret-antidpi.lua
+# и расширения из lua-init). Проверяются раньше поиска по подстроке, иначе,
+# например, hostfakesplit попадал в Split, а fakeddisorder — в MultiDisorder.
+_EXACT_LUA_DESYNC_TECHNIQUES: dict[str, str] = {
+    "pass": "pass",
+    "send": "send",
+    "syndata": "syndata",
+    "udplen": "udplen",
+    "oob": "oob",
+    "tcpseg": "tcpseg",
+    "fake": "fake",
+    "multisplit": "multisplit",
+    "multidisorder": "multidisorder",
+    "multidisorder_legacy": "multidisorder",
+    "hostfakesplit": "hostfakesplit",
+    "fakedsplit": "fakedsplit",
+    "fakeddisorder": "fakeddisorder",
+    "fakemultisplit": "fakemultisplit",
+    "fakemultidisorder": "fakemultidisorder",
+    "drop": "drop",
+    "wssize": "wssize",
+    "pktmod": "pktmod",
+    "dht_dn": "tamper",
+    "http_domcase": "tamper",
+    "http_hostcase": "tamper",
+    "http_methodeol": "tamper",
+    "http_unixeol": "tamper",
 }
 
 
@@ -157,12 +249,13 @@ def _map_lua_desync_value(value: str) -> str | None:
     raw = str(value or "").strip().lower()
     if not raw:
         return None
-    if raw == "pass":
-        return "pass"
+    exact = _EXACT_LUA_DESYNC_TECHNIQUES.get(raw)
+    if exact:
+        return exact
+    if raw.startswith("hostfakesplit"):
+        return "hostfakesplit"
     if "syndata" in raw:
         return "syndata"
-    if raw == "send":
-        return "send"
     if "udplen" in raw:
         return "udplen"
     if "oob" in raw:
@@ -177,6 +270,6 @@ def _map_lua_desync_value(value: str) -> str | None:
         return "split"
     if "tcpseg" in raw:
         return "tcpseg"
-    if "fake" in raw or "hostfakesplit" in raw:
+    if "fake" in raw:
         return "fake"
     return None

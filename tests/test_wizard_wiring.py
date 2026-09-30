@@ -35,17 +35,18 @@ class WizardWiringTests(unittest.TestCase):
 
         self.assertIn("install_first_run_wizard", functions)
 
-    def test_dialog_module_exposes_entry_point(self) -> None:
-        tree = ast.parse(_read("wizard", "ui", "dialog.py"))
-        functions = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
-        classes = {n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
+    def test_setup_questions_live_in_the_tour(self) -> None:
+        """Окна мастера нет: каждый его вопрос задаёт тур у своего раздела."""
+        from ui.onboarding.setup_choices import CHOICE_KEYS
+        from ui.onboarding.steps import TOUR_STEPS
 
-        self.assertIn("show_wizard_if_needed", functions)
-        self.assertIn("WizardDialog", classes)
+        asked = {step.choice for step in TOUR_STEPS if step.choice}
+        self.assertEqual(asked, set(CHOICE_KEYS))
+        self.assertFalse(PROJECT_SRC.joinpath("wizard", "ui", "dialog.py").exists())
 
     def test_diagnostics_run_off_the_ui_thread(self) -> None:
         """check_one_domain делает DNS, TCP, ping и HTTP — это долго."""
-        source = _read("wizard", "ui", "dialog.py")
+        source = _read("ui", "onboarding", "setup_choices.py")
 
         self.assertIn("QThread", source)
         self.assertRegex(source, r"class _DetectWorker\(QThread\)")
@@ -57,20 +58,17 @@ class WizardWiringTests(unittest.TestCase):
         self.assertIn("except Exception", source)
 
     def test_every_step_is_rendered(self) -> None:
-        source = _read("wizard", "ui", "dialog.py")
+        source = _read("ui", "onboarding", "setup_choices.py")
 
-        for builder in ("_build_provider_page", "_build_detect_page", "_build_startup_page"):
+        for builder in ("_provider_widget", "_hosts_widget", "_DetectPanel", "_startup_widget"):
             self.assertIn(builder, source)
-        # Экран «Чем вы пользуетесь?» убран: обходы включаются все сразу,
-        # и ответ ни на что не влиял.
-        self.assertNotIn("_build_services_page", source)
 
     def test_step_count_matches_plans(self) -> None:
         from wizard.plans import WIZARD_STEPS
 
         self.assertEqual(
             [step.key for step in WIZARD_STEPS],
-            ["provider", "detect", "startup"],
+            ["provider", "hosts", "detect", "startup"],
         )
 
 

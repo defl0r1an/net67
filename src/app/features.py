@@ -7,9 +7,9 @@ if TYPE_CHECKING:
     from app.feature_facades import (
         AppearanceFeature,
         BlockcheckFeature,
-        DiagnosticsFeature,
         DnsFeature,
         ExternalActionsFeature,
+        FakesFeature,
         HostsFeature,
         ListsFeature,
         LogsFeature,
@@ -31,8 +31,8 @@ class AppFeatures:
     presets: PresetsFeature
     profile: ProfileFeature
     blockcheck: BlockcheckFeature
-    diagnostics: DiagnosticsFeature
     dns: DnsFeature
+    fakes: FakesFeature
     hosts: HostsFeature
     lists: ListsFeature
     logs: LogsFeature

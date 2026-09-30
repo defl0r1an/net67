@@ -16,6 +16,7 @@ def show_preset_actions_menu(
     global_pos: QPoint | None,
     is_builtin: bool,
     can_reset_to_builtin: bool = False,
+    is_remote_bound: bool = False,
     disabled_actions: set[str] | None = None,
     labels: dict[str, str],
     make_menu_action: Callable[..., object],
@@ -23,6 +24,47 @@ def show_preset_actions_menu(
     round_menu_cls=RoundMenu,
 ) -> str | None:
     """Show shared preset actions menu and return chosen action key."""
+
+    menu, action_map, disabled_action_keys = build_preset_actions_menu(
+        parent,
+        is_builtin=is_builtin,
+        can_reset_to_builtin=can_reset_to_builtin,
+        is_remote_bound=is_remote_bound,
+        disabled_actions=disabled_actions,
+        labels=labels,
+        make_menu_action=make_menu_action,
+        icon_resolver=icon_resolver,
+        round_menu_cls=round_menu_cls,
+    )
+    chosen = exec_popup_menu(
+        menu,
+        global_pos or QCursor.pos(),
+        owner=parent,
+        capture_action=True,
+    )
+    chosen_key = action_map.get(chosen)
+    if chosen_key in disabled_action_keys:
+        return None
+    return chosen_key
+
+
+def build_preset_actions_menu(
+    parent: QWidget,
+    *,
+    is_builtin: bool,
+    can_reset_to_builtin: bool = False,
+    is_remote_bound: bool = False,
+    disabled_actions: set[str] | None = None,
+    labels: dict[str, str],
+    make_menu_action: Callable[..., object],
+    icon_resolver: Callable[[str], object | None],
+    round_menu_cls=RoundMenu,
+) -> tuple[object, dict[object, str], set[str]]:
+    """Собирает меню действий пресета, не показывая его.
+
+    Тот же набор пунктов показывает и обучающий тур, поэтому сборка
+    отделена от показа.
+    """
 
     action_specs = [
         ("open", "VIEW"),
@@ -33,6 +75,8 @@ def show_preset_actions_menu(
         ("duplicate", "COPY"),
         ("export", "SHARE"),
         ("reset", "SYNC"),
+        ("update_remote", "CLOUD_DOWNLOAD"),
+        ("unlink_remote", "LINK"),
         ("delete", "DELETE"),
     ]
 
@@ -49,6 +93,9 @@ def show_preset_actions_menu(
         action_order.insert(4, "rename")
         if can_reset_to_builtin:
             action_order.append("reset")
+        if is_remote_bound:
+            action_order.append("update_remote")
+            action_order.append("unlink_remote")
         action_order.append("delete")
 
     disabled_action_keys = {str(key or "").strip() for key in (disabled_actions or set())}
@@ -66,16 +113,7 @@ def show_preset_actions_menu(
             disabled=is_disabled,
         )
         action_map[action] = key
-    chosen = exec_popup_menu(
-        menu,
-        global_pos or QCursor.pos(),
-        owner=parent,
-        capture_action=True,
-    )
-    chosen_key = action_map.get(chosen)
-    if chosen_key in disabled_action_keys:
-        return None
-    return chosen_key
+    return menu, action_map, disabled_action_keys
 
 
 def _set_menu_item_accessibility(menu, *, text: str, disabled: bool) -> None:

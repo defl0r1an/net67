@@ -13,6 +13,7 @@ class FeatureWindowDeps:
     startup_post_init_ready: Any
     tray_window_port: Any
     set_status: Any
+
     mark_stop_and_exit_requested: Any
 
 
@@ -29,6 +30,7 @@ def build_feature_window_deps(window, *, tray_window_port) -> FeatureWindowDeps:
         startup_post_init_ready=window.startup_post_init_ready,
         tray_window_port=tray_window_port,
         set_status=window.set_status,
+
         mark_stop_and_exit_requested=_mark_stop_and_exit_requested,
     )
 

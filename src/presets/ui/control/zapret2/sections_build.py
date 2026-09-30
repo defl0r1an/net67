@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from presets.ui.control.shared_builders import (
     build_deferred_themed_push_setting_card_common,
     build_docs_card,
+    build_bypass_tour_card_common,
+    build_onboarding_tour_card_common,
     build_updates_card,
 )
 from ui.build_timing import BuildStepTimer
@@ -35,6 +37,8 @@ class Zapret2SettingsBuildWidgets:
     internet_cleanup_card: object
     folder_card: object
     state_media_block_toggle: object
+    tour_card: object | None = None
+    bypass_tour_card: object | None = None
 
 
 def build_winws2_pages_settings_sections(
@@ -59,6 +63,8 @@ def build_winws2_pages_settings_sections(
     on_open_connection_test,
     on_open_internet_cleanup,
     on_open_folder,
+    on_open_onboarding_tour=None,
+    on_open_bypass_tour=None,
 ) -> Zapret2SettingsBuildWidgets:
     # Пошаговый замер: на машине пользователя эта сборка идёт 9,4 с, а на
     # машине разработчика — 91 мс. Угадывать виноватый виджет нельзя,
@@ -137,16 +143,36 @@ def build_winws2_pages_settings_sections(
     program_settings_card.addSettingCard(tray_close_mode_combo)
     program_settings_card.addSettingCard(windows_feature_toggles.defender_toggle)
     program_settings_card.addSettingCard(windows_feature_toggles.max_block_toggle)
+    # Повтор тура — в «Настройках программы», а не среди прочего внизу:
+    # эта группа остаётся и в простом виде, где тур нужнее всего.
+    tour_card = None
+    if on_open_onboarding_tour is not None:
+        with timer.step("onboarding_tour_card"):
+            tour_card = build_onboarding_tour_card_common(
+                push_setting_card_cls=push_setting_card_cls,
+                tr_fn=tr_fn,
+                on_click=on_open_onboarding_tour,
+                parent=content_parent,
+            )
+        program_settings_card.addSettingCard(tour_card)
+    bypass_tour_card = None
+    if on_open_bypass_tour is not None:
+        with timer.step("bypass_tour_card"):
+            bypass_tour_card = build_bypass_tour_card_common(
+                push_setting_card_cls=push_setting_card_cls,
+                tr_fn=tr_fn,
+                on_click=on_open_bypass_tour,
+                parent=content_parent,
+            )
+        program_settings_card.addSettingCard(bypass_tour_card)
 
     with timer.step("program_settings_card_auto_height"):
         enable_setting_card_group_auto_height(program_settings_card)
 
-    # Первое место, где просят шрифт mdi вместо fa5s. Если блокирует
-    # именно загрузка второго набора иконок — увидим это здесь.
-    with timer.step("discord_restart_toggle (mdi)"):
+    with timer.step("discord_restart_toggle"):
         discord_restart_toggle = (
             win11_toggle_row_cls(
-                "mdi.discord",
+                "fa5b.discord",
                 "Перезапуск Discord",
                 "Автоперезапуск при смене стратегии",
                 "#7289da",
@@ -170,10 +196,10 @@ def build_winws2_pages_settings_sections(
     if wssize_toggle:
         wssize_toggle.toggled.connect(on_wssize_toggled)
 
-    with timer.step("debug_log_toggle (mdi)"):
+    with timer.step("debug_log_toggle"):
         debug_log_toggle = (
             win11_toggle_row_cls(
-                "mdi.file-document-outline",
+                "fa5s.file-alt",
                 "Включить лог-файл (--debug)",
                 "Записывает логи winws в папку logs",
             )
@@ -285,4 +311,6 @@ def build_winws2_pages_settings_sections(
         internet_cleanup_card=internet_cleanup_card,
         folder_card=folder_card,
         state_media_block_toggle=state_media_block_toggle,
+        tour_card=tour_card,
+        bypass_tour_card=bypass_tour_card,
     )

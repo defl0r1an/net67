@@ -91,21 +91,28 @@ class OneClickDepsSignatureTests(unittest.TestCase):
 
     @unittest.skipUnless(
         sys.platform == "win32",
-        "dns.dns_core использует ctypes.windll и импортируется только на Windows",
+        "dns.winapi использует ctypes.windll и импортируется только на Windows",
     )
-    def test_dns_manager_supports_used_calls(self) -> None:
-        from dns.dns_force import DNSForceManager
+    def test_dns_runtime_supports_used_calls(self) -> None:
+        """«Одна кнопка» ходит в новый dns.runtime: dns.dns_force удалён вместе с
+        переходом DNS на чистый WinAPI, и старый импорт падал бы молча в шаге DNS."""
+        from dns.adapters import DnsAdapter
+        from dns.runtime import apply_dns, load_state, reset_to_auto
 
-        self.assertTrue(_accepts(DNSForceManager.get_network_adapters, "include_disconnected"))
-        self.assertTrue(_accepts(DNSForceManager.disable_force_dns, "reset_to_auto", "adapters"))
-        self.assertTrue(hasattr(DNSForceManager, "set_dns_for_adapter"))
+        self.assertTrue(_accepts(apply_dns, "guids", "ipv4", "ipv6"))
+        self.assertTrue(_accepts(reset_to_auto, "guids"))
+        self.assertTrue(callable(load_state))
+        for field in ("guid", "name", "connected"):
+            self.assertIn(field, DnsAdapter.__dataclass_fields__)
 
-    def test_probe_and_integrity_helpers_exist(self) -> None:
-        from blockcheck.dns_integrity import check_dns_integrity
-        from blockcheck.tcp_test import probe_tcp_target_health
+    def test_integrity_helper_exists(self) -> None:
+        # probe_tcp_target_health отсюда убран: «одна кнопка» его давно не
+        # зовёт, а в исходном проекте он удалён вместе с httpx.
+        # blockcheck.dns_integrity апстрим удалил; «одна кнопка» ходит в
+        # проверку DNS из diagnostics.engine.
+        from diagnostics.engine import run_dns_check as check_dns_integrity
 
         self.assertTrue(callable(check_dns_integrity))
-        self.assertTrue(_accepts(probe_tcp_target_health, "timeout"))
 
 
 class OneClickDepsIsolationTests(unittest.TestCase):

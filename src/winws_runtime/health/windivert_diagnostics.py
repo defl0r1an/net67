@@ -29,6 +29,9 @@ _ERROR_NOT_ENOUGH_MEMORY = 8
 _ERROR_GEN_FAILURE = 31
 _ERROR_INVALID_PARAMETER = 87
 _ERROR_BAD_PATHNAME = 161
+# ERROR_NO_SUCH_DEVICE: сетевой стек/WFP ещё переинициализируется — типично
+# сразу после переключения сети или выхода из сна.
+_ERROR_NO_SUCH_DEVICE = 433
 _ERROR_INVALID_IMAGE_HASH = 577
 _ERROR_DRIVER_FAILED_PRIOR_UNLOAD = 654
 _ERROR_SERVICE_DISABLED = 1058
@@ -39,6 +42,11 @@ _ERROR_SERVICE_MARKED_FOR_DELETE = 1072
 _ERROR_DRIVER_BLOCKED = 1275
 # EPT_S_NOT_REGISTERED: плавающая гонка SCM сразу после stop/cleanup.
 _ERROR_EPT_S_NOT_REGISTERED = 1753
+# FWP_E_IN_USE — HRESULT платформы фильтрации Windows: "The object is referenced
+# by other objects so cannot be deleted". WinDivert не может снять свои фильтры
+# и callout'ы, пока на них ссылается другой экземпляр драйвера. Практически это
+# означает "остатки прошлого запуска или чужая программа держат WinDivert".
+_FWP_E_IN_USE = 0x80320010
 
 # Имена служб драйвера WinDivert/Monkey (используются диагностикой и auto-fix).
 _WINDIVERT_DRIVER_SERVICE_NAMES = ("WinDivert", "windivert", "WinDivert14", "WinDivert64", "Monkey")
@@ -98,6 +106,19 @@ WINDIVERT_ERROR_TABLE: dict[int, WinDivertErrorRecord] = {
             solution="Переустановите программу или проверьте антивирус",
         ),
         WinDivertErrorRecord(
+            code=_ERROR_NO_SUCH_DEVICE,
+            short_hint_ru=(
+                "сетевое устройство временно недоступно — обычно сразу после "
+                "смены сети или выхода из сна"
+            ),
+            cause="Сетевое устройство для WinDivert временно недоступно",
+            solution=(
+                "Подождите несколько секунд после смены сети и повторите запуск. "
+                "Если не помогает — перезагрузите компьютер"
+            ),
+            transient=True,
+        ),
+        WinDivertErrorRecord(
             code=_ERROR_INVALID_IMAGE_HASH,
             short_hint_ru=(
                 "Windows отклонила подпись драйвера WinDivert "
@@ -155,6 +176,18 @@ WINDIVERT_ERROR_TABLE: dict[int, WinDivertErrorRecord] = {
             solution="Проверьте настройки Device Guard / WDAC или отключите Secure Boot",
         ),
         WinDivertErrorRecord(
+            code=_FWP_E_IN_USE,
+            short_hint_ru=(
+                "объекты WinDivert от предыдущего запуска ещё заняты в системе"
+            ),
+            cause="Объекты WinDivert от предыдущего запуска ещё используются системой",
+            solution=(
+                "Закройте другие программы обхода блокировок (GoodbyeDPI, другой Zapret, "
+                "VPN на базе WinDivert) и повторите запуск. Если не помогает — перезагрузите компьютер"
+            ),
+            transient=True,
+        ),
+        WinDivertErrorRecord(
             code=_ERROR_EPT_S_NOT_REGISTERED,
             # Пустая подсказка: для 1753 сохраняем прежний общий readiness-текст.
             short_hint_ru="",
@@ -165,10 +198,23 @@ WINDIVERT_ERROR_TABLE: dict[int, WinDivertErrorRecord] = {
     )
 }
 
-# Transient-набор pre-spawn readiness recovery: {5, 1058, 1060, 1753, 1072}.
+# Transient-набор pre-spawn readiness recovery: {5, 433, 1058, 1060, 1753, 1072}.
 TRANSIENT_WINDIVERT_READINESS_CODES = frozenset(
     record.code for record in WINDIVERT_ERROR_TABLE.values() if record.transient
 )
+
+
+def format_windows_error_code(code: int) -> str:
+    """Код Windows в виде, пригодном для показа пользователю.
+
+    Обычные Win32-коды остаются десятичными, а HRESULT/NTSTATUS (FWP_E_*,
+    STATUS_*) дополняются шестнадцатеричной записью: в таком виде их узнают и
+    ищут в документации, тогда как голое ``2151092240`` не говорит ничего.
+    """
+    value = int(code)
+    if value < 0 or value > 0xFFFF:
+        return f"{value} / 0x{value & 0xFFFFFFFF:08X}"
+    return str(value)
 
 
 def describe_windivert_error(code: int, stage: str = "exit", *, probe_stage: str = "") -> str:
@@ -185,17 +231,18 @@ def describe_windivert_error(code: int, stage: str = "exit", *, probe_stage: str
     """
     error_code = int(code)
     record = WINDIVERT_ERROR_TABLE.get(error_code)
+    code_text = format_windows_error_code(error_code)
 
     if stage == "readiness":
         if record is not None and record.short_hint_ru:
-            return f"WinDivert не готов: {record.short_hint_ru} (код {error_code})"
+            return f"WinDivert не готов: {record.short_hint_ru} (код {code_text})"
         stage_text = str(probe_stage or "")
         stage_suffix = f", стадия {stage_text}" if stage_text else ""
-        return f"WinDivert ещё не готов к открытию фильтра (код {error_code}{stage_suffix})"
+        return f"WinDivert ещё не готов к открытию фильтра (код {code_text}{stage_suffix})"
 
     if record is not None:
-        return f"{record.cause} (код {error_code}). {record.solution}"
-    return f"Ошибка WinDivert (код {error_code})"
+        return f"{record.cause} (код {code_text}). {record.solution}"
+    return f"Ошибка WinDivert (код {code_text})"
 
 
 # ---------------------------------------------------------------------------

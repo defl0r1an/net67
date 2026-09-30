@@ -167,15 +167,22 @@ class WizardWiringTests(unittest.TestCase):
 
     def test_provider_applied_before_the_rest(self) -> None:
         """Пресет должен встать раньше, чем соберут запрос на включение."""
-        import inspect
+        from unittest.mock import patch
 
-        from wizard.ui.dialog import WizardDialog
+        from ui.onboarding import setup_choices
 
-        source = inspect.getsource(WizardDialog._finish)
-        provider_at = source.index("apply_provider_choice")
-        wizard_at = source.index("apply_wizard(")
+        calls = []
+        answers = setup_choices.SetupAnswers(provider="rostelecom", hosts_groups=set())
+        result = type("R", (), {"saved": True, "message": "", "warnings": ()})()
+        with (
+            patch("provider.apply.apply_provider_choice", side_effect=lambda key: calls.append("provider") or (True, "")),
+            patch("wizard.apply.apply_wizard", side_effect=lambda **_k: calls.append("wizard") or result),
+            patch("settings.store.set_onboarding_tour_done"),
+            patch("main.post_startup_wizard.resync_open_pages"),
+        ):
+            self.assertTrue(setup_choices.apply_setup_answers(None, answers))
 
-        self.assertLess(provider_at, wizard_at)
+        self.assertEqual(calls, ["provider", "wizard"])
 
 
 if __name__ == "__main__":

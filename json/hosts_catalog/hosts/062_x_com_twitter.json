@@ -1,5 +1,9 @@
 {
   "name": "x.com / Twitter",
+  "category": "direct",
+  "icon": "fa5b.twitter",
+  "icon_color": "#1da1f2",
+  "sort_order": 26,
   "hosts": [
     {
       "ip": "151.101.130.146",

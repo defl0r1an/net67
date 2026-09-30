@@ -128,6 +128,17 @@ PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
         breadcrumb_parent=None,
         sidebar_group="system",
     ),
+    PageName.HOSTS_FILE: PageRouteSpec(
+        page_name=PageName.HOSTS_FILE,
+        module_name="hosts.ui.file_page",
+        class_name="HostsFilePage",
+        route_key="HostsFilePage",
+        is_top_level=False,
+        is_hidden=True,
+        launch_modes=_COMMON,
+        breadcrumb_parent=PageName.HOSTS,
+        sidebar_group=None,
+    ),
     PageName.BLOCKCHECK: PageRouteSpec(
         page_name=PageName.BLOCKCHECK,
         module_name="blockcheck.ui.page",
@@ -222,6 +233,20 @@ PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
         breadcrumb_parent=None,
         sidebar_group="appearance",
     ),
+    # Редкие настройки прокси (внешний прокси, Cloudflare, DC→IP, пул и
+    # буфер) вынесены сюда из основной страницы, чтобы она помещалась на
+    # экран. Открывается кнопкой «Продвинутые настройки → Открыть».
+    PageName.TELEGRAM_PROXY_ADVANCED: PageRouteSpec(
+        page_name=PageName.TELEGRAM_PROXY_ADVANCED,
+        module_name="telegram_proxy.ui.advanced_page",
+        class_name="TelegramProxyAdvancedPage",
+        route_key="TelegramProxyAdvancedPage",
+        is_top_level=False,
+        is_hidden=True,
+        launch_modes=_COMMON,
+        breadcrumb_parent=PageName.TELEGRAM_PROXY,
+        sidebar_group=None,
+    ),
     PageName.VPN: PageRouteSpec(
         page_name=PageName.VPN,
         module_name="vpn.ui.page",
@@ -247,8 +272,11 @@ PAGE_CLEANUP_ORDER: tuple[PageName, ...] = (
     PageName.ABOUT,
     PageName.BLOCKCHECK,
     PageName.WINWS_LOG_ANALYZER,
+    PageName.HOSTS_FILE,
     PageName.HOSTS,
     PageName.NETWORK,
+
+    PageName.TELEGRAM_PROXY_ADVANCED,
     PageName.TELEGRAM_PROXY,
     PageName.VPN,
     PageName.CONFIGS,

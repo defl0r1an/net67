@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 import time as _time
 
 from PyQt6.QtCore import QTimer
@@ -20,24 +21,72 @@ from main.shell import shell_bootstrap
 
 QT_SCROLL_STYLE_AFTER_INTERACTIVE_MS = 2_000
 
+# Остальные тяжёлые модули греются после готовности окна:
+# main/post_startup_import_warmup.py.
+IMPORT_WARMUP_MODULES = ("qtawesome",)
+QT_AWESOME_WARMUP_TIMEOUT_SECONDS = 10.0
+_qtawesome_warmup_finished = threading.Event()
+_qtawesome_warmup_error: Exception | None = None
+
+
+def warm_up_modules(names) -> tuple[str, ...]:
+    """Импортирует модули по одному, не прерываясь на неудачном.
+
+    Возвращает те, что удалось прогреть.
+    """
+    global _qtawesome_warmup_error
+    warmed: list[str] = []
+    for name in names:
+        try:
+            module = __import__(name)
+            if name == "qtawesome":
+                from main.qtawesome_font_policy import configure_qtawesome_module
+
+                configure_qtawesome_module(module)
+        except Exception as exc:
+            if name == "qtawesome":
+                _qtawesome_warmup_error = exc
+            continue
+        warmed.append(name)
+    return tuple(warmed)
+
+
+def _run_import_warmup() -> None:
+    try:
+        warm_up_modules(IMPORT_WARMUP_MODULES)
+    finally:
+        _qtawesome_warmup_finished.set()
+
 
 def start_qtawesome_warmup() -> None:
-    """Греет импорт qtawesome (~120-190 мс) в фоне после Qt bootstrap.
+    """Греет тяжёлые импорты в фоне после Qt bootstrap.
 
     Стартует после application_bootstrap(): к этому моменту тяжёлые импорты
     главного потока позади, дальше идёт конструктор окна (C++-код Qt, GIL
     свободен), и фоновый импорт успевает прогреться до сборки первой
     страницы, где qtawesome нужен.
     """
-    import threading
+    global _qtawesome_warmup_error
+    _qtawesome_warmup_error = None
+    _qtawesome_warmup_finished.clear()
 
-    def _warm() -> None:
-        try:
-            import qtawesome  # noqa: F401
-        except Exception:
-            pass
+    threading.Thread(
+        target=_run_import_warmup,
+        daemon=True,
+        name="import-warmup",
+    ).start()
 
-    threading.Thread(target=_warm, daemon=True, name="qtawesome-warmup").start()
+
+def wait_for_qtawesome_warmup(
+    timeout: float = QT_AWESOME_WARMUP_TIMEOUT_SECONDS,
+) -> None:
+    """Не даёт окну запросить иконки до применения компактной политики."""
+    if not _qtawesome_warmup_finished.wait(timeout=max(0.0, float(timeout))):
+        raise RuntimeError("Фоновая подготовка qtawesome не завершилась вовремя")
+    if _qtawesome_warmup_error is not None:
+        raise RuntimeError("Не удалось применить политику шрифтов qtawesome") from (
+            _qtawesome_warmup_error
+        )
 
 
 def _build_application_post_startup_deps(**kwargs):
@@ -57,10 +106,11 @@ def _install_qt_scroll_style(app) -> None:
         from main.qt_runtime import _install_non_transient_scrollbars_style
 
         t_style = _time.perf_counter()
-        _install_non_transient_scrollbars_style(app)
+        replaced = _install_non_transient_scrollbars_style(app)
         emit_startup_metric(
             "StartupQtScrollStyle",
-            f"{(_time.perf_counter() - t_style) * 1000:.0f}ms",
+            f"{(_time.perf_counter() - t_style) * 1000:.0f}ms"
+            f" | {'style replaced' if replaced else 'skipped: scrollbars already permanent'}",
         )
     except Exception:
         pass
@@ -263,6 +313,12 @@ def main() -> None:
         "StartupApplicationControllerImport",
         f"{(_time.perf_counter() - t_controller_import) * 1000:.0f}ms",
     )
+    t_qtawesome = _time.perf_counter()
+    wait_for_qtawesome_warmup()
+    emit_startup_metric(
+        "StartupQtAwesomePolicyReady",
+        f"{(_time.perf_counter() - t_qtawesome) * 1000:.0f}ms",
+    )
     t_window_import = _time.perf_counter()
     from main.window import LupiDPIApp
     emit_startup_metric(
@@ -289,4 +345,9 @@ def main() -> None:
             start_in_tray=bool(start_in_tray),
         ),
     )
+    # Наблюдатель за отзывчивостью интерфейса живёт ровно столько, сколько
+    # крутится event loop: блокировки GUI-потока попадают в лог со стеком.
+    from ui.ui_freeze_watchdog import install_ui_freeze_watchdog
+
+    install_ui_freeze_watchdog()
     sys.exit(app.exec())

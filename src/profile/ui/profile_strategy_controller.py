@@ -14,11 +14,7 @@ request_id живут на странице — поведенческие те�
 from __future__ import annotations
 
 from profile.strategy_state import ProfileStrategyState
-from profile.ui.profile_strategy_list_widget import (
-    _current_strategy_branch_id,
-    _current_strategy_id,
-    _payload_with_strategy_branch,
-)
+from profile.ui.profile_strategy_list_widget import _current_strategy_id
 from ui.latest_value_worker_state import LatestValueWorkerState
 
 
@@ -34,54 +30,120 @@ def _page_module():
     return profile_setup_page
 
 
+_CONFIRMED_APPLY_STATUSES = frozenset({"applied", "already_applied"})
+
+
+def _apply_result_confirms_write(apply_result) -> bool:
+    """Подтвердил ли сервис, что выбранная стратегия лежит в файле пресета.
+
+    Отсутствие результата — не подтверждение: без него страница держала бы
+    оптимистичное состояние, не проверенное ни одним чтением пресета.
+    """
+    if apply_result is None:
+        return False
+    return str(getattr(apply_result, "status", "") or "").strip() in _CONFIRMED_APPLY_STATUSES
+
+
 class ProfileStrategyController:
     """Stateless-оркестратор apply/feedback стратегий со ссылкой на страницу."""
 
     def __init__(self, page) -> None:
         self._page = page
 
+    def _current_profile_reference(self) -> str:
+        page = self._page
+        return page._profile_result_reference(page.__dict__.get("_payload"), page._profile_key)
+
+    def _effective_strategy_id(self) -> str:
+        """Стратегия, которая окажется в пресете после всех записей открытого
+        профиля: ожидающая, иначе записываемая сейчас, иначе из payload.
+
+        Сравнение щелчка только с payload теряло щелчки: при записи B щелчок
+        по A (ещё в payload) молча отбрасывался."""
+        page = self._page
+        current = self._current_profile_reference()
+        pending = str(page._strategy_apply_state_obj().pending or "").strip()
+        pending_key = str(page.__dict__.get("_strategy_apply_pending_profile_key") or "").strip()
+        if pending and pending_key in {"", current}:
+            return pending
+        running = str(page.__dict__.get("_strategy_apply_runtime_strategy_id") or "").strip()
+        running_key = str(page.__dict__.get("_strategy_apply_runtime_profile_key") or "").strip()
+        if running and running_key in {"", current}:
+            return running
+        return _current_strategy_id(page.__dict__.get("_payload"))
+
+    def _drop_pending_strategy_apply(self, profile_key: str) -> None:
+        """Отменить ожидающее применение стратегии этого профиля."""
+        page = self._page
+        state = page._strategy_apply_state_obj()
+        pending_key = str(page.__dict__.get("_strategy_apply_pending_profile_key") or "").strip()
+        if pending_key in {"", profile_key}:
+            state.pending = None
+            page.__dict__.pop("_strategy_apply_pending_profile_key", None)
+        write_state = page._profile_setup_write_state_obj()
+        write_state.pending[:] = [
+            operation
+            for operation in write_state.pending
+            if not (
+                str(operation.get("kind") or "") == "strategy_apply"
+                and str(operation.get("profile_key") or "").strip() in {"", profile_key}
+            )
+        ]
+        scheduled = page.__dict__.get("_scheduled_profile_setup_write_operation")
+        if (
+            isinstance(scheduled, dict)
+            and str(scheduled.get("kind") or "") == "strategy_apply"
+            and str(scheduled.get("profile_key") or "").strip() in {"", profile_key}
+        ):
+            page._scheduled_profile_setup_write_operation = None
+
     def _request_strategy_apply(self, strategy_id: str) -> None:
         page = self._page
         strategy_id = str(strategy_id or "").strip()
-        branch_id = _current_strategy_branch_id(page._payload)
+        # Ключ фиксируется при щелчке: к выполнению отложенного применения
+        # страница может показывать уже другой профиль.
+        profile_key = self._current_profile_reference()
         if page._profile_setup_write_is_running():
-            if (
-                strategy_id != str(getattr(page, "_strategy_apply_runtime_strategy_id", "") or "").strip()
-                or branch_id != str(getattr(page, "_strategy_apply_runtime_branch_id", "") or "").strip()
-            ):
-                page._strategy_apply_state_obj().pending = (strategy_id, branch_id) if branch_id else strategy_id
-                page._queue_profile_setup_write_operation(
-                    {
-                        "kind": "strategy_apply",
-                        "strategy_id": strategy_id,
-                        "branch_id": branch_id,
-                    }
-                )
+            running_strategy_id = str(getattr(page, "_strategy_apply_runtime_strategy_id", "") or "").strip()
+            running_profile_key = str(page.__dict__.get("_strategy_apply_runtime_profile_key") or "").strip()
+            if strategy_id == running_strategy_id and running_profile_key in {"", profile_key}:
+                # Вернулись к стратегии, которая пишется прямо сейчас: она и
+                # должна остаться, ожидающая после неё — отменяется.
+                self._drop_pending_strategy_apply(profile_key)
+                return
+            page._strategy_apply_state_obj().pending = strategy_id
+            page._strategy_apply_pending_profile_key = profile_key
+            page._queue_profile_setup_write_operation(
+                {
+                    "kind": "strategy_apply",
+                    "strategy_id": strategy_id,
+                    "profile_key": profile_key,
+                }
+            )
             return
-        page._start_strategy_apply_worker(strategy_id, strategy_branch_id=branch_id)
+        page._start_strategy_apply_worker(strategy_id)
 
-    def _start_strategy_apply_worker(self, strategy_id: str, *, strategy_branch_id: str = "") -> None:
+    def _start_strategy_apply_worker(self, strategy_id: str, profile_key: str = "") -> None:
         page = self._page
         strategy_id = str(strategy_id or "").strip()
-        strategy_branch_id = str(strategy_branch_id or "").strip()
         if not strategy_id or not page._profile_key:
             return
         runtime = page._worker_runtime("_strategy_apply_runtime")
         page._strategy_apply_request_id = int(getattr(page, "_strategy_apply_request_id", 0) or 0) + 1
         request_id = page._strategy_apply_request_id
         page._strategy_apply_runtime_strategy_id = strategy_id
-        page._strategy_apply_runtime_branch_id = strategy_branch_id
-        worker_kwargs = {
-            "profile_key": page._profile_key,
-            "strategy_id": strategy_id,
-            "parent": page,
-        }
-        if strategy_branch_id:
-            worker_kwargs["strategy_branch_id"] = strategy_branch_id
+        # Стабильная ссылка вместо возможного "profile:N": позиционный ключ,
+        # захваченный при открытии страницы, после сдвига соседей резолвится
+        # в чужой профиль — и стратегия уходит не туда. Для отложенного
+        # применения ключ приходит из операции (зафиксирован при щелчке).
+        profile_key = str(profile_key or "").strip() or self._current_profile_reference()
+        page._strategy_apply_runtime_profile_key = profile_key
         runtime.start_qthread_worker(
             worker_factory=lambda _runtime_request_id: page.create_profile_strategy_apply_worker(
                 request_id,
-                **worker_kwargs,
+                profile_key=profile_key,
+                strategy_id=strategy_id,
+                parent=page,
             ),
             on_loaded=page._on_strategy_apply_finished,
             on_failed=page._on_strategy_apply_failed,
@@ -105,15 +167,30 @@ class ProfileStrategyController:
         # Страница могла принять persistent-ссылку уже после старта запроса —
         # позиционный ключ того же профиля не повод выбрасывать результат.
         item_key = str(getattr(getattr(page.__dict__.get("_payload"), "item", None), "key", "") or "").strip()
-        if requested not in {current, item_key}:
+        if requested not in {current, item_key, self._current_profile_reference()}:
+            # Стратегия записана в профиль, открытый при щелчке, а страница уже
+            # показывает другой: её не трогаем, но список профилей узнаёт о
+            # записи (он пропускает ревизии strategy_only и ждёт этот сигнал).
+            result_item = getattr(
+                _page_module()._profile_setup_payload_and_apply_signature(payload)[0] if payload is not None else None,
+                "item",
+                None,
+            )
+            written_key = str(profile_key or requested).strip()
+            if written_key:
+                if result_item is not None:
+                    page._on_profile_changed_callback(written_key, "strategy", result_item)
+                else:
+                    page._on_profile_changed_callback(written_key, "strategy")
             return
-        pending = page._strategy_apply_state_obj().pending
-        pending_strategy_id = ""
-        if isinstance(pending, tuple):
-            pending_strategy_id = str(pending[0] or "").strip()
-        else:
-            pending_strategy_id = str(pending or "").strip()
-        if pending_strategy_id and pending_strategy_id != str(strategy_id or "").strip():
+        pending_strategy_id = str(page._strategy_apply_state_obj().pending or "").strip()
+        pending_profile_key = str(page.__dict__.get("_strategy_apply_pending_profile_key") or "").strip()
+        # Ожидающая стратегия ДРУГОГО профиля не делает этот результат устаревшим.
+        if (
+            pending_strategy_id
+            and pending_profile_key in {"", current, item_key, self._current_profile_reference()}
+            and pending_strategy_id != str(strategy_id or "").strip()
+        ):
             return
         apply_result = _page_module()._profile_setup_apply_result_from_worker_result(payload)
         result_payload, apply_signature = (
@@ -125,12 +202,10 @@ class ProfileStrategyController:
         new_key = page._profile_result_reference(result_payload, profile_key)
         if new_key:
             page._profile_key = new_key
+        self._report_strategy_write_rejected(apply_result)
+        self._report_strategy_blob_warnings(apply_result)
         if apply_result is not None and bool(getattr(apply_result, "should_reload", False)):
             if result_payload is not None:
-                branch_id = str(getattr(page, "_strategy_apply_runtime_branch_id", "") or "").strip()
-                if branch_id:
-                    result_payload = _payload_with_strategy_branch(result_payload, branch_id)
-                    apply_signature = None
                 page._payload = result_payload
                 page._schedule_profile_setup_payload_apply(result_payload, apply_signature=apply_signature)
                 page._on_profile_changed_callback(
@@ -142,15 +217,17 @@ class ProfileStrategyController:
             page.reload_current_profile()
             page._on_profile_changed_callback(page._profile_key, "strategy")
             return
+        if not _apply_result_confirms_write(apply_result):
+            # Сервис не подтвердил, что стратегия действительно легла в файл:
+            # отметка выбора недостоверна, факт берём из пресета.
+            page.reload_current_profile()
+            page._on_profile_changed_callback(page._profile_key, "strategy")
+            return
         item = getattr(getattr(page, "_payload", None), "item", None)
         if page._profile_key == previous_key and strategy_id == _current_strategy_id(page._payload):
             page._on_profile_changed_callback(page._profile_key, "strategy", item)
             return
         if result_payload is not None:
-            branch_id = str(getattr(page, "_strategy_apply_runtime_branch_id", "") or "").strip()
-            if branch_id:
-                result_payload = _payload_with_strategy_branch(result_payload, branch_id)
-                apply_signature = None
             page._payload = result_payload
             page._schedule_profile_setup_payload_apply(result_payload, apply_signature=apply_signature)
             page._on_profile_changed_callback(
@@ -159,13 +236,42 @@ class ProfileStrategyController:
                 getattr(result_payload, "item", None),
             )
             return
-        applied_locally = page._apply_strategy_locally(strategy_id)
-        if not applied_locally or page._profile_key != previous_key:
-            page.reload_current_profile()
-            page._on_profile_changed_callback(page._profile_key, "strategy")
+        # Запись подтверждена, но payload не приехал: состояние всё равно
+        # берём из пресета, а не достраиваем на странице.
+        page.reload_current_profile()
+        page._on_profile_changed_callback(page._profile_key, "strategy")
+
+    def _report_strategy_write_rejected(self, apply_result) -> None:
+        """Сообщить пользователю, что выбор не записан в пресет.
+
+        Молчаливый отказ — худший исход: пользователь уверен, что стратегия
+        применена, а в бой уходит прежняя.
+        """
+        page = self._page
+        status = str(getattr(apply_result, "status", "") or "").strip()
+        if status not in {"write_failed", "not_applicable"}:
             return
-        item = getattr(getattr(page, "_payload", None), "item", None)
-        page._on_profile_changed_callback(page._profile_key, "strategy", item)
+        message = str(getattr(apply_result, "message", "") or "").strip()
+        _page_module().log(
+            f"{page.__class__.__name__}: стратегия не записана в пресет: {status} {message}".strip(),
+            "ERROR",
+        )
+        _page_module().InfoBar.warning(
+            title="Стратегия не применена",
+            content="Выбор не записан в пресет — показано состояние из файла.",
+            parent=page.window(),
+        )
+
+    def _report_strategy_blob_warnings(self, apply_result) -> None:
+        """Стратегия записана, но часть её фейков (--blob=) не объявлена в пресете."""
+        warnings = tuple(getattr(apply_result, "blob_warnings", ()) or ())
+        if not warnings:
+            return
+        _page_module().InfoBar.warning(
+            title="Фейки стратегии не объявлены",
+            content="\n".join(warnings),
+            parent=self._page.window(),
+        )
 
     def _on_strategy_apply_failed(self, request_id: int, error: str) -> None:
         page = self._page
@@ -185,28 +291,20 @@ class ProfileStrategyController:
         if not accepted:
             return
         page._strategy_apply_runtime_strategy_id = ""
-        page._strategy_apply_runtime_branch_id = ""
+        page._strategy_apply_runtime_profile_key = ""
         if scheduled:
             return
         pending = page._strategy_apply_state_obj().pending
         page._strategy_apply_state_obj().pending = None
+        pending_profile_key = str(page.__dict__.pop("_strategy_apply_pending_profile_key", "") or "").strip()
         if pending:
-            if isinstance(pending, tuple):
-                page._schedule_profile_setup_write_operation_start(
-                    {
-                        "kind": "strategy_apply",
-                        "strategy_id": str(pending[0] or ""),
-                        "branch_id": str(pending[1] or ""),
-                    }
-                )
-            else:
-                page._schedule_profile_setup_write_operation_start(
-                    {
-                        "kind": "strategy_apply",
-                        "strategy_id": str(pending or ""),
-                        "branch_id": "",
-                    }
-                )
+            operation = {
+                "kind": "strategy_apply",
+                "strategy_id": str(pending or ""),
+            }
+            if pending_profile_key:
+                operation["profile_key"] = pending_profile_key
+            page._schedule_profile_setup_write_operation_start(operation)
 
     def _strategy_apply_state_obj(self) -> LatestValueWorkerState:
         page = self._page

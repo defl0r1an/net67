@@ -51,7 +51,7 @@ class LaunchConflictingProcessesTests(unittest.TestCase):
         self.assertIsNotNone(diagnosis)
         assert diagnosis is not None
         self.assertIn("Process Hacker", diagnosis.cause)
-        self.assertIn("помешал запуску Zapret", diagnosis.cause)
+        self.assertIn("помешал запуску net67", diagnosis.cause)
         self.assertIn("Закройте Process Hacker", diagnosis.solution)
 
 

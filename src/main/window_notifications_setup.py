@@ -43,6 +43,9 @@ def attach_window_notifications(window, features) -> None:
         is_window_minimized=window.isMinimized,
     )
     window.window_notification_center.register_global_error_notifier()
+    bell = getattr(window, "notificationBell", None)
+    if bell is not None:
+        window.window_notification_center.attach_bell(bell)
     features.runtime.configure_notifications(
         notify=window.window_notification_center.notify,
     )

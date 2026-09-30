@@ -1,5 +1,5 @@
 # Preset: Universal V5
-# BuiltinVersion: 2.39
+# BuiltinVersion: 2.42
 # IconColor: #a371f7
 # Description: Основной пресет. Десинк применяется точечно и только к реально заблокированным сервисам; работающие сайты, RU-трафик и личный прокси проходят нетронутыми. Покрытие: YouTube, Discord, Telegram, соцсети, Google, AI, LinkedIn, торренты, Twitch, EpicGames/Fortnite, Amazon.
 
@@ -83,6 +83,14 @@
 --blob=hex_0f0f0f0f:0x0F0F0F0F
 --blob=hex_00:0x00
 
+--name=git.zapret.moe
+--filter-tcp=443
+--hostlist=lists/git-zapret-moe.txt
+--out-range=-d8
+--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
+
+--new
+
 --name=googlevideo.com (CDN сервера)
 --filter-tcp=80,443
 --hostlist=lists/googlevideo.txt
@@ -118,7 +126,24 @@
 
 --new
 
---name=Исключения (RU сайты)
+--name=Бэкенд Google
+--filter-tcp=80,443
+--hostlist=lists/google-backend.txt
+--out-range=-d8
+--lua-desync=multidisorder:pos=1,host+2,sld+2,sld+5,sniext+1,sniext+2,endhost-2:seqovl=1
+
+--new
+
+--name=Исключения домены (RU сайты)
+--filter-tcp=80,443-65535
+--hostlist=lists/netrogat.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=pass
+
+--new
+
+--name=Исключения айпи (RU сайты)
 --filter-tcp=80,443-65535
 --ipset=lists/ipset-ru.txt
 --ipset=lists/ipset-dns.txt
@@ -275,7 +300,7 @@
 
 --new
 
---name=chatgpt
+--name=ChatGPT
 --filter-tcp=80-65535
 --hostlist=lists/chatgpt.txt
 --out-range=-d8

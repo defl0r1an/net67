@@ -100,6 +100,19 @@ def install_busy_watchdog(runtime_owner, *, parent=None) -> QTimer | None:
             state["strikes"] = 0
             return
 
+        # «Занято» на время проверки стратегий ставит сама проверка, и
+        # рабочих потоков запуска при этом нет по определению. Без этого
+        # исключения сторож через шесть секунд возвращал кнопку «Включить»
+        # посреди перебора.
+        try:
+            from winws_runtime.runtime.scan_guard import is_external_winws_scan_active
+
+            if is_external_winws_scan_active():
+                state["strikes"] = 0
+                return
+        except ImportError:
+            pass
+
         state["strikes"] += 1
         if state["strikes"] < CONFIRMATIONS_BEFORE_RESET:
             return

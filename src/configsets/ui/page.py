@@ -33,6 +33,9 @@ from configsets.storage import (
 )
 
 
+from configsets import CONFIGS_READY
+
+
 def _settings_root():
     from config.runtime_layout import APPLICATION_PATHS
 
@@ -51,6 +54,13 @@ class ConfigsPage(BasePage):
             subtitle_key="page.configs.subtitle",
         )
         self._items = []
+        if not CONFIGS_READY:
+            # Честная надпись дешевле, чем человек, решивший, что сохранил
+            # настройки, которых нет.
+            wip = StrongBodyLabel("Раздел в разработке и пока не работает.")
+            wip.setWordWrap(True)
+            self.add_widget(wip)
+            return
         self._build_ui()
         self._reload()
 

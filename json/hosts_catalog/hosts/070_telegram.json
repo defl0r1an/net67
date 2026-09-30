@@ -1,5 +1,9 @@
 {
   "name": "Telegram (работает только веб-версия)",
+  "category": "direct",
+  "icon": "fa5b.telegram-plane",
+  "icon_color": "#2aabee",
+  "sort_order": 20,
   "hosts": [
     {
       "ip": "149.154.167.220",

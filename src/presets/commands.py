@@ -9,6 +9,7 @@ import sys
 from presets.file_service import PresetFileService
 from presets.state import PresetSelectionState
 from settings.mode import engine_for_launch_method, normalize_launch_method
+from utils.atomic_text import read_preset_file_text
 
 # Флаг скрытия консольного окна. На Windows любой subprocess без него
 # на мгновение показывает чёрный прямоугольник — человек описал это как
@@ -211,7 +212,7 @@ def read_raw_preset_text(path: str | Path | None) -> tuple[str, bool]:
     source_path = Path(path)
     if not source_path.exists():
         return "", False
-    return source_path.read_text(encoding="utf-8", errors="replace"), True
+    return read_preset_file_text(source_path), True
 
 
 def save_preset_source_by_file_name(
@@ -229,6 +230,13 @@ def save_preset_source_by_file_name(
         publish_content_changed=publish_content_changed,
         content_change_kind=content_change_kind,
     )
+
+
+def migrate_user_presets_to_save_contract(launch_method: str, *, preset_services):
+    return _create_preset_file_service(
+        launch_method,
+        preset_services=preset_services,
+    ).migrate_user_presets_to_save_contract()
 
 
 def publish_preset_content_changed(

@@ -1,0 +1,89 @@
+{
+  "name": "Destiny 2 и Marathon (ошибка TAPIR)",
+  "category": "direct",
+  "icon": "fa5s.gamepad",
+  "icon_color": "#8a6bd1",
+  "sort_order": 104,
+  "hosts": [
+    {
+      "ip": "87.228.47.195",
+      "host": "www1.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www2.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www3.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www4.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www5.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www6.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www7.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www8.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www9.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www10.signon.goliath.prod.gravityshavings.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www1.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www2.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www3.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www4.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www5.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www6.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www7.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www8.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www9.signon.goliath.prod.deadorbit.net"
+    },
+    {
+      "ip": "87.228.47.195",
+      "host": "www10.signon.goliath.prod.deadorbit.net"
+    }
+  ]
+}

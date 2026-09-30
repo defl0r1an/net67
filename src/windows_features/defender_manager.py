@@ -27,7 +27,7 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 def set_defender_disabled(enabled: bool):
-    """Сохраняет пользовательскую память о состоянии Defender в settings.json."""
+    """Сохраняет пользовательскую память о состоянии Defender в settings.sqlite3."""
     try:
         from settings.store import set_defender_disabled_memory
 

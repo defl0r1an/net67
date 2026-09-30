@@ -118,17 +118,18 @@ class WiringTests(unittest.TestCase):
         self.assertIn("BuildStepTimer", source)
         self.assertIn("timer.finish()", source)
 
-    def test_the_mdi_icons_are_measured_separately(self) -> None:
-        """Первый запрос второго набора иконок — отдельный подозреваемый.
+    def test_page_does_not_load_the_second_icon_font(self) -> None:
+        """На странице нет значков mdi — второй шрифт не грузится вовсе.
 
-        Почти все значки страницы берутся из fa5s, и только два — из mdi.
-        Если время съедает загрузка второго шрифта, разделённые шаги
-        покажут это сразу.
+        Раньше два значка из mdi мерились отдельными шагами: подозревали,
+        что время съедает загрузка второго набора иконок. В исходном
+        проекте их заменили на fa5 — подозреваемый снят целиком.
         """
         source = SECTIONS_BUILD.read_text(encoding="utf-8")
 
-        self.assertIn('timer.step("discord_restart_toggle (mdi)")', source)
-        self.assertIn('timer.step("debug_log_toggle (mdi)")', source)
+        self.assertNotIn('"mdi.', source)
+        self.assertIn('timer.step("discord_restart_toggle")', source)
+        self.assertIn('timer.step("debug_log_toggle")', source)
 
     def test_every_widget_group_is_covered(self) -> None:
         source = SECTIONS_BUILD.read_text(encoding="utf-8")

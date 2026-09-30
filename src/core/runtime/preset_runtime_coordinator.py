@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -10,8 +12,12 @@ from log.log import log
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 
 
-PRESET_SWITCH_APPLY_DEBOUNCE_MS = 500
 PRESET_SWITCH_REFRESH_DEBOUNCE_MS = 180
+# Собственное сохранение может породить несколько fs-событий (atomic save —
+# temp+rename); подавляем их окном по времени, а не «одним событием».
+PRESET_OWN_SAVE_SUPPRESS_WINDOW_SEC = 1.5
+PRESET_WATCH_REARM_RETRY_MS = 150
+PRESET_WATCH_REARM_MAX_ATTEMPTS = 20
 
 
 @dataclass(frozen=True)
@@ -100,9 +106,7 @@ class PresetRuntimeCoordinator(QObject):
         self._active_preset_file_watcher: QFileSystemWatcher | None = None
         self._active_preset_file_refresh_timer: QTimer | None = None
         self._preset_switch_refresh_timer: QTimer | None = None
-        self._preset_switch_apply_timer: QTimer | None = None
         self._active_preset_file_path: str = ""
-        self._pending_preset_apply: PendingPresetApply | None = None
         self._pending_preset_content_apply: PendingPresetApply | None = None
         self._last_active_preset_key: tuple[str, str] | None = None
         self._active_preset_revision_publish_pending = False
@@ -110,6 +114,9 @@ class PresetRuntimeCoordinator(QObject):
         self._pending_active_preset_watch: PendingPresetWatch | None = None
         self._pending_refresh_after_switch_reason = ""
         self._pending_own_preset_content_file_name = ""
+        self._own_preset_content_suppress_deadline = 0.0
+        self._active_preset_watch_rearm_timer: QTimer | None = None
+        self._active_preset_watch_rearm_attempts = 0
         self._preset_content_apply_timer: QTimer | None = None
         self._active_preset_watch_runtime = OneShotWorkerRuntime()
         self._active_preset_watch_runtime_request_id = 0
@@ -135,7 +142,11 @@ class PresetRuntimeCoordinator(QObject):
             timer.timeout.connect(self._run_refresh_after_switch)
             self._active_preset_file_refresh_timer = timer
 
+        if watched_path != str(self.__dict__.get("_active_preset_file_path", "") or ""):
+            # Ожидание «файл вернётся» относилось к прежнему пресету.
+            self._active_preset_change_waits_for_file = False
         self._active_preset_file_path = watched_path
+        self._active_preset_watch_rearm_attempts = 0
 
         try:
             current = set(watcher.files() or [])
@@ -171,7 +182,10 @@ class PresetRuntimeCoordinator(QObject):
             launch_method=method,
             preset_file_name=selected_file_name,
         )
-        self._schedule_selected_source_preset_apply(
+        # Быстрые щелчки склеивает switch pipeline (restart_flow, debounce
+        # SELECTED_SOURCE_PRESET_APPLY_DEBOUNCE_MS): второй таймер здесь лишь
+        # добавлял полсекунды к каждому переключению.
+        self._request_selected_source_preset_apply(
             launch_method=method,
             reason="preset_switched",
             preset_file_name=selected_file_name,
@@ -247,45 +261,6 @@ class PresetRuntimeCoordinator(QObject):
         except Exception:
             return
 
-    def _schedule_selected_source_preset_apply(
-        self,
-        *,
-        launch_method: str,
-        reason: str,
-        preset_file_name: str,
-        delay_ms: int = PRESET_SWITCH_APPLY_DEBOUNCE_MS,
-    ) -> None:
-        """Применяет только последний выбранный preset после короткой паузы."""
-        method = normalize_launch_method(launch_method, default="")
-        apply_reason = str(reason or "preset_switched").strip() or "preset_switched"
-        selected_file_name = str(preset_file_name or "").strip()
-        self._pending_preset_apply = PendingPresetApply(
-            launch_method=method,
-            reason=apply_reason,
-            preset_file_name=selected_file_name,
-        )
-        try:
-            timer = self._preset_switch_apply_timer
-            if timer is None:
-                timer = QTimer(self)
-                timer.setSingleShot(True)
-                timer.timeout.connect(self._apply_pending_selected_source_preset)
-                self._preset_switch_apply_timer = timer
-            timer.start(max(0, int(delay_ms)))
-        except Exception:
-            self._apply_pending_selected_source_preset()
-
-    def _apply_pending_selected_source_preset(self) -> None:
-        pending = self._pending_preset_apply
-        self._pending_preset_apply = None
-        if pending is None:
-            return
-        self._request_selected_source_preset_apply(
-            launch_method=pending.launch_method,
-            reason=pending.reason,
-            preset_file_name=pending.preset_file_name,
-        )
-
     def _schedule_preset_content_apply(
         self,
         *,
@@ -297,6 +272,10 @@ class PresetRuntimeCoordinator(QObject):
         method = normalize_launch_method(launch_method, default="")
         selected_file_name = str(preset_file_name or "").strip()
         apply_reason = str(reason or "preset_content_changed").strip() or "preset_content_changed"
+        # Окно ставится до fs-события: watcher может доставить fileChanged от
+        # собственного сохранения раньше, чем отработает отложенный apply.
+        self._pending_own_preset_content_file_name = self._normalize_preset_file_name(selected_file_name)
+        self._own_preset_content_suppress_deadline = time.monotonic() + PRESET_OWN_SAVE_SUPPRESS_WINDOW_SEC
         self._pending_preset_content_apply = PendingPresetApply(
             launch_method=method,
             reason=apply_reason,
@@ -324,6 +303,7 @@ class PresetRuntimeCoordinator(QObject):
             preset_file_name=pending.preset_file_name,
         )
         self._pending_own_preset_content_file_name = self._normalize_preset_file_name(pending.preset_file_name)
+        self._own_preset_content_suppress_deadline = time.monotonic() + PRESET_OWN_SAVE_SUPPRESS_WINDOW_SEC
         self._publish_active_preset_content_changed(pending.preset_file_name, reason=pending.reason)
         self._request_refresh_after_switch(reason=pending.reason)
         self._request_preset_content_apply(
@@ -541,21 +521,31 @@ class PresetRuntimeCoordinator(QObject):
             refresh()
 
     def _on_active_preset_file_changed(self, path: str) -> None:
-        try:
-            watcher = self._active_preset_file_watcher
-            desired = self._active_preset_file_path
-            if watcher is not None:
-                rearm = desired or path
-                if rearm and rearm not in (watcher.files() or []):
-                    watcher.addPath(rearm)
-        except Exception:
-            pass
+        desired = str(self.__dict__.get("_active_preset_file_path", "") or "")
+        self._active_preset_watch_rearm_attempts = 0
+        self._ensure_active_preset_watch_armed()
 
         if self._consume_own_preset_file_change(path):
             return
 
+        if desired and not os.path.exists(desired):
+            # Файл удалён или переименован вне программы (или редактор
+            # сохраняет через «удалить и создать заново»). Применять нечего:
+            # пустой/чужой пресет не должен подменять работающий. Если файл
+            # вернётся, _ensure_active_preset_watch_armed доведёт правку.
+            self._active_preset_change_waits_for_file = True
+            log(
+                f"Активный пресет пропал с диска: {desired}. "
+                "DPI продолжает работать на прежних настройках",
+                "WARNING",
+            )
+            return
+
+        self._apply_external_active_preset_change(desired or path)
+
+    def _apply_external_active_preset_change(self, path: str) -> None:
         try:
-            self._publish_active_preset_content_changed(desired or path)
+            self._publish_active_preset_content_changed(path)
         except Exception:
             pass
 
@@ -572,16 +562,78 @@ class PresetRuntimeCoordinator(QObject):
             except Exception:
                 pass
 
+        self._request_external_preset_content_apply(path)
+
+    def _request_external_preset_content_apply(self, path: str) -> None:
+        """Внешняя правка выбранного пресета обязана дойти до runtime,
+        а не только до UI: watcher видит лишь активный source preset."""
+        try:
+            method = normalize_launch_method(self._get_launch_method(), default="")
+            if not is_preset_launch_method(method):
+                return
+            self._request_preset_content_apply(
+                method,
+                "preset_file_external_change",
+                self._normalize_preset_file_name(path),
+            )
+        except Exception:
+            log("PresetRuntimeCoordinator: не удалось применить внешнее изменение пресета", "DEBUG")
+
+    def _ensure_active_preset_watch_armed(self) -> None:
+        """Возвращает слежение после atomic save (temp+rename): файл может
+        на мгновение отсутствовать, и одиночный addPath молча проваливается."""
+        watcher = self._active_preset_file_watcher
+        desired = str(self.__dict__.get("_active_preset_file_path", "") or "")
+        if watcher is None or not desired:
+            return
+        try:
+            if desired in (watcher.files() or []) or watcher.addPath(desired):
+                self._active_preset_watch_rearm_attempts = 0
+                if self.__dict__.pop("_active_preset_change_waits_for_file", False):
+                    self._apply_external_active_preset_change(desired)
+                return
+        except Exception:
+            pass
+
+        attempts = int(self.__dict__.get("_active_preset_watch_rearm_attempts", 0) or 0)
+        if attempts >= PRESET_WATCH_REARM_MAX_ATTEMPTS:
+            log(f"Watcher активного пресета не восстановлен: файл недоступен ({desired})", "DEBUG")
+            return
+        self._active_preset_watch_rearm_attempts = attempts + 1
+        timer = self._active_preset_watch_rearm_timer
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._ensure_active_preset_watch_armed)
+            self._active_preset_watch_rearm_timer = timer
+        timer.start(PRESET_WATCH_REARM_RETRY_MS)
+
     def _consume_own_preset_file_change(self, path: str) -> bool:
+        changed_file_name = self._normalize_preset_file_name(path)
+        if self._was_recent_own_preset_write(changed_file_name):
+            # Запись сделало само приложение (в т.ч. автосохранение редактора
+            # без publish): это не внешняя правка, apply решает publish-путь.
+            return True
+
         pending_file_name = str(self.__dict__.get("_pending_own_preset_content_file_name", "") or "").strip()
         if not pending_file_name:
             return False
-        changed_file_name = self._normalize_preset_file_name(path)
-        active_file_name = self._normalize_preset_file_name(self.__dict__.get("_active_preset_file_path", ""))
-        if changed_file_name in {pending_file_name, active_file_name}:
+        deadline = float(self.__dict__.get("_own_preset_content_suppress_deadline", 0.0) or 0.0)
+        if deadline and time.monotonic() > deadline:
             self._pending_own_preset_content_file_name = ""
-            return True
-        return False
+            self._own_preset_content_suppress_deadline = 0.0
+            return False
+        active_file_name = self._normalize_preset_file_name(self.__dict__.get("_active_preset_file_path", ""))
+        return changed_file_name in {pending_file_name, active_file_name}
+
+    @staticmethod
+    def _was_recent_own_preset_write(file_name: str) -> bool:
+        try:
+            from presets.own_write_registry import was_recent_own_preset_write
+
+            return was_recent_own_preset_write(file_name)
+        except Exception:
+            return False
 
     @staticmethod
     def _normalize_preset_file_name(path_or_file_name: str) -> str:

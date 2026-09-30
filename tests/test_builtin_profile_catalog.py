@@ -377,14 +377,18 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
         ipset_lines = ipset_path.read_text(encoding="utf-8").splitlines()
         self.assertEqual(ipset_lines[0], "# https://ipinfo.io/AS16509")
         entries = [line.strip() for line in ipset_lines if line.strip() and not line.lstrip().startswith("#")]
-        self.assertEqual(len(entries), 7323)
+        self.assertEqual(len(entries), 7876)
         self.assertEqual(len(entries), len(set(entries)))
         self.assertTrue(
             {
                 "3.0.0.0/10",
+                "15.129.0.0/18",
+                "108.157.224.0/21",
                 "184.192.0.0/10",
+                "195.93.178.0/24",
                 "2406:da00::/24",
                 "2600:1f20:c000::/36",
+                "2620:108:d000::/44",
             }.issubset(entries)
         )
         for entry in entries:
@@ -666,14 +670,14 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             engine="winws2",
             source_name=ALL_PROFILES_PATH.name,
         )
-        profiles = [profile for profile in preset.profiles if str(profile.name or "").strip() == "chatgpt"]
+        profiles = [profile for profile in preset.profiles if str(profile.name or "").strip() == "ChatGPT"]
 
         self.assertEqual(len(profiles), 1)
         self.assertEqual(profiles[0].match.filter_lines, ["--filter-tcp=80-65535"])
         self.assertEqual(profiles[0].match.hostlist_lines, ["--hostlist=lists/chatgpt.txt"])
         self.assertEqual(
             _list_entries(LISTS_ROOT / "chatgpt.txt"),
-            ["chatgpt.com", "openai.com", "oaiusercontent.com"],
+            ["chatgpt.com", "openai.com", "oaistatic.com", "oaiusercontent.com"],
         )
 
     def test_builtin_presets_do_not_repeat_enabled_logical_profile_matches(self) -> None:
@@ -911,6 +915,7 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             if line.strip() and not line.lstrip().startswith("#")
         ]
         supplied_ranges = {
+            "2a06:98c1:3100::/40",
             "152.114.0.0/17",
             "150.48.128.0/18",
             "152.114.128.0/18",
@@ -932,9 +937,9 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             *(f"104.24.{octet}.0/20" for octet in (0, 16, 32, 48, 64, 80, 128, 144, 160)),
         }
 
-        self.assertEqual(len(supplied_ranges), 100)
+        self.assertEqual(len(supplied_ranges), 101)
         self.assertLessEqual(supplied_ranges, set(entries))
-        self.assertEqual(len(entries), 131)
+        self.assertEqual(len(entries), 130)
         self.assertEqual(len(entries), len(set(entries)))
         for entry in entries:
             ipaddress.ip_network(entry, strict=False)
@@ -1930,7 +1935,7 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             not in catalog_pairs
         ]
 
-        self.assertEqual(len(preset.profiles), 96)
+        self.assertEqual(len(preset.profiles), 99)
         self.assertEqual(offenders, [])
         self.assertIn(
             "--lua-init=fake_unknown_256=string.rep(string.char(0),256);"

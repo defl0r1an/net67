@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.page_names import PageName
 from ui.page_deps.types import (
     DnsPageDeps,
-    HostsPageDeps,
+    HostsFilePageDeps, HostsPageDeps,
     UpdateRuntimeActions,
 )
 
@@ -15,10 +15,23 @@ def build_network_page_kwargs(*, page_name: PageName, dns_feature) -> dict:
     }
 
 
-def build_hosts_page_kwargs(*, page_name: PageName, hosts_feature) -> dict:
+def build_hosts_page_kwargs(*, page_name: PageName, hosts_feature, show_page) -> dict:
     _ = page_name
     return {
-        "deps": HostsPageDeps(hosts_feature=hosts_feature),
+        "deps": HostsPageDeps(
+            hosts_feature=hosts_feature,
+            open_file_page=lambda: show_page(PageName.HOSTS_FILE, allow_internal=True),
+        ),
+    }
+
+
+def build_hosts_file_page_kwargs(*, page_name: PageName, hosts_feature, show_page) -> dict:
+    _ = page_name
+    return {
+        "deps": HostsFilePageDeps(
+            hosts_feature=hosts_feature,
+            open_hosts_page=lambda: show_page(PageName.HOSTS),
+        ),
     }
 
 
@@ -152,7 +165,9 @@ def build_servers_page_kwargs(
     return {
         "runtime_actions": UpdateRuntimeActions(
             is_any_running=runtime_feature.is_any_running,
-            shutdown_sync=runtime_feature.shutdown_sync,
+            # Остановки обновлятора идут из фоновых потоков, поэтому
+            # состояние обхода (и подписчиков-виджетов) меняет GUI-поток.
+            shutdown_sync=runtime_feature.shutdown_sync_from_worker,
             is_available=runtime_feature.is_available,
             restart=runtime_feature.restart,
             mark_stopped=_mark_runtime_stopped_after_update,
@@ -168,23 +183,32 @@ def build_blockcheck_page_kwargs(
     *,
     page_name: PageName,
     blockcheck_feature,
-    diagnostics_feature,
     dns_feature,
     runtime_feature,
+    show_page=None,
 ) -> dict:
     _ = page_name
 
     def _create_strategy_scan_worker(**kwargs):
-        return blockcheck_feature.create_strategy_scan_worker(
+        # Сканер останавливает обход из своего QThread. Worker-вариант
+        # гасит процессы в этом потоке, а состояние обхода (и через него
+        # кнопки и статус) меняет уже GUI-поток — иначе подписчики-виджеты
+        # перерисовывались из фонового потока.
+        worker = blockcheck_feature.create_strategy_scan_worker(
             **kwargs,
-            shutdown_sync=runtime_feature.shutdown_sync,
+            shutdown_sync=runtime_feature.shutdown_sync_from_worker,
         )
+        # Подбор останавливает Zapret на время замеров. Если он работал,
+        # окно запустит его снова, когда подбор закончится.
+        worker.set_runtime_restore(was_running=runtime_feature.is_running(), restore=runtime_feature.start)
+        return worker
 
     return {
         "blockcheck_feature": blockcheck_feature,
-        "diagnostics_feature": diagnostics_feature,
         "dns_feature": dns_feature,
         "create_strategy_scan_worker": _create_strategy_scan_worker,
+        # «Поймали провайдера на подмене DNS» → кнопка ведёт на «Настройка DNS».
+        "open_dns_settings": (lambda: show_page(PageName.NETWORK)) if show_page is not None else None,
     }
 
 
@@ -195,7 +219,13 @@ def build_logs_page_kwargs(*, page_name: PageName, logs_feature) -> dict:
     }
 
 
-def build_telegram_proxy_page_kwargs(*, page_name: PageName, runtime_feature, telegram_proxy_feature) -> dict:
+def build_telegram_proxy_page_kwargs(
+    *,
+    page_name: PageName,
+    runtime_feature,
+    telegram_proxy_feature,
+    show_page,
+) -> dict:
     _ = page_name
 
     def _get_zapret_running() -> bool:
@@ -204,6 +234,15 @@ def build_telegram_proxy_page_kwargs(*, page_name: PageName, runtime_feature, te
     return {
         "telegram_proxy_feature": telegram_proxy_feature,
         "get_zapret_running": _get_zapret_running,
+        "open_advanced_settings": lambda: show_page(PageName.TELEGRAM_PROXY_ADVANCED, allow_internal=True),
+    }
+
+
+def build_telegram_proxy_advanced_page_kwargs(*, page_name: PageName, telegram_proxy_feature, show_page) -> dict:
+    _ = page_name
+    return {
+        "telegram_proxy_feature": telegram_proxy_feature,
+        "open_telegram_proxy": lambda: show_page(PageName.TELEGRAM_PROXY),
     }
 
 
@@ -211,6 +250,7 @@ __all__ = [
     "build_about_page_kwargs",
     "build_autostart_page_kwargs",
     "build_blockcheck_page_kwargs",
+    "build_hosts_file_page_kwargs",
     "build_hosts_page_kwargs",
     "build_logs_page_kwargs",
     "build_network_page_kwargs",
@@ -218,4 +258,5 @@ __all__ = [
     "build_winws_log_analyzer_page_kwargs",
     "build_support_page_kwargs",
     "build_telegram_proxy_page_kwargs",
+    "build_telegram_proxy_advanced_page_kwargs",
 ]

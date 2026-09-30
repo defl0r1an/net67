@@ -1,5 +1,5 @@
 # Preset: Стандартный 1
-# BuiltinVersion: 2.37
+# BuiltinVersion: 2.42
 # IconColor: #a8c5ff
 
 --lua-init=@lua/zapret-lib.lua
@@ -82,11 +82,21 @@
 --blob=hex_0f0f0f0f:0x0F0F0F0F
 --blob=hex_00:0x00
 
---name=chatgpt
+--name=ChatGPT
 --filter-tcp=80-65535
 --hostlist=lists/chatgpt.txt
 --out-range=-d8
 --lua-desync=pass
+
+--new
+
+--name=Claude
+--skip
+--filter-tcp=80,443
+--hostlist=lists/claude.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=multisplit:pos=1,host+2,sld+2,sld+5,sniext+1,sniext+2,endhost-2:seqovl=1
 
 --new
 
@@ -103,17 +113,6 @@
 --ipset=lists/ipset-anydesk.txt
 --out-range=-d8
 --lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
-
---new
-
---name=Исключения (RU сайты)
---filter-tcp=80,443-65535
---ipset=lists/ipset-ru.txt
---ipset=lists/ipset-dns.txt
---ipset=lists/ipset-exclude.txt
---out-range=-d8
---payload=tls_client_hello
---lua-desync=pass
 
 --new
 
@@ -135,12 +134,41 @@
 
 --new
 
+--name=Бэкенд Google
+--filter-tcp=80,443
+--hostlist=lists/google-backend.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=multisplit:pos=1,host+2,sld+2,sld+5,sniext+1,sniext+2,endhost-2:seqovl=1
+
+--new
+
 --name=youtube.com (QUIC)
 --filter-udp=443
 --ipset=lists/ipset-youtube.txt
 --out-range=-n8
 --payload=all
 --lua-desync=fake:repeats=6:blob=fake_default_quic
+
+--new
+
+--name=Исключения домены (RU сайты)
+--filter-tcp=80,443-65535
+--hostlist=lists/netrogat.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=pass
+
+--new
+
+--name=Исключения айпи (RU сайты)
+--filter-tcp=80,443-65535
+--ipset=lists/ipset-ru.txt
+--ipset=lists/ipset-dns.txt
+--ipset=lists/ipset-exclude.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=pass
 
 --new
 

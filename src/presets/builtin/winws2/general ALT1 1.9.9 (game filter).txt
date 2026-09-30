@@ -1,5 +1,5 @@
 # Preset: general ALT1 1.9.9 (game filter)
-# BuiltinVersion: 2.39
+# BuiltinVersion: 2.42
 # IconColor: #60cdff
 
 --lua-init=@lua/zapret-lib.lua
@@ -25,6 +25,14 @@
 
 --wf-tcp-out=80,443,2053,2083,2087,2096,8443,1024-65535
 --wf-udp-out=443,19294-19344,50000-50100,1024-65535
+
+--name=git.zapret.moe
+--filter-tcp=443
+--hostlist=lists/git-zapret-moe.txt
+--out-range=-d8
+--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
+
+--new
 
 --name=googlevideo.com (CDN сервера)
 --filter-tcp=80,443
@@ -52,7 +60,25 @@
 
 --new
 
---name=Исключения (RU сайты)
+--name=Бэкенд Google
+--filter-tcp=80,443
+--hostlist=lists/google-backend.txt
+--payload=all
+--lua-desync=fake:blob=tls_google:tcp_ts=-600000:ip_id=zero:repeats=6
+--lua-desync=fakedsplit:pattern=0x00:tcp_ts=-600000:ip_id=zero:repeats=6
+
+--new
+
+--name=Исключения домены (RU сайты)
+--filter-tcp=80,443-65535
+--hostlist=lists/netrogat.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=pass
+
+--new
+
+--name=Исключения айпи (RU сайты)
 --filter-tcp=80,443-65535
 --ipset=lists/ipset-ru.txt
 --ipset=lists/ipset-dns.txt

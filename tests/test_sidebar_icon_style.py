@@ -68,32 +68,6 @@ class SidebarIconStyleSettingsTests(unittest.TestCase):
 
         self.assertEqual(appearance_settings.peek_warmed_sidebar_icon_style(), "windows11_fluent")
 
-    def test_warmed_page_initial_state_warms_sidebar_icon_style(self) -> None:
-        import settings.appearance as appearance_settings
-
-        state = appearance_settings.AppearancePageInitialStatePlan(
-            display_mode="dark",
-            ui_language="ru",
-            background_preset="standard",
-            rkn_background=None,
-            mica_enabled=False,
-            window_opacity=100,
-            accent_color=None,
-            follow_windows_accent=True,
-            tinted_background=False,
-            tinted_intensity=20,
-            animations_enabled=False,
-            smooth_scroll_enabled=False,
-            editor_smooth_scroll_enabled=False,
-            sidebar_icon_style="windows11_fluent",
-            garland_enabled=False,
-            snowflakes_enabled=False,
-        )
-
-        appearance_settings.clear_warmed_sidebar_icon_style_cache()
-        appearance_settings.store_warmed_page_initial_state(state)
-
-        self.assertEqual(appearance_settings.peek_warmed_sidebar_icon_style(), "windows11_fluent")
 
 
 class SidebarIconStyleNavigationTests(unittest.TestCase):

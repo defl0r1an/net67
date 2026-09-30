@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from telegram_proxy.ui.text_plan import TELEGRAM_PROXY_SETTINGS_TEXT
+
 
 @dataclass(slots=True)
 class TelegramProxyToggleActionPlan:
@@ -32,7 +34,6 @@ class TelegramProxyStartPlan:
     should_start: bool
     status_text: str
     toggle_enabled: bool
-    upstream_log_line: str
 
 
 @dataclass(slots=True)
@@ -66,19 +67,54 @@ class TelegramProxyStatsPlan:
     next_speed_hist_down: tuple[int, ...]
 
 
-@dataclass(slots=True)
-class TelegramProxyPageInitPlan:
-    ensure_hosts_once: bool
+@dataclass(frozen=True, slots=True)
+class TelegramHostsRowPlan:
+    description: str
+    button_text: str
+    button_action: str
+    button_accessible_name: str
+    button_enabled: bool
 
 
 def is_zapret_runtime_running(runtime_feature) -> bool:
     return bool(runtime_feature.is_running())
 
 
-def build_page_init_plan(*, runtime_initialized: bool) -> TelegramProxyPageInitPlan:
-    return TelegramProxyPageInitPlan(
-        ensure_hosts_once=not bool(runtime_initialized),
+def build_hosts_row_plan(status, *, busy: bool, error: str = "") -> TelegramHostsRowPlan:
+    """Что показать в строке «Записи Telegram в hosts».
+
+    ``status`` — TelegramHostsStatus или None, пока файл не прочитан.
+    Кнопка «Убрать» — когда прописаны все записи, иначе «Прописать».
+    Пока идёт фоновая работа или состояние ещё неизвестно, кнопка выключена.
+    """
+    text = TELEGRAM_PROXY_SETTINGS_TEXT
+    remove = False
+    known = status is not None
+    has_error = bool(str(error or "").strip())
+    if not known:
+        state = text.hosts_state_error if has_error else text.hosts_state_checking
+    else:
+        present = max(0, int(getattr(status, "present", 0) or 0))
+        total = max(0, int(getattr(status, "total", 0) or 0))
+        if total > 0 and present >= total:
+            state = text.hosts_state_all.format(present=present, total=total)
+            remove = True
+        elif present <= 0:
+            state = text.hosts_state_none
+        else:
+            state = text.hosts_state_partial.format(present=present, total=total)
+
+    can_act = known or has_error
+    return TelegramHostsRowPlan(
+        description=f"{state}\n{text.hosts_hint}",
+        button_text=text.hosts_remove_button if remove else text.hosts_add_button,
+        button_action="remove" if remove else "add",
+        button_accessible_name=(
+            text.hosts_remove_accessible_name if remove else text.hosts_add_accessible_name
+        ),
+        button_enabled=bool(can_act and not busy),
     )
+
 
 def build_status_plan(*, running: bool, restarting: bool, starting: bool, host: str, port: int) -> TelegramProxyStatusPlan:
     if restarting:
@@ -140,28 +176,17 @@ def build_restart_plan(*, running: bool, restarting: bool) -> TelegramProxyResta
         status_text="Перезапуск прокси...",
     )
 
-def build_start_plan(*, starting: bool, running: bool, host: str, port: int, upstream_config) -> TelegramProxyStartPlan:
+def build_start_plan(*, starting: bool, running: bool) -> TelegramProxyStartPlan:
     if starting or running:
         return TelegramProxyStartPlan(
             should_start=False,
             status_text="",
             toggle_enabled=False,
-            upstream_log_line="",
         )
-
-    upstream_log_line = ""
-    if upstream_config:
-        upstream_log_line = (
-            f"Upstream: {upstream_config.host}:{upstream_config.port} "
-            f"(mode={upstream_config.mode}, user={upstream_config.username})"
-        )
-
-    _ = host, port
     return TelegramProxyStartPlan(
         should_start=True,
         status_text="Запуск прокси...",
         toggle_enabled=False,
-        upstream_log_line=upstream_log_line,
     )
 
 def build_finish_start_plan(start_ok: bool) -> TelegramProxyFinishStartPlan:
@@ -238,7 +263,7 @@ def build_relay_result_plan(
                 "перезапустите прокси (нажмите Остановить → Запустить).\n"
                 "Если после перезапуска проблема осталась — "
                 "ваш провайдер блокирует TLS к Telegram. "
-                "Настройте 'Внешний прокси' ниже."
+                "Включите «Внешний прокси» в разделе «Продвинутые настройки»."
             ),
         )
     if zapret_running:
@@ -252,7 +277,7 @@ def build_relay_result_plan(
                 "Что делать: выключите net67 и перезапустите прокси.\n"
                 "Если без net67 relay тоже недоступен — "
                 "ваш провайдер блокирует IP Telegram. "
-                "Настройте 'Внешний прокси' ниже."
+                "Включите «Внешний прокси» в разделе «Продвинутые настройки»."
             ),
         )
     return TelegramProxyRelayResultPlan(
@@ -263,7 +288,7 @@ def build_relay_result_plan(
             "Что происходит: relay (149.154.167.220) полностью недоступен — "
             "ваш провайдер блокирует IP Telegram.\n"
             "Прокси не сможет работать напрямую.\n"
-            "Что делать: включите 'Внешний прокси' в настройках ниже "
+            "Что делать: включите «Внешний прокси» в разделе «Продвинутые настройки» "
             "и выберите один из доступных прокси-серверов."
         ),
     )

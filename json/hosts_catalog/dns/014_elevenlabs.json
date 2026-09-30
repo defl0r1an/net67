@@ -1,121 +1,110 @@
 {
   "name": "ElevenLabs",
+  "category": "other",
+  "icon": "fa5s.microphone-alt",
+  "icon_color": "#ffffff",
+  "sort_order": 16,
   "domains": [
     {
       "host": "api.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "158.255.3.181",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": "87.228.47.198",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": "34.8.184.191",
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "api.us.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "158.255.3.179",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": "87.228.47.198",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": "34.36.213.91",
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "eleven-public-cdn.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
         "xbox_dns": "34.98.93.216",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": "34.98.93.216",
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "158.255.3.181",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": "87.228.47.198",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "45.88.174.254",
+          "89.150.59.128"
+        ],
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "elevenreader.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "158.255.3.181",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": "87.228.47.198",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": "34.117.39.235",
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "help.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "158.255.3.181",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": "87.228.47.198",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "216.198.53.6",
+          "216.198.54.6"
+        ],
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "payload.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
         "xbox_dns": "34.54.252.193",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": "34.54.252.193",
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "try.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "8.6.112.0",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ],
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "45.88.174.254",
+          "89.150.59.128"
+        ],
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "www.elevenlabs.io",
       "ips": {
-        "zapret_dns": "72.56.93.144",
         "xbox_dns": "34.54.252.193",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": "34.54.252.193",
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     }
   ]

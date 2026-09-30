@@ -12,7 +12,7 @@ from presets.ui.control.control_page_runtime_shared import (
     BUTTON_ICON_TEXT_GAP_PROPERTY,
     set_button_text_accessibility,
 )
-from ui.pulsing_dot import PulsingDot
+from ui.pulsing_dot import PulsingDot, PacketFlowIndicator
 from ui.accessibility import enable_keyboard_click, set_control_accessibility, set_state_text
 from ui.theme import get_themed_qta_icon
 
@@ -43,7 +43,7 @@ def build_mode_status_section_common(
     status_layout.setContentsMargins(16, 14, 16, 14)
     status_layout.setSpacing(16)
 
-    status_dot = PulsingDot()
+    status_dot = PacketFlowIndicator()
     set_state_text(status_dot, "Индикатор состояния net67: состояние пока не загружено")
     status_layout.addWidget(status_dot)
 
@@ -225,6 +225,44 @@ def schedule_stop_button_icon(button, *, delay_ms: int = 250) -> None:
         QTimer.singleShot(delay_ms, _apply_icon)
     except Exception:
         _apply_icon()
+
+
+def build_onboarding_tour_card_common(*, push_setting_card_cls, tr_fn, on_click, parent=None):
+    """Карточка «Как пользоваться программой»: повтор обучающего тура."""
+    return build_deferred_themed_push_setting_card_common(
+        push_setting_card_cls=push_setting_card_cls,
+        button_text=tr_fn("page.control.onboarding_tour.button", "Показать"),
+        icon_name="fa5s.graduation-cap",
+        icon_color="#b39ddb",
+        title_text=tr_fn("page.control.onboarding_tour.title", "Как пользоваться программой"),
+        content_text=tr_fn(
+            "page.control.onboarding_tour.desc",
+            "Пошаговая экскурсия: как устроен net67, что такое пресеты, профили и стратегии и где что находится",
+        ),
+        on_click=on_click,
+        button_icon_name=FluentIcon.PLAY,
+        button_accessible_name=tr_fn("page.control.onboarding_tour.accessible_name", "Показать обучающий тур"),
+        parent=parent,
+    )
+
+
+def build_bypass_tour_card_common(*, push_setting_card_cls, tr_fn, on_click, parent=None):
+    """Карточка «Как работает обход»: экскурсия по техникам со схемами."""
+    return build_deferred_themed_push_setting_card_common(
+        push_setting_card_cls=push_setting_card_cls,
+        button_text=tr_fn("page.control.bypass_tour.button", "Показать"),
+        icon_name="fa5s.route",
+        icon_color="#b39ddb",
+        title_text=tr_fn("page.control.bypass_tour.title", "Как работает обход"),
+        content_text=tr_fn(
+            "page.control.bypass_tour.desc",
+            "Экскурсия со схемами: как провайдер узнаёт сайт и какими приёмами обход ему мешает",
+        ),
+        on_click=on_click,
+        button_icon_name=FluentIcon.PLAY,
+        button_accessible_name=tr_fn("page.control.bypass_tour.accessible_name", "Показать экскурсию по обходу"),
+        parent=parent,
+    )
 
 
 def build_deferred_themed_push_setting_card_common(

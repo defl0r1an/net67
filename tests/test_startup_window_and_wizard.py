@@ -105,11 +105,12 @@ class WizardStepsTests(unittest.TestCase):
         self.assertTrue(build_oneclick_request(default_selection()).needs_telegram_proxy)
 
     def test_dialog_has_no_services_page(self) -> None:
+        """Вопроса «чем вы пользуетесь» нет и в туре: ответ ни на что не влиял."""
         import inspect
 
-        from wizard.ui import dialog
+        from ui.onboarding import setup_choices
 
-        source = inspect.getsource(dialog)
+        source = inspect.getsource(setup_choices)
 
         self.assertNotIn("_build_services_page", source)
         self.assertNotIn("SERVICE_CHOICES", source)

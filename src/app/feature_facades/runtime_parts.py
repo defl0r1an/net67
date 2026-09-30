@@ -14,6 +14,7 @@ class RuntimeEventDispatcher(QObject):
     launch_error = pyqtSignal(str)
     active_preset_content_changed = pyqtSignal(str)
     unexpected_process_exit = pyqtSignal(object)
+    installation_damaged = pyqtSignal(object)
 
 
 @dataclass(slots=True)
@@ -221,12 +222,23 @@ _AUTO_RESTART_MAX_PER_WINDOW = 2
 # экономия памяти на одном экземпляре с семью полями смысла не имеет.
 @dataclass
 class RuntimeEvents:
+    """Владелец Qt-диспетчера runtime-событий.
+
+    `weakref_slot` обязателен: методы этого объекта подключаются к сигналам
+    через `QueuedConnection`, а PyQt для такого соединения берёт слабую ссылку
+    на приёмник. У `slots=True` без этого флага нет `__weakref__`, и connect
+    падает `SystemError: ... QMetaObject.Connection returned a result with an
+    exception set` — из-за чего весь launch runtime не поднимался и DPI не
+    стартовал.
+    """
+
     runtime_service: Any
     ui_port: Any = None
     ui_state: Any = None
     qt_parent: Any = None
     dispatcher: RuntimeEventDispatcher | None = None
     command_port: Any = None
+    repair_port: Any = None
     auto_restart_history: list = field(default_factory=list)
 
     def ensure_dispatcher(self) -> RuntimeEventDispatcher:
@@ -250,6 +262,10 @@ class RuntimeEvents:
             )
             dispatcher.unexpected_process_exit.connect(
                 self.handle_unexpected_process_exit,
+                Qt.ConnectionType.QueuedConnection,
+            )
+            dispatcher.installation_damaged.connect(
+                self.handle_installation_damaged,
                 Qt.ConnectionType.QueuedConnection,
             )
             self.dispatcher = dispatcher
@@ -283,6 +299,56 @@ class RuntimeEvents:
     def publish_unexpected_process_exit(self, resolution) -> None:
         """Передаёт в UI уже готовый результат фоновой диагностики."""
         self.ensure_dispatcher().unexpected_process_exit.emit(resolution)
+
+    def publish_installation_damaged(self, report) -> None:
+        """Сообщает, что поставка не соответствует манифесту.
+
+        Runtime не умеет и не должен уметь чинить установку: решение и
+        исполнение живут в слое приложения, у которого есть updater.
+        """
+        if report is None:
+            return
+        self.ensure_dispatcher().installation_damaged.emit(report)
+
+    def handle_installation_damaged(self, report) -> None:
+        port = self.repair_port
+        if port is None:
+            return
+        try:
+            port.request_repair(report)
+        except Exception:
+            return
+
+    def post_runtime_state_sync_after_shutdown(
+        self,
+        *,
+        still_running: bool,
+        launch_method: str,
+    ) -> None:
+        """Применяет runtime-state после остановки строго в GUI-потоке.
+
+        Подписчики UI-state — живые виджеты, поэтому запись состояния из
+        фонового потока (BlockCheck-сканер) обязана дойти до них через
+        GUI-поток; иначе правка QWidget уходит в чужой поток и подвешивает окно.
+        """
+        from winws_runtime.runtime.sync_shutdown import apply_runtime_state_after_shutdown
+
+        runtime_service = self.runtime_service
+
+        def _apply() -> None:
+            apply_runtime_state_after_shutdown(
+                runtime_service=runtime_service,
+                still_running=bool(still_running),
+                launch_method=str(launch_method or ""),
+            )
+
+        store = self.ui_state
+        post_to_ui_thread = getattr(store, "post_to_ui_thread", None) if store is not None else None
+        if callable(post_to_ui_thread):
+            post_to_ui_thread(_apply)
+            return
+
+        _apply()
 
     def handle_runner_failure(self, payload: object) -> None:
         if not isinstance(payload, dict):
@@ -483,12 +549,18 @@ class RuntimeCommandPort:
             )
         )
 
-    def restart(self, *, force_full_stop: bool = False) -> bool:
+    def restart(
+        self,
+        *,
+        force_full_stop: bool = False,
+        target_launch_method: str | None = None,
+    ) -> bool:
         runtime_commands = self._runtime_commands()
         return bool(
             runtime_commands.restart_dpi_async(
                 runtime_feature=self.owner,
                 force_full_stop=force_full_stop,
+                target_launch_method=target_launch_method,
             )
         )
 
@@ -522,6 +594,35 @@ class RuntimeCommandPort:
             update_runtime_state=update_runtime_state,
         )
 
+    def shutdown_sync_from_worker(
+        self,
+        *,
+        reason: str = "",
+        include_cleanup: bool = True,
+        cleanup_services: bool = True,
+        update_runtime_state: bool = True,
+    ):
+        """Синхронная остановка для вызывающих из фоновых потоков.
+
+        Drop-in замена `shutdown_sync`: процессную часть выполняет вызывающий
+        поток, а runtime-state (и, значит, UI-подписчиков) обновляет GUI-поток.
+        """
+        from winws_runtime.runtime.sync_shutdown import resolve_launch_method
+
+        launch_method = resolve_launch_method(self.owner) if update_runtime_state else ""
+        result = self.shutdown_sync(
+            reason=reason,
+            include_cleanup=include_cleanup,
+            cleanup_services=cleanup_services,
+            update_runtime_state=False,
+        )
+        if update_runtime_state:
+            self.owner.events.post_runtime_state_sync_after_shutdown(
+                still_running=bool(getattr(result, "still_running", False)),
+                launch_method=launch_method,
+            )
+        return result
+
     def start_autostart(self, launch_method: str | None = None) -> bool:
         runtime_commands = self._runtime_commands()
         return bool(
@@ -541,40 +642,6 @@ class RuntimeCommandPort:
             ui_state=self.owner.events.ui_state,
             autostart_enabled=autostart_enabled,
             set_status=set_status,
-        )
-
-    def apply_selected_source_preset(
-        self,
-        *,
-        launch_method: str,
-        reason: str,
-        preset_file_name: str = "",
-    ) -> bool:
-        runtime_commands = self._runtime_commands()
-        return bool(
-            runtime_commands.request_selected_source_preset_apply(
-                runtime_feature=self.owner,
-                launch_method=launch_method,
-                reason=reason,
-                preset_file_name=preset_file_name,
-            )
-        )
-
-    def apply_preset_content(
-        self,
-        *,
-        launch_method: str,
-        reason: str,
-        profile_key: str | None = None,
-    ) -> bool:
-        runtime_commands = self._runtime_commands()
-        return bool(
-            runtime_commands.request_preset_runtime_content_apply(
-                runtime_feature=self.owner,
-                launch_method=launch_method,
-                reason=reason,
-                profile_key=profile_key,
-            )
         )
 
     def create_preset_runtime_coordinator(self, **kwargs):

@@ -20,7 +20,9 @@ from winws_runtime.health.windivert_diagnostics import (
     _ERROR_SERVICE_DEPENDENCY_FAIL,
     _ERROR_SERVICE_DISABLED,
     _ERROR_SERVICE_DOES_NOT_EXIST,
+    _FWP_E_IN_USE,
 )
+from winws_runtime.health.winws_output import has_diagnostic_output
 
 
 # STATUS_DLL_INIT_FAILED: Windows killed the process before main() because one
@@ -29,12 +31,17 @@ from winws_runtime.health.windivert_diagnostics import (
 STATUS_DLL_INIT_FAILED = 0xC0000142
 
 # ERROR_INVALID_BLOCK — stale WinDivert state from a previous instance.
-_WINDIVERT_CONFLICT_EXIT_CODES = frozenset({9})
+# FWP_E_IN_USE — WFP-объекты прошлого экземпляра ещё удерживают драйвер: тоже
+# остаточное состояние, которое лечится тяжёлой очисткой, а не действием
+# пользователя.
+_WINDIVERT_CONFLICT_EXIT_CODES = frozenset({9, _FWP_E_IN_USE})
 
 _WINDIVERT_CONFLICT_SIGNATURES = (
     "guid or luid already exists",
     "object with that guid",
     "already running with the same filter",
+    # FWP_E_IN_USE: winws2 обрезает код завершения, поэтому опознаём по тексту.
+    "referenced by other objects",
 )
 
 # Errors that require user action (Secure Boot, AV, disabled service, ...)
@@ -57,6 +64,15 @@ _WINDIVERT_SYSTEM_SIGNATURES = (
     "driver failed prior unload",
 )
 
+# Процесс, умерший с кодом 1 и не сказавший ни слова: собственные сбои
+# winws/winws2 всегда сопровождаются диагностикой в выводе, поэтому здесь
+# причину придётся искать вне процесса. Классификация фиксирует только сам
+# факт «умер молча»; чем это вызвано, устанавливает silent_exit_probe по
+# проверяемым признакам — угадывать причину на этом уровне нельзя.
+_SILENT_EXIT_EXIT_CODES = frozenset({1})
+
+SILENT_EXIT_STATEMENT = "процесс завершился без единого сообщения о причине"
+
 # diagnose_winws_exit() causes that mark a 1058 as a real system problem
 # rather than a residual stop/start race.
 _HARD_1058_CAUSE_MARKERS = (
@@ -74,6 +90,7 @@ class SpawnFailureKind(Enum):
     WINDIVERT_CONFLICT = "windivert_conflict"
     WINDIVERT_SERVICE_TRANSIENT = "windivert_service_transient"
     WINDIVERT_SYSTEM = "windivert_system"
+    SILENT_EXIT = "silent_exit"
     UNKNOWN = "unknown"
 
 
@@ -90,6 +107,7 @@ class SpawnFailureClassification:
     is_conflict: bool
     is_system: bool
     is_service_transient: bool
+    is_silent_exit: bool = False
 
 
 def _normalize_exit_code(exit_code) -> int:
@@ -123,6 +141,19 @@ def _is_soft_windivert_1058(exit_code: int, stderr: str) -> bool:
     return not any(marker in cause for marker in _HARD_1058_CAUSE_MARKERS)
 
 
+def is_silent_exit(exit_code, stderr: str = "") -> bool:
+    """True для «умер молча с кодом 1».
+
+    Пустого вывода у winws2 не бывает — он всегда печатает баннер версии,
+    поэтому предикат опирается на наличие *диагностических* строк, а не на
+    непустой текст.
+    """
+    code = _normalize_exit_code(exit_code)
+    if code not in _SILENT_EXIT_EXIT_CODES:
+        return False
+    return not has_diagnostic_output(stderr)
+
+
 def classify_spawn_failure(exit_code, stderr: str = "") -> SpawnFailureClassification:
     code = _normalize_exit_code(exit_code)
     stderr_text = str(stderr or "")
@@ -136,6 +167,7 @@ def classify_spawn_failure(exit_code, stderr: str = "") -> SpawnFailureClassific
         sig in stderr_lower for sig in _WINDIVERT_SYSTEM_SIGNATURES
     )
     is_service_transient = _is_soft_windivert_1058(code, stderr_text)
+    silent_exit = is_silent_exit(code, stderr_text)
 
     if is_transient_dll_init:
         kind = SpawnFailureKind.TRANSIENT_DLL_INIT
@@ -145,9 +177,14 @@ def classify_spawn_failure(exit_code, stderr: str = "") -> SpawnFailureClassific
         kind = SpawnFailureKind.WINDIVERT_SYSTEM
     elif is_conflict:
         kind = SpawnFailureKind.WINDIVERT_CONFLICT
+    elif silent_exit:
+        kind = SpawnFailureKind.SILENT_EXIT
     else:
         kind = SpawnFailureKind.UNKNOWN
 
+    # SILENT_EXIT намеренно не retryable: чистка WinDivert к причине молчаливой
+    # смерти отношения не имеет. Одноразовый повтор запуска (на случай разовой
+    # гонки) остаётся решением конкретного раннера.
     retryable = kind in (
         SpawnFailureKind.TRANSIENT_DLL_INIT,
         SpawnFailureKind.WINDIVERT_SERVICE_TRANSIENT,
@@ -158,9 +195,12 @@ def classify_spawn_failure(exit_code, stderr: str = "") -> SpawnFailureClassific
         kind=kind,
         retryable=retryable,
         needs_aggressive_cleanup=retryable,
-        user_message=None,
+        user_message=(
+            SILENT_EXIT_STATEMENT if kind == SpawnFailureKind.SILENT_EXIT else None
+        ),
         is_transient_dll_init=is_transient_dll_init,
         is_conflict=is_conflict,
         is_system=is_system,
         is_service_transient=is_service_transient,
+        is_silent_exit=silent_exit,
     )

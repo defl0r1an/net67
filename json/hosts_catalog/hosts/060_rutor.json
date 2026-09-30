@@ -1,5 +1,9 @@
 {
   "name": "Rutor",
+  "category": "direct",
+  "icon": "fa5s.magnet",
+  "icon_color": "#e74c3c",
+  "sort_order": 27,
   "hosts": [
     {
       "ip": "173.245.59.219",

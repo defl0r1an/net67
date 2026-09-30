@@ -65,7 +65,7 @@ def check_system_commands() -> tuple[bool, str]:
                 try:
                     from log.log import log
 
-                    log(f"ERROR: Системный файл {cmd_name} не найден: {command_path}", level="❌ ERROR")
+                    log(f"Проверка при запуске: системный файл {cmd_name} не найден: {command_path}", level="WARNING")
                 except ImportError:
                     print(f"ERROR: Системный файл {cmd_name} не найден: {command_path}")
         except Exception as e:
@@ -136,7 +136,7 @@ def check_mitmproxy() -> tuple[bool, str]:
             try:
                 from log.log import log
 
-                log(f"ERROR: Найден конфликтующий процесс mitmproxy: {process_name} (PID: {pid})", level="❌ ERROR")
+                log(f"Проверка при запуске: найден конфликтующий процесс mitmproxy: {process_name} (PID: {pid})", level="WARNING")
             except ImportError:
                 print(f"ERROR: Найден конфликтующий процесс mitmproxy: {process_name}")
             return True, err
@@ -221,7 +221,10 @@ def check_path_for_onedrive() -> tuple[bool, str]:
         try:
             from log.log import log
 
-            log(f"ERROR: Обнаружен OneDrive в пути: {path}", level="❌ ERROR")
+            # WARNING, а не ERROR: у проверки своё уведомление «Проверка при
+            # запуске». Строка уровня ERROR уходила эхом ещё и из журнала, и
+            # человек под OneDrive получал две плашки об одном — поверх мастера.
+            log(f"Проверка при запуске: обнаружен OneDrive в пути: {path}", level="WARNING")
         except ImportError:
             print(f"ERROR: Обнаружен OneDrive в пути: {path}")
 
@@ -244,7 +247,7 @@ def check_windows_version() -> tuple[bool, str]:
 
     result = current_windows_support()
     if not result.supported:
-        log(f"ERROR: Неподдерживаемая версия Windows: {result.os_name}", level="❌ ERROR")
+        log(f"Проверка при запуске: неподдерживаемая версия Windows: {result.os_name}", level="WARNING")
         return True, result.message
 
     try:
@@ -292,7 +295,7 @@ def check_path_for_special_chars():
         try:
             from log.log import log
 
-            log(f"ERROR: Путь содержит специальные символы: {path}", level="❌ ERROR")
+            log(f"Проверка при запуске: путь содержит специальные символы: {path}", level="WARNING")
         except ImportError:
             print(f"ERROR: Путь содержит специальные символы: {path}")
 

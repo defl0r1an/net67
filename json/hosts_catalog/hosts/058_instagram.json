@@ -1,5 +1,9 @@
 {
   "name": "Instagram",
+  "category": "direct",
+  "icon": "fa5b.instagram",
+  "icon_color": "#e4405f",
+  "sort_order": 31,
   "hosts": [
     {
       "ip": "157.240.245.174",

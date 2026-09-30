@@ -37,11 +37,6 @@ class AppearanceBackgroundPresetPlan:
 
 
 @dataclass(slots=True)
-class AppearanceMicaPlan:
-    enabled: bool
-
-
-@dataclass(slots=True)
 class AppearanceOpacityPlan:
     value: int
 
@@ -69,6 +64,7 @@ class AppearanceTintedSettingsPlan:
 
 
 @dataclass(slots=True)
+
 class AppearancePageInitialStatePlan:
     display_mode: str
     ui_language: str
@@ -83,6 +79,7 @@ class AppearancePageInitialStatePlan:
     smooth_scroll_enabled: bool
     editor_smooth_scroll_enabled: bool
     sidebar_icon_style: str
+    live_animations_enabled: bool = True
 
 
 _warmed_page_initial_state_lock = threading.Lock()
@@ -91,8 +88,6 @@ _warmed_ui_language_lock = threading.Lock()
 _warmed_ui_language_cache: str | None = None
 _warmed_background_preset_lock = threading.Lock()
 _warmed_background_preset_cache: str | None = None
-_warmed_mica_enabled_lock = threading.Lock()
-_warmed_mica_enabled_cache: bool | None = None
 _warmed_window_opacity_lock = threading.Lock()
 _warmed_window_opacity_cache: int | None = None
 _warmed_accent_color_lock = threading.Lock()
@@ -105,6 +100,8 @@ _warmed_smooth_scroll_enabled_lock = threading.Lock()
 _warmed_smooth_scroll_enabled_cache: bool | None = None
 _warmed_editor_smooth_scroll_enabled_lock = threading.Lock()
 _warmed_editor_smooth_scroll_enabled_cache: bool | None = None
+_warmed_live_animations_enabled_lock = threading.Lock()
+_warmed_live_animations_enabled_cache: bool | None = None
 _warmed_sidebar_icon_style_lock = threading.Lock()
 _warmed_sidebar_icon_style_cache: str | None = None
 
@@ -145,24 +142,6 @@ def clear_warmed_background_preset_cache() -> None:
     global _warmed_background_preset_cache
     with _warmed_background_preset_lock:
         _warmed_background_preset_cache = None
-
-
-def store_warmed_mica_enabled(enabled: bool | None) -> None:
-    global _warmed_mica_enabled_cache
-    normalized = bool(schema.default_appearance()["mica_enabled"]) if enabled is None else bool(enabled)
-    with _warmed_mica_enabled_lock:
-        _warmed_mica_enabled_cache = normalized
-
-
-def peek_warmed_mica_enabled() -> bool | None:
-    with _warmed_mica_enabled_lock:
-        return _warmed_mica_enabled_cache
-
-
-def clear_warmed_mica_enabled_cache() -> None:
-    global _warmed_mica_enabled_cache
-    with _warmed_mica_enabled_lock:
-        _warmed_mica_enabled_cache = None
 
 
 def store_warmed_window_opacity(value: int | None) -> None:
@@ -299,6 +278,24 @@ def clear_warmed_editor_smooth_scroll_enabled_cache() -> None:
         _warmed_editor_smooth_scroll_enabled_cache = None
 
 
+def store_warmed_live_animations_enabled(enabled: bool | None) -> None:
+    global _warmed_live_animations_enabled_cache
+    normalized = bool(schema.default_appearance()["live_animations_enabled"]) if enabled is None else bool(enabled)
+    with _warmed_live_animations_enabled_lock:
+        _warmed_live_animations_enabled_cache = normalized
+
+
+def peek_warmed_live_animations_enabled() -> bool | None:
+    with _warmed_live_animations_enabled_lock:
+        return _warmed_live_animations_enabled_cache
+
+
+def clear_warmed_live_animations_enabled_cache() -> None:
+    global _warmed_live_animations_enabled_cache
+    with _warmed_live_animations_enabled_lock:
+        _warmed_live_animations_enabled_cache = None
+
+
 def store_warmed_sidebar_icon_style(style: str | None) -> None:
     global _warmed_sidebar_icon_style_cache
     with _warmed_sidebar_icon_style_lock:
@@ -322,13 +319,13 @@ def store_warmed_page_initial_state(state: AppearancePageInitialStatePlan) -> No
         _warmed_page_initial_state_cache = state
     store_warmed_ui_language(state.ui_language)
     store_warmed_background_preset(state.background_preset)
-    store_warmed_mica_enabled(state.mica_enabled)
     store_warmed_window_opacity(state.window_opacity)
     store_warmed_accent_color(state.accent_color)
     store_warmed_tinted_settings(state.follow_windows_accent, state.tinted_background, state.tinted_intensity)
     store_warmed_animations_enabled(state.animations_enabled)
     store_warmed_smooth_scroll_enabled(state.smooth_scroll_enabled)
     store_warmed_editor_smooth_scroll_enabled(state.editor_smooth_scroll_enabled)
+    store_warmed_live_animations_enabled(state.live_animations_enabled)
     store_warmed_sidebar_icon_style(state.sidebar_icon_style)
 
 
@@ -362,6 +359,7 @@ def build_default_page_initial_state() -> AppearancePageInitialStatePlan:
         animations_enabled=bool(appearance_defaults["animations_enabled"]),
         smooth_scroll_enabled=bool(appearance_defaults["smooth_scroll_enabled"]),
         editor_smooth_scroll_enabled=bool(appearance_defaults["editor_smooth_scroll_enabled"]),
+        live_animations_enabled=bool(appearance_defaults["live_animations_enabled"]),
         sidebar_icon_style=normalize_sidebar_icon_style(str(appearance_defaults["sidebar_icon_style"])),
     )
 
@@ -415,6 +413,7 @@ def load_page_initial_state() -> AppearancePageInitialStatePlan:
         animations_enabled=_plan_bool(appearance, "animations_enabled", bool(appearance_defaults["animations_enabled"])),
         smooth_scroll_enabled=_plan_bool(appearance, "smooth_scroll_enabled", bool(appearance_defaults["smooth_scroll_enabled"])),
         editor_smooth_scroll_enabled=_plan_bool(appearance, "editor_smooth_scroll_enabled", bool(appearance_defaults["editor_smooth_scroll_enabled"])),
+        live_animations_enabled=_plan_bool(appearance, "live_animations_enabled", bool(appearance_defaults["live_animations_enabled"])),
         sidebar_icon_style=normalize_sidebar_icon_style(
             _plan_str(appearance, "sidebar_icon_style", appearance_defaults["sidebar_icon_style"])
         ),
@@ -437,13 +436,10 @@ def load_display_mode() -> str:
 
 def save_display_mode(mode: str) -> AppearanceDisplayModePlan:
     effective_mode = str(mode or "dark")
-    try:
-        from settings.store import get_display_mode, set_display_mode
+    from settings.store import get_display_mode, set_display_mode
 
-        set_display_mode(mode)
-        effective_mode = str(get_display_mode() or effective_mode)
-    except Exception:
-        pass
+    set_display_mode(mode)
+    effective_mode = str(get_display_mode() or effective_mode)
     return AppearanceDisplayModePlan(
         requested_mode=str(mode or "dark"),
         effective_mode=effective_mode,
@@ -460,12 +456,9 @@ def load_ui_language() -> AppearanceUiLanguagePlan:
 
 def save_ui_language(language: str) -> AppearanceUiLanguagePlan:
     lang = normalize_language(language)
-    try:
-        from settings.store import set_ui_language
+    from settings.store import set_ui_language
 
-        set_ui_language(lang)
-    except Exception:
-        pass
+    set_ui_language(lang)
     store_warmed_ui_language(lang)
     return AppearanceUiLanguagePlan(language=lang)
 
@@ -480,33 +473,11 @@ def load_background_preset() -> AppearanceBackgroundPresetPlan:
 
 def save_background_preset(preset: str) -> AppearanceBackgroundPresetPlan:
     normalized = str(preset or "standard")
-    try:
-        from settings.store import set_background_preset
+    from settings.store import set_background_preset
 
-        set_background_preset(normalized)
-    except Exception:
-        pass
+    set_background_preset(normalized)
     store_warmed_background_preset(normalized)
     return AppearanceBackgroundPresetPlan(preset=normalized)
-
-def load_mica_enabled() -> AppearanceMicaPlan:
-    try:
-        from settings.store import get_mica_enabled
-
-        enabled = bool(get_mica_enabled())
-    except Exception:
-        enabled = True
-    return AppearanceMicaPlan(enabled=enabled)
-
-def save_mica_enabled(enabled: bool) -> AppearanceMicaPlan:
-    try:
-        from settings.store import set_mica_enabled
-
-        set_mica_enabled(bool(enabled))
-    except Exception:
-        pass
-    store_warmed_mica_enabled(bool(enabled))
-    return AppearanceMicaPlan(enabled=bool(enabled))
 
 def load_window_opacity() -> AppearanceOpacityPlan:
     try:
@@ -519,12 +490,9 @@ def load_window_opacity() -> AppearanceOpacityPlan:
 
 def save_window_opacity(value: int) -> AppearanceOpacityPlan:
     normalized = int(value)
-    try:
-        from settings.store import set_window_opacity
+    from settings.store import set_window_opacity
 
-        set_window_opacity(normalized)
-    except Exception:
-        pass
+    set_window_opacity(normalized)
     store_warmed_window_opacity(normalized)
     return AppearanceOpacityPlan(value=normalized)
 
@@ -538,12 +506,9 @@ def load_animations_enabled() -> AppearanceTogglePlan:
     return AppearanceTogglePlan(enabled=enabled)
 
 def save_animations_enabled(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_animations_enabled
+    from settings.store import set_animations_enabled
 
-        set_animations_enabled(bool(enabled))
-    except Exception:
-        pass
+    set_animations_enabled(bool(enabled))
     store_warmed_animations_enabled(bool(enabled))
     return AppearanceTogglePlan(enabled=bool(enabled))
 
@@ -557,12 +522,9 @@ def load_smooth_scroll_enabled() -> AppearanceTogglePlan:
     return AppearanceTogglePlan(enabled=enabled)
 
 def save_smooth_scroll_enabled(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_smooth_scroll_enabled
+    from settings.store import set_smooth_scroll_enabled
 
-        set_smooth_scroll_enabled(bool(enabled))
-    except Exception:
-        pass
+    set_smooth_scroll_enabled(bool(enabled))
     store_warmed_smooth_scroll_enabled(bool(enabled))
     return AppearanceTogglePlan(enabled=bool(enabled))
 
@@ -576,13 +538,17 @@ def load_editor_smooth_scroll_enabled() -> AppearanceTogglePlan:
     return AppearanceTogglePlan(enabled=enabled)
 
 def save_editor_smooth_scroll_enabled(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_editor_smooth_scroll_enabled
+    from settings.store import set_editor_smooth_scroll_enabled
 
-        set_editor_smooth_scroll_enabled(bool(enabled))
-    except Exception:
-        pass
+    set_editor_smooth_scroll_enabled(bool(enabled))
     store_warmed_editor_smooth_scroll_enabled(bool(enabled))
+    return AppearanceTogglePlan(enabled=bool(enabled))
+
+def save_live_animations_enabled(enabled: bool) -> AppearanceTogglePlan:
+    from settings.store import set_live_animations_enabled
+
+    set_live_animations_enabled(bool(enabled))
+    store_warmed_live_animations_enabled(bool(enabled))
     return AppearanceTogglePlan(enabled=bool(enabled))
 
 
@@ -598,12 +564,9 @@ def load_sidebar_icon_style() -> AppearanceSidebarIconStylePlan:
 
 def save_sidebar_icon_style(style: str) -> AppearanceSidebarIconStylePlan:
     normalized = normalize_sidebar_icon_style(style)
-    try:
-        from settings.store import set_sidebar_icon_style
+    from settings.store import set_sidebar_icon_style
 
-        set_sidebar_icon_style(normalized)
-    except Exception:
-        pass
+    set_sidebar_icon_style(normalized)
     store_warmed_sidebar_icon_style(normalized)
     return AppearanceSidebarIconStylePlan(style=normalized)
 
@@ -619,13 +582,10 @@ def load_accent_color() -> AppearanceAccentColorPlan:
 
 def save_accent_color(hex_color: str) -> AppearanceAccentColorPlan:
     normalized = str(hex_color or "").strip()
-    try:
-        from settings.store import set_accent_color
+    from settings.store import set_accent_color
 
-        if normalized:
-            set_accent_color(normalized)
-    except Exception:
-        pass
+    if normalized:
+        set_accent_color(normalized)
     store_warmed_accent_color(normalized or None)
     return AppearanceAccentColorPlan(hex_color=normalized or None)
 
@@ -651,12 +611,9 @@ def load_tinted_settings() -> AppearanceTintedSettingsPlan:
     )
 
 def save_follow_windows_accent(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_follow_windows_accent
+    from settings.store import set_follow_windows_accent
 
-        set_follow_windows_accent(bool(enabled))
-    except Exception:
-        pass
+    set_follow_windows_accent(bool(enabled))
     current = peek_warmed_tinted_settings()
     store_warmed_tinted_settings(
         bool(enabled),
@@ -666,12 +623,9 @@ def save_follow_windows_accent(enabled: bool) -> AppearanceTogglePlan:
     return AppearanceTogglePlan(enabled=bool(enabled))
 
 def save_tinted_background(enabled: bool) -> AppearanceTogglePlan:
-    try:
-        from settings.store import set_tinted_background
+    from settings.store import set_tinted_background
 
-        set_tinted_background(bool(enabled))
-    except Exception:
-        pass
+    set_tinted_background(bool(enabled))
     current = peek_warmed_tinted_settings()
     store_warmed_tinted_settings(
         None if current is None else current.follow_windows_accent,
@@ -682,12 +636,9 @@ def save_tinted_background(enabled: bool) -> AppearanceTogglePlan:
 
 def save_tinted_background_intensity(value: int) -> AppearanceOpacityPlan:
     normalized = max(0, min(schema.MAX_TINTED_INTENSITY, int(value)))
-    try:
-        from settings.store import set_tinted_background_intensity
+    from settings.store import set_tinted_background_intensity
 
-        set_tinted_background_intensity(normalized)
-    except Exception:
-        pass
+    set_tinted_background_intensity(normalized)
     current = peek_warmed_tinted_settings()
     store_warmed_tinted_settings(
         None if current is None else current.follow_windows_accent,
@@ -705,4 +656,55 @@ def load_windows_system_accent() -> AppearanceAccentColorPlan:
         hex_color = None
     return AppearanceAccentColorPlan(hex_color=hex_color)
 
+# ── Mica ─────────────────────────────────────────────────────────
+# У net67 фон окна Mica настраивается; в исходном проекте этого нет, и
+# при слиянии функции пропали — вернули их отсюда.
 
+@dataclass(slots=True)
+class AppearanceMicaPlan:
+    enabled: bool
+
+
+_warmed_mica_enabled_lock = threading.Lock()
+
+
+_warmed_mica_enabled_cache: bool | None = None
+
+
+def store_warmed_mica_enabled(enabled: bool | None) -> None:
+    global _warmed_mica_enabled_cache
+    normalized = bool(schema.default_appearance()["mica_enabled"]) if enabled is None else bool(enabled)
+    with _warmed_mica_enabled_lock:
+        _warmed_mica_enabled_cache = normalized
+
+
+def peek_warmed_mica_enabled() -> bool | None:
+    with _warmed_mica_enabled_lock:
+        return _warmed_mica_enabled_cache
+
+
+def clear_warmed_mica_enabled_cache() -> None:
+    global _warmed_mica_enabled_cache
+    with _warmed_mica_enabled_lock:
+        _warmed_mica_enabled_cache = None
+
+
+def load_mica_enabled() -> AppearanceMicaPlan:
+    try:
+        from settings.store import get_mica_enabled
+
+        enabled = bool(get_mica_enabled())
+    except Exception:
+        enabled = True
+    return AppearanceMicaPlan(enabled=enabled)
+
+
+def save_mica_enabled(enabled: bool) -> AppearanceMicaPlan:
+    try:
+        from settings.store import set_mica_enabled
+
+        set_mica_enabled(bool(enabled))
+    except Exception:
+        pass
+    store_warmed_mica_enabled(bool(enabled))
+    return AppearanceMicaPlan(enabled=bool(enabled))

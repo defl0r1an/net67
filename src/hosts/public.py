@@ -13,6 +13,7 @@ from hosts.commands import (
     build_services_catalog_plan,
     invalidate_catalog_cache,
     load_user_selection,
+    refresh_applied_selection,
     open_hosts_file,
     read_hosts_file,
     read_active_domains_map,
@@ -38,6 +39,7 @@ __all__ = [
     "build_services_catalog_plan",
     "invalidate_catalog_cache",
     "load_user_selection",
+    "refresh_applied_selection",
     "open_hosts_file",
     "read_hosts_file",
     "read_active_domains_map",
@@ -46,3 +48,8 @@ __all__ = [
     "save_user_selection",
     "write_hosts_file",
 ]
+
+# Страница Hosts: снимок, черновик и весь файл (перенесено из zapret).
+from hosts.commands import apply_hosts_draft, load_hosts_text, load_page_snapshot, save_hosts_text  # noqa: E402
+from hosts.state import HostsApplyResult, HostsFileText  # noqa: E402
+__all__ = [*__all__, 'apply_hosts_draft', 'load_hosts_text', 'load_page_snapshot', 'save_hosts_text', 'HostsApplyResult', 'HostsFileText']

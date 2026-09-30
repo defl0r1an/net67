@@ -182,7 +182,7 @@ class DialogGeometryTests(unittest.TestCase):
         import qfluentwidgets
 
         from shell.app_window import AppShellWindow
-        from wizard.ui.dialog import WizardDialog
+        from ui.fluent_dialog import MessageBoxBase
 
         qfluentwidgets.setTheme(qfluentwidgets.Theme.DARK)
         window = AppShellWindow()
@@ -193,7 +193,9 @@ class DialogGeometryTests(unittest.TestCase):
             window.show()
             self._settle()
 
-        dialog = WizardDialog(window)
+        # Окна мастера больше нет, но маска — свойство любого диалога
+        # MessageBoxBase, и ошибка с ней вернулась бы в каждом из них.
+        dialog = MessageBoxBase(window)
         self.addCleanup(dialog.deleteLater)
 
         if not show_window_first:
@@ -299,21 +301,18 @@ class WiringTests(unittest.TestCase):
 
         self.assertLessEqual(WIZARD_DELAY_MS, 400)
 
-    def test_window_opens_before_the_wizard_not_after(self) -> None:
-        """Диалог с маской читает размеры родителя при показе.
+    def test_first_run_opens_the_window_for_the_setup_tour(self) -> None:
+        """Окна мастера нет: вопросы задаёт тур, и ему нужно видимое окно.
 
-        У спрятанного окна раскладка ещё не отработала, и мастер получал
-        размеры, которых на экране никогда не было. Поэтому окно
-        открывается первым, а мастер накрывает его в соседнем кадре.
+        На первом запуске окно спрятано до этой минуты, чтобы не мелькать
+        пустым. Тур стартует, только когда окно на экране.
         """
         from main import post_startup_wizard
 
         source = inspect.getsource(post_startup_wizard.install_first_run_wizard)
 
-        self.assertLess(
-            source.index("_reveal_main_window(startup_host)"),
-            source.index("show_wizard_if_needed(window)"),
-        )
+        self.assertIn("_reveal_main_window(startup_host)", source)
+        self.assertNotIn("show_wizard_if_needed", source)
 
     def test_startup_asks_about_the_wizard_before_showing(self) -> None:
         from main import window_startup_signal_setup as setup

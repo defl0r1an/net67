@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 @dataclass(slots=True)
@@ -15,6 +15,8 @@ class StrategyApplyResult:
     applied_profile: str
     selected_file_name: str
     operation: str
+    # Предупреждения про фейки (--blob=) найденной стратегии.
+    blob_warnings: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass(slots=True)
@@ -23,9 +25,20 @@ class StrategyScanStartPlan:
     scan_protocol: str
     udp_games_scope: str
     mode: str
-    keep_current_results: bool
-    scan_cursor: int
     status_text: str
+
+
+@dataclass(slots=True)
+class StrategyScanPanelOutcome:
+    """Итог подбора для панели: вид, заголовок, объяснение, лучшая стратегия."""
+
+    kind: str
+    title: str
+    detail: str = ""
+    best_text: str = ""
+    # Номер лучшей стратегии в строках результатов (-1 — нет).
+    best_index: int = -1
+    celebrate: bool = False
 
 
 @dataclass(slots=True)
@@ -41,6 +54,7 @@ class StrategyScanFinishPlan:
     notification_kind: str
     baseline_variant: str
     fatal_error: str = ""
+    outcome: StrategyScanPanelOutcome | None = None
 
 
 @dataclass(slots=True)
@@ -106,26 +120,17 @@ class StrategyScanInteractionPlan:
 
 
 @dataclass(slots=True)
-class StrategyScanLogExpandPlan:
-    control_visible: bool
-    warning_visible: bool
-    results_visible: bool
-    log_min_height: int
-    log_max_height: int
-    button_text: str
-
-
-@dataclass(slots=True)
 class StrategyScanLanguagePlan:
-    control_title: str
-    results_title: str
-    log_title: str
-    expand_log_text: str
-    warning_title: str
+    log_button_text: str
+    protocol_label: str
+    target_label: str
+    mode_label: str
+    mode_items: list[str]
     start_text: str
     stop_text: str
     prepare_support_text: str
     protocol_items: list[str]
+    protocol_hints: list[str]
     udp_scope_label: str
     udp_scope_items: list[str]
     quick_domains_text: str

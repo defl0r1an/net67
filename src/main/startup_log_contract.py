@@ -55,6 +55,7 @@ _AFTER_INTERACTIVE_MARKERS: frozenset[str] = frozenset(
         "StartupPresetSetupUiWarmupFinished",
         "StartupProfileSetupUiWarmupQueued",
         "StartupProfileSetupUiWarmupFinished",
+        "StartupUserPresetContractMigrationQueued",
         "StartupUserPresetsWarmupQueued",
         "StartupUserPresetsWarmupStarted",
         "StartupSidebarSearchQueued",
@@ -194,7 +195,7 @@ def validate_startup_log_contract(text: str) -> StartupLogContractResult:
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) != 1:
-        print("Использование: python -m main.startup_log_contract <zapret_log.txt>")
+        print("Использование: python -m main.startup_log_contract <net67_log.txt>")
         return 2
 
     path = Path(args[0])

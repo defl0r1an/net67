@@ -1,5 +1,9 @@
 {
   "name": "Discord",
+  "category": "direct",
+  "icon": "fa5b.discord",
+  "icon_color": "#5865f2",
+  "sort_order": 21,
   "hosts": [
     {
       "ip": "23.227.38.74",

@@ -39,6 +39,7 @@ class BlockcheckFeature:
             start_run_log=self.start_strategy_scan_run_log,
             append_run_log=self.append_strategy_scan_run_log,
             close_run_log=self.close_strategy_scan_run_log,
+            load_fakes_catalog=self.profile_feature.load_fakes_catalog,
             **kwargs,
         )
 
@@ -92,15 +93,6 @@ class BlockcheckFeature:
             **kwargs,
         )
 
-    def create_strategy_scan_resume_save_worker(self, request_id: int, **kwargs):
-        from blockcheck.workers import StrategyScanResumeSaveWorker
-
-        return StrategyScanResumeSaveWorker(
-            request_id,
-            save_resume_state=self.save_resume_state,
-            **kwargs,
-        )
-
     def create_strategy_scan_finalize_worker(self, request_id: int, **kwargs):
         from blockcheck.workers import StrategyScanFinalizeWorker
 
@@ -118,9 +110,6 @@ class BlockcheckFeature:
 
     def start_run_log(self, *args, **kwargs):
         return self._commands().start_run_log(*args, **kwargs)
-
-    def save_resume_state(self, *args, **kwargs):
-        return self._commands().save_resume_state(*args, **kwargs)
 
     def start_blockcheck_run_log(self, *args, **kwargs):
         return self._worker_commands().start_blockcheck_run_log(*args, **kwargs)
@@ -151,7 +140,6 @@ class BlockcheckFeature:
 
     def apply_strategy(self, **kwargs):
         return self._commands().apply_strategy(
-            presets_feature=self.presets_feature,
             profile_feature=self.profile_feature,
             **kwargs,
         )
@@ -170,6 +158,9 @@ class BlockcheckFeature:
 
     def plan_scan_start(self, *args, **kwargs):
         return self._commands().plan_scan_start(*args, **kwargs)
+
+    def count_resumable_strategies(self, *args, **kwargs):
+        return self._commands().count_resumable_strategies(*args, **kwargs)
 
     def build_running_interaction_plan(self, *args, **kwargs):
         return self._commands().build_running_interaction_plan(*args, **kwargs)
@@ -194,9 +185,6 @@ class BlockcheckFeature:
 
     def build_apply_error_plan(self, *args, **kwargs):
         return self._commands().build_apply_error_plan(*args, **kwargs)
-
-    def build_log_expand_plan(self, *args, **kwargs):
-        return self._commands().build_log_expand_plan(*args, **kwargs)
 
     def build_language_plan(self, *args, **kwargs):
         return self._commands().build_language_plan(*args, **kwargs)

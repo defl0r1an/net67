@@ -83,11 +83,18 @@ class SourceTests(unittest.TestCase):
             with self.subTest(path=relative):
                 self.assertTrue((PROJECT_ROOT / "src" / relative).exists())
 
-    def test_blockcheck_reads_data_next_to_itself(self) -> None:
-        """Причина, по которой копирование в корень не помогает."""
+    def test_blockcheck_builtin_targets_live_in_code(self) -> None:
+        """Встроенные цели BlockCheck — в модуле, а не в data-файлах.
+
+        Исходный проект перенёс списки в blockcheck.data_lists ровно из-за
+        той беды, что описана выше: data-файлы не попадали в сборку, и
+        диагностика молча проверяла 3 цели вместо 62. Модуль Python в сборку
+        попадает всегда. Файлы в blockcheck/data остались только как
+        переопределение рядом с приложением.
+        """
         source = (PROJECT_ROOT / "src" / "blockcheck" / "targets.py").read_text(encoding="utf-8")
 
-        self.assertIn("Path(__file__).parent", source)
+        self.assertIn("data_lists", source)
 
 
 if __name__ == "__main__":

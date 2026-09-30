@@ -265,7 +265,7 @@ class LogsAccessibilityTests(unittest.TestCase):
             widgets.send_desc_label.property("screenReaderStateText"),
             (
                 "Описание подготовки обращения: Нажмите кнопку, чтобы собрать ZIP из свежих логов, "
-                "скопировать шаблон обращения и открыть GitHub Discussions."
+                "скопировать шаблон обращения и открыть Forgejo Issues."
             ),
         )
         self.assertEqual(
@@ -337,7 +337,7 @@ class LogsAccessibilityTests(unittest.TestCase):
             page.send_desc_label.property("screenReaderStateText"),
             (
                 "Описание подготовки обращения: Нажмите кнопку, чтобы собрать ZIP из свежих логов, "
-                "скопировать шаблон обращения и открыть GitHub Discussions."
+                "скопировать шаблон обращения и открыть Forgejo Issues."
             ),
         )
         self.assertEqual(

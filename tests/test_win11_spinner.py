@@ -1,52 +1,72 @@
 from __future__ import annotations
 
+import os
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-class _Timer:
-    def __init__(self, active: bool = False) -> None:
-        self._active = bool(active)
-        self.start_calls: list[int] = []
-        self.stop_calls = 0
-
-    def isActive(self) -> bool:  # noqa: N802
-        return self._active
-
-    def start(self, interval_ms: int) -> None:
-        self.start_calls.append(int(interval_ms))
-        self._active = True
-
-    def stop(self) -> None:
-        self.stop_calls += 1
-        self._active = False
+from PyQt6.QtCore import QAbstractAnimation
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QWidget
+from qfluentwidgets import IndeterminateProgressRing
 
 
 class Win11SpinnerTests(unittest.TestCase):
-    def test_start_skips_restarting_active_timer(self) -> None:
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_spinner_uses_stock_fluent_animation_with_visible_arc(self) -> None:
         from ui.widgets.win11_spinner import Win11Spinner
 
-        timer = _Timer(active=False)
-        spinner = SimpleNamespace(_timer=timer, show=Mock())
+        spinner = Win11Spinner(size=24)
+        self.addCleanup(spinner.deleteLater)
+        spinner.show()
+        spinner.start()
+        QTest.qWait(20)
+        initial_angle = spinner.startAngle
+        QTest.qWait(80)
 
-        Win11Spinner.start(spinner)
-        Win11Spinner.start(spinner)
+        self.assertIsInstance(spinner, IndeterminateProgressRing)
+        self.assertEqual(spinner.aniGroup.state(), QAbstractAnimation.State.Running)
+        self.assertNotEqual(spinner.startAngle, initial_angle)
+        self.assertEqual(spinner.spanAngle, 90)
 
-        self.assertEqual(timer.start_calls, [16])
-        self.assertEqual(spinner.show.call_count, 1)
-
-    def test_stop_skips_stopping_inactive_timer(self) -> None:
+    def test_animation_waits_for_hidden_page_and_restarts_after_every_show(self) -> None:
         from ui.widgets.win11_spinner import Win11Spinner
 
-        timer = _Timer(active=True)
-        spinner = SimpleNamespace(_timer=timer, hide=Mock())
+        parent = QWidget()
+        spinner = Win11Spinner(size=24, parent=parent)
+        self.addCleanup(parent.deleteLater)
+        spinner.start()
+        QTest.qWait(20)
 
-        Win11Spinner.stop(spinner)
-        Win11Spinner.stop(spinner)
+        self.assertFalse(spinner.isVisible())
+        self.assertEqual(spinner.aniGroup.state(), QAbstractAnimation.State.Stopped)
 
-        self.assertEqual(timer.stop_calls, 1)
-        self.assertEqual(spinner.hide.call_count, 1)
+        parent.show()
+        QTest.qWait(20)
+        self.assertEqual(spinner.aniGroup.state(), QAbstractAnimation.State.Running)
+        self.assertEqual(spinner.spanAngle, 90)
+        first_visible_angle = spinner.startAngle
+        QTest.qWait(60)
+        self.assertNotEqual(spinner.startAngle, first_visible_angle)
+
+        parent.hide()
+        QApplication.processEvents()
+        self.assertEqual(spinner.aniGroup.state(), QAbstractAnimation.State.Stopped)
+
+        parent.show()
+        QTest.qWait(20)
+        self.assertEqual(spinner.aniGroup.state(), QAbstractAnimation.State.Running)
+        self.assertEqual(spinner.spanAngle, 90)
+        restarted_angle = spinner.startAngle
+        QTest.qWait(60)
+        self.assertNotEqual(spinner.startAngle, restarted_angle)
+
+        spinner.stop()
+        self.assertEqual(spinner.aniGroup.state(), QAbstractAnimation.State.Stopped)
+        self.assertTrue(spinner.isHidden())
 
 
 if __name__ == "__main__":

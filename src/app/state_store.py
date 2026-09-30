@@ -21,7 +21,10 @@ class AppUiState:
     # В net67 подписки нет, все возможности доступны сразу. Значение по
     # умолчанию важно: страницы читают снапшот состояния ещё до того, как
     # отработает проверка подписки, и при False блокировали часть настроек
-    # оформления, показывая их как «недоступно без Premium».
+    # оформления, показывая их как «недоступно без Premium». По той же
+    # причине статус сразу «известен»: ждать проверки, которой не будет,
+    # нечего.
+    subscription_known: bool = ALL_FEATURES_UNLOCKED
     subscription_is_premium: bool = ALL_FEATURES_UNLOCKED
     subscription_days_remaining: int | None = None
     window_opacity: int = 100
@@ -41,12 +44,24 @@ class MainWindowStateStore:
     Здесь хранится только та часть состояния, которая действительно нужна
     подписчикам UI и общим app-level helper'ам. Внутренний process-tracking
     launch-контура сюда больше не входит.
+
+    Подписчики — живые виджеты, поэтому доставка колбэков обязана происходить
+    в GUI-потоке. Сам store про Qt не знает: за перевод в GUI-поток отвечает
+    опциональный маршалер (`app/ui_thread_marshaller.py`) с duck-typed
+    контрактом `is_ui_thread()` / `post(callable)`. Без маршалера поведение
+    остаётся полностью синхронным (тесты, headless-сценарии).
     """
 
-    def __init__(self, initial_state: AppUiState | None = None) -> None:
+    def __init__(
+        self,
+        initial_state: AppUiState | None = None,
+        *,
+        ui_thread_marshaller: object | None = None,
+    ) -> None:
         self._state = initial_state or AppUiState()
         self._lock = RLock()
         self._subscribers: list[tuple[frozenset[str] | None, UiStateCallback]] = []
+        self._ui_thread_marshaller = ui_thread_marshaller
 
     def snapshot(self) -> AppUiState:
         with self._lock:
@@ -93,14 +108,70 @@ class MainWindowStateStore:
 
             self._state = replace(state, **real_changes)
             snapshot = replace(self._state)
-            subscribers = list(self._subscribers)
 
         changed_fields = frozenset(real_changes.keys())
+        self._notify_subscribers(snapshot, changed_fields)
+        return True
+
+    def set_ui_thread_marshaller(self, marshaller: object | None) -> None:
+        """Задаёт маршалер доставки колбэков в GUI-поток."""
+        self._ui_thread_marshaller = marshaller
+
+    def post_to_ui_thread(self, action: Callable[[], None]) -> None:
+        """Выполняет `action` в GUI-потоке (сразу, если уже в нём)."""
+        if not callable(action):
+            return
+        marshaller = self._ui_thread_marshaller
+        if marshaller is not None and not self._is_ui_thread(marshaller):
+            marshaller.post(action)
+            return
+        action()
+
+    def _notify_subscribers(self, snapshot: AppUiState, changed_fields: frozenset[str]) -> None:
+        marshaller = self._ui_thread_marshaller
+        if marshaller is not None and not self._is_ui_thread(marshaller):
+            self._log_cross_thread_update(changed_fields)
+            marshaller.post(lambda: self._deliver_to_subscribers(snapshot, changed_fields))
+            return
+
+        self._deliver_to_subscribers(snapshot, changed_fields)
+
+    def _deliver_to_subscribers(self, snapshot: AppUiState, changed_fields: frozenset[str]) -> None:
+        # Список подписчиков перечитывается в момент доставки: между
+        # отложенной публикацией и её выполнением подписчик мог отписаться
+        # (страница закрылась), и звать его уже нельзя.
+        with self._lock:
+            subscribers = list(self._subscribers)
+
         for watched_fields, callback in subscribers:
             if watched_fields is None or watched_fields & changed_fields:
                 callback(snapshot, changed_fields)
 
-        return True
+    @staticmethod
+    def _is_ui_thread(marshaller: object) -> bool:
+        checker = getattr(marshaller, "is_ui_thread", None)
+        if not callable(checker):
+            return True
+        try:
+            return bool(checker())
+        except Exception:
+            return True
+
+    @staticmethod
+    def _log_cross_thread_update(changed_fields: frozenset[str]) -> None:
+        try:
+            from threading import current_thread
+
+            from log.log import log
+
+            log(
+                "UI state обновлён вне GUI-потока "
+                f"(поток={current_thread().name}, поля={sorted(changed_fields)}) — "
+                "доставка подписчикам перенесена в GUI-поток",
+                "⚠ WARNING",
+            )
+        except Exception:
+            pass
 
     def set_launch_busy(self, busy: bool, text: str = "") -> bool:
         if not busy:
@@ -118,6 +189,7 @@ class MainWindowStateStore:
             is_premium = True
         normalized_days = None if not is_premium else days_remaining
         return self.update(
+            subscription_known=True,
             subscription_is_premium=bool(is_premium),
             subscription_days_remaining=normalized_days,
         )

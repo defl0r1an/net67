@@ -79,8 +79,6 @@ from orchestra.ui.ratings_page import OrchestraRatingsPage
 from orchestra.ui.settings_page import OrchestraSettingsPage
 from orchestra.ui.whitelist_page import OrchestraWhitelistPage
 import app.feature_facades.orchestra as orchestra_feature_facade
-import dns.page_diagnostics_warning_workflow as dns_diag_workflow
-import dns.page_load_workflow as dns_load_workflow
 import dns.ui.page as dns_page
 import dns.ui.dns_check_page as dns_check_page
 import dns.commands as dns_commands
@@ -99,10 +97,6 @@ import telegram_proxy.runtime.workers as telegram_proxy_workers
 from telegram_proxy.ui.page import TelegramProxyPage
 from telegram_proxy.ui.worker_state import TelegramProxyPageQueuedWorkerState
 from telegram_proxy.runtime.workers import TelegramProxyDiagnosticsWorker
-from diagnostics.ui.page import ConnectionTestPage
-import diagnostics.ui.runtime_helpers as diagnostics_runtime_helpers
-import app.feature_facades.diagnostics as diagnostics_feature_facade
-from app.feature_facades.diagnostics import DiagnosticsFeature
 import ui.navigation.text_sync as navigation_text_sync
 import ui.theme as ui_theme
 import ui.window_appearance_bindings as window_appearance_bindings
@@ -375,13 +369,15 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
 
         self.assertTrue(hasattr(RawPresetTextEditor, "search_text"))
         self.assertTrue(hasattr(RawPresetTextEditor, "find_next"))
-        self.assertIn("SearchLineEdit", editor_init_source)
-        self.assertIn("self.search_input.setPlaceholderText", editor_init_source)
+        # Поиск живёт в общем ui.code_editor: панель Find/Replace плюс
+        # контроллер, владеющий состоянием совпадений.
+        self.assertIn("FindReplaceBar(parent)", editor_init_source)
+        self.assertIn("FindController(self.editor, self.find_bar", editor_init_source)
+        self.assertIn("self.search_input = self.find_bar.search_input", editor_init_source)
         self.assertIn("actions_layout.addStretch(1)", build_source)
-        self.assertIn("actions_layout.addWidget(self.searchInput, 1)", build_source)
-        self.assertIn(".find(query", find_source)
-        self.assertIn("QTextDocument.FindFlag(0)", find_source)
-        self.assertIn("FindBackward", find_source)
+        self.assertIn("self.add_widget(self.findBar)", build_source)
+        self.assertIn("self.find_controller.search_text(query)", search_source)
+        self.assertIn("self.find_controller.find_next(reverse=", find_source)
 
     def test_refresh_after_switch_uses_profile_snapshot_not_full_list(self) -> None:
         source = inspect.getsource(display_state.resolve_profile_strategy_display_state)
@@ -2187,7 +2183,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
             "_on_ui_language_changed",
             "_on_rkn_background_changed",
             "_on_bg_preset_toggled",
-            "_on_mica_changed",
             "_on_opacity_changed",
             "_on_snowflakes_changed",
             "_on_garland_changed",
@@ -2195,7 +2190,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
             "_on_follow_windows_accent_changed",
             "_on_tinted_bg_changed",
             "_on_tinted_intensity_changed",
-            "set_premium_status",
             "_on_animations_changed",
             "_on_smooth_scroll_changed",
             "_on_editor_smooth_scroll_changed",
@@ -2203,6 +2197,11 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
             source = inspect.getsource(getattr(AppearancePage, method_name))
             self.assertIn("_request_appearance_save", source)
             self.assertNotIn("appearance_settings.save_", source)
+
+        # Сброс Premium-настроек Free-версии сохраняет окно, а не страница.
+        premium_access_source = inspect.getsource(AppearancePage._apply_premium_access)
+        self.assertNotIn("_request_appearance_save", premium_access_source)
+        self.assertNotIn("_callback", premium_access_source)
 
         self.assertIn("create_appearance_save_worker", page_source)
         self.assertIn("create_appearance_save_worker", feature_source)
@@ -2222,33 +2221,33 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("save_display_mode", worker_init_source)
         self.assertIn("save_ui_language", worker_init_source)
         self.assertIn("save_background_preset", worker_init_source)
-        self.assertIn("save_mica_enabled", worker_init_source)
+        self.assertNotIn("mica", worker_init_source)
         self.assertIn("save_window_opacity", worker_init_source)
         self.assertIn("save_accent_color", worker_init_source)
         self.assertIn("save_animations_enabled", worker_init_source)
         self.assertIn("save_display_mode", worker_source)
         self.assertIn("save_ui_language", worker_source)
         self.assertIn("save_background_preset", worker_source)
-        self.assertIn("save_mica_enabled", worker_source)
+        self.assertNotIn("mica", worker_source)
         self.assertIn("save_window_opacity", worker_source)
         self.assertIn("save_accent_color", worker_source)
         self.assertIn("save_animations_enabled", worker_source)
         self.assertNotIn("settings.appearance", worker_source)
 
     def test_telegram_proxy_restart_request_survives_queued_settings_saves(self) -> None:
-        from telegram_proxy.ui.settings_save_flow import merge_restart_request
+        from telegram_proxy.runtime.settings_save_flow import merge_restart_request
 
         self.assertEqual(merge_restart_request("", "schedule"), "schedule")
         self.assertEqual(merge_restart_request("schedule", ""), "schedule")
         self.assertEqual(merge_restart_request("schedule", "now"), "now")
         self.assertEqual(merge_restart_request("now", "schedule"), "now")
 
-        init_source = inspect.getsource(TelegramProxyPage.__init__)
-        finished_source = inspect.getsource(TelegramProxyPage._on_settings_save_finished)
+        completed_source = inspect.getsource(TelegramProxyFeature._on_settings_save_completed)
+        flushed_source = inspect.getsource(TelegramProxyPage._on_settings_flushed)
 
-        self.assertIn("_settings_save_restart_pending", init_source)
-        self.assertIn("merge_restart_request", finished_source)
-        self.assertIn("_settings_save_restart_pending", finished_source)
+        self.assertIn("merge_restart_request", completed_source)
+        self.assertIn("restart_pending", completed_source)
+        self.assertIn("_dispatch_pending_restart(restart)", flushed_source)
 
     def test_appearance_rkn_background_options_load_through_worker(self) -> None:
         appearance_feature = importlib.import_module("app.feature_facades.appearance")
@@ -2305,15 +2304,16 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
 
         combined = "\n".join((background_source, opacity_source, startup_source))
         self.assertIn("peek_warmed_background_preset", combined)
-        self.assertIn("peek_warmed_mica_enabled", combined)
         self.assertIn("peek_warmed_window_opacity", combined)
         self.assertNotIn("load_background_preset", combined)
-        self.assertNotIn("load_mica_enabled", combined)
+        self.assertNotIn("mica_enabled", combined)
         self.assertNotIn("load_window_opacity", combined)
 
     def test_window_appearance_bindings_use_warmed_state_without_settings_reads(self) -> None:
         bindings_source = inspect.getsource(window_appearance_bindings.initialize_window_appearance_bindings)
-        holiday_source = inspect.getsource(window_appearance_bindings.initialize_window_holiday_effects)
+        holiday_source = inspect.getsource(
+            importlib.import_module("ui.window_premium_appearance").WindowPremiumAppearance
+        )
         smooth_source = "\n".join(
             (
                 inspect.getsource(smooth_scroll.get_page_smooth_scroll_enabled),
@@ -2640,7 +2640,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
                 "ui_language": "en",
                 "background_preset": "rkn_chan",
                 "rkn_background": "rkn_tyan/bg.webp",
-                "mica_enabled": False,
                 "accent_color": "#112233",
                 "follow_windows_accent": True,
                 "tinted_background": True,
@@ -2664,7 +2663,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertEqual(plan.ui_language, "en")
         self.assertEqual(plan.background_preset, "rkn_chan")
         self.assertEqual(plan.rkn_background, "rkn_tyan/bg.webp")
-        self.assertFalse(plan.mica_enabled)
         self.assertEqual(plan.window_opacity, 73)
         self.assertEqual(plan.accent_color, "#112233")
         self.assertTrue(plan.follow_windows_accent)
@@ -2797,7 +2795,7 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("append_log_line", worker_source)
 
     def test_telegram_proxy_auto_deeplink_check_runs_through_worker(self) -> None:
-        try_source = inspect.getsource(TelegramProxyPage._try_auto_deeplink)
+        due_source = inspect.getsource(TelegramProxyPage._run_due_auto_deeplink)
         request_source = inspect.getsource(TelegramProxyPage._request_auto_deeplink_check)
         start_source = inspect.getsource(TelegramProxyPage._start_auto_deeplink_worker)
         checked_source = inspect.getsource(TelegramProxyPage._on_auto_deeplink_checked)
@@ -2810,8 +2808,8 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertTrue(hasattr(telegram_proxy_workers, "TelegramProxyAutoDeeplinkWorker"))
         worker_source = inspect.getsource(telegram_proxy_workers.TelegramProxyAutoDeeplinkWorker.run)
 
-        self.assertIn("_request_auto_deeplink_check", try_source)
-        self.assertNotIn("telegram_proxy_settings.consume_auto_deeplink_request", try_source)
+        self.assertIn("_request_auto_deeplink_check", due_source)
+        self.assertNotIn("consume_auto_deeplink_request", due_source)
         self.assertIn("_auto_deeplink_runtime", page_source)
         self.assertIn("_start_auto_deeplink_worker", request_source)
         self.assertIn("start_qthread_worker", start_source)
@@ -2859,79 +2857,59 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("_run_dns_poisoning_check", worker_source)
         self.assertNotIn("dns_commands", worker_source)
         self.assertNotIn("dns_checker", worker_source)
-        self.assertIn("DNSChecker", commands_source)
-
-    def test_dns_quick_check_runs_through_worker(self) -> None:
-        page_source = inspect.getsource(dns_check_page.DNSCheckPage)
-        quick_source = inspect.getsource(dns_check_page.DNSCheckPage.quick_dns_check)
-        feature_source = inspect.getsource(__import__("app.feature_facades.dns", fromlist=["build_dns_feature"]).build_dns_feature)
-        plans_source = inspect.getsource(dns_check_page_plans)
-        commands_source = inspect.getsource(__import__("dns.commands", fromlist=["run_quick_dns_check"]).run_quick_dns_check)
-
-        self.assertTrue(hasattr(dns_check_worker, "DNSQuickCheckWorker"))
-        worker_source = inspect.getsource(dns_check_worker.DNSQuickCheckWorker.run)
-
-        self.assertIn("create_dns_quick_check_worker", page_source)
-        self.assertIn("_start_quick_dns_check_worker", quick_source)
-        self.assertNotIn("run_quick_dns_check(", quick_source)
-        self.assertIn("create_dns_quick_check_worker", feature_source)
-        self.assertIn("run_quick_dns_check=run_quick_dns_check", feature_source)
-        self.assertIn("_run_quick_dns_check", worker_source)
-        self.assertNotIn("dns.commands", worker_source)
-        self.assertNotIn("socket.", plans_source)
-        self.assertIn("socket.gethostbyname", commands_source)
+        self.assertNotIn("diagnostics.engine", worker_source)
+        self.assertIn("run_dns_check", commands_source)
 
     def test_telegram_proxy_settings_save_runs_through_worker(self) -> None:
+        from telegram_proxy.ui.advanced_page import TelegramProxyAdvancedPage
+
         page_source = inspect.getsource(TelegramProxyPage)
         upstream_source = inspect.getsource(telegram_upstream_workflow)
         runtime_source = inspect.getsource(telegram_runtime_workflow)
-        request_source = inspect.getsource(TelegramProxyPage._request_settings_save)
-        start_source = inspect.getsource(TelegramProxyPage._start_settings_save_worker)
-        completed_source = inspect.getsource(TelegramProxyPage._on_settings_save_finished)
-        failed_source = inspect.getsource(TelegramProxyPage._on_settings_save_failed)
-        finished_source = inspect.getsource(TelegramProxyPage._on_settings_save_worker_finished)
-        cleanup_source = inspect.getsource(TelegramProxyPage.cleanup)
+        request_source = inspect.getsource(TelegramProxyFeature.request_settings_save)
+        start_source = inspect.getsource(TelegramProxyFeature._start_settings_save_worker)
+        completed_source = inspect.getsource(TelegramProxyFeature._on_settings_save_completed)
+        failed_source = inspect.getsource(TelegramProxyFeature._on_settings_save_failed)
+        finished_source = inspect.getsource(TelegramProxyFeature._on_settings_save_worker_finished)
+        cleanup_source = inspect.getsource(TelegramProxyFeature.cleanup)
         command_source = inspect.getsource(telegram_proxy_commands)
         queued_state_source = inspect.getsource(TelegramProxyPageQueuedWorkerState)
 
         self.assertTrue(hasattr(telegram_proxy_workers, "TelegramProxySettingsSaveWorker"))
         worker_source = inspect.getsource(telegram_proxy_workers.TelegramProxySettingsSaveWorker.run)
 
-        for handler_name in (
-            "_on_port_changed",
-            "_on_host_changed",
-            "_on_upstream_changed",
-            "_on_upstream_preset_changed",
-            "_on_upstream_host_changed",
-            "_on_upstream_port_changed",
-            "_on_upstream_user_changed",
-            "_on_upstream_pass_changed",
-            "_on_upstream_mode_changed",
+        for page_cls, handler_name in (
+            (TelegramProxyPage, "_on_port_changed"),
+            (TelegramProxyPage, "_on_host_changed"),
+            (TelegramProxyPage, "_on_auto_deeplink_toggled"),
+            (TelegramProxyAdvancedPage, "_on_upstream_changed"),
+            (TelegramProxyAdvancedPage, "_on_upstream_preset_changed"),
+            (TelegramProxyAdvancedPage, "_on_manual_upstream_edited"),
+            (TelegramProxyAdvancedPage, "_on_upstream_port_changed"),
+            (TelegramProxyAdvancedPage, "_on_upstream_mode_changed"),
         ):
-            source = inspect.getsource(getattr(TelegramProxyPage, handler_name))
-            self.assertIn("_request_settings_save", source)
+            source = inspect.getsource(getattr(page_cls, handler_name))
+            self.assertRegex(source, r"_request_(?:manual_upstream|settings)_save")
             self.assertNotIn("telegram_proxy_settings.set_", source)
-            self.assertNotIn("save_upstream_fields(", source)
-            self.assertNotIn("save_upstream_mode(", source)
 
-        self.assertIn("create_settings_save_worker", page_source)
-        self.assertIn("_settings_save_runtime", page_source)
+        for page_cls in (TelegramProxyPage, TelegramProxyAdvancedPage):
+            self.assertIn(
+                "self._telegram_proxy.request_settings_save(",
+                inspect.getsource(page_cls._request_settings_save),
+            )
         self.assertIn("_queue_settings_save_payload", request_source)
-        self.assertIn(
-            '_queued_worker_state("_settings_save_state", "_settings_save_runtime")',
-            inspect.getsource(TelegramProxyPage._queue_settings_save_payload),
-        )
-        self.assertIn("state.start_or_queue", request_source)
+        self.assertIn("has_pending_settings_saves", request_source)
+        self.assertIn("replace_by_key", inspect.getsource(TelegramProxyFeature._queue_settings_save_payload))
         self.assertIn("start_qthread_worker", start_source)
         self.assertIn("bind_worker", start_source)
-        self.assertIn("worker.completed.connect(self._on_settings_save_finished)", start_source)
+        self.assertIn("worker.completed.connect(self._on_settings_save_completed)", start_source)
         self.assertIn("worker.failed.connect(self._on_settings_save_failed)", start_source)
-        self.assertIn("_settings_save_runtime.is_current", completed_source)
-        self.assertIn("_settings_save_runtime.is_current", failed_source)
+        self.assertIn("runtime.is_current", completed_source)
+        self.assertIn("runtime.is_current", failed_source)
         self.assertIn("schedule_next_after_finish", finished_source)
         self.assertIn("pop_next_after_finish", queued_state_source)
-        self.assertIn("_settings_save_runtime.stop", cleanup_source)
-        self.assertNotIn("_settings_save_worker =", page_source)
+        self.assertIn("runtime.stop", cleanup_source)
+        self.assertNotIn("_settings_save_runtime", page_source)
         self.assertNotIn("worker.start()", start_source)
         self.assertNotIn("import telegram_proxy.settings", upstream_source)
         self.assertNotIn("telegram_proxy_settings.set_", upstream_source)
@@ -2944,13 +2922,17 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertNotIn("telegram_proxy.runtime.commands", worker_source)
         self.assertNotIn("telegram_proxy.settings", worker_source)
         self.assertIn("save_settings_action", worker_source)
-        self.assertIn("set_host", command_source)
-        self.assertIn("set_port", command_source)
-        self.assertIn("set_proxy_enabled", command_source)
-        self.assertIn("set_upstream_enabled", command_source)
-        self.assertIn("set_upstream_preset", command_source)
-        self.assertIn("set_manual_upstream", command_source)
-        self.assertIn("set_upstream_mode", command_source)
+        for setter in (
+            "set_host",
+            "set_port",
+            "set_proxy_enabled",
+            "set_upstream_enabled",
+            "set_upstream_preset",
+            "set_manual_upstream",
+            "set_upstream_mode",
+            "set_auto_deeplink",
+        ):
+            self.assertIn(setter, command_source)
 
     def test_telegram_proxy_relay_http_probe_is_command_not_ui_runtime(self) -> None:
         page_runtime_source = inspect.getsource(telegram_page.telegram_proxy_page_runtime)
@@ -2996,19 +2978,25 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("open_log_file", worker_source)
 
     def test_telegram_proxy_external_links_run_through_worker(self) -> None:
+        from telegram_proxy.ui.advanced_page import TelegramProxyAdvancedPage
+
         page_source = inspect.getsource(TelegramProxyPage)
-        mtproxy_source = inspect.getsource(TelegramProxyPage._on_open_mtproxy)
         telegram_source = inspect.getsource(TelegramProxyPage._on_open_in_telegram)
+        mtproxy_source = inspect.getsource(TelegramProxyAdvancedPage._on_open_mtproxy)
         start_source = inspect.getsource(TelegramProxyPage._start_external_link_worker)
         cleanup_source = inspect.getsource(TelegramProxyPage.cleanup)
+        advanced_cleanup_source = inspect.getsource(TelegramProxyAdvancedPage.cleanup)
         feature_source = inspect.getsource(TelegramProxyFeature)
 
         self.assertTrue(hasattr(telegram_proxy_workers, "TelegramProxyExternalLinkWorker"))
         worker_source = inspect.getsource(telegram_proxy_workers.TelegramProxyExternalLinkWorker.run)
 
+        self.assertIn("_start_external_link_worker", telegram_source)
         for source in (mtproxy_source, telegram_source):
-            self.assertIn("_start_external_link_worker", source)
             self.assertNotIn(".open_external_link(", source)
+        self.assertIn("_external_link_runtime.start_qthread_worker", mtproxy_source)
+        self.assertIn("create_external_link_worker", mtproxy_source)
+        self.assertIn("_external_link_runtime", advanced_cleanup_source)
 
         self.assertIn("create_external_link_worker", page_source)
         self.assertIn("_external_link_runtime", page_source)
@@ -3160,7 +3148,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         kwargs = build_blockcheck_page_kwargs(
             page_name=PageName.BLOCKCHECK,
             blockcheck_feature=blockcheck_feature,
-            diagnostics_feature=Mock(),
             dns_feature=Mock(),
             runtime_feature=runtime_feature,
         )
@@ -3170,7 +3157,9 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         kwargs["create_strategy_scan_worker"](target="example.org", mode="quick", parent=object())
         blockcheck_feature.create_strategy_scan_worker.assert_called_once()
         _, call_kwargs = blockcheck_feature.create_strategy_scan_worker.call_args
-        self.assertIs(call_kwargs["shutdown_sync"], runtime_feature.shutdown_sync)
+        # Сканер работает в своём QThread: остановка идёт через worker-вариант,
+        # который применяет runtime-state (и UI-подписчиков) в GUI-потоке.
+        self.assertIs(call_kwargs["shutdown_sync"], runtime_feature.shutdown_sync_from_worker)
 
     def test_blockcheck_support_bundle_prepares_through_worker(self) -> None:
         blockcheck_workers = importlib.import_module("blockcheck.workers")
@@ -3274,24 +3263,16 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("build_quick_target_menu_plan", worker_source)
         self.assertNotIn("build_quick_target_menu_plan", handler_source)
 
-    def test_strategy_scan_resume_progress_saves_through_worker(self) -> None:
+    def test_strategy_scan_has_no_resume_cursor(self) -> None:
         import blockcheck.workers as blockcheck_workers
 
         page_source = inspect.getsource(StrategyScanPage)
-        result_source = inspect.getsource(StrategyScanPage._on_strategy_result)
         feature_source = inspect.getsource(BlockcheckFeature)
 
-        self.assertTrue(hasattr(blockcheck_workers, "StrategyScanResumeSaveWorker"))
-        worker_source = inspect.getsource(blockcheck_workers.StrategyScanResumeSaveWorker.run)
-
-        self.assertIn("_request_strategy_scan_resume_save", result_source)
-        self.assertNotIn("record_strategy_scan_result(", result_source)
-        self.assertIn("_strategy_scan_resume_save_worker", page_source)
-        self.assertIn("create_strategy_scan_resume_save_worker", feature_source)
-        self.assertIn("save_resume_state=self.save_resume_state", feature_source)
-        self.assertIn("_save_resume_state", worker_source)
-        self.assertNotIn("blockcheck_public", worker_source)
-        self.assertIn("save_resume_state", worker_source)
+        # Порядок стратегий теперь задаёт история подбора, а не курсор продолжения.
+        self.assertFalse(hasattr(blockcheck_workers, "StrategyScanResumeSaveWorker"))
+        self.assertNotIn("resume", page_source)
+        self.assertNotIn("resume", feature_source)
 
     def test_strategy_scan_finish_plan_finalizes_through_worker(self) -> None:
         import blockcheck.workers as blockcheck_workers
@@ -3391,7 +3372,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         blocked_source = inspect.getsource(OrchestraBlockedPage)
         ratings_source = inspect.getsource(OrchestraRatingsPage)
         updater_source = inspect.getsource(ServersPage)
-        update_runtime_source = inspect.getsource(__import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime)
 
         self.assertIn("class OneShotWorkerRuntime", runtime_source)
         self.assertIn("start_qobject_worker", runtime_source)
@@ -3402,37 +3382,31 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
             locked_source,
             blocked_source,
             ratings_source,
-            updater_source + update_runtime_source,
+            updater_source,
         ):
             self.assertIn("OneShotWorkerRuntime", source)
 
-    def test_updater_auto_check_save_runs_through_worker(self) -> None:
-        settings_workers = importlib.import_module("updater.settings_workers")
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-        updater_feature_cls = __import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature
+    def test_updater_settings_and_channel_open_run_off_gui_thread(self) -> None:
+        page_actions = importlib.import_module("updater.page_actions")
+        page_source = inspect.getsource(ServersPage)
+        actions_source = inspect.getsource(page_actions)
 
-        handler_source = inspect.getsource(update_runtime_cls.set_auto_check_enabled)
-        runtime_source = inspect.getsource(update_runtime_cls)
-        feature_source = inspect.getsource(updater_feature_cls)
+        # Страница не читает и не пишет настройки сама: только через действия.
+        self.assertNotIn("settings.store", page_source)
+        self.assertIn("AutoCheckSetting", page_source)
+        self.assertIn("ChannelOpener", page_source)
+        for call in (
+            "self._updater_feature.is_auto_update_enabled()",
+            "self._updater_feature.set_auto_update_enabled(value)",
+            "self._updater_feature.open_update_channel(",
+        ):
+            self.assertIn(call, actions_source)
+        self.assertIn("threading.Thread(", actions_source)
+        self.assertNotIn("updater_commands", actions_source)
 
-        self.assertTrue(hasattr(settings_workers, "UpdaterAutoCheckSaveWorker"))
-        worker_source = inspect.getsource(settings_workers.UpdaterAutoCheckSaveWorker.run)
-
-        self.assertIn("_request_auto_check_save", handler_source)
-        self.assertNotIn("set_auto_update_enabled", handler_source)
-        self.assertIn("_auto_check_save_pending", runtime_source)
-        self.assertIn("create_auto_check_save_worker", feature_source)
-        self.assertIn("set_auto_update_enabled=self.set_auto_update_enabled", feature_source)
-        self.assertIn("_set_auto_update_enabled", worker_source)
-        self.assertNotIn("updater_commands", worker_source)
-
-    def test_updater_auto_check_initial_read_runs_through_worker(self) -> None:
-        settings_workers = importlib.import_module("updater.settings_workers")
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-        updater_feature_cls = __import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature
-
-        init_source = inspect.getsource(update_runtime_cls.__init__)
-        runtime_source = inspect.getsource(update_runtime_cls)
+    def test_updater_dpi_and_network_work_belongs_to_services(self) -> None:
+        check_service = importlib.import_module("updater.check.service")
+        install_service = importlib.import_module("updater.download.service")
         page_source = inspect.getsource(ServersPage)
         feature_source = inspect.getsource(updater_feature_cls)
 
@@ -3492,103 +3466,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
             url="https://example.org",
             parent=parent,
         )
-
-    def test_updater_pipeline_workers_are_created_through_feature(self) -> None:
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-        updater_feature_cls = __import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature
-
-        preflight_source = inspect.getsource(update_runtime_cls._start_update_download)
-        download_source = inspect.getsource(update_runtime_cls._start_update_download_stage)
-        installer_source = inspect.getsource(update_runtime_cls._start_update_installer_stage)
-        feature_source = inspect.getsource(updater_feature_cls)
-
-        self.assertIn("create_update_preflight_worker", preflight_source)
-        self.assertIn("create_update_download_worker", download_source)
-        self.assertIn("create_update_installer_worker", installer_source)
-        self.assertIn("UpdatePreflightWorker", feature_source)
-        self.assertIn("UpdateDownloadWorker", feature_source)
-        self.assertIn("UpdateInstallerWorker", feature_source)
-        self.assertNotIn("UpdateWorker", feature_source)
-
-    def test_updater_cache_invalidation_runs_through_worker(self) -> None:
-        settings_workers = importlib.import_module("updater.settings_workers")
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-        updater_feature_cls = __import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature
-
-        manual_check_source = inspect.getsource(update_runtime_cls.request_manual_check)
-        install_source = inspect.getsource(update_runtime_cls.install_update)
-        runtime_source = inspect.getsource(update_runtime_cls)
-        feature_source = inspect.getsource(updater_feature_cls)
-
-        self.assertTrue(hasattr(settings_workers, "UpdaterCacheInvalidateWorker"))
-        worker_source = inspect.getsource(settings_workers.UpdaterCacheInvalidateWorker.run)
-
-        self.assertIn("_request_update_cache_invalidate", manual_check_source)
-        self.assertIn("_request_update_cache_invalidate", install_source)
-        self.assertNotIn("invalidate_cache", manual_check_source)
-        self.assertNotIn("invalidate_cache", install_source)
-        self.assertIn("_cache_invalidate_runtime", runtime_source)
-        self.assertIn("create_cache_invalidate_worker", runtime_source)
-        self.assertIn("create_cache_invalidate_worker", feature_source)
-        self.assertIn("invalidate_update_cache=self.invalidate_update_cache", feature_source)
-        self.assertIn("_invalidate_update_cache", worker_source)
-
-    def test_updater_server_retry_without_dpi_runs_through_worker(self) -> None:
-        retry_workers = importlib.import_module("updater.retry_workers")
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-        updater_feature_cls = __import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature
-
-        retry_source = inspect.getsource(update_runtime_cls._maybe_retry_server_check_without_dpi)
-        runtime_source = inspect.getsource(update_runtime_cls)
-
-        self.assertTrue(hasattr(retry_workers, "UpdaterServerRetryWithoutDpiWorker"))
-        worker_source = inspect.getsource(retry_workers.UpdaterServerRetryWithoutDpiWorker.run)
-        command_source = inspect.getsource(importlib.import_module("updater.commands").retry_server_check_without_dpi)
-        feature_source = inspect.getsource(updater_feature_cls)
-
-        self.assertIn("_request_server_retry_without_dpi", retry_source)
-        self.assertNotIn("shutdown_sync", retry_source)
-        self.assertNotIn("is_any_running", retry_source)
-        self.assertIn("_server_retry_without_dpi_runtime", runtime_source)
-        self.assertIn("create_server_retry_without_dpi_worker", runtime_source)
-        self.assertIn("_teardown_server_retry_without_dpi_worker", runtime_source)
-        self.assertIn("create_server_retry_without_dpi_worker", feature_source)
-        self.assertIn("retry_server_check_without_dpi=self.retry_server_check_without_dpi", feature_source)
-        self.assertIn("_retry_server_check_without_dpi", worker_source)
-        self.assertNotIn("updater.commands", worker_source)
-        self.assertIn("retry_server_check_without_dpi", worker_source)
-        self.assertNotIn("self._is_any_running(", worker_source)
-        self.assertNotIn("self._shutdown_sync(", worker_source)
-        self.assertIn("is_any_running", command_source)
-        self.assertIn("shutdown_sync", command_source)
-
-    def test_updater_dpi_restart_runs_through_worker(self) -> None:
-        retry_workers = importlib.import_module("updater.retry_workers")
-        update_runtime_cls = __import__("updater.update_page_runtime", fromlist=["UpdatePageRuntime"]).UpdatePageRuntime
-
-        restart_source = inspect.getsource(update_runtime_cls._restart_dpi_after_update)
-        runtime_source = inspect.getsource(update_runtime_cls)
-
-        self.assertTrue(hasattr(retry_workers, "UpdaterDpiRestartWorker"))
-        worker_source = inspect.getsource(retry_workers.UpdaterDpiRestartWorker.run)
-        command_source = inspect.getsource(importlib.import_module("updater.commands").restart_dpi_after_update)
-        feature_source = inspect.getsource(__import__("app.feature_facades.updater", fromlist=["UpdaterFeature"]).UpdaterFeature)
-
-        self.assertIn("_request_dpi_restart", restart_source)
-        self.assertNotIn(".restart(", restart_source)
-        self.assertNotIn(".is_available(", restart_source)
-        self.assertIn("_dpi_restart_runtime", runtime_source)
-        self.assertIn("create_dpi_restart_worker", runtime_source)
-        self.assertIn("_teardown_dpi_restart_worker", runtime_source)
-        self.assertIn("create_dpi_restart_worker", feature_source)
-        self.assertIn("restart_dpi_after_update=self.restart_dpi_after_update", feature_source)
-        self.assertIn("_restart_dpi_after_update", worker_source)
-        self.assertNotIn("updater.commands", worker_source)
-        self.assertIn("restart_dpi_after_update", worker_source)
-        self.assertNotIn(".is_available(", worker_source)
-        self.assertNotIn(".restart(", worker_source)
-        self.assertIn("is_available", command_source)
-        self.assertIn("restart", command_source)
 
     def test_logs_cleanup_stops_overview_worker(self) -> None:
         cleanup_source = inspect.getsource(LogsPage.cleanup)
@@ -4482,44 +4359,22 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("_ensure_panel_built(index)", switch_source)
         self.assertIn("self._stacked.currentIndex() == 1", timer_source)
 
-    def test_telegram_proxy_builds_advanced_settings_lazily(self) -> None:
-        setup_source = inspect.getsource(TelegramProxyPage._setup_ui)
-        settings_build_source = inspect.getsource(telegram_proxy_settings_build.build_telegram_proxy_settings_panel)
-        initial_apply_source = inspect.getsource(TelegramProxyPage._apply_initial_settings_state)
-        advanced_toggle_source = inspect.getsource(TelegramProxyPage._on_advanced_toggled)
-        ensure_method = getattr(TelegramProxyPage, "_ensure_advanced_settings_built", None)
-        advanced_builder = getattr(
-            telegram_proxy_settings_build,
-            "build_telegram_proxy_advanced_settings_panel",
-            None,
-        )
+    def test_telegram_proxy_advanced_settings_live_on_nested_page(self) -> None:
+        from telegram_proxy.ui import advanced_build
+        from telegram_proxy.ui.advanced_page import TelegramProxyAdvancedPage
 
-        self.assertIsNotNone(ensure_method)
-        self.assertIsNotNone(advanced_builder)
-        if ensure_method is None or advanced_builder is None:
-            return
-        ensure_source = inspect.getsource(ensure_method)
-        advanced_build_source = inspect.getsource(advanced_builder)
+        page_source = inspect.getsource(TelegramProxyPage)
+        settings_build_source = inspect.getsource(telegram_proxy_settings_build)
+        advanced_init_source = inspect.getsource(TelegramProxyAdvancedPage.__init__)
+        activated_source = inspect.getsource(TelegramProxyAdvancedPage.on_page_activated)
 
-        self.assertNotIn("build_telegram_proxy_advanced_settings_panel(", setup_source)
-        self.assertNotIn("advanced_card = setting_card_group_cls", settings_build_source)
-        self.assertIn("build_telegram_proxy_advanced_settings_panel", ensure_source)
-        self.assertIn("_schedule_initial_advanced_settings_build", initial_apply_source)
-        self.assertNotIn("_ensure_advanced_settings_built()", initial_apply_source)
-        self.assertIn("_ensure_advanced_settings_built", advanced_toggle_source)
-        self.assertIn("advanced_card = setting_card_group_cls", advanced_build_source)
-
-    def test_telegram_proxy_defers_initial_advanced_settings_build(self) -> None:
-        apply_source = inspect.getsource(TelegramProxyPage._apply_initial_settings_state)
-        schedule_source = inspect.getsource(TelegramProxyPage._schedule_initial_advanced_settings_build)
-        run_source = inspect.getsource(TelegramProxyPage._run_initial_advanced_settings_build)
-
-        self.assertIn("_schedule_initial_advanced_settings_build", apply_source)
-        self.assertNotIn("_ensure_advanced_settings_built()", apply_source)
-        self.assertIn("QTimer.singleShot", schedule_source)
-        self.assertIn("_run_initial_advanced_settings_build", schedule_source)
-        self.assertIn("_ensure_advanced_settings_built()", run_source)
-        self.assertIn("_apply_advanced_settings_state", run_source)
+        self.assertNotIn("advanced_build", page_source)
+        self.assertNotIn("cloudflare", settings_build_source.lower())
+        self.assertIn("build_telegram_proxy_advanced_panel", inspect.getsource(TelegramProxyAdvancedPage))
+        self.assertIn("SettingCardGroup(text.upstream_group_title", inspect.getsource(advanced_build))
+        # Настройки читаются не в конструкторе, а при открытии страницы и в фоне.
+        self.assertNotIn("_request_state_reload", advanced_init_source)
+        self.assertIn("_request_state_reload", activated_source)
 
     def test_user_presets_hide_keeps_clean_cache_clean(self) -> None:
         source = inspect.getsource(UserPresetsPageBase.on_page_hidden)
@@ -4535,90 +4390,28 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertNotIn("_get_active_domains()", build_status_source)
         self.assertIn("_run_runtime_init_once(show_access_errors=True)", activated_source)
 
-    def test_hosts_warmup_defers_access_error_until_real_activation(self) -> None:
-        page = HostsPage.__new__(HostsPage)
-        page._runtime_initialized = True
-        page._runtime_access_checked = False
-        page._check_hosts_access = Mock()
+    def test_hosts_page_file_work_runs_through_feature_workers(self) -> None:
+        from hosts.ui.file_page import HostsFilePage
 
-        HostsPage._run_runtime_init_once(page, show_access_errors=False)
-
-        page._check_hosts_access.assert_not_called()
-        self.assertFalse(page._runtime_access_checked)
-
-        HostsPage._run_runtime_init_once(page, show_access_errors=True)
-
-        page._check_hosts_access.assert_called_once_with()
-        self.assertTrue(page._runtime_access_checked)
-
-    def test_hosts_services_catalog_is_prepared_through_worker_not_page_reading(self) -> None:
-        rebuild_source = inspect.getsource(HostsPage._rebuild_services_selectors)
-        build_source = inspect.getsource(HostsPage._build_services_selectors)
-
-        self.assertIn("_start_services_catalog_worker", rebuild_source)
-        self.assertNotIn("read_active_domains_map", build_source)
-        self.assertNotIn("build_services_catalog_plan", build_source)
-
-    def test_hosts_user_selection_loads_through_worker(self) -> None:
-        spec = importlib.util.find_spec("hosts.selection_load_worker")
-        self.assertIsNotNone(spec)
-        selection_load_worker = importlib.import_module("hosts.selection_load_worker")
-
-        init_source = inspect.getsource(HostsPage.__init__)
-        runtime_source = inspect.getsource(HostsPage._run_runtime_init_once)
-        worker_source = inspect.getsource(selection_load_worker.HostsSelectionLoadWorker.run)
-
-        self.assertIn("self._hosts = deps.hosts_feature", init_source)
-        self.assertIn("_selection_load_runtime", init_source)
-        self.assertIn("_start_user_selection_load_worker", runtime_source)
-        self.assertNotIn("self._controller.load_user_selection()", runtime_source)
-        self.assertIn("self._hosts.create_selection_load_worker", inspect.getsource(HostsPage._start_user_selection_load_worker))
-        self.assertIn("_load_user_selection", worker_source)
-        self.assertNotIn("hosts.commands", worker_source)
-        self.assertNotIn("self._controller", worker_source)
-        self.assertIn("load_user_selection", inspect.getsource(hosts_commands.load_user_selection))
-
-    def test_hosts_runtime_state_loads_through_worker(self) -> None:
-        spec = importlib.util.find_spec("hosts.state_load_worker")
-        self.assertIsNotNone(spec)
-        state_load_worker = importlib.import_module("hosts.state_load_worker")
-
-        init_source = inspect.getsource(HostsPage.__init__)
-        update_source = inspect.getsource(HostsPage._update_ui)
-        access_source = inspect.getsource(HostsPage._check_hosts_access)
-        worker_source = inspect.getsource(state_load_worker.HostsStateLoadWorker.run)
-
-        self.assertIn("self._hosts = deps.hosts_feature", init_source)
-        self.assertIn("_state_load_runtime", init_source)
-        self.assertIn("_request_hosts_state_load", update_source)
-        self.assertIn("_request_hosts_state_load", access_source)
-        self.assertNotIn("_get_hosts_runtime_state()", update_source)
-        self.assertNotIn("_get_hosts_runtime_state()", access_source)
-        self.assertIn("self._hosts.create_state_load_worker", inspect.getsource(HostsPage._request_hosts_state_load))
-        self.assertIn("_get_hosts_state", worker_source)
-        self.assertNotIn("hosts.commands", worker_source)
-        self.assertNotIn("self._controller", worker_source)
-        self.assertIn("get_hosts_state", inspect.getsource(hosts_commands.get_hosts_state))
-
-    def test_hosts_open_file_runs_through_worker(self) -> None:
-        spec = importlib.util.find_spec("hosts.open_file_worker")
-        self.assertIsNotNone(spec)
-        open_file_worker = importlib.import_module("hosts.open_file_worker")
-
-        init_source = inspect.getsource(HostsPage.__init__)
-        open_source = inspect.getsource(HostsPage._open_hosts_file)
         page_source = inspect.getsource(HostsPage)
-        worker_source = inspect.getsource(open_file_worker.HostsOpenFileWorker.run)
+        file_page_source = inspect.getsource(HostsFilePage)
 
-        self.assertIn("self._hosts = deps.hosts_feature", init_source)
-        self.assertIn("_open_file_runtime", init_source)
-        self.assertIn("_request_open_hosts_file", open_source)
-        self.assertNotIn(".open_hosts_file(", open_source)
-        self.assertIn("create_open_hosts_file_worker", page_source)
-        self.assertIn("self._hosts.create_open_hosts_file_worker", page_source)
-        self.assertIn("_open_hosts_file", worker_source)
-        self.assertNotIn("hosts.commands", worker_source)
-        self.assertNotIn("self._controller", worker_source)
+        for factory in (
+            "self._hosts.create_snapshot_worker",
+            "self._hosts.create_apply_worker",
+            "self._hosts.create_permission_restore_worker",
+        ):
+            self.assertIn(factory, page_source)
+        for factory in (
+            "self._hosts.create_file_text_worker",
+            "self._hosts.create_file_save_worker",
+            "self._hosts.create_open_hosts_file_worker",
+        ):
+            self.assertIn(factory, file_page_source)
+        for source in (page_source, file_page_source):
+            self.assertNotIn("hosts.commands", source)
+            self.assertNotIn("safe_read_hosts_file", source)
+            self.assertNotIn("safe_write_hosts_file", source)
         self.assertIn("open_hosts_file", inspect.getsource(hosts_commands.open_hosts_file))
 
     def test_hosts_restore_permissions_runs_through_worker(self) -> None:
@@ -4658,16 +4451,15 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         dns_feature_module = importlib.import_module("app.feature_facades.dns")
 
         page_source = inspect.getsource(dns_page.NetworkPage)
-        check_source = inspect.getsource(dns_page.NetworkPage._check_and_show_isp_dns_warning)
         feature_source = inspect.getsource(dns_feature_module.DnsFeature)
 
         self.assertTrue(hasattr(dns_workers, "DnsIspWarningWorker"))
         worker_source = inspect.getsource(dns_workers.DnsIspWarningWorker.run)
-        self.assertIn("_request_isp_dns_warning_plan", check_source)
-        self.assertNotIn("self._dns.is_isp_dns_warning_shown", check_source)
-        self.assertNotIn("self._dns.mark_isp_dns_warning_shown", check_source)
-        self.assertIn("_isp_warning_runtime", page_source)
-        self.assertIn("OneShotWorkerRuntime", page_source)
+        self.assertIn("self._isp_lane.request()", page_source)
+        self.assertIn("create_isp_dns_warning_worker", page_source)
+        self.assertNotIn("self._dns.is_isp_dns_warning_shown", page_source)
+        self.assertNotIn("self._dns.mark_isp_dns_warning_shown", page_source)
+        self.assertIn("LatestWorkerLane", page_source)
         self.assertIn("create_isp_dns_warning_worker", feature_source)
         self.assertIn("is_isp_dns_warning_shown", worker_source)
         self.assertIn("mark_isp_dns_warning_shown", worker_source)
@@ -4814,8 +4606,7 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
 
     def test_network_and_telegram_ui_do_not_create_python_threads(self) -> None:
         modules = (
-            dns_diag_workflow,
-            dns_load_workflow,
+            dns_page,
             telegram_diag_workflow,
             telegram_runtime_workflow,
             telegram_page,
@@ -4827,74 +4618,42 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
 
     def test_dns_page_worker_returns_state_instead_of_calling_page_method(self) -> None:
         feature_source = inspect.getsource(__import__("app.feature_facades.dns", fromlist=["build_dns_feature"]).build_dns_feature)
-        loading_source = inspect.getsource(dns_page.NetworkPage._start_loading)
         page_source = inspect.getsource(dns_page.NetworkPage)
+        init_source = inspect.getsource(dns_page.NetworkPage._run_runtime_init_once)
         worker_source = inspect.getsource(DnsPageLoadWorker)
 
         self.assertIn("create_page_load_worker", feature_source)
-        self.assertIn("create_page_load_worker", loading_source)
-        self.assertIn("start_qthread_worker", loading_source)
+        self.assertIn("create_page_load_worker", page_source)
+        self.assertIn('result_signal="loaded"', page_source)
+        self.assertIn("self._load_lane.request()", init_source)
         self.assertIn("loaded = pyqtSignal", worker_source)
         self.assertIn("self.loaded.emit", worker_source)
-        self.assertNotIn("self._load_data_fn()", worker_source)
-        self.assertNotIn("load_data_fn=self._load_data", page_source)
+        self.assertNotIn("load_page_data", page_source)
 
-    def test_network_force_dns_status_is_applied_from_page_load_worker(self) -> None:
-        build_force_source = inspect.getsource(dns_page.NetworkPage._build_force_dns_card)
-        loaded_source = inspect.getsource(dns_page.NetworkPage._on_page_state_loaded)
-        apply_source = inspect.getsource(dns_page.NetworkPage._apply_loaded_force_dns_state)
-
-        self.assertNotIn("get_force_dns_status_fn=dns_feature.get_force_dns_status", build_force_source)
-        self.assertIn("get_force_dns_status_fn=lambda: self._force_dns_active", build_force_source)
-        self.assertIn("_apply_loaded_force_dns_state()", loaded_source)
-        self.assertIn("_set_force_dns_toggle", apply_source)
-        self.assertIn("_update_force_dns_status", apply_source)
-        self.assertIn("_update_dns_selection_state", apply_source)
-
-    def test_dns_force_dns_actions_run_through_worker(self) -> None:
+    def test_dns_page_has_no_force_dns_worker(self) -> None:
         page_workers = importlib.import_module("dns.page_workers")
         feature_source = inspect.getsource(__import__("app.feature_facades.dns", fromlist=["DnsFeature"]).DnsFeature)
         page_source = inspect.getsource(dns_page.NetworkPage)
-        toggle_source = inspect.getsource(dns_page.NetworkPage._on_force_dns_toggled)
-        reset_source = inspect.getsource(dns_page.NetworkPage._reset_dns_to_dhcp)
-        toggle_result_source = inspect.getsource(dns_page.NetworkPage._apply_force_dns_toggle_worker_result)
-        reset_result_source = inspect.getsource(dns_page.NetworkPage._apply_force_dns_reset_worker_result)
 
-        self.assertTrue(hasattr(page_workers, "DnsForceDnsActionWorker"))
-        worker_source = inspect.getsource(page_workers.DnsForceDnsActionWorker)
-
-        for source in (toggle_source, reset_source):
-            self.assertIn("_request_force_dns_action", source)
-            self.assertNotIn("handle_force_dns_toggled_action", source)
-            self.assertNotIn("reset_dns_to_dhcp_action", source)
-            self.assertNotIn(".enable_force_dns(", source)
-            self.assertNotIn(".disable_force_dns(", source)
-
-        self.assertIn("create_force_dns_action_worker", feature_source)
-        self.assertIn("create_force_dns_action_worker", page_source)
-        self.assertIn("_force_dns_action_pending", page_source)
-        self.assertIn("get_force_dns_status", worker_source)
-        self.assertIn("enable_force_dns", worker_source)
-        self.assertIn("disable_force_dns", worker_source)
-        self.assertIn("refresh_dns_info", worker_source)
-        self.assertNotIn("_refresh_adapters_dns", toggle_result_source)
-        self.assertNotIn("_refresh_adapters_dns", reset_result_source)
+        self.assertFalse(hasattr(page_workers, "DnsForceDnsActionWorker"))
+        self.assertFalse(hasattr(page_workers, "DnsConnectivityTestWorker"))
+        self.assertNotIn("create_force_dns_action_worker", feature_source)
+        self.assertNotIn("force_dns_action", page_source)
+        self.assertNotIn("_force_dns_active", page_source)
 
     def test_dns_flush_cache_runs_through_worker(self) -> None:
         page_workers = importlib.import_module("dns.page_workers")
         feature_source = inspect.getsource(__import__("app.feature_facades.dns", fromlist=["DnsFeature"]).DnsFeature)
         page_source = inspect.getsource(dns_page.NetworkPage)
-        flush_source = inspect.getsource(dns_page.NetworkPage._flush_dns_cache)
+        flush_source = inspect.getsource(dns_page.NetworkPage._flush_cache)
 
         self.assertTrue(hasattr(page_workers, "DnsFlushCacheWorker"))
         worker_source = inspect.getsource(page_workers.DnsFlushCacheWorker)
 
-        self.assertIn("_request_dns_flush_cache", flush_source)
-        self.assertNotIn("flush_dns_cache_action", flush_source)
+        self.assertIn("self._flush_lane.request()", flush_source)
         self.assertNotIn(".flush_dns_cache(", flush_source)
         self.assertIn("create_dns_flush_cache_worker", feature_source)
         self.assertIn("create_dns_flush_cache_worker", page_source)
-        self.assertIn("_dns_flush_cache_pending", page_source)
         self.assertIn("_flush_dns_cache", worker_source)
         self.assertNotIn("dns_public.flush_dns_cache", worker_source)
         self.assertIn("build_flush_dns_cache_result_plan", worker_source)
@@ -4903,69 +4662,33 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         page_workers = importlib.import_module("dns.page_workers")
         feature_source = inspect.getsource(__import__("app.feature_facades.dns", fromlist=["DnsFeature"]).DnsFeature)
         page_source = inspect.getsource(dns_page.NetworkPage)
-        force_workflow = importlib.import_module("dns.page_force_dns_workflow")
 
         self.assertTrue(hasattr(page_workers, "DnsApplyWorker"))
         worker_source = inspect.getsource(page_workers.DnsApplyWorker)
 
-        for method_name, old_action in (
-            ("_apply_auto_dns_quick", "apply_auto_dns_quick"),
-            ("_apply_provider_dns_quick", "apply_provider_dns_quick"),
-            ("_apply_custom_dns_quick", "apply_custom_dns_quick"),
-        ):
+        for method_name in ("_choose_provider", "_confirm_reset_to_auto"):
             source = inspect.getsource(getattr(dns_page.NetworkPage, method_name))
-            body_source = source.split("\n", 1)[1]
-            self.assertIn("_request_dns_apply", source)
-            self.assertNotIn(f"{old_action}(", body_source)
-            self.assertNotIn(".apply_auto_dns(", body_source)
-            self.assertNotIn(".apply_provider_dns(", body_source)
-            self.assertNotIn(".apply_custom_dns(", body_source)
+            self.assertIn("self._apply_lane.request(", source)
+            self.assertNotIn(".apply_auto_dns(", source)
+            self.assertNotIn(".apply_provider_dns(", source)
 
         self.assertIn("create_dns_apply_worker", feature_source)
         self.assertIn("create_dns_apply_worker", page_source)
-        self.assertIn("_dns_apply_pending", page_source)
-        self.assertIn("apply_auto_dns", worker_source)
-        self.assertIn("apply_provider_dns", worker_source)
-        self.assertIn("apply_custom_dns", worker_source)
-        self.assertIn("refresh_dns_info", worker_source)
-        self.assertFalse(hasattr(dns_page.NetworkPage, "_refresh_adapters_dns"))
+        self.assertIn("self._apply_dns(", worker_source)
+        self.assertIn("self._reset_to_auto(", worker_source)
+        self.assertNotIn("apply_custom_dns", worker_source)
+        self.assertIn("self._load_state()", worker_source)
         self.assertIsNone(importlib.util.find_spec("dns.page_apply_workflow"))
-        self.assertFalse(hasattr(force_workflow, "handle_force_dns_toggled_action"))
-        self.assertFalse(hasattr(force_workflow, "flush_dns_cache_action"))
-        self.assertFalse(hasattr(force_workflow, "reset_dns_to_dhcp_action"))
-
-    def test_network_loaded_adapters_do_not_wait_for_current_dns(self) -> None:
-        stored = {}
-        build_calls = []
-
-        dns_load_workflow.handle_loaded_adapters(
-            adapters=[("Ethernet", "Intel")],
-            current_dns_info={},
-            ui_built=False,
-            set_adapters_fn=lambda adapters: stored.setdefault("adapters", adapters),
-            build_dynamic_ui_fn=lambda: build_calls.append("build"),
-        )
-
-        self.assertEqual(stored["adapters"], [("Ethernet", "Intel")])
-        self.assertEqual(build_calls, ["build"])
+        self.assertIsNone(importlib.util.find_spec("dns.page_force_dns_workflow"))
 
     def test_network_page_builds_dns_choices_before_runtime_load(self) -> None:
-        build_source = inspect.getsource(dns_page.NetworkPage._build_ui)
-        choices_source = inspect.getsource(dns_page.NetworkPage._build_dns_choices_ui)
-
-        self.assertIn("self._build_dns_choices_ui()", build_source)
-        self.assertNotIn("load_page_data", choices_source)
-        self.assertNotIn("refresh_dns_info", choices_source)
-
-    def test_network_page_adds_dns_containers_before_showing_dns_choices(self) -> None:
+        init_source = inspect.getsource(dns_page.NetworkPage.__init__)
         build_source = inspect.getsource(dns_page.NetworkPage._build_ui)
 
-        choices_pos = build_source.index("self._build_dns_choices_ui()")
-        dns_container_pos = build_source.index("self.add_widget(self.dns_cards_container)")
-        custom_card_pos = build_source.index("self.custom_card = shell.custom_card")
-
-        self.assertLess(dns_container_pos, choices_pos)
-        self.assertLess(custom_card_pos, choices_pos)
+        self.assertIn("self.grid = DnsProviderGrid(self.content)", build_source)
+        self.assertLess(init_source.index("self._build_ui()"), init_source.index("self._render()"))
+        self.assertNotIn("self._load_lane.request()", init_source)
+        self.assertNotIn("refresh_dns_info", build_source)
 
     def test_telegram_diagnostics_worker_uses_progress_signal(self) -> None:
         workflow_source = inspect.getsource(telegram_diag_workflow.start_diagnostics)
@@ -5000,51 +4723,6 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertNotIn("_ensure_hosts_worker =", page_source)
         self.assertNotIn("worker.start()", start_source)
 
-    def test_connection_support_bundle_prepares_through_worker(self) -> None:
-        support_worker = importlib.import_module("diagnostics.support_worker")
-        page_source = inspect.getsource(ConnectionTestPage)
-        handler_source = inspect.getsource(ConnectionTestPage.open_support_with_log)
-        request_source = "\n".join(
-            (
-                inspect.getsource(ConnectionTestPage._request_support_prepare),
-                inspect.getsource(ConnectionTestPage._start_support_prepare_worker),
-            )
-        )
-        handler_body = handler_source.split("\n", 1)[1]
-        worker_source = inspect.getsource(support_worker.ConnectionSupportPrepareWorker.run)
-        feature_source = inspect.getsource(DiagnosticsFeature)
-        feature_build_source = inspect.getsource(diagnostics_feature_facade.build_diagnostics_feature)
-
-        self.assertIn("_request_support_prepare", handler_source)
-        self.assertNotIn("open_support_with_log(", handler_body)
-        self.assertIn("create_support_prepare_worker", page_source)
-        self.assertIn("_support_prepare_runtime", page_source)
-        self.assertIn("start_qthread_worker", request_source)
-        self.assertNotIn("worker.start()", request_source)
-        self.assertIn("create_connection_support_prepare_worker", feature_source)
-        self.assertIn("prepare_connection_support=", feature_build_source)
-        self.assertIn("_prepare_connection_support", worker_source)
-        self.assertNotIn("diagnostics.commands", worker_source)
-        self.assertIn("prepare_connection_support", worker_source)
-        self.assertFalse(hasattr(diagnostics_runtime_helpers, "open_support_with_log"))
-
-    def test_connection_test_run_uses_page_worker_runtime(self) -> None:
-        page_source = inspect.getsource(ConnectionTestPage)
-        start_source = inspect.getsource(ConnectionTestPage.start_test)
-        stop_source = inspect.getsource(ConnectionTestPage.stop_test)
-        cleanup_source = inspect.getsource(ConnectionTestPage.cleanup)
-        runtime_source = inspect.getsource(diagnostics_runtime_helpers.start_connection_test)
-        cleanup_runtime_source = inspect.getsource(diagnostics_runtime_helpers.cleanup_connection_runtime)
-
-        self.assertIn("_connection_test_runtime", page_source)
-        self.assertIn("OneShotWorkerRuntime", page_source)
-        self.assertIn("start_qobject_worker", start_source)
-        self.assertIn("stop_connection_test", stop_source)
-        self.assertIn("runtime=self._connection_test_runtime", cleanup_source)
-        self.assertIn("runtime.stop", cleanup_runtime_source)
-        self.assertNotIn("self.worker_thread", page_source)
-        self.assertNotIn("QThread", runtime_source)
-        self.assertNotIn("worker_thread.start()", runtime_source)
 
 
 if __name__ == "__main__":

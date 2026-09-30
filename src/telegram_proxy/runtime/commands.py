@@ -6,6 +6,8 @@ import webbrowser
 from dataclasses import dataclass
 
 from telegram_proxy.runtime.plans import (
+    TELEGRAM_HOSTS_ACTIONS,
+    TelegramHostsActionResult,
     TelegramProxyActionResult,
     TelegramProxyDiagnosticsFinishPlan,
     TelegramProxyDiagnosticsPollPlan,
@@ -137,18 +139,6 @@ def build_upstream_config():
     return _build_upstream_config()
 
 
-def build_cloudflare_config():
-    from telegram_proxy.config.settings import build_cloudflare_config as _build_cloudflare_config
-
-    return _build_cloudflare_config()
-
-
-def build_dc_endpoint_overrides():
-    from telegram_proxy.config.settings import build_dc_endpoint_overrides as _build_dc_endpoint_overrides
-
-    return _build_dc_endpoint_overrides()
-
-
 def copy_text(
     text: str,
     *,
@@ -172,14 +162,38 @@ def copy_text(
     )
 
 
-def ensure_telegram_hosts() -> TelegramProxyActionResult:
-    try:
-        from telegram_proxy.telegram_hosts import ensure_telegram_hosts
+def run_telegram_hosts_action(action: str) -> TelegramHostsActionResult:
+    """Выполняет действие с записями Telegram в hosts и перечитывает состояние.
 
-        ensure_telegram_hosts()
-        return TelegramProxyActionResult(True, "", "", "")
-    except Exception as e:
-        return TelegramProxyActionResult(False, f"Telegram hosts check error: {e}", "", "")
+    ``status`` только читает файл. ``add`` и ``remove`` меняют его и
+    вызываются лишь по кнопке пользователя.
+    """
+    from telegram_proxy import telegram_hosts
+
+    action = str(action or "").strip()
+    if action not in TELEGRAM_HOSTS_ACTIONS:
+        return TelegramHostsActionResult(action, False, False, f"Неизвестное действие с hosts: {action}", None)
+
+    changed = False
+    message = ""
+    ok = True
+    try:
+        if action == "add":
+            changed, message = telegram_hosts.add_telegram_hosts()
+        elif action == "remove":
+            changed, message = telegram_hosts.remove_telegram_hosts()
+    except Exception as exc:
+        ok = False
+        message = str(exc) or "Не удалось изменить файл hosts"
+
+    status = None
+    try:
+        status = telegram_hosts.get_telegram_hosts_status()
+    except Exception as exc:
+        if ok:
+            ok = False
+            message = str(exc) or "Не удалось прочитать файл hosts"
+    return TelegramHostsActionResult(action, ok, bool(changed), str(message or ""), status)
 
 
 def set_enabled(enabled: bool) -> None:
@@ -252,6 +266,8 @@ def save_settings_action(
         return telegram_proxy_settings.set_fake_tls_domain(value)
     if action_name == "proxy_protocol":
         return telegram_proxy_settings.set_proxy_protocol(enabled)
+    if action_name == "auto_deeplink":
+        return telegram_proxy_settings.set_auto_deeplink(enabled)
     if action_name == "upstream_enabled":
         return telegram_proxy_settings.set_upstream_enabled(enabled)
     if action_name == "upstream_preset":

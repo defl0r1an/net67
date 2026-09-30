@@ -51,6 +51,27 @@ class ApplicationPaths:
         return self.root / "json"
 
     @property
+    def fakes_catalog_database(self) -> Path:
+        """Реестр фейков winws2: только чтение, кладёт установщик.
+
+        В исходном проекте база лежит в system/. У net67 поставляемые
+        данные живут в json/ — рядом с каталогом hosts, который так же
+        целиком заменяется при обновлении.
+        """
+        return self.json_dir / "fakes_catalog.sqlite3"
+
+    @property
+    def user_fakes_dir(self) -> Path:
+        """Свои фейки пользователя; установщик их не трогает.
+
+        Путь именно user/fakes: пресет ссылается на файл строкой
+        --blob=ИМЯ:@user/fakes/<файл>, и winws2 разрешает её от корня
+        программы. Поменять здесь — значит сломать пресеты, где фейк уже
+        подключён.
+        """
+        return self.root / "user" / "fakes"
+
+    @property
     def docs_dir(self) -> Path:
         """Собранная вики, которую открывает раздел «Документация».
 

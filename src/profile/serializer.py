@@ -6,7 +6,8 @@ import re
 from settings.mode import ENGINE_WINWS1, ENGINE_WINWS2
 
 from .models import EngineName, Preset, Profile, ProfileSegment
-from .parser import parse_preset_text
+from .parser import _name_from_new_line, parse_preset_text
+from .strategy_shape import PAYLOAD_OPTION, RANGE_OPTIONS, strategy_shape, union_payload
 
 
 _STRATEGY_KINDS = {"strategy", "strategy_filter"}
@@ -91,6 +92,94 @@ def with_profile_strategy_lines(preset: Preset, profile_index: int, strategy_lin
             insert_at -= 1
     profile.segments = [*kept[:insert_at], *replacement_segments, *kept[insert_at:]]
     return _reparse(updated)
+
+
+def with_profile_whole_strategy(preset: Preset, profile_index: int, strategy_lines) -> Preset:
+    """Пресет, где стратегия profile-а (winws2) заменена строками целиком.
+
+    Остаются только настройки profile-а — строки ``--in-range``/``--out-range``
+    до первой ``--lua-desync`` (см. ``profile.strategy_shape``); все остальные
+    строки стратегии (``--payload``, диапазоны между ветками, ``--lua-desync``)
+    удаляются, а новые строки вставляются как есть. Так применяется составная
+    готовая стратегия и обычная стратегия поверх составной.
+    """
+    updated = deepcopy(preset)
+    profile = updated.profiles[int(profile_index)]
+    replacement = [
+        _segment_for_strategy_line(updated.engine, line)
+        for line in (str(raw or "").strip() for raw in strategy_lines or ())
+        if line
+    ]
+    first_lua = next(
+        (index for index, segment in enumerate(profile.segments) if segment.kind == "strategy"),
+        None,
+    )
+    kept: list[ProfileSegment] = []
+    first_removed: int | None = None
+    after_last_profile_range: int | None = None
+    for index, segment in enumerate(profile.segments):
+        if segment.kind in _STRATEGY_KINDS:
+            is_profile_range = (
+                segment.kind == "strategy_filter"
+                and str(segment.name or "").strip().lower() in RANGE_OPTIONS
+                and (first_lua is None or index < first_lua)
+            )
+            if not is_profile_range:
+                if first_removed is None:
+                    first_removed = len(kept)
+                continue
+            kept.append(segment)
+            after_last_profile_range = len(kept)
+            continue
+        kept.append(segment)
+
+    if first_removed is None:
+        insert_at = len(kept)
+        while insert_at > 0 and kept[insert_at - 1].kind == "blank":
+            insert_at -= 1
+    else:
+        insert_at = first_removed
+    # Диапазоны profile-а должны остаться ДО первой --lua-desync новой стратегии.
+    if after_last_profile_range is not None:
+        insert_at = max(insert_at, after_last_profile_range)
+    profile.segments = [*kept[:insert_at], *replacement, *kept[insert_at:]]
+    return _reparse(updated)
+
+
+def with_profile_ready_strategy(
+    preset: Preset,
+    profile_index: int,
+    strategy_lines,
+) -> tuple[Preset, tuple[str, ...] | None]:
+    """Пресет с выбранной готовой стратегией у profile-а — единое правило для
+    выбора на странице profile-а и для «Применить» в blockcheck.
+
+    winws2 (см. ``profile.strategy_shape``):
+
+    - составная стратегия: её строки целиком вместо стратегии profile-а
+      (остаются только диапазоны profile-а до первой ``--lua-desync``);
+    - обычная стратегия поверх составной: один ``--payload`` с объединением
+      типов пакетов прежних веток (``all``, если хоть одна ветка была на все
+      пакеты) и строки стратегии;
+    - обычная стратегия поверх обычной: меняются только строки
+      ``--lua-desync``, ``--payload`` и диапазоны profile-а остаются.
+
+    Второй элемент — строки стратегии, записанные целиком (для проверки после
+    записи), или None, если заменены только строки ``--lua-desync``.
+    """
+    lines = [str(line or "").strip() for line in strategy_lines or () if str(line or "").strip()]
+    if preset.engine == ENGINE_WINWS2:
+        profile = preset.profiles[int(profile_index)]
+        current = strategy_shape(getattr(profile.strategy, "strategy_lines", ()) or ())
+        if strategy_shape(lines).composite:
+            whole: tuple[str, ...] | None = tuple(lines)
+        elif current.composite:
+            whole = (f"{PAYLOAD_OPTION}={union_payload(current.payload_scopes)}", *lines)
+        else:
+            whole = None
+        if whole is not None:
+            return with_profile_whole_strategy(preset, profile_index, whole), whole
+    return with_profile_strategy_lines(preset, profile_index, lines), None
 
 
 def with_profile_user_match(
@@ -189,12 +278,14 @@ def append_profile_from_template(
     template: Profile,
     *,
     enabled: bool = True,
-    position: str = "bottom",
+    position: str | int = "bottom",
 ) -> Preset:
+    """Вставляет profile из шаблона: "top", "bottom" или индекс profile-а.
+
+    Хвост пресета (`footer_lines`) принадлежит файлу и не удаляется.
+    """
     updated = deepcopy(preset)
-    if getattr(updated, "footer_lines", None):
-        updated.footer_lines = []
-    insert_at = 0 if str(position or "").strip().lower() == "top" else len(updated.profiles)
+    insert_at = _template_insert_index(position, len(updated.profiles))
     if (
         updated.profiles
         and insert_at == len(updated.profiles)
@@ -218,6 +309,17 @@ def append_profile_from_template(
     updated.profiles.insert(insert_at, profile)
     _ensure_profile_boundaries(updated)
     return _reparse(updated)
+
+
+def _template_insert_index(position: str | int, profile_count: int) -> int:
+    if isinstance(position, int) and not isinstance(position, bool):
+        return max(0, min(int(position), profile_count))
+    clean = str(position or "").strip().lower()
+    if clean == "top":
+        return 0
+    if clean == "bottom":
+        return profile_count
+    raise ValueError(f"Unsupported template profile position: {position}")
 
 
 def with_profile_deleted(preset: Preset, profile_index: int) -> Preset:
@@ -277,15 +379,22 @@ def with_profile_raw_text(preset: Preset, profile_index: int, raw_text: str) -> 
     if not text:
         raise ValueError("profile text must not be empty")
 
-    parsed = parse_preset_text(text, engine=updated.engine, source_name=updated.source_name)
-    if len(parsed.profiles) != 1:
+    # Текст разбирается как профиль после «--new», а не как отдельный пресет:
+    # иначе ведущие «# комментарии» уходили в шапку разобранного пресета и
+    # молча пропадали при сохранении.
+    parsed = parse_preset_text(f"--new\n{text}", engine=updated.engine, source_name=updated.source_name)
+    if len(parsed.profiles) != 1 or parsed.header_lines or parsed.preamble_lines:
         raise ValueError("profile text must contain exactly one profile")
 
     replacement = deepcopy(parsed.profiles[0])
-    current_new_line = str(updated.profiles[index].new_line or "")
     replacement.index = index
     replacement.engine = updated.engine
-    replacement.new_line = str(replacement.new_line or current_new_line)
+    # Граница профиля («--new» / «--new=Имя») не часть его текста — остаётся
+    # прежней, вместе с именем, записанным в ней.
+    current_new_line = str(updated.profiles[index].new_line or "")
+    replacement.new_line = current_new_line
+    if not str(replacement.name or "").strip():
+        replacement.name = _name_from_new_line(current_new_line)
     updated.profiles[index] = replacement
     _ensure_profile_boundaries(updated)
     return _reparse(updated)
@@ -389,8 +498,17 @@ def _ensure_profile_boundaries(preset: Preset) -> None:
         if _profile_has_name_directive(profile, preset.engine):
             profile.new_line = "--new"
             continue
-        name = str(profile.name or profile.display_name or f"profile {index + 1}").strip() or f"profile {index + 1}"
-        profile.new_line = f"--new={name}"
+        if preset.engine == ENGINE_WINWS1:
+            # winws1 (nfqws1) объявляет --new без аргумента: `--new=имя` не запускается
+            # ("option doesn't take an argument -- new"). Имя профиля в winws1 — только --comment.
+            profile.new_line = "--new"
+            continue
+        # Только собственное имя профиля (из «--new=Имя»). Отображаемое имя
+        # («TCP 443 • hostlist …») — вычисляемая подпись интерфейса: её запись
+        # в файл незаметно меняла пресет, «замораживала» подпись и сдвигала
+        # ключи безымянных профилей после перемещения/удаления соседей.
+        name = str(profile.name or "").strip()
+        profile.new_line = f"--new={name}" if name else "--new"
 
 
 def _ensure_profile_name_directive(profile: Profile, engine: EngineName) -> None:

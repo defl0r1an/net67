@@ -26,6 +26,7 @@ def build_initial_ui_state() -> AppUiState:
             store_warmed_background_preset,
             store_warmed_editor_smooth_scroll_enabled,
             store_warmed_mica_enabled,
+            store_warmed_live_animations_enabled,
             store_warmed_sidebar_icon_style,
             store_warmed_smooth_scroll_enabled,
             store_warmed_tinted_settings,
@@ -35,9 +36,9 @@ def build_initial_ui_state() -> AppUiState:
 
         store_warmed_ui_language(appearance.get("ui_language"))
         store_warmed_background_preset(appearance.get("background_preset"))
-        store_warmed_mica_enabled(appearance.get("mica_enabled"))
         store_warmed_window_opacity(window.get("opacity"))
         store_warmed_accent_color(appearance.get("accent_color"))
+        store_warmed_mica_enabled(appearance.get("mica_enabled"))
         store_warmed_tinted_settings(
             appearance.get("follow_windows_accent"),
             appearance.get("tinted_background"),
@@ -46,6 +47,7 @@ def build_initial_ui_state() -> AppUiState:
         store_warmed_animations_enabled(appearance.get("animations_enabled"))
         store_warmed_smooth_scroll_enabled(appearance.get("smooth_scroll_enabled"))
         store_warmed_editor_smooth_scroll_enabled(appearance.get("editor_smooth_scroll_enabled"))
+        store_warmed_live_animations_enabled(appearance.get("live_animations_enabled"))
         store_warmed_sidebar_icon_style(appearance.get("sidebar_icon_style"))
         from core.runtime.program_settings_runtime_service import store_warmed_tray_close_mode
 

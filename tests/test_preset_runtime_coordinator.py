@@ -175,6 +175,207 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(ui_state.content_revision, 1)
         self.assertEqual(refresh_calls, ["strategy_only"])
 
+    def _existing_preset_path(self, file_name: str) -> str:
+        """Watcher проверяет, что файл на месте: пропавший пресет не применяется."""
+        tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp_dir.cleanup)
+        path = Path(tmp_dir.name) / file_name
+        path.write_text("--filter-tcp=443\n", encoding="utf-8")
+        return str(path)
+
+    def _make_watch_coordinator(self, active_path: str, content_calls: list):
+        from core.runtime.preset_runtime_coordinator import PresetRuntimeCoordinator
+        from settings.mode import ZAPRET2_MODE
+
+        ui_state = SimpleNamespace(content_revision=0)
+
+        def bump_preset_content_revision(*, content_change_kind: str = "") -> None:
+            ui_state.content_revision += 1
+
+        ui_state.bump_preset_content_revision = bump_preset_content_revision
+        presets_feature = SimpleNamespace(
+            is_selected_source_preset_file=lambda method, file_name: True,
+        )
+        coordinator = PresetRuntimeCoordinator(
+            presets_feature=presets_feature,
+            ui_state_store=ui_state,
+            get_launch_method=lambda: ZAPRET2_MODE,
+            get_active_preset_path=lambda: active_path,
+            refresh_after_switch=lambda *, reason="": None,
+            request_selected_source_preset_apply=lambda *_args: True,
+            request_preset_content_apply=lambda method, reason, file_name: content_calls.append(
+                (method, reason, file_name)
+            )
+            or True,
+        )
+        coordinator._active_preset_file_path = active_path
+        coordinator.setup_active_preset_file_watcher = lambda: None
+        coordinator._ui_state = ui_state
+        return coordinator
+
+    def test_external_preset_file_change_triggers_runtime_apply(self) -> None:
+        from settings.mode import ZAPRET2_MODE
+
+        active_path = self._existing_preset_path("Default v5.txt")
+        content_calls: list[tuple[str, str, str]] = []
+        coordinator = self._make_watch_coordinator(active_path, content_calls)
+
+        # Никакого собственного сохранения не было: изменение файла снаружи
+        # обязано дойти до runtime, а не только обновить UI.
+        coordinator._on_active_preset_file_changed(active_path)
+
+        self.assertEqual(
+            content_calls,
+            [(ZAPRET2_MODE, "preset_file_external_change", "default v5.txt")],
+        )
+        self.assertEqual(coordinator._ui_state.content_revision, 1)
+
+    def test_own_save_fs_events_are_suppressed_by_time_window(self) -> None:
+        from settings.mode import ZAPRET2_MODE
+
+        active_path = self._existing_preset_path("Default v5.txt")
+        content_calls: list[tuple[str, str, str]] = []
+        coordinator = self._make_watch_coordinator(active_path, content_calls)
+
+        coordinator.handle_preset_content_changed(ZAPRET2_MODE, "Default v5.txt")
+        self._app.processEvents()
+        self.assertEqual(
+            content_calls,
+            [(ZAPRET2_MODE, "preset_content_changed", "Default v5.txt")],
+        )
+
+        # Atomic save породил два fs-события — оба внутри окна, оба свои.
+        coordinator._on_active_preset_file_changed(active_path)
+        coordinator._on_active_preset_file_changed(active_path)
+        self.assertEqual(len(content_calls), 1)
+
+        # Окно истекло: следующее событие — уже внешняя правка.
+        coordinator._own_preset_content_suppress_deadline = time.monotonic() - 1.0
+        coordinator._on_active_preset_file_changed(active_path)
+        self.assertEqual(
+            content_calls[-1],
+            (ZAPRET2_MODE, "preset_file_external_change", "default v5.txt"),
+        )
+
+    def test_vanished_active_preset_is_not_applied_until_it_returns(self) -> None:
+        from settings.mode import ZAPRET2_MODE
+
+        active_path = self._existing_preset_path("Vanished preset.txt")
+        content_calls: list[tuple[str, str, str]] = []
+        coordinator = self._make_watch_coordinator(active_path, content_calls)
+        coordinator._active_preset_file_watcher = SimpleNamespace(files=lambda: [], addPath=lambda _path: False)
+        coordinator._active_preset_watch_rearm_timer = SimpleNamespace(start=lambda _ms: None)
+
+        # Файл удалён/переименован в Проводнике: работающий пресет не
+        # подменяется ни пустым, ни пресетом по умолчанию.
+        Path(active_path).unlink()
+        coordinator._on_active_preset_file_changed(active_path)
+        self.assertEqual(content_calls, [])
+        self.assertEqual(coordinator._ui_state.content_revision, 0)
+
+        # Редактор сохранил «удалить и создать заново»: файл вернулся —
+        # правка доходит до runtime как обычная внешняя.
+        Path(active_path).write_text("--filter-tcp=80\n", encoding="utf-8")
+        coordinator._active_preset_file_watcher = SimpleNamespace(files=lambda: [], addPath=lambda _path: True)
+        coordinator._ensure_active_preset_watch_armed()
+        self.assertEqual(
+            content_calls,
+            [(ZAPRET2_MODE, "preset_file_external_change", "vanished preset.txt")],
+        )
+        self.assertEqual(coordinator._ui_state.content_revision, 1)
+
+    def test_unpublished_own_save_does_not_trigger_external_apply(self) -> None:
+        from presets.own_write_registry import mark_own_preset_write
+
+        active_path = self._existing_preset_path("Default v5.txt")
+        content_calls: list[tuple[str, str, str]] = []
+        coordinator = self._make_watch_coordinator(active_path, content_calls)
+
+        # Автосохранение редактора: файл записан приложением без publish —
+        # watcher не должен применять его к runtime как внешнюю правку.
+        mark_own_preset_write(active_path)
+        coordinator._on_active_preset_file_changed(active_path)
+
+        self.assertEqual(content_calls, [])
+        self.assertEqual(coordinator._ui_state.content_revision, 0)
+
+    def test_preset_file_store_write_marks_own_write(self) -> None:
+        from presets.file_store import PresetFileStore
+        from presets.own_write_registry import was_recent_own_preset_write
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            target = Path(tmp_dir) / "Own Write Probe.txt"
+            PresetFileStore._write_source(target, "--new\n")
+
+            self.assertTrue(was_recent_own_preset_write(str(target)))
+            self.assertTrue(was_recent_own_preset_write("own write probe.txt"))
+            self.assertFalse(was_recent_own_preset_write("other.txt"))
+
+    def test_active_preset_watch_rearm_retries_after_atomic_save(self) -> None:
+        active_path = self._existing_preset_path("Default v5.txt")
+        content_calls: list[tuple[str, str, str]] = []
+        coordinator = self._make_watch_coordinator(active_path, content_calls)
+
+        watcher = SimpleNamespace(files=lambda: [], addPath=Mock(return_value=False))
+        coordinator._active_preset_file_watcher = watcher
+
+        # Файл на мгновение отсутствует (temp+rename): addPath проваливается,
+        # но слежение должно восстановиться повтором, а не умереть молча.
+        coordinator._ensure_active_preset_watch_armed()
+        self.assertEqual(coordinator._active_preset_watch_rearm_attempts, 1)
+        self.assertIsNotNone(coordinator._active_preset_watch_rearm_timer)
+        self.assertTrue(coordinator._active_preset_watch_rearm_timer.isActive())
+
+        watcher.addPath = Mock(return_value=True)
+        coordinator._ensure_active_preset_watch_armed()
+        self.assertEqual(coordinator._active_preset_watch_rearm_attempts, 0)
+        coordinator._active_preset_watch_rearm_timer.stop()
+
+    def test_editor_save_publishes_editor_save_content_change_kind(self) -> None:
+        from presets.raw_preset_editor_workflow import save_raw_preset_text
+
+        captured: dict = {}
+        updated = SimpleNamespace(file_name="Default v5.txt", name="Default v5")
+
+        def save_preset_source_by_file_name(
+            method,
+            file_name,
+            source_text,
+            *,
+            publish_content_changed=True,
+            content_change_kind="",
+        ):
+            captured["kind"] = content_change_kind
+            captured["publish"] = publish_content_changed
+            return updated
+
+        def publish_preset_content_changed(method, file_name, *, content_change_kind=""):
+            captured["published"] = (file_name, content_change_kind)
+
+        presets_feature = SimpleNamespace(
+            save_preset_source_by_file_name=save_preset_source_by_file_name,
+            publish_preset_content_changed=publish_preset_content_changed,
+            read_preset_source_by_file_name=lambda method, file_name: "--new\n--filter-tcp=443\n",
+            get_preset_source_path_by_file_name=lambda method, file_name: Path(
+                "C:/Zapret/presets"
+            )
+            / file_name,
+        )
+
+        save_raw_preset_text(
+            presets_feature=presets_feature,
+            launch_method="zapret2_mode",
+            file_name="Default v5.txt",
+            source_text="--new\n--filter-tcp=443\n",
+            publish_content_changed=True,
+        )
+
+        self.assertEqual(captured["kind"], "editor_save")
+        # Запись и публикация разделены: фиксация правки публикует всегда, даже
+        # если текст уже записало автосохранение и сама запись ничего не меняет.
+        self.assertFalse(captured["publish"])
+        self.assertEqual(captured["published"], ("Default v5.txt", "editor_save"))
+
     def test_rapid_active_preset_content_changes_coalesce_to_one_apply(self) -> None:
         from core.runtime.preset_runtime_coordinator import PresetRuntimeCoordinator
         from settings.mode import ZAPRET2_MODE
@@ -484,13 +685,17 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
 
         self.assertEqual(watched_paths, ["C:/Zapret/Dev/presets/winws2/Default v3.txt"])
         self.assertEqual(ui_state.active_revision, 1)
-        self.assertEqual(switch_calls, [])
+        # Запросы уходят сразу; склеивает их switch pipeline (restart_flow).
+        self.assertEqual(
+            switch_calls,
+            [
+                (ZAPRET2_MODE, "preset_switched", "Default v1.txt"),
+                (ZAPRET2_MODE, "preset_switched", "Default v2.txt"),
+                (ZAPRET2_MODE, "preset_switched", "Default v3.txt"),
+            ],
+        )
         self.assertEqual(refresh_calls, [])
         self.assertEqual(coordinator._preset_switch_refresh_timer.interval(), 180)
-
-        coordinator._apply_pending_selected_source_preset()
-
-        self.assertEqual(switch_calls, [(ZAPRET2_MODE, "preset_switched", "Default v3.txt")])
 
     def test_get_selected_source_path_does_not_build_launch_snapshot(self) -> None:
         import inspect
@@ -502,33 +707,9 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
         self.assertNotIn("get_launch_snapshot", source)
         self.assertIn("preset_mode_coordinator.get_selected_source_path", source)
 
-    def test_preset_switch_apply_uses_short_debounce_to_coalesce_fast_clicks(self) -> None:
-        from core.runtime.preset_runtime_coordinator import PRESET_SWITCH_APPLY_DEBOUNCE_MS, PresetRuntimeCoordinator
+    def test_preset_switch_apply_is_requested_without_second_debounce(self) -> None:
+        from core.runtime.preset_runtime_coordinator import PresetRuntimeCoordinator
         from settings.mode import ZAPRET2_MODE
-
-        class _Signal:
-            def __init__(self) -> None:
-                self.callback = None
-
-            def connect(self, callback) -> None:
-                self.callback = callback
-
-        class _FakeTimer:
-            instances = []
-
-            def __init__(self, *_args, **_kwargs) -> None:
-                self.timeout = _Signal()
-                self.delay_ms = None
-                _FakeTimer.instances.append(self)
-
-            def setSingleShot(self, _single_shot: bool) -> None:
-                pass
-
-            def start(self, delay_ms: int) -> None:
-                self.delay_ms = int(delay_ms)
-
-            def fire(self) -> None:
-                self.timeout.callback()
 
         switch_calls: list[tuple[str, str, str]] = []
         coordinator = PresetRuntimeCoordinator(
@@ -545,21 +726,12 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
         )
         coordinator.setup_active_preset_file_watcher = lambda: None
 
-        with patch("core.runtime.preset_runtime_coordinator.QTimer", _FakeTimer):
-            coordinator.handle_preset_switched(ZAPRET2_MODE, "Default v5.txt")
+        coordinator.handle_preset_switched(ZAPRET2_MODE, "Default v5.txt")
 
-            apply_timers = [
-                timer
-                for timer in _FakeTimer.instances
-                if getattr(timer.timeout.callback, "__name__", "") == "_apply_pending_selected_source_preset"
-            ]
-            self.assertEqual(len(apply_timers), 1)
-            self.assertEqual(apply_timers[0].delay_ms, PRESET_SWITCH_APPLY_DEBOUNCE_MS)
-            self.assertEqual(switch_calls, [])
-
-            apply_timers[0].fire()
-
+        # Раньше здесь стоял свой таймер на 500 мс поверх debounce switch
+        # pipeline (700 мс): каждое переключение ждало ~1,2 с.
         self.assertEqual(switch_calls, [(ZAPRET2_MODE, "preset_switched", "Default v5.txt")])
+        self.assertFalse(hasattr(coordinator, "_preset_switch_apply_timer"))
 
     def test_reapplying_same_preset_skips_ui_refresh_and_runtime_apply(self) -> None:
         from core.runtime.preset_runtime_coordinator import PresetRuntimeCoordinator
@@ -595,14 +767,10 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
         coordinator.handle_preset_switched(ZAPRET2_MODE, "Default v5.txt")
         self._app.processEvents()
 
-        self.assertEqual(switch_calls, [])
         self.assertEqual(refresh_calls, [])
         self.assertEqual(coordinator._preset_switch_refresh_timer.interval(), 180)
         coordinator._preset_switch_refresh_timer.timeout.emit()
         self.assertEqual(refresh_calls, ["refresh"])
-
-        coordinator._apply_pending_selected_source_preset()
-
         self.assertEqual(
             switch_calls,
             [
@@ -662,8 +830,8 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
         )
         from settings.mode import ZAPRET2_MODE
 
-        save_calls: list[tuple[str, str, str, bool]] = []
-        publish_calls: list[tuple[str, str]] = []
+        save_calls: list[tuple[str, str, str, bool, str]] = []
+        publish_calls: list[tuple[str, str, str]] = []
 
         class _PresetsFeature:
             def save_preset_source_by_file_name(
@@ -673,8 +841,11 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
                 source_text,
                 *,
                 publish_content_changed=True,
+                content_change_kind="",
             ):
-                save_calls.append((launch_method, file_name, source_text, publish_content_changed))
+                save_calls.append(
+                    (launch_method, file_name, source_text, publish_content_changed, content_change_kind)
+                )
                 return type("Manifest", (), {"name": "Default v5", "file_name": file_name})()
 
             def get_preset_source_path_by_file_name(self, _launch_method, file_name):
@@ -682,8 +853,11 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
 
                 return Path("C:/Zapret/Dev/presets/winws2") / file_name
 
-            def publish_preset_content_changed(self, launch_method, file_name):
-                publish_calls.append((launch_method, file_name))
+            def publish_preset_content_changed(self, launch_method, file_name, *, content_change_kind=""):
+                publish_calls.append((launch_method, file_name, content_change_kind))
+
+            def read_preset_source_by_file_name(self, _launch_method, _file_name):
+                return save_calls[-1][2]
 
         feature = _PresetsFeature()
 
@@ -702,9 +876,9 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
 
         self.assertEqual(
             save_calls,
-            [(ZAPRET2_MODE, "Default v5.txt", "--new\n--filter-tcp=80\n", False)],
+            [(ZAPRET2_MODE, "Default v5.txt", "--new\n--filter-tcp=80\n", False, "editor_save")],
         )
-        self.assertEqual(publish_calls, [(ZAPRET2_MODE, "Default v5.txt")])
+        self.assertEqual(publish_calls, [(ZAPRET2_MODE, "Default v5.txt", "editor_save")])
 
     def test_preset_content_apply_switches_running_preset_once(self) -> None:
         from pathlib import Path
@@ -798,6 +972,40 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
             )
             launch_runtime.stop_dpi_async.assert_not_called()
 
+    def test_editor_save_preset_content_apply_uses_short_debounce(self) -> None:
+        from unittest.mock import Mock
+
+        from winws_runtime.flow.apply_policy import (
+            PRESET_CONTENT_APPLY_DEBOUNCE_MS,
+            PRESET_EDITOR_SAVE_APPLY_DEBOUNCE_MS,
+            request_preset_runtime_content_apply,
+        )
+        from settings.mode import ZAPRET2_MODE
+
+        launch_runtime = SimpleNamespace(
+            is_running=Mock(return_value=True),
+            switch_presets_async=Mock(),
+            stop_dpi_async=Mock(),
+        )
+        runtime_feature = SimpleNamespace(
+            objects=SimpleNamespace(launch_runtime=launch_runtime),
+        )
+
+        self.assertLess(PRESET_EDITOR_SAVE_APPLY_DEBOUNCE_MS, PRESET_CONTENT_APPLY_DEBOUNCE_MS)
+        self.assertTrue(
+            request_preset_runtime_content_apply(
+                runtime_feature=runtime_feature,
+                launch_method=ZAPRET2_MODE,
+                reason="editor_save",
+            )
+        )
+
+        launch_runtime.switch_presets_async.assert_called_once_with(
+            ZAPRET2_MODE,
+            delay_ms=PRESET_EDITOR_SAVE_APPLY_DEBOUNCE_MS,
+        )
+        launch_runtime.stop_dpi_async.assert_not_called()
+
     def test_selected_source_preset_apply_is_debounced_before_runtime_switch(self) -> None:
         from unittest.mock import Mock
 
@@ -830,6 +1038,110 @@ class PresetRuntimeCoordinatorTests(unittest.TestCase):
             delay_ms=SELECTED_SOURCE_PRESET_APPLY_DEBOUNCE_MS,
         )
         launch_runtime.restart_dpi_async.assert_not_called()
+
+    def test_preset_switch_during_dpi_start_is_forwarded_not_dropped(self) -> None:
+        from unittest.mock import Mock
+
+        from settings.mode import ZAPRET2_MODE
+        from winws_runtime.flow.apply_policy import request_preset_runtime_content_apply
+        from winws_runtime.flow.preset_switch_policy import request_selected_source_preset_apply
+
+        def _runtime_feature(phase: str):
+            launch_runtime = SimpleNamespace(
+                is_running=Mock(return_value=False),
+                switch_presets_async=Mock(),
+                restart_dpi_async=Mock(),
+            )
+            return launch_runtime, SimpleNamespace(
+                objects=SimpleNamespace(
+                    launch_runtime=launch_runtime,
+                    snapshot=lambda: SimpleNamespace(phase=phase, running=False),
+                ),
+            )
+
+        # «Старт» нажат, worker уже прочитал прежний пресет: смена пресета и
+        # правка стратегии обязаны дойти до switch pipeline, который дождётся
+        # конца запуска, а не выброситься как «DPI не запущен».
+        launch_runtime, runtime_feature = _runtime_feature("starting")
+        self.assertTrue(
+            request_selected_source_preset_apply(
+                runtime_feature=runtime_feature,
+                launch_method=ZAPRET2_MODE,
+                reason="preset_switched",
+                preset_file_name="B.txt",
+            )
+        )
+        self.assertTrue(
+            request_preset_runtime_content_apply(
+                runtime_feature=runtime_feature,
+                launch_method=ZAPRET2_MODE,
+                reason="strategy_only",
+            )
+        )
+        self.assertEqual(launch_runtime.switch_presets_async.call_count, 2)
+
+        launch_runtime, runtime_feature = _runtime_feature("stopped")
+        self.assertFalse(
+            request_selected_source_preset_apply(
+                runtime_feature=runtime_feature,
+                launch_method=ZAPRET2_MODE,
+                reason="preset_switched",
+                preset_file_name="B.txt",
+            )
+        )
+        launch_runtime.switch_presets_async.assert_not_called()
+
+    def test_pending_preset_switch_waits_while_dpi_is_starting(self) -> None:
+        from settings.mode import ZAPRET2_MODE
+        from winws_runtime.runtime import restart_flow
+
+        snapshot = SimpleNamespace(phase="starting", launch_method=ZAPRET2_MODE)
+        owner = SimpleNamespace(
+            _presets_switch_requested_generation=3,
+            _presets_switch_completed_generation=2,
+            _presets_switch_method=ZAPRET2_MODE,
+            _presets_switch_thread=None,
+            _dpi_start_thread=None,
+            _dpi_stop_thread=None,
+            is_running=lambda: False,
+            _runtime_service=lambda: SimpleNamespace(snapshot=lambda: snapshot, set_busy=Mock()),
+        )
+        retries: list[object] = []
+
+        with patch.object(restart_flow, "_schedule_pending_presets_switch_retry", retries.append):
+            restart_flow.process_pending_presets_switch(owner)
+        # Поколение не закрыто — после запуска переключение применится.
+        self.assertEqual(retries, [owner])
+        self.assertEqual(owner._presets_switch_completed_generation, 2)
+
+        snapshot.phase = "stopped"
+        with patch.object(restart_flow, "_schedule_pending_presets_switch_retry", retries.append):
+            restart_flow.process_pending_presets_switch(owner)
+        self.assertEqual(retries, [owner])
+        self.assertEqual(owner._presets_switch_completed_generation, 3)
+
+    def test_owner_redirect_happens_after_debounce(self) -> None:
+        from settings.mode import ZAPRET2_MODE
+        from winws_runtime.runtime import restart_flow
+
+        owner = SimpleNamespace(
+            _runtime_service=lambda: SimpleNamespace(snapshot=lambda: SimpleNamespace(launch_method=ZAPRET2_MODE)),
+            restart_dpi_async=Mock(),
+        )
+        redirect = Mock(return_value=True)
+        scheduled: list[tuple[str, int]] = []
+
+        with patch.object(restart_flow, "_redirect_preset_switch_if_owner_differs", redirect), patch.object(
+            restart_flow,
+            "_schedule_debounced_presets_switch",
+            lambda _owner, method, delay: scheduled.append((method, delay)),
+        ):
+            restart_flow.switch_presets_async(owner, ZAPRET2_MODE, delay_ms=700)
+
+        # Быстрые щелчки при чужом владельце склеиваются, а не запускают
+        # полный stop+start на каждом щелчке.
+        self.assertEqual(scheduled, [(ZAPRET2_MODE, 700)])
+        redirect.assert_not_called()
 
     def test_preset_content_apply_does_not_validate_preset_on_ui_request_path(self) -> None:
         from pathlib import Path

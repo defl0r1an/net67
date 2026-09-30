@@ -466,7 +466,10 @@ def check_window_page_deps_setup_uses_actions() -> list[Problem]:
             r"(?:build_window_page_deps_context\s*\(\s*window\s*(?:,|\))|"
             r"\bwindow\.(?:set_status|window_notification_center|app_runtime|ui_state_store|"
             r"runtime_feature|presets_feature|profile_feature|dns_feature|"
-            r"hosts_feature|lists_feature|telegram_proxy_feature|tray_feature|updater_feature|"
+            # Раньше перечень кончался на orchestra_feature. Оркестратор
+            # убрали, а разделитель «|» остался — пустая альтернатива, и
+            # правило срабатывало на любое window.что-угодно.
+            r"hosts_feature|lists_feature|telegram_proxy_feature|tray_feature|updater_feature"
             r")\b|"
             r"from ui\.(?:workflows|profile_setup_workflow|window_appearance_state))"
         ),
@@ -1186,6 +1189,46 @@ def check_preset_source_changes_have_single_runtime_owner(files: list[Path]) -> 
     return problems
 
 
+def check_skip_float_in_is_allowlisted(files: list[Path]) -> list[Problem]:
+    """Появление страниц не выключают: skip_float_in — только для виджетов,
+    у которых вход уже есть свой (вкладки «О программе», девиз, шапка).
+
+    Большому виджету с ручной отрисовкой дают play_float_in(delay_ms):
+    общий модуль ui.widgets.stagger_float_in вызывает его в своей очереди.
+    """
+    return _scan_lines(
+        files,
+        re.compile(r"\bskip_float_in\s*\("),
+        "не выключайте появление страницы — дайте виджету play_float_in (свой вход через ui.widgets.stagger_float_in)",
+        allowed_paths={
+            "src/ui/widgets/stagger_float_in.py",
+            "src/ui/pages/about_page.py",
+            "src/ui/pages/about_page_help_build.py",
+            "src/ui/pages/about_page_kvn_build.py",
+        },
+    )
+
+
+def check_switches_use_aligned_switch_button(files: list[Path]) -> list[Problem]:
+    """Переключатели создаются только через ui.widgets.aligned_switch.
+
+    У стандартного SwitchButton ширина зависит от подписи «Вкл.»/«Выкл.»,
+    а строка настроек прижимает его вправо: ползунок уезжал вбок при каждом
+    переключении. На странице hosts это прожило со времён исходного проекта,
+    потому что проверки в net67 не было, — правило взято оттуда.
+    """
+    return _scan_lines(
+        files,
+        re.compile(
+            r"(?<![\w.\"'])SwitchButton\s*[(,)]"
+            r"|=\s*SwitchButton\b"
+            r"|\bimport\b.*(?<![\w.\"'])SwitchButton\b"
+        ),
+        "используйте AlignedSwitchButton из ui/widgets/aligned_switch.py вместо SwitchButton",
+        allowed_paths={"src/ui/widgets/aligned_switch.py"},
+    )
+
+
 def run_checks() -> list[Problem]:
     files = _python_files()
     problems: list[Problem] = []
@@ -1221,6 +1264,8 @@ def run_checks() -> list[Problem]:
     problems.extend(check_page_deps_context_not_stored_on_window(files))
     problems.extend(check_no_qfluentwidgets_fallbacks(files))
     problems.extend(check_no_legacy_toggle_widgets_in_production_ui(files))
+    problems.extend(check_switches_use_aligned_switch_button(files))
+    problems.extend(check_skip_float_in_is_allowlisted(files))
     problems.extend(check_no_raw_text_edit_in_production_ui(files))
     problems.extend(check_pages_have_explicit_dependencies(files))
     problems.extend(check_external_imports(files))

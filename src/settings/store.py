@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import uuid
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -83,8 +84,12 @@ def _format_settings_json(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
+_SETTINGS_REVISION = 0
+
+
 def _write_settings_file_locked(data: dict[str, Any]) -> None:
-    global _SETTINGS_CACHE, _SETTINGS_CACHE_SIGNATURE, _SETTINGS_CACHE_MATERIALIZED
+    global _SETTINGS_CACHE, _SETTINGS_CACHE_SIGNATURE, _SETTINGS_CACHE_MATERIALIZED, _SETTINGS_REVISION
+    _SETTINGS_REVISION += 1
 
     normalized = _normalize_settings(data)
     path = get_settings_path()
@@ -385,6 +390,39 @@ def set_user_profiles_settings(values: dict[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(updated["user_profiles"])
 
 
+def update_user_profiles_settings(mutator) -> dict[str, Any]:
+    """Read-modify-write секции user_profiles одним вызовом _update_settings.
+
+    `mutator` получает копию секции и меняет её на месте. Проверка
+    уникальности, выбор id и запись идут под одним замком хранилища, и
+    параллельная правка из другого воркера не теряется.
+    """
+
+    def _mutate(data: dict[str, Any]) -> None:
+        section = copy.deepcopy(_as_dict(data.get("user_profiles")))
+        mutator(section)
+        _set_path_value(data, ("user_profiles",), section)
+
+    updated = _update_settings(_mutate)
+    return copy.deepcopy(updated["user_profiles"])
+
+
+def get_user_fakes_settings() -> dict[str, Any]:
+    return copy.deepcopy(read_settings()["user_fakes"])
+
+
+def update_user_fakes_settings(mutator) -> dict[str, Any]:
+    """Read-modify-write секции user_fakes: проверка имени, файл и запись разом."""
+
+    def _mutate(data: dict[str, Any]) -> None:
+        section = copy.deepcopy(_as_dict(data.get("user_fakes")))
+        mutator(section)
+        _set_path_value(data, ("user_fakes",), section)
+
+    updated = _update_settings(_mutate)
+    return copy.deepcopy(updated["user_fakes"])
+
+
 def get_user_profiles_revision() -> str:
     """Детерминированный токен состояния user_profiles для ключей кэшей.
 
@@ -413,6 +451,24 @@ def get_blockcheck_settings() -> dict[str, Any]:
 
 def set_blockcheck_settings(values: dict[str, Any]) -> dict[str, Any]:
     updated = _update_settings(lambda data: data["blockcheck"].update(_as_dict(values)))
+    return copy.deepcopy(updated["blockcheck"])
+
+
+def update_blockcheck_settings(mutator) -> dict[str, Any]:
+    """Read-modify-write секции blockcheck под общим замком настроек.
+
+    `mutator` получает копию секции, прочитанную под _SETTINGS_LOCK, и меняет
+    её на месте. Итоги подбора стратегии пишутся из рабочего потока — без
+    общего замка они затирали бы правку пользовательских доменов, сделанную
+    в это же время на странице.
+    """
+
+    def _mutate(data: dict[str, Any]) -> None:
+        section = copy.deepcopy(_as_dict(data.get("blockcheck")))
+        mutator(section)
+        data["blockcheck"] = section
+
+    updated = _update_settings(_mutate)
     return copy.deepcopy(updated["blockcheck"])
 
 
@@ -483,14 +539,6 @@ def get_auto_update_enabled() -> bool:
 
 def set_auto_update_enabled(value: bool) -> bool:
     return _set_bool(("program", "auto_update_enabled"), value)
-
-
-def get_remove_github_api() -> bool:
-    return _get_bool(("program", "remove_github_api"), True)
-
-
-def set_remove_github_api(value: bool) -> bool:
-    return _set_bool(("program", "remove_github_api"), value)
 
 
 def get_discord_restart_enabled() -> bool:
@@ -799,22 +847,6 @@ def set_tg_proxy_deeplink_done(value: bool) -> bool:
     return _set_bool(("warnings", "tg_proxy_deeplink_done"), value)
 
 
-def get_force_dns_enabled() -> bool:
-    return _get_bool(("dns", "force_dns_enabled"), False)
-
-
-def set_force_dns_enabled(value: bool) -> bool:
-    return _set_bool(("dns", "force_dns_enabled"), value)
-
-
-def get_dns_crash_count() -> int:
-    return _get_int(("dns", "dns_crash_count"), 0)
-
-
-def set_dns_crash_count(value: int) -> bool:
-    return _set_int(("dns", "dns_crash_count"), value)
-
-
 def get_custom_dns_servers() -> list[dict[str, Any]]:
     value = _get_path_value(read_settings(), ("dns", "custom_servers"), [])
     return copy.deepcopy(value if isinstance(value, list) else [])
@@ -823,29 +855,6 @@ def get_custom_dns_servers() -> list[dict[str, Any]]:
 def set_custom_dns_servers(value: list[dict[str, Any]]) -> list[dict[str, Any]]:
     updated = _update_settings(lambda data: _set_path_value(data, ("dns", "custom_servers"), value))
     return copy.deepcopy(updated["dns"]["custom_servers"])
-
-
-def increment_dns_crash_count() -> int:
-    updated = _update_settings(
-        lambda data: _set_path_value(
-            data,
-            ("dns", "dns_crash_count"),
-            _as_int(_get_path_value(data, ("dns", "dns_crash_count"), 0), 0, minimum=0) + 1,
-        )
-    )
-    return int(updated["dns"]["dns_crash_count"])
-
-
-def reset_dns_crash_count() -> bool:
-    return _set_int(("dns", "dns_crash_count"), 0)
-
-
-def get_hosts_bootstrap_signature() -> str | None:
-    return _get_nullable_str(("hosts", "bootstrap_signature"))
-
-
-def set_hosts_bootstrap_signature(value: str | None) -> bool:
-    return _set_nullable_str(("hosts", "bootstrap_signature"), value)
 
 
 def get_active_hosts_domains() -> set[str]:
@@ -1088,6 +1097,14 @@ def set_tg_proxy_proxy_protocol(value: bool) -> bool:
     return _set_bool(("telegram_proxy", "proxy_protocol"), value)
 
 
+def get_tg_proxy_auto_deeplink() -> bool:
+    return _get_bool(("telegram_proxy", "auto_deeplink"), True)
+
+
+def set_tg_proxy_auto_deeplink(value: bool) -> bool:
+    return _set_bool(("telegram_proxy", "auto_deeplink"), value)
+
+
 __all__ = [
     "get_accent_color",
     "get_active_hosts_domains",
@@ -1096,16 +1113,13 @@ __all__ = [
     "get_background_preset",
     "get_discord_restart_enabled",
     "get_display_mode",
-    "get_dns_crash_count",
     "get_custom_dns_servers",
     "get_dpi_autostart",
     "get_editor_smooth_scroll_enabled",
     "get_defender_disabled_memory",
     "get_follow_windows_accent",
-    "get_force_dns_enabled",
     "get_folders_settings",
     "get_gui_autostart_enabled",
-    "get_hosts_bootstrap_signature",
     "get_hosts_selection",
     "get_isp_dns_info_shown",
     "get_kaspersky_warning_disabled",
@@ -1113,7 +1127,6 @@ __all__ = [
     "get_mica_enabled",
     "get_program_settings",
     "get_profile_strategy_state_settings",
-    "get_remove_github_api",
     "get_russian_state_media_blocked",
     "get_selected_source_preset_file_name",
     "get_advanced_mode",
@@ -1159,11 +1172,9 @@ __all__ = [
     "get_window_geometry",
     "get_window_opacity",
     "get_windows_system_accent",
-    "increment_dns_crash_count",
     "materialize_settings_file",
     "read_settings",
     "remove_active_hosts_domain",
-    "reset_dns_crash_count",
     "replace_settings",
     "reset_settings",
     "set_accent_color",
@@ -1174,15 +1185,12 @@ __all__ = [
     "set_defender_disabled_memory",
     "set_discord_restart_enabled",
     "set_display_mode",
-    "set_dns_crash_count",
     "set_custom_dns_servers",
     "set_dpi_autostart",
     "set_editor_smooth_scroll_enabled",
     "set_follow_windows_accent",
-    "set_force_dns_enabled",
     "set_folders_settings",
     "set_gui_autostart_enabled",
-    "set_hosts_bootstrap_signature",
     "set_hosts_selection",
     "set_isp_dns_info_shown",
     "set_kaspersky_warning_disabled",
@@ -1190,7 +1198,6 @@ __all__ = [
     "set_mica_enabled",
     "set_program_settings",
     "set_profile_strategy_state_settings",
-    "set_remove_github_api",
     "set_russian_state_media_blocked",
     "set_selected_source_preset_file_name",
     "set_advanced_mode",
@@ -1236,3 +1243,211 @@ __all__ = [
     "set_window_opacity",
     "clear_selected_source_preset_file_name",
 ]
+
+
+# ────────────────────────────────────────────────────────────────────
+# Функции, которые зовёт код из исходного проекта.
+#
+# Там настройки живут в SQLite (settings.sqlite3), и переноса старого
+# settings.json нет: у пользователя после обновления пропали бы VPN-ссылки,
+# выбор сервисов hosts и настройки прокси. net67 остаётся на settings.json,
+# а те же функции реализует поверх него. Сигнатуры и смысл — как в
+# исходном проекте, чтобы пришедший код не отличал одно от другого.
+# ────────────────────────────────────────────────────────────────────
+
+_PRESET_UID_PREFIX = "pid:"
+
+
+def close_settings_database() -> None:
+    """В исходном проекте закрывает соединение с SQLite.
+
+    У json соединения нет; смысл тот же — следующий читатель должен взять
+    файл с диска, а не кеш прежнего. Этим пользуется изоляция настроек в
+    тестах: каждый тест получает свой каталог, и кеш прошлого теста в нём
+    оказался бы чужим.
+    """
+    global _SETTINGS_CACHE, _SETTINGS_CACHE_SIGNATURE, _SETTINGS_CACHE_MATERIALIZED
+    with _SETTINGS_LOCK:
+        _SETTINGS_CACHE = None
+        _SETTINGS_CACHE_SIGNATURE = None
+        _SETTINGS_CACHE_MATERIALIZED = False
+
+
+def get_settings_database_path() -> Path:
+    """В исходном проекте — путь к SQLite. Здесь — к settings.json."""
+    return get_settings_path()
+
+
+def prepare_settings_database() -> dict[str, Any]:
+    """Создаёт и проверяет файл настроек. Для json это обычное чтение."""
+    return read_settings()
+
+
+def get_settings_revision() -> int:
+    """Монотонная ревизия для зависимых кэшей: растёт на каждой записи."""
+    with _SETTINGS_LOCK:
+        return int(_SETTINGS_REVISION)
+
+
+def get_last_seen_version() -> str:
+    return _get_str(("program", "last_seen_version"), "")
+
+
+def set_last_seen_version(value: str) -> bool:
+    return _set_str(("program", "last_seen_version"), str(value or ""))
+
+
+def set_live_animations_enabled(value: bool) -> bool:
+    return _set_bool(("appearance", "live_animations_enabled"), value)
+
+
+def get_onboarding_tour_done() -> bool:
+    return _get_bool(("warnings", "onboarding_tour_done"), False)
+
+
+def set_onboarding_tour_done(value: bool) -> bool:
+    return _set_bool(("warnings", "onboarding_tour_done"), value)
+
+
+def get_remote_presets_settings() -> dict[str, Any]:
+    return copy.deepcopy(read_settings()["remote_presets"])
+
+
+def set_remote_presets_settings(values: dict[str, Any]) -> dict[str, Any]:
+    updated = _update_settings(lambda data: _set_path_value(data, ("remote_presets",), _as_dict(values)))
+    return copy.deepcopy(updated["remote_presets"])
+
+
+def _clean_scope_file(scope: str, file_name: str) -> tuple[str, str]:
+    return str(scope or "").strip().lower(), str(file_name or "").strip()
+
+
+def get_preset_uid(scope: str, file_name: str) -> str | None:
+    scope, file_name = _clean_scope_file(scope, file_name)
+    if not scope or not file_name:
+        return None
+    uid = _get_path_value(read_settings(), ("preset_registry", scope, file_name), None)
+    return str(uid) if uid else None
+
+
+def get_or_create_preset_uid(scope: str, file_name: str) -> str | None:
+    scope, file_name = _clean_scope_file(scope, file_name)
+    if not scope or not file_name:
+        return None
+    created: list[str] = []
+
+    def _mutate(data: dict[str, Any]) -> None:
+        registry = data.setdefault("preset_registry", {})
+        entries = registry.setdefault(scope, {})
+        if not entries.get(file_name):
+            uid = f"{_PRESET_UID_PREFIX}{uuid.uuid4().hex}"
+            entries[file_name] = uid
+            created.append(uid)
+
+    updated = _update_settings(_mutate)
+    uid = _get_path_value(updated, ("preset_registry", scope, file_name), None)
+    return str(uid) if uid else None
+
+
+def rename_preset_identity(scope: str, old_file_name: str, new_file_name: str) -> bool:
+    scope, old_file_name = _clean_scope_file(scope, old_file_name)
+    _, new_file_name = _clean_scope_file(scope, new_file_name)
+    if not scope or not old_file_name or not new_file_name or old_file_name == new_file_name:
+        return False
+    moved: list[bool] = []
+
+    def _mutate(data: dict[str, Any]) -> None:
+        for section in ("preset_registry", "remote_presets"):
+            entries = _as_dict(data.get(section)).get(scope)
+            if not isinstance(entries, dict) or old_file_name not in entries:
+                continue
+            # Имя уже занято — как UNIQUE в исходном проекте: не переносим.
+            if section == "preset_registry" and new_file_name in entries:
+                return
+            entries[new_file_name] = entries.pop(old_file_name)
+            if section == "preset_registry":
+                moved.append(True)
+
+    _update_settings(_mutate)
+    return bool(moved)
+
+
+def delete_preset_identity(scope: str, file_name: str) -> bool:
+    """Удаляет пресет из реестра; привязка к источнику уходит вместе с ним."""
+    scope, file_name = _clean_scope_file(scope, file_name)
+    if not scope or not file_name:
+        return False
+    removed: list[bool] = []
+
+    def _mutate(data: dict[str, Any]) -> None:
+        for section in ("preset_registry", "remote_presets"):
+            entries = _as_dict(data.get(section)).get(scope)
+            if isinstance(entries, dict) and entries.pop(file_name, None) is not None and section == "preset_registry":
+                removed.append(True)
+
+    _update_settings(_mutate)
+    return bool(removed)
+
+
+def get_preset_remote_source(scope: str, file_name: str) -> dict[str, Any] | None:
+    scope, file_name = _clean_scope_file(scope, file_name)
+    if not scope or not file_name:
+        return None
+    binding = _get_path_value(read_settings(), ("remote_presets", scope, file_name), None)
+    return copy.deepcopy(binding) if isinstance(binding, dict) else None
+
+
+def list_preset_remote_sources(scope: str) -> dict[str, dict[str, Any]]:
+    scope = str(scope or "").strip().lower()
+    if not scope:
+        return {}
+    entries = _get_path_value(read_settings(), ("remote_presets", scope), {})
+    return copy.deepcopy(entries) if isinstance(entries, dict) else {}
+
+
+def set_preset_remote_source(scope: str, file_name: str, binding: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(binding, dict) or not str(binding.get("url") or "").strip():
+        return None
+    if get_or_create_preset_uid(scope, file_name) is None:
+        return None
+    scope, file_name = _clean_scope_file(scope, file_name)
+    values = {
+        "url": str(binding.get("url") or "").strip(),
+        "etag": str(binding.get("etag") or ""),
+        "last_modified": str(binding.get("last_modified") or ""),
+        "synced_hash": str(binding.get("synced_hash") or ""),
+        "checked_at": str(binding.get("checked_at") or ""),
+        "updated_at": str(binding.get("updated_at") or ""),
+        "error": str(binding.get("error") or ""),
+        "auto": bool(binding.get("auto", True)),
+        "detached": bool(binding.get("detached", False)),
+    }
+    _update_settings(lambda data: _set_path_value(data, ("remote_presets", scope, file_name), values))
+    return get_preset_remote_source(scope, file_name)
+
+
+def delete_preset_remote_source(scope: str, file_name: str) -> bool:
+    scope, file_name = _clean_scope_file(scope, file_name)
+    if not scope or not file_name:
+        return False
+    removed: list[bool] = []
+
+    def _mutate(data: dict[str, Any]) -> None:
+        entries = _as_dict(data.get("remote_presets")).get(scope)
+        if isinstance(entries, dict) and entries.pop(file_name, None) is not None:
+            removed.append(True)
+
+    _update_settings(_mutate)
+    return bool(removed)
+
+
+def find_preset_remote_source_by_url(url: str) -> tuple[str, str, dict[str, Any]] | None:
+    needle = str(url or "").strip()
+    if not needle:
+        return None
+    sections = _as_dict(read_settings().get("remote_presets"))
+    for scope, entries in sections.items():
+        for file_name, binding in _as_dict(entries).items():
+            if isinstance(binding, dict) and str(binding.get("url") or "").strip() == needle:
+                return str(scope), str(file_name), copy.deepcopy(binding)
+    return None

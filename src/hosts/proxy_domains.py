@@ -10,7 +10,7 @@ import json
 import threading
 import time
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from config.runtime_layout import APPLICATION_PATHS, PACKAGED_RUNTIME
@@ -35,6 +35,31 @@ class HostsCatalog:
     service_entries: dict[str, list[tuple[str, list[str]]]]
     service_order: list[str]
     service_modes: dict[str, str]
+    #: Категория из каталога («direct», «ai», «other»), ключ — casefold имени.
+    #:
+    #: Раньше «что такое нейросеть» решал список подстрок в page_plans.
+    #: Каталог zapret уже хранит категорию, и OpenRouter — первый сервис,
+    #: который по подстрокам в группу «ИИ» не попал бы.
+    service_categories: dict[str, str] = field(default_factory=dict)
+    #: Значок и цвет сервиса из каталога, ключ — имя сервиса. Раньше значки
+    #: жили списком QUICK_SERVICES в коде и расходились с каталогом: новый
+    #: сервис получал глобус, пока кто-нибудь не дописывал его руками.
+    service_icons: dict[str, tuple[str, str | None]] = field(default_factory=dict)
+
+
+#: Сервис каталога, чьи записи в hosts ведёт другая страница.
+#:
+#: Telegram прописывала и плитка редактора hosts, и кнопка на странице
+#: Telegram Proxy — два писателя одних и тех же доменов. Хуже того,
+#: «Прописать» на странице прокси вырезает строки Telegram на любом
+#: адресе, в том числе внутри блока net67, и следующая сверка при запуске
+#: возвращала их обратно: блоки переписывали друг друга. Хозяин записей —
+#: страница прокси (``telegram_proxy/telegram_hosts.py``).
+#:
+#: Фильтр здесь, а не удалённый файл 070_telegram.json: каталог приходит
+#: из zapret, и следующее слияние молча вернуло бы плитку.
+TELEGRAM_HOSTS_SERVICE = "Telegram (работает только веб-версия)"
+_SERVICES_OWNED_ELSEWHERE = frozenset({TELEGRAM_HOSTS_SERVICE.casefold()})
 
 
 _SERVICE_MODE_DNS = "dns"
@@ -230,6 +255,9 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
     service_entries: dict[str, list[tuple[str, list[str]]]] = {}
     service_order: list[str] = []
     service_modes: dict[str, str] = {}
+    service_categories: dict[str, str] = {}
+    service_icons: dict[str, tuple[str, str | None]] = {}
+    service_sort: dict[str, int] = {}
 
     for raw_service in data.get("services") or []:
         if not isinstance(raw_service, dict):
@@ -237,13 +265,25 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         service_name = _clean_str(raw_service.get("name"))
         if not service_name:
             continue
+        if service_name.casefold() in _SERVICES_OWNED_ELSEWHERE:
+            continue
 
-        mode = _normalize_mode(raw_service.get("mode"))
+        mode =_normalize_mode(raw_service.get("mode"))
         if service_name not in service_order:
             service_order.append(service_name)
         services.setdefault(service_name, {})
         service_entries.setdefault(service_name, [])
         service_modes[service_name.casefold()] = mode
+        category = _clean_str(raw_service.get("category")).lower()
+        if category:
+            service_categories[service_name.casefold()] = category
+        icon_name = _clean_str(raw_service.get("icon"))
+        if icon_name:
+            service_icons[service_name] = (icon_name, _clean_str(raw_service.get("icon_color")) or None)
+        try:
+            service_sort[service_name] = int(raw_service.get("sort_order"))
+        except (TypeError, ValueError):
+            pass
 
         if mode == _SERVICE_MODE_HOSTS:
             _ensure_hosts_profile(profiles, profile_names)
@@ -295,6 +335,11 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
                     ips_by_profile=row_values,
                 )
 
+    # Порядок — как в каталоге: сквозной sort_order. Без него сервисы шли
+    # в порядке файлов, то есть по алфавиту, и ИИ-сервисы оказывались
+    # вперемешку с остальными.
+    order_index = {name: index for index, name in enumerate(service_order)}
+    service_order.sort(key=lambda name: (service_sort.get(name, 10_000), order_index[name]))
     return HostsCatalog(
         dns_profiles=profiles,
         dns_profile_names=profile_names,
@@ -302,6 +347,8 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         service_entries=service_entries,
         service_order=service_order,
         service_modes=service_modes,
+        service_categories=service_categories,
+        service_icons=service_icons,
     )
 
 
@@ -342,6 +389,16 @@ def _iter_json_files(path: Path) -> list[Path]:
     )
 
 
+#: Профили DNS, которые добавил сам net67, — поверх каталога из zapret.
+#:
+#: Отдельным файлом, а не колонкой в каждом файле dns/. Каталог приходит
+#: из zapret трёхсторонним слиянием, и своя колонка в шестидесяти файлах
+#: давала бы конфликт в каждом, стоит zapret поменять хоть один адрес.
+#: Файл заполняет tools/refresh_hosts_catalog.py (источники с
+#: ``"overlay": true`` в tools/hosts_catalog_resolvers.json).
+NET67_OVERLAY_FILE_NAME = "net67_dns_sources.json"
+
+
 def _split_catalog_files(root: Path) -> list[Path]:
     """Канонический список файлов split-каталога.
 
@@ -354,7 +411,53 @@ def _split_catalog_files(root: Path) -> list[Path]:
         files.append(profiles_path)
     files.extend(_iter_json_files(root / "dns"))
     files.extend(_iter_json_files(root / "hosts"))
+    overlay_path = root / NET67_OVERLAY_FILE_NAME
+    if overlay_path.is_file():
+        files.append(overlay_path)
     return files
+
+
+def _apply_net67_overlay(raw: object, profiles: list[dict[str, str]], services: list[dict]) -> None:
+    """Накладывает профили net67 на прочитанный каталог.
+
+    Каталог главнее: профиль, который уже есть в dns_sources.json, из
+    дополнения не берётся вовсе. Если zapret однажды добавит тот же
+    AstraCat, адреса будут его, а не наши, и дублей в ряду не появится.
+    """
+    if not isinstance(raw, dict):
+        return
+    known = {profile["id"] for profile in profiles}
+    added: set[str] = set()
+    for profile in _normalize_split_profiles(raw):
+        if profile["id"] in known:
+            continue
+        profiles.append(profile)
+        known.add(profile["id"])
+        added.add(profile["id"])
+    if not added:
+        return
+
+    raw_ips = raw.get("ips")
+    if not isinstance(raw_ips, dict):
+        return
+    by_host = {
+        _clean_str(host).casefold(): values
+        for host, values in raw_ips.items()
+        if _clean_str(host) and isinstance(values, dict)
+    }
+    for service in services:
+        for domain in service.get("domains") or []:
+            if not isinstance(domain, dict):
+                continue
+            host = _clean_str(domain.get("host") or domain.get("domain")).casefold()
+            values = by_host.get(host)
+            if not values:
+                continue
+            ips = dict(domain.get("ips") or {}) if isinstance(domain.get("ips"), dict) else {}
+            for profile_id in added:
+                if profile_id in values and profile_id not in ips:
+                    ips[profile_id] = values[profile_id]
+            domain["ips"] = ips
 
 
 def _normalize_split_profiles(raw: object) -> list[dict[str, str]]:
@@ -419,6 +522,15 @@ def _load_split_catalog_data_with_sig(path: Path) -> tuple[dict, tuple[int, int]
             services.extend(_normalize_split_services(read_json(service_path), mode=_SERVICE_MODE_DNS))
         except Exception as exc:
             _log(f"Не удалось прочитать DNS-сервис hosts-каталога {service_path.name}: {exc}", "WARNING")
+
+    overlay_path = path / NET67_OVERLAY_FILE_NAME
+    if overlay_path.is_file():
+        try:
+            _apply_net67_overlay(read_json(overlay_path), profiles, services)
+        except Exception as exc:
+            # Битое дополнение не должно гасить каталог целиком: без него
+            # пропадают только профили net67.
+            _log(f"Не удалось прочитать профили net67 hosts-каталога: {exc}", "WARNING")
 
     for service_path in _iter_json_files(path / "hosts"):
         try:
@@ -598,6 +710,11 @@ def get_dns_profile_display_name(profile_id: str) -> str:
 
 def get_all_services() -> list[str]:
     return list(_load_catalog().service_order)
+
+
+def get_service_category(service_name: str) -> str:
+    """Категория сервиса из каталога; пустая строка — каталог её не знает."""
+    return _load_catalog().service_categories.get(_clean_str(service_name).casefold(), "")
 
 
 def get_service_domain_names(service_name: str) -> list[str]:
@@ -819,7 +936,26 @@ def _build_services_profile_index(cat: HostsCatalog) -> dict[str, object]:
         "domain_names_by_service": domain_names_by_service,
         "profile_domain_maps_by_service": profile_domain_maps_by_service,
         "profile_domain_ip_candidates_by_service": profile_domain_ip_candidates_by_service,
+        "category_by_service": {
+            service_name: cat.service_categories.get(service_name.casefold(), "other")
+            for service_name in services
+        },
+        "icon_by_service": {
+            service_name: _service_icon(cat, service_name)
+            for service_name in services
+        },
     }
+
+
+def _service_icon(cat: HostsCatalog, service_name: str) -> tuple[str, str | None]:
+    """Значок сервиса: из каталога, иначе прежний из QUICK_SERVICES, иначе глобус."""
+    icon = cat.service_icons.get(service_name)
+    if icon:
+        return icon
+    for icon_name, name, color in QUICK_SERVICES:
+        if name == service_name:
+            return (icon_name, color)
+    return ("fa5s.globe", None)
 
 
 def get_services_profile_index() -> dict[str, object]:
@@ -889,7 +1025,6 @@ QUICK_SERVICES = [
     ("fa5s.book-open", "MangaLib", "#f28c28"),
     ("fa5s.desktop", "Parsec", "#5e5ce6"),
     ("fa5s.credit-card", "Square", "#006aff"),
-    ("fa5b.telegram", "Telegram (работает только веб-версия)", "#2aabee"),
     ("fa5b.discord", "Discord", "#5865f2"),
     ("fa5b.youtube", "YouTube (иногда может не работать с ним! Отключите тумблер если YouTube не работает с пресетами)", "#ff0000"),
     ("fa5b.github", "GitHub", "#181717"),

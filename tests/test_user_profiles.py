@@ -185,7 +185,7 @@ class UserProfilesTests(unittest.TestCase):
         self.assertIn("--filter-l7=stun,discord", profile.match.filter_lines)
         self.assertNotIn("--filter-tcp=stun,discord", profile.match.filter_lines)
 
-    def test_winws1_user_profile_uses_first_strategy_from_protocol_catalog(self) -> None:
+    def test_winws1_user_profile_has_no_desync_until_user_picks_strategy(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             catalog_dir = root / "profile" / "strategy_catalogs" / "winws1"
@@ -215,9 +215,36 @@ class UserProfilesTests(unittest.TestCase):
         texts = [segment.text for segment in profile.segments]
         self.assertIn("--filter-tcp=80,443", profile.match.filter_lines)
         self.assertIn("--hostlist=lists/my-tcp.txt", profile.match.hostlist_lines)
-        self.assertIn("--dpi-desync=fake", texts)
-        self.assertIn("--dup=2", texts)
-        self.assertNotIn("--dpi-desync=split2", texts)
+        # winws1 без --dpi-desync = DESYNC_NONE (аналог --lua-desync=pass):
+        # первая стратегия каталога молча не выбирается.
+        self.assertFalse(any(text.startswith("--dpi-desync") for text in texts))
+        self.assertNotIn("--dup=2", texts)
+        self.assertEqual(profile.strategy.strategy_lines, [])
+
+    def test_winws1_l7_user_profiles_have_no_desync_by_default(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog_dir = root / "profile" / "strategy_catalogs" / "winws1"
+            catalog_dir.mkdir(parents=True)
+            (catalog_dir / "tcp.txt").write_text(
+                "[first_tcp]\n--dpi-desync=fake\n--dpi-desync-fake-tls=tls_clienthello_4.bin\n",
+                encoding="utf-8",
+            )
+            (catalog_dir / "udp.txt").write_text(
+                "[first_udp]\n--dpi-desync=fake\n--dpi-desync-fake-quic=quic_1.bin\n",
+                encoding="utf-8",
+            )
+            paths = AppPaths(user_root=root, local_root=root)
+            with patch("settings.store.MAIN_DIRECTORY", str(root)):
+                tls_id = create_user_profile(paths, name="My TLS", protocol="l7", ports="tls")
+                voice_id = create_user_profile(paths, name="My Voice", protocol="l7", ports="stun,discord")
+                templates = load_user_profile_templates(paths, "winws1")
+
+        self.assertIn("--filter-l7=tls", templates[f"user:{tls_id}"].match.filter_lines)
+        self.assertIn("--filter-l7=stun,discord", templates[f"user:{voice_id}"].match.filter_lines)
+        for profile_id in (tls_id, voice_id):
+            texts = [segment.text for segment in templates[f"user:{profile_id}"].segments]
+            self.assertFalse(any(text.startswith("--dpi-desync") for text in texts), texts)
 
     def test_list_profiles_includes_user_profile_and_enabling_adds_it_to_preset(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -315,41 +342,23 @@ class UserProfilesTests(unittest.TestCase):
 
         self.assertEqual([item.user_profile_id for item in payload.items], [profile_id])
 
-    def test_corrupt_settings_file_is_backed_up_before_defaults_rewrite(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            settings_path = root / "settings" / "settings.json"
-            settings_path.parent.mkdir(parents=True)
-            settings_path.write_text("{broken json", encoding="utf-8")
-
-            with patch("settings.store.MAIN_DIRECTORY", str(root)):
-                settings = read_settings()
-
-            backup_path = root / "settings" / "settings.json.corrupt.bak"
-            self.assertEqual(settings["user_profiles"]["profiles"], {})
-            self.assertTrue(backup_path.is_file())
-            self.assertEqual(backup_path.read_text(encoding="utf-8"), "{broken json")
-
-    def test_revision_read_does_not_prevent_corrupt_settings_repair(self) -> None:
-        """Регресс: не-materialize чтение (get_user_profiles_revision) не должно
-        отравлять кэш так, чтобы битый settings.json больше не чинился."""
-        from settings.store import get_user_profiles_revision, materialize_settings_file
+    def test_legacy_settings_json_is_not_read_or_rewritten(self) -> None:
+        from settings import store as settings_store
 
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            settings_path = root / "settings" / "settings.json"
+            settings_path = root / "user" / "settings.json"
             settings_path.parent.mkdir(parents=True)
-            settings_path.write_text("{broken json", encoding="utf-8")
+            settings_path.write_text('{"appearance":{"display_mode":"light"}}', encoding="utf-8")
 
             with patch("settings.store.MAIN_DIRECTORY", str(root)):
-                get_user_profiles_revision()
-                self.assertEqual(settings_path.read_text(encoding="utf-8"), "{broken json")
-                materialize_settings_file()
+                prepared = settings_store.prepare_settings_database()
 
-            import json
-
-            repaired = json.loads(settings_path.read_text(encoding="utf-8"))
-            self.assertIn("user_profiles", repaired)
+            self.assertEqual(prepared["appearance"]["display_mode"], "dark")
+            self.assertEqual(
+                settings_path.read_text(encoding="utf-8"),
+                '{"appearance":{"display_mode":"light"}}',
+            )
 
     def test_recreating_profile_preserves_orphaned_domains(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -606,11 +615,12 @@ class UserProfilesTests(unittest.TestCase):
                 new_key = service.apply_strategy("template:all_profiles:0", "tcp_md5")
 
         self.assertEqual(new_key.status, "applied")
-        self.assertEqual(new_key.profile_key, "profile:0")
+        self.assertEqual(new_key.profile_key, "profile:1")
         self.assertIn("--hostlist=lists/speedtest.txt\n--out-range=-d8", store.text)
         self.assertNotIn("--hostlist=lists/speedtest.txt\n\n--out-range=-d8", store.text)
         self.assertNotIn("--lua-desync=pass", store.text)
-        self.assertIn("\n--new\n\n--name=youtube.com (интерфейс)", store.text)
+        self.assertTrue(store.text.startswith("--name=youtube.com (интерфейс)\n"))
+        self.assertIn("\n--new\n\n--name=SpeedTest", store.text)
 
     def test_enabling_stock_template_adds_safe_pass_without_internal_blanks(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -651,12 +661,12 @@ class UserProfilesTests(unittest.TestCase):
                 service = ProfilePresetService(feature, "zapret2_mode")
                 new_key = service.set_profile_enabled("template:all_profiles:0", True)
 
-        self.assertEqual(new_key, "profile:0")
+        self.assertEqual(new_key, "profile:1")
         self.assertIn("--hostlist=lists/speedtest.txt\n--out-range=-d8\n--lua-desync=pass", store.text)
         self.assertNotIn("--hostlist=lists/speedtest.txt\n\n--out-range=-d8", store.text)
         self.assertNotIn("--hostlist=lists/youtube.txt\n\n--payload=tls_client_hello", store.text)
 
-    def test_enabling_missing_profile_adds_it_to_top_of_preset(self) -> None:
+    def test_enabling_missing_profile_appends_it_after_existing_site_profiles(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / "profile" / "templates").mkdir(parents=True)
@@ -682,15 +692,15 @@ class UserProfilesTests(unittest.TestCase):
                 service = ProfilePresetService(feature, "zapret2_mode")
                 new_key = service.set_profile_enabled(f"template:user:{profile_id}", True)
 
-        self.assertEqual(new_key, "profile:0")
+        self.assertEqual(new_key, "profile:1")
         preset = parse_preset_text(store.text, engine="winws2")
         self.assertEqual(len(preset.profiles), 2)
-        self.assertEqual(preset.profiles[0].name, "My Site")
-        self.assertEqual(preset.profiles[1].name, "All TCP")
-        self.assertIn("--hostlist=lists/my-site.txt", preset.profiles[0].match.hostlist_lines)
-        self.assertIn("--hostlist=lists/all.txt", preset.profiles[1].match.hostlist_lines)
-        self.assertTrue(store.text.startswith("--name=My Site\n"))
-        self.assertIn("\n--new\n\n--name=All TCP\n", store.text)
+        self.assertEqual(preset.profiles[0].name, "All TCP")
+        self.assertEqual(preset.profiles[1].name, "My Site")
+        self.assertIn("--hostlist=lists/all.txt", preset.profiles[0].match.hostlist_lines)
+        self.assertIn("--hostlist=lists/my-site.txt", preset.profiles[1].match.hostlist_lines)
+        self.assertTrue(store.text.startswith("--name=All TCP\n"))
+        self.assertIn("\n--new\n\n--name=My Site\n", store.text)
 
     def test_template_profile_bare_hostlist_is_saved_as_lists_relative_path(self) -> None:
         from profile.serializer import append_profile_from_template, serialize_preset
@@ -751,7 +761,8 @@ class UserProfilesTests(unittest.TestCase):
                 service.set_profile_enabled(f"template:user:{profile_id}", True)
                 after_add_again = store.text
 
-        self.assertIn("\n--new\n\n--name=Tanki X\n", after_add)
+        self.assertTrue(after_add.startswith("--name=Tanki X\n"))
+        self.assertIn("\n--new\n\n--name=youtube.com (интерфейс)\n", after_add)
         self.assertNotIn("--new=Tanki X", after_add)
         self.assertNotIn("--new=youtube.com (интерфейс)", after_add)
         self.assertTrue(after_delete.startswith("--name=Tanki X\n"))
@@ -823,6 +834,53 @@ class UserProfilesTests(unittest.TestCase):
             self.assertIn("--comment=New Site", store.files_by_method[ZAPRET1_MODE]["three.txt"])
             self.assertIn("--filter-udp=443", store.files_by_method[ZAPRET1_MODE]["three.txt"])
             self.assertIn("--ipset=lists/ipset-new-site.txt", store.files_by_method[ZAPRET1_MODE]["three.txt"])
+
+    def test_update_user_profile_keeps_profile_identity_folder_and_ratings(self) -> None:
+        from profile.models import build_profile_logical_key
+        from settings.store import get_profile_identity_registry, set_profile_identity_registry
+
+        source = "\n".join((
+            "--name=My Site",
+            "--filter-tcp=80,443",
+            "--hostlist=lists/my-site.txt",
+            "--lua-desync=pass",
+            "",
+        ))
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "system" / "templates").mkdir(parents=True)
+            (root / "system" / "templates" / "all_profiles.txt").write_text("", encoding="utf-8")
+            store = _PresetLibrary({ZAPRET2_MODE: {"one.txt": source}, ZAPRET1_MODE: {}})
+            feature = SimpleNamespace(
+                _presets_feature=store,
+                _app_paths=AppPaths(user_root=root, local_root=root),
+            )
+            old_profile = parse_preset_text(source, engine="winws2", source_name="one.txt").profiles[0]
+
+            with patch("settings.store.MAIN_DIRECTORY", str(root)):
+                profile_id = create_user_profile(feature._app_paths, name="My Site", protocol="tcp", ports="80,443")
+                # uid, к которому привязаны папка и оценки стратегий профиля.
+                set_profile_identity_registry(
+                    "winws2",
+                    {
+                        "uid:my-site": {
+                            "name": "My Site",
+                            "sig": build_profile_logical_key(old_profile.match_signature),
+                        }
+                    },
+                )
+                service = ProfilePresetService(feature, "zapret2_mode")
+                service.update_user_profile(profile_id, name="New Site", protocol="udp", ports="443")
+                registry = get_profile_identity_registry("winws2")
+
+            new_profile = parse_preset_text(
+                store.files_by_method[ZAPRET2_MODE]["one.txt"], engine="winws2", source_name="one.txt"
+            ).profiles[0]
+            # Имя и списки сменились, но uid остался за тем же профилем.
+            self.assertEqual(
+                registry["uid:my-site"],
+                {"name": "New Site", "sig": build_profile_logical_key(new_profile.match_signature)},
+            )
 
     def test_delete_user_profile_removes_files_and_named_profiles_from_all_presets(self) -> None:
         with TemporaryDirectory() as temp_dir:

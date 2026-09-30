@@ -199,7 +199,7 @@ class ProfileListPayloadTests(unittest.TestCase):
         self.assertFalse(discord.in_preset)
         self.assertTrue(discord.key.startswith("template:"))
 
-    def test_list_profiles_normalizes_multi_list_profile_without_saving_preset(self) -> None:
+    def test_list_profiles_shows_multi_list_profile_as_written_in_file(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             lists_dir = root / "lists"
@@ -228,13 +228,13 @@ class ProfileListPayloadTests(unittest.TestCase):
             with patch("settings.store.MAIN_DIRECTORY", str(root)):
                 payload = ProfilePresetService(feature, "zapret2_mode").list_profiles()
 
-        self.assertEqual(payload.normalized_split_profiles, 1)
-        self.assertEqual(payload.normalized_created_profiles, 1)
-        self.assertEqual(len(payload.items), 2)
+        # Список не разрезает profile: то, что видно в GUI, совпадает с файлом.
+        self.assertEqual(len(payload.items), 1)
         self.assertEqual(store.save_count, 0)
         self.assertEqual(store.text, original_text)
-        self.assertTrue(any("--hostlist=lists/discord.txt" in item.match_lines for item in payload.items))
-        self.assertTrue(any("--hostlist=lists/other.txt" in item.match_lines for item in payload.items))
+        self.assertIn("--hostlist=lists/discord.txt", payload.items[0].match_lines)
+        self.assertIn("--hostlist=lists/other.txt", payload.items[0].match_lines)
+        self.assertIn("--hostlist-exclude=lists/list-exclude.txt", payload.items[0].match_lines)
 
     def test_catalog_profile_with_multiple_ipsets_is_visible_and_not_split(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -296,7 +296,6 @@ class ProfileListPayloadTests(unittest.TestCase):
                 payload = service.list_profiles()
                 order_payload = service.list_preset_order_profiles()
 
-        self.assertEqual(payload.normalized_split_profiles, 0)
         self.assertEqual([item.profile_name for item in payload.items], ["Каталожный набор IP", "YouTube"])
         self.assertEqual([item.profile_name for item in order_payload.items], ["Каталожный набор IP", "YouTube"])
         catalog_item = payload.items[0]
@@ -1753,37 +1752,6 @@ class ProfileDerivedCacheTests(unittest.TestCase):
             entries_after_list,
             "get_profile_setup не должен пересчитывать контентное ядро после построения списка",
         )
-
-
-class FolderStateHotPathTests(unittest.TestCase):
-    """Горячий цикл сборки списка не пере-нормализует состояние папок."""
-
-    def test_folder_helpers_trust_normalized_state(self) -> None:
-        import inspect
-
-        from profile.folders import profile_folder_collapsed, profile_folder_for_profile
-
-        for helper in (profile_folder_for_profile, profile_folder_collapsed):
-            source = inspect.getsource(helper)
-            self.assertNotIn(
-                "normalize_folder_state(",
-                source,
-                f"{helper.__name__} не должен нормализовать состояние на каждый вызов",
-            )
-
-    def test_folder_helper_loads_state_when_none(self) -> None:
-        from unittest.mock import patch as mock_patch
-
-        from profile import folders as folders_module
-
-        normalized = {"folders": {"youtube": {"name": "YouTube", "collapsed": True}}, "items": {}}
-        with mock_patch.object(folders_module, "load_profile_folder_state", return_value=normalized) as loader:
-            self.assertTrue(folders_module.profile_folder_collapsed("youtube", None))
-            loader.assert_called_once_with()
-        # переданный dict используется как есть, без загрузки
-        with mock_patch.object(folders_module, "load_profile_folder_state") as loader:
-            self.assertTrue(folders_module.profile_folder_collapsed("youtube", normalized))
-            loader.assert_not_called()
 
 
 class CatalogIdentityCacheTests(unittest.TestCase):

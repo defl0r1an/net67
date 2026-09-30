@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
-from qfluentwidgets import CaptionLabel
+from qfluentwidgets import CaptionLabel, TransparentPushButton
 
 from settings.mode import ZAPRET1_MODE, ZAPRET2_MODE, normalize_launch_method
-from ui.accessibility import set_state_text
+from ui.accessibility import set_control_accessibility, set_state_text
 from ui.fluent_widgets import set_tooltip
 from ui.pulsing_dot import PulsingDot
 from ui.theme import get_theme_tokens
@@ -132,19 +132,51 @@ def set_pulse_dot_color_if_changed(widget: PulsingDot, color: str) -> bool:
     return True
 
 
+_PROBLEM_COLORS = {
+    "error": ("#c42b1c", "#ff6b61"),
+    "warning": ("#9d5d00", "#f2c14e"),
+}
+
+
+def _plural(count: int, one: str, few: str, many: str) -> str:
+    tail = count % 100
+    if 11 <= tail <= 14:
+        return many
+    tail %= 10
+    if tail == 1:
+        return one
+    if 2 <= tail <= 4:
+        return few
+    return many
+
+
+def build_problems_counter_text(errors: int, warnings: int) -> str:
+    """«2 ошибки, 1 предупреждение»; пусто, если проблем нет."""
+    parts = []
+    if errors:
+        parts.append(f"{errors} {_plural(errors, 'ошибка', 'ошибки', 'ошибок')}")
+    if warnings:
+        parts.append(f"{warnings} {_plural(warnings, 'предупреждение', 'предупреждения', 'предупреждений')}")
+    return ", ".join(parts)
+
+
 def _preset_status_state_text(text: str) -> str:
     value = str(text or "").strip()
     return f"Статус пресета: {value}" if value else "Статус пресета"
 
 
 class PresetStatusBar(QWidget):
+    problemsClicked = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._last_plan: PresetStatusPlan | None = None
         self._last_theme_key: tuple[str, bool] | None = None
         self._last_indicator: str | None = None
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.setFixedHeight(24)
+        # Длинное сообщение (например, причина ошибки запуска) переносится на
+        # следующие строки, а не обрезается: высота строки статуса растёт.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.setMinimumHeight(24)
 
         self.spinner = Win11Spinner(size=16, parent=self)
         self.spinner.hide()
@@ -153,18 +185,89 @@ class PresetStatusBar(QWidget):
         self.pulse_dot.hide()
 
         self.text_label = CaptionLabel("", self)
-        self.text_label.setWordWrap(False)
-        self.text_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.text_label.setWordWrap(True)
+        self.text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.text_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 0)
         layout.setSpacing(6)
-        layout.addWidget(self.spinner, 0, Qt.AlignmentFlag.AlignVCenter)
-        layout.addWidget(self.pulse_dot, 0, Qt.AlignmentFlag.AlignVCenter)
-        layout.addWidget(self.text_label, 0, Qt.AlignmentFlag.AlignVCenter)
-        layout.addStretch(1)
+        layout.addWidget(self.spinner, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self.pulse_dot, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self.text_label, 3, Qt.AlignmentFlag.AlignVCenter)
+
+        # Проверка текста пресета: что не так в строке курсора и общий счётчик.
+        # Клик по счётчику переводит курсор к следующей проблеме (как F8).
+        self._problem_severity = ""
+        self._line_problem_severity = ""
+        self.problem_label = CaptionLabel("", self)
+        self.problem_label.setWordWrap(True)
+        self.problem_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.problem_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.problem_label.hide()
+        layout.addWidget(self.problem_label, 2, Qt.AlignmentFlag.AlignVCenter)
+
+        self.problems_button = TransparentPushButton("", self)
+        self.problems_button.setFixedHeight(22)
+        self.problems_button.hide()
+        self.problems_button.clicked.connect(self.problemsClicked.emit)
+        set_control_accessibility(
+            self.problems_button,
+            name="Проблемы в тексте пресета",
+            description="Переходит к следующей ошибке или предупреждению в тексте (клавиша F8).",
+        )
+        layout.addWidget(self.problems_button, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # Правый индикатор редактора (строка/колонка/выделение) — отдельная
+        # надпись, чтобы не конкурировать со статусом сохранения слева.
+        self.detail_label = CaptionLabel("", self)
+        self.detail_label.setWordWrap(False)
+        self.detail_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.detail_label.hide()
+        layout.addWidget(self.detail_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.set_plan(build_preset_status_plan("neutral", launch_method=ZAPRET2_MODE))
+
+    def set_problems(self, *, errors: int, warnings: int, current_message: str = "",
+                     current_severity: str = "") -> None:
+        """Счётчик проблем проверки текста и сообщение для строки курсора."""
+        counter = build_problems_counter_text(int(errors), int(warnings))
+        severity = "error" if errors else ("warning" if warnings else "")
+        set_text_if_changed(self.problems_button, counter)
+        self.problems_button.setVisible(bool(counter))
+        set_tooltip(self.problems_button, f"{counter}. Нажмите, чтобы перейти к следующей (F8)." if counter else "")
+        set_state_text(self.problems_button, counter or "Проблем нет")
+
+        message = str(current_message or "").strip()
+        shown = " ".join(message.split())
+        set_text_if_changed(self.problem_label, shown)
+        self.problem_label.setVisible(bool(shown))
+        set_tooltip(self.problem_label, message)
+        set_state_text(self.problem_label, message or "В этой строке проблем нет")
+
+        self._problem_severity = severity
+        self._line_problem_severity = str(current_severity or "")
+        self._apply_problem_colors()
+
+    def _apply_problem_colors(self) -> None:
+        try:
+            is_light = bool(get_theme_tokens().is_light)
+        except Exception:
+            is_light = False
+        index = 0 if is_light else 1
+        muted = "#5f6368" if is_light else "#b8b8b8"
+        counter_color = _PROBLEM_COLORS.get(self._problem_severity, (muted, muted))[index]
+        line_color = _PROBLEM_COLORS.get(self._line_problem_severity, (muted, muted))[index]
+        set_style_sheet_if_changed(self.problems_button, f"color: {counter_color};")
+        set_style_sheet_if_changed(self.problem_label, f"color: {line_color};")
+
+    def set_detail_text(self, text: str) -> None:
+        """Показывает вспомогательный текст справа (позиция курсора в редакторе)."""
+        value = str(text or "")
+        changed = set_text_if_changed(self.detail_label, value)
+        self.detail_label.setVisible(bool(value))
+        if changed or value:
+            set_state_text(self.detail_label, value or "Позиция курсора")
 
     def set_plan(self, plan: PresetStatusPlan) -> None:
         indicator = str(plan.indicator or "none").strip().lower()
@@ -221,6 +324,9 @@ class PresetStatusBar(QWidget):
 
         set_pulse_dot_color_if_changed(self.pulse_dot, color)
         set_style_sheet_if_changed(self.text_label, f"color: {color};")
+        muted = "#5f6368" if is_light else "#b8b8b8"
+        set_style_sheet_if_changed(self.detail_label, f"color: {muted};")
+        self._apply_problem_colors()
 
 
 class PresetStatusIcon(QWidget):

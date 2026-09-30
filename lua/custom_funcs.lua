@@ -1,3 +1,10 @@
+-- Общие blob-ы для готовых стратегий winws2 (каталоги system/strategy_catalogs).
+-- Объявлены здесь, потому что custom_funcs.lua подключается во всех пресетах,
+-- а стратегию из каталога можно выбрать в любом пресете. `or` не перетирает
+-- такие же определения из --lua-init пресета.
+fake_unknown_256 = fake_unknown_256 or string.rep(string.char(0), 256)
+fake_zero64 = fake_zero64 or string.rep(string.char(0), 64)
+
 -- AGGRESSIVE HTTP BYPASS for stubborn DPI (like porno365)
 -- Combines multiple techniques: fake flood + disorder + host splitting
 -- standard args : direction, payload, fooling, ip_id, rawsend, reconstruct
@@ -2291,23 +2298,6 @@ function http_oob_prefix(ctx, desync)
         -- перед GET/POST
         desync.dis.payload = "\n" .. desync.dis.payload
         DLOG("http_oob_prefix: added \\n prefix")
-        return VERDICT_MODIFY
-    end
-end
-
--- Безопасный methodeol - только добавляет \r\n в начало, ничего не обрезает
--- Некоторые серверы принимают \r\n перед GET
-function http_methodeol_safe(ctx, desync)
-    if not desync.dis.tcp then
-        instance_cutoff_shim(ctx, desync)
-        return
-    end
-    direction_cutoff_opposite(ctx, desync)
-    
-    if desync.l7payload=="http_req" and direction_check(desync) then
-        -- Просто добавляем \r\n в начало (без обрезания User-Agent)
-        desync.dis.payload = "\r\n" .. desync.dis.payload
-        DLOG("http_methodeol_safe: added \\r\\n prefix only")
         return VERDICT_MODIFY
     end
 end

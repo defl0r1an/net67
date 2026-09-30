@@ -78,6 +78,8 @@
 --blob=hex_0f0e0e0f:0x0F0E0E0F
 --blob=hex_0f0f0f0f:0x0F0F0F0F
 --blob=hex_00:0x00
+--blob=hex_0f0f0e0f:0x0F0F0E0F
+--blob=hex_zeros16:0x00000000000000000000000000000000
 
 # Profile 1: TLS (HTTPS 443)
 --filter-tcp=443

@@ -1,30 +1,40 @@
 {
   "name": "Square",
+  "category": "other",
+  "icon": "fa5s.credit-card",
+  "icon_color": "#006aff",
+  "sort_order": 20,
   "domains": [
     {
       "host": "api-global.squareup.com",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "162.159.136.66",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": [
+          "162.159.136.66",
+          "162.159.137.66"
+        ],
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "162.159.136.66",
+          "162.159.137.66"
+        ],
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "api.squareup.com",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "162.159.136.66",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": [
+          "162.159.136.66",
+          "162.159.137.66"
+        ],
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "162.159.136.66",
+          "162.159.137.66"
+        ],
+        "malw_dns": "62.133.62.97",
+        "malw_dns_v2": "45.95.233.23"
       }
     }
   ]

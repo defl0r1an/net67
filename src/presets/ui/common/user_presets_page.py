@@ -9,14 +9,16 @@ from PyQt6.QtCore import (
     QTimer,
     QPoint,
 )
+from PyQt6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QFileDialog,
     QHBoxLayout,
     QSizePolicy,
     QWidget,
 )
 from ui.pages.base_page import BasePage
-from presets.ui.common.preset_actions_menu import show_preset_actions_menu
+from presets.ui.common.preset_actions_menu import build_preset_actions_menu, show_preset_actions_menu
 from presets.ui.common.preset_rating_menu import show_preset_rating_menu
 from presets.user_presets_runtime_service import (
     UserPresetsRuntimeAdapter,
@@ -79,6 +81,7 @@ from log.log import log
 from ui.presets_menu.common import fluent_icon, make_menu_action
 from ui.presets_menu.delegate import PresetListDelegate
 from ui.presets_menu.model import PresetListModel
+from ui.onboarding.menu_preview import create_menu_preview, place_menu_preview, remove_menu_preview
 from ui.presets_menu.toolbar import PresetsToolbarLayout
 from ui.presets_menu.common import tr_text as _tr_text
 from ui.latest_value_worker_state import LatestValueWorkerState
@@ -100,6 +103,7 @@ class UserPresetsPageConfig:
     create_dialog_cls: type
     rename_dialog_cls: type
     reset_all_dialog_cls: type
+    import_dialog_cls: type | None = None
     delegate_language_scope: str = "winws2"
     delegate_help_name_role: str = "name"
 
@@ -121,6 +125,7 @@ class UserPresetsPageBase(BasePage):
         create_preset_link_action_worker,
         create_preset_folder_action_worker,
         create_preset_storage_action_worker,
+        create_preset_remote_sync_worker=None,
         load_preset_folder_state,
         open_preset_raw_editor,
         notify=None,
@@ -143,6 +148,7 @@ class UserPresetsPageBase(BasePage):
         self._create_preset_link_action_worker_fn = create_preset_link_action_worker
         self._create_preset_folder_action_worker_fn = create_preset_folder_action_worker
         self._create_preset_storage_action_worker_fn = create_preset_storage_action_worker
+        self._create_preset_remote_sync_worker_fn = create_preset_remote_sync_worker
         self._load_preset_folder_state_fn = load_preset_folder_state
         self._open_preset_raw_editor_callback = open_preset_raw_editor
         self._notify = notify
@@ -161,12 +167,12 @@ class UserPresetsPageBase(BasePage):
         self._layout_resync_delayed_timer = QTimer(self)
         self._layout_resync_delayed_timer.setSingleShot(True)
         self._layout_resync_delayed_timer.timeout.connect(self._resync_layout_metrics)
-        self._presets_list_show_scheduled = False
 
         self._preset_search_timer = QTimer(self)
         self._preset_search_timer.setSingleShot(True)
         self._preset_search_timer.timeout.connect(self._apply_preset_search)
         self._preset_search_input: Optional[LineEdit] = None
+        self._preset_search_shortcut: Optional[QShortcut] = None
         self._toolbar_layout: Optional[PresetsToolbarLayout] = None
         self.open_folder_btn = None
         self._preset_status_icon = None
@@ -426,30 +432,6 @@ class UserPresetsPageBase(BasePage):
     def on_page_hidden(self) -> None:
         self._layout_resync_timer.stop()
         self._layout_resync_delayed_timer.stop()
-        self._hide_presets_list_for_next_switch()
-
-    def _hide_presets_list_for_next_switch(self) -> None:
-        self._presets_list_show_scheduled = False
-
-    def _schedule_presets_list_show_after_page_switch(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        if self.__dict__.get("presets_list") is None:
-            return
-        if self.__dict__.get("_presets_list_show_scheduled", False):
-            return
-        self._presets_list_show_scheduled = True
-        try:
-            QTimer.singleShot(0, self._show_presets_list_after_page_switch)
-        except Exception:
-            self._show_presets_list_after_page_switch()
-
-    def _show_presets_list_after_page_switch(self) -> None:
-        if not self.__dict__.get("_presets_list_show_scheduled", False):
-            return
-        self._presets_list_show_scheduled = False
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
 
     def _after_ui_built(self) -> None:
         after_user_presets_ui_built(
@@ -526,6 +508,68 @@ class UserPresetsPageBase(BasePage):
     def _start_watching_presets(self):
         self._runtime_service.start_watching_presets()
 
+    def onboarding_target(self, name: str):
+        if name == "presets_list":
+            return self.__dict__.get("presets_list")
+        if name == "presets_toolbar":
+            toolbar = self.__dict__.get("_toolbar_layout")
+            return getattr(toolbar, "container", None)
+        if name == "preset_menu":
+            row = self._onboarding_active_preset_row()
+            preview = self.__dict__.get("_onboarding_menu_preview")
+            if row is None or preview is None:
+                return None
+            # Окно могли растянуть: держим меню рядом со строкой.
+            place_menu_preview(preview, *row)
+            return [row, preview]
+        return None
+
+    def onboarding_set_state(self, state: str | None) -> None:
+        """Тур показывает настоящее меню выбранного пресета (см. ui.onboarding.menu_preview)."""
+        remove_menu_preview(self.__dict__.pop("_onboarding_menu_preview", None))
+        if state != "preset_menu":
+            return
+        name = str(self._runtime_service.active_preset_file_name() or "").strip()
+        row = self._onboarding_active_preset_row(scroll=True)
+        if not name or row is None:
+            return
+        menu = self._build_preset_actions_menu_for(name)
+        preview = create_menu_preview(self, menu) if menu is not None else None
+        if preview is not None:
+            self._onboarding_menu_preview = preview
+            place_menu_preview(preview, *row)
+
+    def onboarding_open_subpage(self, key: str) -> bool:
+        """Тур открывает выбранный пресет в редакторе — как пункт «Открыть» в меню."""
+        if key != "preset_editor":
+            return False
+        name = str(self._runtime_service.active_preset_file_name() or "").strip()
+        if not name:
+            return False
+        self._open_preset_subpage(name)
+        return True
+
+    def _onboarding_active_preset_row(self, *, scroll: bool = False):
+        """Строка выбранного пресета: (viewport, прямоугольник строки)."""
+        view = self.__dict__.get("presets_list")
+        model = self.__dict__.get("_presets_model")
+        if view is None or model is None:
+            return None
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            if str(index.data(PresetListModel.KindRole) or "") != "preset":
+                continue
+            if not index.data(PresetListModel.ActiveRole):
+                continue
+            if scroll:
+                view.scrollTo(index, QAbstractItemView.ScrollHint.EnsureVisible)
+            viewport = view.viewport()
+            rect = view.visualRect(index).intersected(viewport.rect())
+            if rect.isValid() and rect.height() >= 8:
+                return viewport, rect
+            return None
+        return None
+
     def _build_ui(self):
         tokens = get_theme_tokens()
 
@@ -574,6 +618,7 @@ class UserPresetsPageBase(BasePage):
         self.presets_list = shell.presets_list
         self._presets_model = shell.presets_model
         self._presets_delegate = shell.presets_delegate
+        self._install_preset_search_shortcut()
         self._install_title_status_icon()
 
         self.add_widget(self._toolbar_layout.container)
@@ -779,6 +824,22 @@ class UserPresetsPageBase(BasePage):
             refresh_presets_view_from_cache_fn=self._refresh_presets_view_from_cache,
         )
 
+    def _install_preset_search_shortcut(self) -> None:
+        shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
+        shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        shortcut.activated.connect(self._focus_preset_search)
+        shortcut.activatedAmbiguously.connect(self._focus_preset_search)
+        self._preset_search_shortcut = shortcut
+
+    def _focus_preset_search(self) -> None:
+        if not self.isVisible() or not self.isEnabled():
+            return
+        search_input = self._preset_search_input
+        if search_input is None:
+            return
+        search_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        search_input.selectAll()
+
     def _apply_preset_search(self) -> None:
         apply_preset_search(
             is_visible=self.isVisible(),
@@ -953,15 +1014,57 @@ class UserPresetsPageBase(BasePage):
         self._show_inline_action_create()
 
     def _on_import_clicked(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            self._tr(f"{self._config.tr_prefix}.file_dialog.import_title", "Импортировать пресет"),
-            "",
-            "Файлы пресетов (*.txt);;Все файлы (*.*)",
-        )
+        dialog_cls = getattr(self._config, "import_dialog_cls", None)
+        if dialog_cls is None:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                self._tr(f"{self._config.tr_prefix}.file_dialog.import_title", "Импортировать пресет"),
+                "",
+                "Пресеты и архивы (*.txt *.zip);;Все файлы (*.*)",
+            )
+            if not file_path:
+                return
+            self._request_preset_bulk_action("import", file_path=file_path)
+            return
+
+        dlg = dialog_cls(self.window(), language=self._ui_language)
+        # Пока диалог открыт, оконный drop-фильтр отдаёт файлы ему,
+        # а не странице (иначе drop уйдёт в импорт мимо диалога).
+        drop_filter = getattr(self.window(), "_preset_file_drop_filter", None)
+        set_delegate = getattr(drop_filter, "set_drop_delegate", None)
+        if callable(set_delegate):
+            set_delegate(dlg)
+        try:
+            accepted = dlg.exec()
+        finally:
+            if callable(set_delegate):
+                set_delegate(None)
+        if not accepted:
+            return
+        file_path = str(getattr(dlg, "result_file_path", "") or "")
         if not file_path:
             return
-        self._request_preset_bulk_action("import", file_path=file_path)
+        self._request_preset_bulk_action(
+            "import",
+            file_path=file_path,
+            source_url=str(getattr(dlg, "result_source_url", "") or ""),
+            auto_update=bool(getattr(dlg, "result_auto_update", False)),
+        )
+
+    def import_dropped_preset_files(self, file_paths) -> bool:
+        """Ставит перетащенные TXT/ZIP-файлы в общую очередь импорта."""
+        if self.__dict__.get("_cleanup_in_progress", False):
+            return False
+
+        accepted = False
+        for file_path in file_paths or ():
+            path = str(file_path or "").strip()
+            if not path or not path.lower().endswith((".txt", ".zip")):
+                continue
+            accepted = bool(
+                self._request_preset_bulk_action("import", file_path=path)
+            ) or accepted
+        return accepted
 
     def _on_reset_all_presets_clicked(self):
         dlg = self._config.reset_all_dialog_cls(self.window(), language=self._ui_language)
@@ -971,27 +1074,58 @@ class UserPresetsPageBase(BasePage):
         if not self._request_preset_bulk_action("reset_all"):
             self._bulk_reset_running = False
 
-    def create_preset_bulk_action_worker(self, request_id: int, *, action: str, file_path: str = ""):
+    def create_preset_bulk_action_worker(
+        self,
+        request_id: int,
+        *,
+        action: str,
+        file_path: str = "",
+        source_url: str = "",
+        auto_update: bool = False,
+    ):
         return self._create_preset_bulk_action_worker_fn(
             request_id,
             launch_method=self._config.launch_method,
             action=action,
             file_path=file_path,
+            source_url=source_url,
+            auto_update=auto_update,
             parent=self,
         )
 
-    def _request_preset_bulk_action(self, action: str, *, file_path: str = "") -> bool:
+    def _request_preset_bulk_action(
+        self,
+        action: str,
+        *,
+        file_path: str = "",
+        source_url: str = "",
+        auto_update: bool = False,
+    ) -> bool:
         if self._preset_write_action_running():
             self._queue_preset_write_action(
                 "bulk",
                 action=action,
                 file_path=file_path,
+                source_url=source_url,
+                auto_update=auto_update,
             )
             return True
-        self._start_preset_bulk_action_worker(action, file_path=file_path)
+        self._start_preset_bulk_action_worker(
+            action,
+            file_path=file_path,
+            source_url=source_url,
+            auto_update=auto_update,
+        )
         return True
 
-    def _start_preset_bulk_action_worker(self, action: str, *, file_path: str = "") -> None:
+    def _start_preset_bulk_action_worker(
+        self,
+        action: str,
+        *,
+        file_path: str = "",
+        source_url: str = "",
+        auto_update: bool = False,
+    ) -> None:
         runtime = self._worker_runtime("_preset_bulk_action_runtime")
         self._preset_bulk_action_request_id = int(self.__dict__.get("_preset_bulk_action_request_id", 0) or 0) + 1
         request_id = self._preset_bulk_action_request_id
@@ -1006,6 +1140,8 @@ class UserPresetsPageBase(BasePage):
                 request_id,
                 action=str(action or ""),
                 file_path=str(file_path or ""),
+                source_url=str(source_url or ""),
+                auto_update=bool(auto_update),
             ),
             bind_worker=_bind_worker,
             on_finished=self._on_preset_bulk_action_worker_finished,
@@ -1018,7 +1154,11 @@ class UserPresetsPageBase(BasePage):
             return
         log(str(getattr(result, "log_message", "") or ""), str(getattr(result, "log_level", "") or "INFO"))
         structure_changed = bool(getattr(result, "structure_changed", False))
-        if action == "import" and bool(getattr(result, "ok", False)):
+        if (
+            action == "import"
+            and bool(getattr(result, "ok", False))
+            and not bool(getattr(result, "updated_existing", False))
+        ):
             if self._runtime_service.add_created_preset_locally(
                 str(getattr(result, "actual_file_name", "") or ""),
                 str(getattr(result, "actual_name", "") or ""),
@@ -1106,6 +1246,16 @@ class UserPresetsPageBase(BasePage):
     ) -> bool:
         if self._presets_model is None:
             return False
+        source_row = self._presets_model.find_preset_row(file_name)
+        if source_row >= 0:
+            source_index = self._presets_model.index(source_row, 0)
+            pinned_role = getattr(type(self._presets_model), "PinnedRole", None)
+            if pinned_role is not None and bool(source_index.data(pinned_role)):
+                # «Закрепленные» — виртуальная группа, которой нет в обычной
+                # модели папок. Общий оптимистический move временно помещает
+                # строку под обычный заголовок. Для pinned-порядка безопасно
+                # сразу перестроить строки из уже сохранённого folder_state.
+                return False
         view_state = self._runtime_service.capture_presets_view_state()
         moved = self._presets_model.move_preset(
             file_name,
@@ -1167,6 +1317,8 @@ class UserPresetsPageBase(BasePage):
                 delete=self._on_delete_preset,
                 export=self._on_export_preset,
                 toggle_folder=self._on_toggle_folder,
+                update_remote=self._on_update_remote_preset,
+                unlink_remote=self._on_unlink_remote_preset,
             ),
         )
 
@@ -1184,6 +1336,7 @@ class UserPresetsPageBase(BasePage):
         model = getattr(self, "_presets_model", None)
         folder_key_role = getattr(type(model), "FolderKeyRole", None)
         collapsed_role = getattr(type(model), "CollapsedRole", None)
+        kind_role = getattr(type(model), "KindRole", None)
         if model is None or folder_key_role is None or collapsed_role is None:
             return None
         try:
@@ -1191,6 +1344,11 @@ class UserPresetsPageBase(BasePage):
             for row in range(row_count):
                 index = model.index(row, 0)
                 if not index.isValid():
+                    continue
+                # FolderKeyRole есть и у строк preset-ов. Закреплённый preset
+                # стоит выше заголовка своей папки, и без проверки вида строки
+                # клик читал его «не свёрнут» вместо состояния самой папки.
+                if kind_role is not None and str(index.data(kind_role) or "") != "folder":
                     continue
                 if str(index.data(folder_key_role) or "").strip() == key:
                     return bool(index.data(collapsed_role))
@@ -1306,8 +1464,9 @@ class UserPresetsPageBase(BasePage):
         action = str(queued.get("action") or "")
         folder_key = str(queued.get("folder_key") or "")
         pending = self._preset_folder_action_state_obj().pending
-        if action == "move" and queued in pending:
-            return
+        # Перемещение — пошаговая команда, а не установка состояния. Два
+        # одинаковых быстрых клика означают два шага и не должны схлопываться
+        # в одну операцию, как два одинаковых set_collapsed.
         if action == "set_collapsed" and folder_key:
             pending[:] = [
                 item
@@ -1576,6 +1735,8 @@ class UserPresetsPageBase(BasePage):
         destination_folder_key: str = "",
         file_name: str = "",
         file_path: str = "",
+        source_url: str = "",
+        auto_update: bool = False,
         current_name: str = "",
         new_name: str = "",
         from_current: bool = False,
@@ -1595,6 +1756,8 @@ class UserPresetsPageBase(BasePage):
             "destination_folder_key": str(destination_folder_key or ""),
             "file_name": str(file_name or ""),
             "file_path": str(file_path or ""),
+            "source_url": str(source_url or ""),
+            "auto_update": bool(auto_update),
         }
         if operation["kind"] == "edit":
             operation["current_name"] = str(current_name or "")
@@ -1767,6 +1930,8 @@ class UserPresetsPageBase(BasePage):
             {
                 "action": str(operation.get("action") or ""),
                 "file_path": str(operation.get("file_path") or ""),
+                "source_url": str(operation.get("source_url") or ""),
+                "auto_update": bool(operation.get("auto_update")),
             }
             for operation in self._preset_write_state_obj().pending
             if str(operation.get("kind") or "") == "bulk"
@@ -1896,6 +2061,8 @@ class UserPresetsPageBase(BasePage):
             action=str(pending.get("action") or ""),
         )
         result["file_path"] = str(pending.get("file_path") or "")
+        result["source_url"] = str(pending.get("source_url") or "")
+        result["auto_update"] = bool(pending.get("auto_update"))
         return result
 
     @classmethod
@@ -1932,6 +2099,8 @@ class UserPresetsPageBase(BasePage):
             "destination_folder_key": "",
             "file_name": "",
             "file_path": "",
+            "source_url": "",
+            "auto_update": False,
         }
 
     @staticmethod
@@ -2093,6 +2262,8 @@ class UserPresetsPageBase(BasePage):
             self._start_preset_bulk_action_worker(
                 str(pending.get("action") or ""),
                 file_path=str(pending.get("file_path") or ""),
+                source_url=str(pending.get("source_url") or ""),
+                auto_update=bool(pending.get("auto_update")),
             )
             return True
         if pending.get("kind") == "edit":
@@ -2153,9 +2324,16 @@ class UserPresetsPageBase(BasePage):
     def _on_preset_storage_action_finished(self, request_id: int, action: str, result, context) -> None:
         if request_id != int(getattr(self, "_preset_storage_action_request_id", 0) or 0):
             return
-        if self._has_pending_preset_write_action():
-            return
         context = dict(context or {})
+        has_pending = self._has_pending_preset_write_action()
+        # Порядок перемещений должен применяться к модели по шагам. Если
+        # отбросить промежуточный успешный move/drop, следующий worker уже
+        # работает над изменённым на диске порядком, а локальная модель — над
+        # старым; итоговый destination тогда применяется не к тому списку.
+        # Остальные действия по-прежнему не показываем до последнего элемента
+        # очереди, чтобы не мигали промежуточные уведомления и строки.
+        if has_pending and action not in {"move_step", "drop"}:
+            return
         if isinstance(context.get("folder_state"), dict):
             self._runtime_service.update_cached_folder_state(context.get("folder_state"))
         if action == "pin":
@@ -2357,6 +2535,22 @@ class UserPresetsPageBase(BasePage):
         self._schedule_next_preset_write_action_after_finish("_preset_activate_request_id", worker)
 
     def _on_edit_preset(self, name: str, global_pos: QPoint | None = None):
+        self._open_preset_actions_menu(name, global_pos=global_pos, show_menu_fn=show_preset_actions_menu)
+
+    def _build_preset_actions_menu_for(self, name: str):
+        """То же меню, что по правой кнопке, но собранное без показа."""
+        built = []
+
+        def _build_only(parent, *, global_pos, **menu_options):
+            _ = global_pos
+            menu, _actions, _disabled = build_preset_actions_menu(parent, **menu_options)
+            built.append(menu)
+            return None
+
+        self._open_preset_actions_menu(name, global_pos=None, show_menu_fn=_build_only)
+        return built[0] if built else None
+
+    def _open_preset_actions_menu(self, name: str, *, global_pos: QPoint | None, show_menu_fn) -> None:
         open_edit_preset_menu_action(
             page=self,
             name=name,
@@ -2364,12 +2558,13 @@ class UserPresetsPageBase(BasePage):
             is_builtin_preset_file_fn=self._is_builtin_preset_file,
             is_selected_preset_file_fn=self._is_selected_source_preset_file,
             can_reset_preset_to_builtin_fn=self._can_reset_preset_to_builtin,
+            is_remote_bound_preset_file_fn=self._is_remote_bound_preset_file,
             tr_fn=self._tr,
             make_menu_action=make_menu_action,
             fluent_icon=fluent_icon,
             round_menu_cls=RoundMenu,
             on_preset_list_action_fn=self._on_preset_list_action,
-            show_preset_actions_menu_fn=show_preset_actions_menu,
+            show_preset_actions_menu_fn=show_menu_fn,
             tr_prefix=self._config.tr_prefix,
         )
 
@@ -2377,6 +2572,152 @@ class UserPresetsPageBase(BasePage):
         current = str(self._runtime_service.active_preset_file_name() or "").strip().lower()
         candidate = str(name or "").strip().lower()
         return bool(current and candidate and current == candidate)
+
+    # ------------------------------------------------- удалённые пресеты
+
+    def _get_remote_preset_binding(self, file_name: str):
+        """Активная привязка пресета; пауза (auto=False) считается отсутствием."""
+        try:
+            from presets.remote_bindings import get_remote_preset_binding
+
+            binding = get_remote_preset_binding(self._config.folder_scope, file_name)
+            if binding is not None and not bool(binding.get("auto", True)):
+                return None
+            return binding
+        except Exception:
+            return None
+
+    def _is_remote_bound_preset_file(self, name: str) -> bool:
+        return self._get_remote_preset_binding(name) is not None
+
+    def _on_update_remote_preset(self, name: str) -> None:
+        binding = self._get_remote_preset_binding(name)
+        if binding is None:
+            return
+        force = False
+        if bool(binding.get("detached")):
+            dlg = MessageBox(
+                self._tr(
+                    f"{self._config.tr_prefix}.remote.confirm_overwrite.title",
+                    "Перезаписать локальные правки?",
+                ),
+                self._tr(
+                    f"{self._config.tr_prefix}.remote.confirm_overwrite.body",
+                    "Этот пресет был изменён локально, поэтому автообновление приостановлено.\n"
+                    "Обновление из источника перезапишет ваши правки и снова включит автообновление.",
+                ),
+                self.window(),
+            )
+            if not dlg.exec():
+                return
+            force = True
+        self._start_preset_remote_sync_worker("update", name, force=force)
+
+    def _on_unlink_remote_preset(self, name: str) -> None:
+        self._start_preset_remote_sync_worker("unlink", name)
+
+    def _start_preset_remote_sync_worker(self, action: str, file_name: str, *, force: bool = False) -> None:
+        if not callable(self._create_preset_remote_sync_worker_fn):
+            return
+        runtime = self._worker_runtime("_preset_remote_sync_runtime")
+        if runtime.is_running():
+            return
+        self._preset_remote_sync_request_id = int(self.__dict__.get("_preset_remote_sync_request_id", 0) or 0) + 1
+        request_id = self._preset_remote_sync_request_id
+
+        def _bind_worker(worker) -> None:
+            worker.completed.connect(self._on_preset_remote_sync_finished)
+            worker.failed.connect(self._on_preset_remote_sync_failed)
+
+        runtime.start_qthread_worker(
+            worker_factory=lambda _runtime_request_id: self._create_preset_remote_sync_worker_fn(
+                request_id,
+                launch_method=self._config.launch_method,
+                action=str(action or ""),
+                file_name=str(file_name or ""),
+                force=bool(force),
+                parent=self,
+            ),
+            bind_worker=_bind_worker,
+        )
+
+    def _on_preset_remote_sync_finished(self, request_id: int, action: str, outcome, context) -> None:
+        if request_id != int(getattr(self, "_preset_remote_sync_request_id", 0) or 0):
+            return
+        file_name = str((context or {}).get("file_name") or "")
+        status = str(getattr(outcome, "status", "") or "")
+        detail = str(getattr(outcome, "detail", "") or "")
+        prefix = self._config.tr_prefix
+        if action == "unlink":
+            if status == "unlinked":
+                log(f"Пресет '{file_name}' отвязан от источника", "INFO")
+                InfoBar.success(
+                    title=self._tr(f"{prefix}.remote.unlinked.title", "Автообновление отключено"),
+                    content=self._tr(
+                        f"{prefix}.remote.unlinked.content",
+                        "Пресет «{name}» больше не привязан к ссылке.",
+                        name=file_name,
+                    ),
+                    parent=self.window(),
+                )
+            else:
+                InfoBar.error(
+                    title=self._tr("common.error.title", "Ошибка"),
+                    content=detail or self._tr(f"{prefix}.remote.error.generic", "Не удалось выполнить действие."),
+                    parent=self.window(),
+                )
+            self._runtime_service.mark_presets_structure_changed()
+            return
+        if status == "updated":
+            log(f"Пресет '{file_name}' обновлён из источника", "INFO")
+            InfoBar.success(
+                title=self._tr(f"{prefix}.remote.updated.title", "Пресет обновлён из источника"),
+                content=self._tr(
+                    f"{prefix}.remote.updated.content",
+                    "Пресет «{name}» обновлён по ссылке.",
+                    name=file_name,
+                ),
+                parent=self.window(),
+            )
+        elif status in ("unchanged", "not_modified"):
+            InfoBar.success(
+                title=self._tr(f"{prefix}.remote.up_to_date.title", "Пресет актуален"),
+                content=self._tr(
+                    f"{prefix}.remote.up_to_date.content",
+                    "Пресет «{name}» уже совпадает с источником.",
+                    name=file_name,
+                ),
+                parent=self.window(),
+            )
+        elif status == "detached":
+            InfoBar.warning(
+                title=self._tr(f"{prefix}.remote.detached.title", "Автообновление приостановлено"),
+                content=self._tr(
+                    f"{prefix}.remote.detached.content",
+                    "Пресет «{name}» изменён локально. Обновите его из источника вручную, чтобы вернуть автообновление.",
+                    name=file_name,
+                ),
+                parent=self.window(),
+            )
+        elif status == "skipped":
+            pass
+        else:
+            InfoBar.error(
+                title=self._tr("common.error.title", "Ошибка"),
+                content=detail or self._tr(f"{prefix}.remote.error.generic", "Не удалось выполнить действие."),
+                parent=self.window(),
+            )
+        self._runtime_service.mark_presets_structure_changed()
+
+    def _on_preset_remote_sync_failed(self, request_id: int, action: str, error: str, _context) -> None:
+        if request_id != int(getattr(self, "_preset_remote_sync_request_id", 0) or 0):
+            return
+        log(f"Ошибка remote-действия preset ({action}): {error}", "ERROR")
+        InfoBar.error(
+            title=self._tr("common.error.title", "Ошибка"),
+            content=self._tr(f"{self._config.tr_prefix}.error.generic", "Ошибка: {error}", error=error),
+            parent=self.window(),
+        )
 
     def _update_cached_preset_rating(self, name: str, rating: int) -> bool:
         cached_metadata = self._runtime_service.cached_presets_metadata()
@@ -2836,7 +3177,6 @@ class UserPresetsPageBase(BasePage):
 
     def cleanup(self) -> None:
         self._stop_action_workers_for_cleanup()
-        self._presets_list_show_scheduled = False
         cleanup_user_presets_page(
             set_cleanup_in_progress_fn=lambda value: setattr(self, "_cleanup_in_progress", value),
             layout_resync_timer=self._layout_resync_timer,

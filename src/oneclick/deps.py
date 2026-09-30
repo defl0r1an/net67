@@ -339,45 +339,57 @@ def restore_hosts_to_original() -> tuple[bool, str]:
 
 
 def _check_dns_integrity() -> list:
-    from blockcheck.dns_integrity import check_dns_integrity
+    """Проверка подмены DNS для шага «Проверка DNS».
 
-    return list(check_dns_integrity() or [])
+    Раньше здесь стоял blockcheck.dns_integrity. Исходный проект удалил его,
+    когда переписал проверку на Windows API, и «одна кнопка» падала бы на
+    импорте, не дойдя до решения о DNS. Новая проверка сверяет ответ DNS
+    системы с эталоном по DoH и при расхождении смотрит сертификат —
+    ложных «подмен» на CDN у неё меньше, чем у старой.
+    """
+    from diagnostics.engine import run_dns_check
+    from oneclick.plans import integrity_from_dns_check
+
+    return integrity_from_dns_check(run_dns_check(emit=lambda _line: None))
 
 
-def _active_adapters() -> list[str]:
-    from dns.dns_force import DNSForceManager
+def _active_adapters() -> list:
+    """Подключённые адаптеры, которым «одна кнопка» меняет DNS.
 
-    manager = DNSForceManager()
-    # include_disconnected=False — трогаем только работающий адаптер.
-    # Смена DNS на всех сразу это главный источник жалоб «после программы
-    # отвалились внутренние адреса и VPN».
-    return list(manager.get_network_adapters(include_disconnected=False) or [])
+    Только подключённые: смена DNS на всех сразу — главный источник жалоб
+    «после программы отвалились внутренние адреса и VPN». Модуль
+    dns.dns_force, откуда это бралось раньше, исходный проект удалил,
+    переписав DNS на чистом WinAPI; список адаптеров теперь даёт
+    dns.runtime — в нём уже нет служебных фильтров, виртуалок и VPN.
+    """
+    from dns.runtime import load_state
+
+    return [adapter for adapter in load_state().adapters if adapter.connected]
 
 
 def _apply_dns() -> tuple[bool, str]:
-    from dns.dns_force import DNSForceManager
+    from dns.runtime import apply_dns
 
     adapters = _active_adapters()
     if not adapters:
         return (False, "Не найден активный сетевой адаптер")
 
-    manager = DNSForceManager()
-    changed = [
-        name
-        for name in adapters
-        if manager.set_dns_for_adapter(name, FALLBACK_DNS_PRIMARY, FALLBACK_DNS_SECONDARY)
-    ]
-    if not changed:
-        return (False, "Не удалось назначить DNS")
-    return (True, f"DNS назначен ({', '.join(changed)})")
+    # IPv6 пустой: у запасного DNS его адресов нет, и прежние IPv6-серверы
+    # адаптера вернутся в автоматический режим, а не останутся висеть.
+    result = apply_dns([adapter.guid for adapter in adapters], [FALLBACK_DNS_PRIMARY, FALLBACK_DNS_SECONDARY], [])
+    if not result.affected_count:
+        return (False, result.message or "Не удалось назначить DNS")
+    return (True, f"DNS назначен ({', '.join(adapter.name for adapter in adapters)})")
 
 
 def _restore_dns() -> tuple[bool, str]:
-    from dns.dns_force import DNSForceManager
+    from dns.runtime import reset_to_auto
 
-    manager = DNSForceManager()
-    ok, message = manager.disable_force_dns(reset_to_auto=True, adapters=_active_adapters())
-    return (bool(ok), str(message or ""))
+    adapters = _active_adapters()
+    if not adapters:
+        return (True, "")
+    result = reset_to_auto([adapter.guid for adapter in adapters])
+    return (bool(result.success), str(result.message or ""))
 
 
 # ──────────────────────────────────────────────────────────────────────

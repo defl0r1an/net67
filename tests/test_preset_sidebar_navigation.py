@@ -1,6 +1,6 @@
 """Навигация сайдбара по режимам запуска.
 
-Проверяется фильтрация по движку (Zapret 1 против Zapret 2), поэтому
+Проверяется фильтрация по движку (net67 v1 против net67 v2), поэтому
 всюду передаётся advanced=True: без него сработает фильтр простого
 интерфейса и в сайдбаре останутся только главная и оформление.
 """
@@ -293,7 +293,8 @@ class PresetSidebarNavigationTests(unittest.TestCase):
         self.assertEqual(get_nav_page_label(PageName.HOSTS, language="ru"), "Редактор hosts")
         self.assertEqual(
             tr("page.network.subtitle", language="ru"),
-            "Здесь можно посмотреть текущие DNS, выбрать другие серверы и проверить, помогает ли настройка обходу блокировок.",
+            "Выберите DNS-сервер — он сразу встанет на отмеченные сетевые адаптеры. "
+            "Кнопка «Замерить скорость» покажет, какой сервер отвечает быстрее.",
         )
 
     def test_initial_sidebar_build_skips_secondary_and_hidden_other_mode_items(self) -> None:
@@ -1021,8 +1022,8 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.ZAPRET1_MODE_CONTROL: hidden_item,
             },
             nav_labels={
-                PageName.ZAPRET2_MODE_CONTROL: "Управление Zapret 2",
-                PageName.ZAPRET1_MODE_CONTROL: "Управление Zapret 1",
+                PageName.ZAPRET2_MODE_CONTROL: "Управление net67 v2",
+                PageName.ZAPRET1_MODE_CONTROL: "Управление net67 v1",
             },
             nav_headers=[(header, (PageName.ZAPRET2_MODE_CONTROL,), "nav.header.root")],
             nav_mode_visibility={
@@ -1124,8 +1125,8 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.NETWORK: dns_item,
             },
             nav_labels={
-                PageName.ZAPRET2_MODE_CONTROL: "Управление Zapret 2",
-                PageName.ZAPRET1_MODE_CONTROL: "Управление Zapret 1",
+                PageName.ZAPRET2_MODE_CONTROL: "Управление net67 v2",
+                PageName.ZAPRET1_MODE_CONTROL: "Управление net67 v1",
                 PageName.NETWORK: "Настройка DNS",
             },
             nav_headers=[],
@@ -1171,8 +1172,8 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.NETWORK: dns_item,
             },
             nav_labels={
-                PageName.ZAPRET2_MODE_CONTROL: "Управление Zapret 2",
-                PageName.ZAPRET1_MODE_CONTROL: "Управление Zapret 1",
+                PageName.ZAPRET2_MODE_CONTROL: "Управление net67 v2",
+                PageName.ZAPRET1_MODE_CONTROL: "Управление net67 v1",
                 PageName.ORCHESTRA: "Оркестратор",
                 PageName.ORCHESTRA_SETTINGS: "Настройки оркестратора",
                 PageName.NETWORK: "Настройка DNS",

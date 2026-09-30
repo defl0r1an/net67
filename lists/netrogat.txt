@@ -67,6 +67,7 @@ createjs.com
 sbercloud.ru
 ozon.ru
 wildberries.ru
+vkusvill.ru
 rustore.ru
 lmarena.ai
 ppl-ai-file-upload.s3.amazonaws.com

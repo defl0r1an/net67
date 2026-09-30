@@ -1017,7 +1017,7 @@ class BuildResourceLayoutTests(unittest.TestCase):
             builder = release_pipeline.ReleasePipeline(request, log=Mock())
 
             with tempfile.TemporaryDirectory() as temp_dir:
-                app_root = Path(temp_dir) / "Zapret" / "Dev"
+                app_root = Path(temp_dir) / "net67" / "Dev"
                 internal = app_root / "_internal"
                 settings = app_root / "settings"
                 internal.mkdir(parents=True)
@@ -1398,7 +1398,7 @@ class BuildResourceLayoutTests(unittest.TestCase):
         self.assertIn("if Copy(NewInstallRoot, 1, 2) = '\\\\' then", iss)
         self.assertIn("IsNestedPath(Root, ExpandConstant('{win}'))", iss)
         self.assertIn("IsNestedPath(Root, GetEnv('ProgramW6432'))", iss)
-        self.assertIn("Previous InstallLocation ignored because it is not a registered Zapret install root", iss)
+        self.assertIn("Previous InstallLocation ignored because it is not a registered net67 install root", iss)
         self.assertIn("IsDirectoryEmpty(NewInstallRoot)", iss)
         self.assertIn("InstallOwnerMarkerAllowsReuse(NewInstallRoot)", iss)
         self.assertIn("DestinationConfirmationRequired := True;", iss)

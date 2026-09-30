@@ -27,7 +27,9 @@ def _get_nav_labels():
         PageName.ZAPRET2_MODE_CONTROL: "Управление net67 v2",
         PageName.ZAPRET2_PRESET_SETUP: "Настройка preset-а",
         PageName.ZAPRET2_USER_PRESETS: "Мои пресеты",
+        PageName.HOSTS_FILE: "Файл hosts",
         PageName.TELEGRAM_PROXY: "Telegram Proxy",
+        PageName.TELEGRAM_PROXY_ADVANCED: "Продвинутые настройки",
     }
 
 

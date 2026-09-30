@@ -31,6 +31,23 @@ def _apply_application_icon(app: QApplication) -> str:
     return icon_path
 
 
+GIL_SWITCH_INTERVAL_SEC = 0.001
+
+
+def apply_gui_gil_switch_interval() -> None:
+    """Даёт GUI-потоку чаще перехватывать GIL у фоновых воркеров.
+
+    Дефолтные 5 мс означают, что CPU-bound фоновая загрузка удерживает GIL
+    целыми кадрами: замеры джиттера показали худшие задержки кадра 48–54 мс
+    против 15–22 мс с интервалом 1 мс.
+    """
+    try:
+        if sys.getswitchinterval() > GIL_SWITCH_INTERVAL_SEC:
+            sys.setswitchinterval(GIL_SWITCH_INTERVAL_SEC)
+    except (AttributeError, ValueError):
+        pass
+
+
 def _set_attr_if_exists(name: str, on: bool = True) -> None:
     attr = getattr(Qt.ApplicationAttribute, name, None)
     if attr is None:
@@ -114,6 +131,7 @@ def ensure_qt_runtime() -> QApplication:
 
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
     os.environ["QT_API"] = "pyqt6"
+    apply_gui_gil_switch_interval()
     _set_attr_if_exists("AA_EnableHighDpiScaling")
     _set_attr_if_exists("AA_UseHighDpiPixmaps")
 
@@ -124,6 +142,13 @@ def ensure_qt_runtime() -> QApplication:
         f"{(_time.perf_counter() - t_qapp) * 1000:.0f}ms",
     )
 
+    # Дальше по коду фоновые точки входа сверяются с этим потоком: работа,
+    # уехавшая в GUI-поток, обязана быть видна в логе, а не только по
+    # зависшему окну.
+    from ui.ui_thread_guard import mark_gui_thread
+
+    mark_gui_thread()
+
     # Гарнитура приложения. Без этого Qt берёт «Sans Serif 9» — замерено,
     # — и окно набрано не тем шрифтом, которым набрана сама Windows.
     try:
@@ -133,14 +158,31 @@ def ensure_qt_runtime() -> QApplication:
     except Exception:
         pass
 
+    # До первого значка: широкие глифы qtawesome иначе срезаются по
+    # краям и выпирают из ряда. Подробности — в ui/qta_fit.py.
+    try:
+        from ui.qta_fit import install_wide_glyph_fit
+
+        install_wide_glyph_fit()
+    except Exception:
+        pass
+
     if _QT_RUNTIME_READY:
         return app
 
     t_hooks = _time.perf_counter()
-    t_infobar_duration = _time.perf_counter()
-    from ui.infobar_duration import install_success_infobar_min_duration
+    t_fluent_translator = _time.perf_counter()
+    from ui.fluent_translator import install_fluent_translator
 
-    install_success_infobar_min_duration()
+    install_fluent_translator(app)
+    emit_startup_metric(
+        "StartupQtFluentTranslator",
+        f"{(_time.perf_counter() - t_fluent_translator) * 1000:.0f}ms",
+    )
+    t_infobar_duration = _time.perf_counter()
+    from ui.infobar_duration import install_infobar_min_duration
+
+    install_infobar_min_duration()
     emit_startup_metric(
         "StartupQtInfoBarDuration",
         f"{(_time.perf_counter() - t_infobar_duration) * 1000:.0f}ms",
@@ -175,6 +217,14 @@ def ensure_qt_runtime() -> QApplication:
         "StartupQtThemeSignalGuards",
         f"{(_time.perf_counter() - t_signal_guards) * 1000:.0f}ms",
     )
+    t_button_motion = _time.perf_counter()
+    from ui.button_motion import install_button_motion
+
+    install_button_motion()
+    emit_startup_metric(
+        "StartupQtButtonMotion",
+        f"{(_time.perf_counter() - t_button_motion) * 1000:.0f}ms",
+    )
     t_accent_signal = _time.perf_counter()
     _connect_qfluent_accent_signal_lazy()
     emit_startup_metric(
@@ -190,8 +240,22 @@ def ensure_qt_runtime() -> QApplication:
     return app
 
 
-def _install_non_transient_scrollbars_style(app: QApplication) -> None:
+def _install_non_transient_scrollbars_style(app: QApplication) -> bool:
+    """Отключает исчезающие скроллбары, если текущий стиль их включает.
+
+    `setStyle` заново полирует каждый живой виджет и блокирует GUI-поток на
+    сотни миллисекунд (в логах старта — ~630 мс). Штатные стили Windows и
+    Fusion и без подмены сообщают `SH_ScrollBar_Transient = 0`, поэтому сначала
+    спрашиваем стиль и подменяем его, только когда это действительно меняет
+    поведение. Возвращает True, если подмена состоялась.
+    """
     from PyQt6.QtWidgets import QProxyStyle, QStyle
+
+    current_style = app.style()
+    if current_style is not None and not current_style.styleHint(
+        QStyle.StyleHint.SH_ScrollBar_Transient
+    ):
+        return False
 
     class _NoTransientScrollbarsStyle(QProxyStyle):
         def styleHint(self, hint, option=None, widget=None, returnData=None):
@@ -199,7 +263,8 @@ def _install_non_transient_scrollbars_style(app: QApplication) -> None:
                 return 0
             return super().styleHint(hint, option, widget, returnData)
 
-    app.setStyle(_NoTransientScrollbarsStyle(app.style()))
+    app.setStyle(_NoTransientScrollbarsStyle(current_style))
+    return True
 
 
 def application_bootstrap() -> QApplication:

@@ -1,0 +1,297 @@
+{
+  "name": "GitHub загрузки/картинки (работает если есть IPv6)",
+  "category": "direct",
+  "icon": "fa5b.github",
+  "icon_color": "#181717",
+  "sort_order": 23,
+  "hosts": [
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "objects.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "objects.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "objects.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "objects.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "raw.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "raw.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "raw.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "raw.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "release-assets.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "release-assets.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "release-assets.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "release-assets.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "private-user-images.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "private-user-images.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "private-user-images.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "private-user-images.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "gist.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "gist.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "gist.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "gist.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "media.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "media.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "media.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "media.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars0.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars0.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars0.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars0.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars1.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars1.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars1.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars1.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars2.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars2.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars2.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars2.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars3.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars3.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars3.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars3.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars4.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars4.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars4.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars4.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars5.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars5.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars5.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars5.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars6.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars6.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars6.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars6.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars7.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars7.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars7.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars7.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "avatars8.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "avatars8.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "avatars8.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "avatars8.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "camo.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "camo.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "camo.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "camo.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8000::154",
+      "host": "cloud.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8001::154",
+      "host": "cloud.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8002::154",
+      "host": "cloud.githubusercontent.com"
+    },
+    {
+      "ip": "2606:50c0:8003::154",
+      "host": "cloud.githubusercontent.com"
+    }
+  ]
+}

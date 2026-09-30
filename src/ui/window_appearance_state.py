@@ -15,8 +15,8 @@ def on_background_refresh_needed(window) -> None:
         from ui.theme import apply_window_background
 
         apply_window_background(window.window())
-    except Exception:
-        pass
+    except Exception as exc:
+        log(f"❌ Не удалось обновить фон окна: {exc}", "ERROR")
 
 
 def on_background_preset_changed(window, preset: str) -> None:
@@ -25,8 +25,8 @@ def on_background_preset_changed(window, preset: str) -> None:
         from ui.theme import apply_window_background
 
         apply_window_background(window.window(), preset=preset)
-    except Exception:
-        pass
+    except Exception as exc:
+        log(f"❌ Не удалось применить фон окна «{preset}»: {exc}", "ERROR")
 
 
 def on_opacity_changed(window, value: int) -> None:
@@ -43,7 +43,10 @@ def on_mica_changed(window, enabled: bool) -> None:
 
 
 def on_animations_changed(window, enabled: bool) -> None:
-    """Включает или отключает оконные анимации."""
+    """Включает или отключает оконные анимации.
+
+    Праздничные эффекты при этом пересчитывает WindowPremiumAppearance.
+    """
     apply_window_animation_policy(window, enabled)
 
 
@@ -55,6 +58,7 @@ def on_smooth_scroll_changed(window, enabled: bool) -> None:
 def on_editor_smooth_scroll_changed(window, enabled: bool) -> None:
     """Переключает плавную прокрутку только у текстовых редакторов."""
     apply_window_editor_smooth_scroll_policy(window, enabled)
+
 
 
 def apply_window_opacity_value(window, value: int) -> None:

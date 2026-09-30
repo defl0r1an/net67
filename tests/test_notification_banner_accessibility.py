@@ -19,11 +19,11 @@ class NotificationBannerAccessibilityTests(unittest.TestCase):
     def test_notification_banner_has_screen_reader_text(self) -> None:
         banner = NotificationBanner()
 
-        banner.show_error("Не удалось запустить Zapret", auto_hide_ms=0)
+        banner.show_error("Не удалось запустить net67", auto_hide_ms=0)
 
-        self.assertEqual(banner.accessibleName(), "Ошибка: Не удалось запустить Zapret")
-        self.assertEqual(banner.property("screenReaderStateText"), "Ошибка: Не удалось запустить Zapret")
-        self.assertEqual(banner.message_label.property("screenReaderStateText"), "Ошибка: Не удалось запустить Zapret")
+        self.assertEqual(banner.accessibleName(), "Ошибка: Не удалось запустить net67")
+        self.assertEqual(banner.property("screenReaderStateText"), "Ошибка: Не удалось запустить net67")
+        self.assertEqual(banner.message_label.property("screenReaderStateText"), "Ошибка: Не удалось запустить net67")
         self.assertIn("уведомление", banner.accessibleDescription().lower())
 
     def test_close_button_has_screen_reader_name_and_description(self) -> None:
@@ -39,7 +39,7 @@ class NotificationBannerAccessibilityTests(unittest.TestCase):
         banner = NotificationBanner()
         self.addCleanup(banner.deleteLater)
 
-        banner.show_error("Не удалось запустить Zapret", auto_hide_ms=0)
+        banner.show_error("Не удалось запустить net67", auto_hide_ms=0)
 
         self.assertEqual(banner.icon_label.accessibleName(), "Иконка уведомления: Ошибка")
         self.assertEqual(
@@ -47,7 +47,7 @@ class NotificationBannerAccessibilityTests(unittest.TestCase):
             "Иконка уведомления: Ошибка",
         )
 
-        banner.show_success("Zapret запущен", auto_hide_ms=0)
+        banner.show_success("net67 запущен", auto_hide_ms=0)
 
         self.assertEqual(banner.icon_label.accessibleName(), "Иконка уведомления: Успешно")
         self.assertEqual(

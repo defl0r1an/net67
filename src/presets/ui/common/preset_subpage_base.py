@@ -21,7 +21,16 @@ from ui.latest_value_worker_state import LatestValueWorkerState
 from ui.message_box_accessibility import set_message_box_button_accessibility
 from ui.queued_worker_state import QueuedWorkerState
 from ui.popup_menu import exec_popup_menu
+from log.log import log
 from presets.ui.common.raw_preset_text_editor import RawPresetTextEditor
+from ui.onboarding.preset_sections import (
+    build_outline,
+    editor_lines_rect,
+    scroll_editor_to_line,
+    section_lines,
+    section_name,
+    section_text_values,
+)
 from presets.ui.common.preset_status_bar import (
     PresetStatusBar,
     build_runtime_preset_status_plan,
@@ -286,6 +295,7 @@ class PresetRawEditorPage(BasePage):
         open_root,
         runtime_actions: RawPresetRuntimeActions | None,
         ui_state_store,
+        save_raw_preset_on_close=None,
     ):
         self._launch_method = str(launch_method or "").strip()
         self._title = str(title or "").strip() or "Пресет"
@@ -345,6 +355,7 @@ class PresetRawEditorPage(BasePage):
         self._create_raw_preset_save_worker_fn = create_raw_preset_save_worker
         self._create_raw_preset_activate_worker_fn = create_raw_preset_activate_worker
         self._create_raw_preset_action_worker_fn = create_raw_preset_action_worker
+        self._save_raw_preset_on_close_fn = save_raw_preset_on_close
         self._raw_text_editor = RawPresetTextEditor(
             self,
             request_save=lambda *, publish_content_changed=False: self._save_file(
@@ -353,14 +364,17 @@ class PresetRawEditorPage(BasePage):
             set_footer=self._set_footer,
             cleanup_in_progress=lambda: bool(self.__dict__.get("_cleanup_in_progress", False))
             or bool(self.__dict__.get("_is_loading", False)),
+            set_cursor_status=self._set_cursor_status,
         )
         self._sync_raw_text_editor_state_from_legacy()
         self.searchInput = self._raw_text_editor.search_input
+        self.findBar = self._raw_text_editor.find_bar
         self.editor = self._raw_text_editor.editor
         self._save_timer = self._raw_text_editor.save_timer
         self._commit_timer = self._raw_text_editor.commit_timer
 
         self._build_ui()
+        self._editor_language = self._attach_editor_language()
         self.editor.installEventFilter(self)
         self.searchInput.installEventFilter(self)
         try:
@@ -719,6 +733,44 @@ class PresetRawEditorPage(BasePage):
     def _preset_launch_method(self) -> str | None:
         return self._launch_method
 
+    def _attach_editor_language(self):
+        """Подсказки, проверка и быстрые исправления — только для net67 v2.
+
+        Проверка лишь подчёркивает проблемы и предлагает исправления: текст
+        пресета меняется только действием пользователя.
+        """
+        from settings.mode import is_zapret2_launch_method
+
+        if not is_zapret2_launch_method(self._launch_method):
+            return None
+        from profile.ui.winws2_editor_language import Winws2EditorLanguageController
+
+        controller = Winws2EditorLanguageController(
+            self.editor,
+            current_text=self._current_raw_editor_text,
+            parent=self,
+        )
+        self.editor.problemsChanged.connect(self._on_editor_problems_changed)
+        self.footerStatusBar.problemsClicked.connect(self._goto_next_editor_problem)
+        return controller
+
+    def _on_editor_problems_changed(self, summary) -> None:
+        if bool(self.__dict__.get("_cleanup_in_progress", False)):
+            return
+        status_bar = self.__dict__.get("footerStatusBar")
+        if status_bar is None:
+            return
+        status_bar.set_problems(
+            errors=int(getattr(summary, "errors", 0) or 0),
+            warnings=int(getattr(summary, "warnings", 0) or 0),
+            current_message=str(getattr(summary, "current_message", "") or ""),
+            current_severity=str(getattr(summary, "current_severity", "") or ""),
+        )
+
+    def _goto_next_editor_problem(self) -> None:
+        if self.editor.goto_next_problem(forward=True):
+            self.editor.setFocus()
+
 
     def _preset_folder_scope_key(self) -> str | None:
         from settings.mode import (
@@ -910,9 +962,9 @@ class PresetRawEditorPage(BasePage):
         actions_layout.addWidget(self.runtimeToggleButton)
 
         actions_layout.addStretch(1)
-        actions_layout.addWidget(self.searchInput, 1)
         self.add_widget(actions)
 
+        self.add_widget(self.findBar)
         self.add_widget(self.editor, 1)
 
         self.footerStatusBar = PresetStatusBar(self)
@@ -944,19 +996,62 @@ class PresetRawEditorPage(BasePage):
             return False
         return not self._raw_preset_content_dirty
 
+    def onboarding_target(self, name: str):
+        if name == "editor":
+            return self.__dict__.get("editor")
+        section = section_name(name)
+        if section:
+            outline = self._onboarding_outline()
+            if outline is None:
+                return None
+            return editor_lines_rect(self.__dict__.get("editor"), section_lines(outline, section))
+        return None
+
+    def onboarding_set_state(self, state: str | None) -> None:
+        """Тур прокручивает редактор к части пресета, потом возвращает как было."""
+        editor = self.__dict__.get("editor")
+        if editor is None:
+            return
+        section = section_name(state or "")
+        if not section:
+            saved = self.__dict__.pop("_onboarding_saved_scroll", None)
+            if saved is not None:
+                editor.verticalScrollBar().setValue(saved)
+            return
+        self.__dict__.setdefault("_onboarding_saved_scroll", editor.verticalScrollBar().value())
+        outline = self._onboarding_outline()
+        lines = section_lines(outline, section) if outline is not None else ()
+        if lines:
+            scroll_editor_to_line(editor, min(lines))
+
+    def onboarding_text_values(self, name: str) -> dict[str, str]:
+        section = section_name(name)
+        outline = self._onboarding_outline() if section else None
+        return section_text_values(outline, section) if outline is not None else {}
+
+    def _onboarding_outline(self):
+        """Оглавление текста, который сейчас в редакторе; пересчёт — только после правок."""
+        editor = self.__dict__.get("editor")
+        if editor is None:
+            return None
+        revision = editor.document().revision()
+        cached = self.__dict__.get("_onboarding_outline_cache")
+        if cached is not None and cached[0] == revision:
+            return cached[1]
+        from settings.mode import is_zapret2_launch_method
+
+        outline = build_outline(
+            self._current_raw_editor_text(),
+            zapret2=is_zapret2_launch_method(self._launch_method),
+        )
+        self._onboarding_outline_cache = (revision, outline)
+        return outline
+
     def handle_page_command(self, command: str, payload: dict) -> bool:
         if command == "open_raw_preset":
             self.set_preset_file_name(str((payload or {}).get("preset_name") or ""))
             return True
         return False
-
-    def _flush_pending_save(self) -> None:
-        if self._cleanup_in_progress:
-            return
-        if self._save_timer.isActive():
-            self._save_timer.stop()
-        if self._content_publish_pending:
-            self._save_file()
 
     def _run_after_raw_preset_save(self, callback) -> bool:
         if self._cleanup_in_progress:
@@ -997,10 +1092,41 @@ class PresetRawEditorPage(BasePage):
             status = "Импортированный пресет"
         else:
             status = "Пользовательский пресет"
+        meta_text = f"Имя: {self._preset_name}"
+        remote_binding = self._remote_preset_binding()
+        if remote_binding is not None:
+            if bool(remote_binding.get("detached", False)):
+                status += " · изменён локально, автообновление приостановлено"
+            else:
+                status += " · обновляется по ссылке"
+            source_url = str(remote_binding.get("url") or "")
+            if source_url:
+                meta_text += f" · Источник: {source_url}"
+            updated_at = str(remote_binding.get("updated_at") or "")
+            if updated_at:
+                meta_text += f" · Синхронизирован: {updated_at}"
         set_text_if_changed(self.statusLabel, status)
         set_visible_if_changed(self.activateButton, not is_active)
-        set_text_if_changed(self.metaLabel, f"Имя: {self._preset_name}")
+        set_text_if_changed(self.metaLabel, meta_text)
         set_text_if_changed(self.pathLabel, str(self._preset_path or ""))
+
+    def _remote_preset_binding(self):
+        file_name = str(self._preset_file_name or "").strip()
+        if not file_name:
+            return None
+        try:
+            from presets.remote_bindings import get_remote_preset_binding
+            from settings.mode import ENGINE_BY_LAUNCH_METHOD, ENGINE_WINWS2, normalize_launch_method
+
+            scope = ENGINE_BY_LAUNCH_METHOD.get(
+                normalize_launch_method(self._launch_method), ENGINE_WINWS2
+            )
+            binding = get_remote_preset_binding(scope, file_name)
+            if binding is not None and not bool(binding.get("auto", True)):
+                return None
+            return binding
+        except Exception:
+            return None
 
     def _load_file(self) -> None:
         self._request_raw_preset_text()
@@ -1403,6 +1529,14 @@ class PresetRawEditorPage(BasePage):
         if publish_content_changed:
             self._content_publish_pending = False
         self._set_footer(result.footer_text)
+        self._show_saved_raw_preset_text(result)
+
+    def _show_saved_raw_preset_text(self, result) -> None:
+        """Сохранение могло нормализовать текст — редактор показывает файл."""
+        text_editor = self.__dict__.get("_raw_text_editor")
+        if text_editor is None:
+            return
+        text_editor.show_saved_text(result.requested_text, result.saved_text)
 
     def _on_raw_preset_save_failed(self, request_id: int, error: str) -> None:
         if request_id != self._raw_save_request_id:
@@ -1571,6 +1705,18 @@ class PresetRawEditorPage(BasePage):
     def _set_footer(self, text: str) -> None:
         self._footer_status, self._footer_text = self._footer_status_from_text(text)
         self._render_footer_status()
+
+    def _set_cursor_status(self, text: str) -> None:
+        """Позиция курсора справа в статус-баре (строка/колонка/выделение)."""
+        if bool(self.__dict__.get("_cleanup_in_progress", False)):
+            return
+        status_bar = self.__dict__.get("footerStatusBar")
+        if status_bar is None:
+            return
+        try:
+            status_bar.set_detail_text(str(text or ""))
+        except Exception:
+            pass
 
     def _footer_status_from_text(self, text: str) -> tuple[str, str]:
         value = str(text or "").strip()
@@ -1950,7 +2096,15 @@ class PresetRawEditorPage(BasePage):
             self._refresh_header()
             self._show_success(f"Создан дубликат: {payload.get('new_name') or duplicated.name}")
         elif action == "export":
-            self._show_success(f"Пресет экспортирован: {result}")
+            actual_path = str(getattr(result, "path", result) or "")
+            archived_lists = tuple(getattr(result, "archived_list_files", ()) or ())
+            if archived_lists:
+                self._show_success(
+                    "В пресете есть пользовательские списки, поэтому создан ZIP-архив "
+                    f"с пресетом и {len(archived_lists)} файлами: {actual_path}"
+                )
+            else:
+                self._show_success(f"Пресет экспортирован: {actual_path}")
         elif action == "reset":
             updated, path, load_result = result
             self._preset_name = updated.name
@@ -2198,24 +2352,69 @@ class PresetRawEditorPage(BasePage):
         except Exception:
             pass
 
-    def _stop_raw_worker_runtimes(self) -> None:
+    def _stop_raw_worker_runtimes(self) -> bool:
+        """True — какой-то worker пришлось прервать принудительно."""
+        terminated = False
         for attr, warning_prefix, blocking in (
             ("_raw_load_runtime", "raw preset load worker", False),
-            ("_raw_save_runtime", "raw preset save worker", False),
+            # Запись ждём: иначе поздно завершившийся worker перезапишет файл
+            # более старым текстом поверх синхронной записи при закрытии.
+            ("_raw_save_runtime", "raw preset save worker", True),
             ("_raw_activate_runtime", "raw preset activate worker", False),
             ("_raw_action_runtime", "raw preset action worker", False),
         ):
             runtime = self.__dict__.get(attr)
             if runtime is None:
                 continue
-            runtime.stop(blocking=blocking, warning_prefix=warning_prefix)
+            terminated = bool(runtime.stop(blocking=blocking, log_fn=log, warning_prefix=warning_prefix)) or terminated
             runtime.cancel()
+        return terminated
 
-    def cleanup(self) -> None:
+    def _raw_preset_text_to_save_on_close(self) -> tuple[str, str] | None:
+        """(имя файла, текст), если в редакторе есть правки, которые ещё не
+        легли в файл: набранные после последнего сохранения, ждущие своей
+        очереди или сохраняемые прямо сейчас."""
+        if self.__dict__.get("_preset_path") is None:
+            return None
+        file_name = str(self.__dict__.get("_preset_file_name") or "").strip()
+        if not file_name:
+            return None
+        unsaved = bool(self._content_publish_pending)
         try:
-            self._commit_pending_content_change()
+            save_state = self._raw_preset_save_state_obj()
+            unsaved = unsaved or save_state.is_busy() or save_state.has_pending()
         except Exception:
             pass
+        try:
+            unsaved = unsaved or any(
+                str((operation or {}).get("kind") or "") == "save"
+                for operation in self._raw_preset_write_state_obj().pending
+            )
+        except Exception:
+            pass
+        if not unsaved:
+            return None
+        return file_name, self._current_raw_editor_text()
+
+    def _save_raw_preset_on_close(self, file_name: str, text: str) -> None:
+        """Синхронная запись при закрытии: event loop уже не даст worker-у
+        завершиться (тот же приём, что persist_sidebar_state). Запуск не
+        оповещается — работающий DPI не перезапускается на выходе, а
+        следующий старт прочитает файл."""
+        save = self.__dict__.get("_save_raw_preset_on_close_fn")
+        if not callable(save):
+            return
+        try:
+            save(file_name, text)
+        except Exception as exc:
+            log(f"Не удалось сохранить пресет {file_name} при закрытии: {exc}", "ERROR")
+
+    def cleanup(self) -> None:
+        text_to_save = None
+        try:
+            text_to_save = self._raw_preset_text_to_save_on_close()
+        except Exception:
+            text_to_save = None
         self._cleanup_in_progress = True
         self._raw_load_state_obj().reset()
         self._pending_raw_text_apply = None
@@ -2225,7 +2424,14 @@ class PresetRawEditorPage(BasePage):
         self._raw_preset_save_state_obj().reset()
         self._raw_preset_activation_state_obj().reset()
         self._raw_load_runtime_request_id = 0
-        self._stop_raw_worker_runtimes()
+        terminated = self._stop_raw_worker_runtimes()
+        if text_to_save is not None:
+            if terminated:
+                # Прерванный поток мог держать замки записи: синхронная запись
+                # подвесила бы закрытие навсегда. Правку теряем, но с записью в лог.
+                log(f"Пресет {text_to_save[0]} не сохранён при закрытии: запись зависла и была прервана", "WARNING")
+            else:
+                self._save_raw_preset_on_close(*text_to_save)
         unsubscribe = self._ui_state_unsubscribe
         if callable(unsubscribe):
             try:
@@ -2253,4 +2459,7 @@ class PresetRawEditorPage(BasePage):
                 text_editor.cleanup()
         except Exception:
             pass
+        language = self.__dict__.get("_editor_language")
+        if language is not None:
+            language.cleanup()
         self._ui_state_store = None

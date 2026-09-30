@@ -20,18 +20,6 @@
     {
       "id": "malw_dns_v2",
       "name": "Malw DNS v2"
-    },
-    {
-      "id": "play2go_cloud_dns",
-      "name": "play2go.cloud DNS"
-    },
-    {
-      "id": "zapret_dns",
-      "name": "Zapret DNS"
-    },
-    {
-      "id": "fin_dns",
-      "name": "Fin DNS"
     }
   ]
 }

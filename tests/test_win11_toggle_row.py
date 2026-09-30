@@ -363,14 +363,14 @@ class Win11ToggleRowTests(unittest.TestCase):
         from ui.widgets.win11_controls import Win11RadioOption
 
         row = Win11RadioOption.__new__(Win11RadioOption)
-        title_label = _TextLabel("Zapret 2")
+        title_label = _TextLabel("net67 v2")
         desc_label = _TextLabel("Preset mode")
         badge_label = _TextLabel("recommended")
         row._title_label = title_label
         row._desc_label = desc_label
         row._badge_label = badge_label
 
-        Win11RadioOption.set_texts(row, "Zapret 2", "Preset mode", "recommended")
+        Win11RadioOption.set_texts(row, "net67 v2", "Preset mode", "recommended")
 
         self.assertEqual(title_label.set_calls, [])
         self.assertEqual(desc_label.set_calls, [])
@@ -387,9 +387,9 @@ class Win11ToggleRowTests(unittest.TestCase):
         row._desc_label = desc_label
         row._badge_label = badge_label
 
-        Win11RadioOption.set_texts(row, "Zapret 2", "Preset mode", "recommended")
+        Win11RadioOption.set_texts(row, "net67 v2", "Preset mode", "recommended")
 
-        self.assertEqual(title_label.set_calls, ["Zapret 2"])
+        self.assertEqual(title_label.set_calls, ["net67 v2"])
         self.assertEqual(desc_label.set_calls, ["Preset mode"])
         self.assertEqual(badge_label.set_calls, ["recommended"])
 
@@ -397,7 +397,7 @@ class Win11ToggleRowTests(unittest.TestCase):
         from ui.widgets.win11_controls import Win11RadioOption
 
         option = Win11RadioOption(
-            "Профили Zapret 2",
+            "Профили net67 v2",
             "Запуск через готовые профили",
             recommended=True,
             recommended_badge="рекомендуется",
@@ -408,7 +408,7 @@ class Win11ToggleRowTests(unittest.TestCase):
         self.assertEqual(option.focusPolicy(), Qt.FocusPolicy.StrongFocus)
         self.assertEqual(
             option.accessibleName(),
-            "Профили Zapret 2, не выбрано, рекомендуется",
+            "Профили net67 v2, не выбрано, рекомендуется",
         )
         self.assertIn("Запуск через готовые профили", option.accessibleDescription())
 
@@ -451,7 +451,7 @@ class Win11ToggleRowTests(unittest.TestCase):
         from ui.widgets.win11_controls import Win11RadioOption
 
         option = Win11RadioOption(
-            "Профили Zapret 2",
+            "Профили net67 v2",
             "Запуск через готовые профили",
         )
 
@@ -463,7 +463,7 @@ class Win11ToggleRowTests(unittest.TestCase):
         from ui.widgets.win11_controls import Win11RadioOption
 
         option = Win11RadioOption(
-            "Профили Zapret 2",
+            "Профили net67 v2",
             "Запуск через готовые профили",
         )
         clicked = Mock()
@@ -477,7 +477,7 @@ class Win11ToggleRowTests(unittest.TestCase):
         from ui.widgets.win11_controls import Win11RadioOption
 
         option = Win11RadioOption(
-            "Профили Zapret 2",
+            "Профили net67 v2",
             "Запуск через готовые профили",
         )
 
@@ -488,14 +488,14 @@ class Win11ToggleRowTests(unittest.TestCase):
         from ui.widgets.win11_controls import Win11RadioOption
 
         option = Win11RadioOption(
-            "Профили Zapret 2",
+            "Профили net67 v2",
             "Запуск через готовые профили",
         )
 
         option.setSelected(True)
 
-        self.assertEqual(option.accessibleName(), "Профили Zapret 2, выбрано")
-        self.assertEqual(option.property("screenReaderStateText"), "Профили Zapret 2, выбрано")
+        self.assertEqual(option.accessibleName(), "Профили net67 v2, выбрано")
+        self.assertEqual(option.property("screenReaderStateText"), "Профили net67 v2, выбрано")
 
     def test_number_row_set_value_skips_duplicate_value(self) -> None:
         from ui.widgets.win11_controls import Win11NumberRow
@@ -710,13 +710,13 @@ class Win11ToggleRowTests(unittest.TestCase):
             "fa5s.list",
             "Режим запуска",
             "Выберите способ запуска",
-            items=[("Zapret 1", "zapret1"), ("Zapret 2", "zapret2")],
+            items=[("net67 v1", "zapret1"), ("net67 v2", "zapret2")],
         )
 
-        self.assertEqual(row.accessibleName(), "Режим запуска, выбрано: Zapret 1")
-        self.assertEqual(row.property("screenReaderStateText"), "Режим запуска, выбрано: Zapret 1")
+        self.assertEqual(row.accessibleName(), "Режим запуска, выбрано: net67 v1")
+        self.assertEqual(row.property("screenReaderStateText"), "Режим запуска, выбрано: net67 v1")
         self.assertIn("Выберите способ запуска", row.accessibleDescription())
-        self.assertEqual(row.combo.accessibleName(), "Режим запуска, выбрано: Zapret 1")
+        self.assertEqual(row.combo.accessibleName(), "Режим запуска, выбрано: net67 v1")
 
     def test_combo_row_updates_screen_reader_text_after_selection_change(self) -> None:
         from ui.widgets.win11_controls import Win11ComboRow
@@ -725,14 +725,14 @@ class Win11ToggleRowTests(unittest.TestCase):
             "fa5s.list",
             "Режим запуска",
             "Выберите способ запуска",
-            items=[("Zapret 1", "zapret1"), ("Zapret 2", "zapret2")],
+            items=[("net67 v1", "zapret1"), ("net67 v2", "zapret2")],
         )
 
         row.setCurrentIndex(1)
 
-        self.assertEqual(row.accessibleName(), "Режим запуска, выбрано: Zapret 2")
-        self.assertEqual(row.property("screenReaderStateText"), "Режим запуска, выбрано: Zapret 2")
-        self.assertEqual(row.combo.accessibleName(), "Режим запуска, выбрано: Zapret 2")
+        self.assertEqual(row.accessibleName(), "Режим запуска, выбрано: net67 v2")
+        self.assertEqual(row.property("screenReaderStateText"), "Режим запуска, выбрано: net67 v2")
+        self.assertEqual(row.combo.accessibleName(), "Режим запуска, выбрано: net67 v2")
 
     def test_combo_row_works_from_keyboard_when_row_has_focus(self) -> None:
         from ui.widgets.win11_controls import Win11ComboRow
@@ -741,7 +741,7 @@ class Win11ToggleRowTests(unittest.TestCase):
             "fa5s.list",
             "Режим запуска",
             "Выберите способ запуска",
-            items=[("Zapret 1", "zapret1"), ("Zapret 2", "zapret2")],
+            items=[("net67 v1", "zapret1"), ("net67 v2", "zapret2")],
         )
         events: list[int] = []
         row.currentIndexChanged.connect(events.append)
@@ -754,7 +754,7 @@ class Win11ToggleRowTests(unittest.TestCase):
         self.assertTrue(event.isAccepted())
         self.assertEqual(row.currentIndex(), 1)
         self.assertEqual(events, [1])
-        self.assertEqual(row.accessibleName(), "Режим запуска, выбрано: Zapret 2")
+        self.assertEqual(row.accessibleName(), "Режим запуска, выбрано: net67 v2")
 
         event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Up, Qt.KeyboardModifier.NoModifier)
         QApplication.sendEvent(row, event)

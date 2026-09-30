@@ -17,11 +17,11 @@ class BasePageLayoutTests(unittest.TestCase):
 
     def test_long_subtitle_wraps_inside_narrow_viewport(self) -> None:
         subtitle = (
-            "Настройка и запуск Zapret 2. В «Мои пресеты» выбирается пресет, "
+            "Настройка и запуск net67 v2. В «Мои пресеты» выбирается пресет, "
             "а в «Настройка пресета» меняются профили и выбранные для них "
             "готовые стратегии."
         )
-        page = BasePage("Управление Zapret 2", subtitle)
+        page = BasePage("Управление net67 v2", subtitle)
         self.addCleanup(page.deleteLater)
 
         page.resize(640, 360)

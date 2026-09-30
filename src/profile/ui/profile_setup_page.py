@@ -16,7 +16,6 @@ from profile.match_filters import filter_values
 from profile.editable_settings import normalize_filter_value
 from profile.key_resolution import profile_reference_key
 from profile.profile_setup_loader import profile_save_result_keys
-from profile.setup_match_text import build_profile_setup_match_tab_text
 from profile.ui.profile_setup_controls import (
     range_expression_from_controls,
     set_combo_by_data,
@@ -35,18 +34,12 @@ from profile.ui.profile_strategy_list_widget import (
     ProfileStrategyListView,
     ProfileStrategyListWidget,
     ProfileStrategySearchLineEdit,
-    _current_strategy_branch_id,
     _current_strategy_id,
     _join_accessible_options,
-    _payload_with_strategy_branch,
     _set_strategy_clear_feedback_button_state,
     _set_strategy_favorite_button_state,
     _set_strategy_feedback_button_state,
-    _strategy_branch_label,
-    _strategy_branch_summary_name,
     _sync_combo_items_accessibility,
-    _sync_strategy_branch_combo_items_accessibility,
-    _update_strategy_branch_combo_in_place,
 )
 from profile.ui.user_profile_dialog import CreateUserProfileDialog
 from qfluentwidgets import (
@@ -71,6 +64,10 @@ from ui.accessibility import (
     set_control_accessibility,
     set_state_text,
 )
+from ui.code_editor.editor import CodeEditor
+from ui.code_editor.find_bar import FindReplaceBar
+from ui.code_editor.find_controller import FindController
+from ui.code_editor.syntax import ListFileSyntaxHighlighter, PresetSyntaxHighlighter
 from ui.fluent_widgets import set_tooltip
 from ui.latest_value_worker_state import LatestValueWorkerState
 from ui.message_box_accessibility import set_message_box_button_accessibility
@@ -232,32 +229,6 @@ def set_tab_item_text_if_changed(widget, item_key: str, text: str) -> bool:
     return True
 
 
-def _branch_raw_strategy_text(branch, strategy_args: str) -> str:
-    lines = []
-    in_range = str(getattr(branch, "in_range", "") or "x").strip() or "x"
-    out_range = str(getattr(branch, "out_range", "") or "a").strip() or "a"
-    payload = str(getattr(branch, "payload", "") or "all").strip() or "all"
-    if in_range != "x":
-        lines.append(f"--in-range={in_range}")
-    if out_range != "a":
-        lines.append(f"--out-range={out_range}")
-    if payload != "all":
-        lines.append(f"--payload={payload}")
-    clean_strategy_args = str(strategy_args or "").strip()
-    if clean_strategy_args:
-        lines.append(clean_strategy_args)
-    return "\n".join(lines).strip()
-
-
-def _branch_match_tab_text(payload, branch, raw_strategy_text: str) -> str:
-    return build_profile_setup_match_tab_text(
-        match_summary=str(getattr(payload, "match_summary", "") or ""),
-        strategy_id=str(getattr(branch, "strategy_id", "") or ""),
-        strategy_name=str(getattr(branch, "strategy_name", "") or ""),
-        raw_strategy_text=raw_strategy_text,
-    )
-
-
 def _profile_editor_tab_title(payload) -> str:
     item = getattr(payload, "item", None)
     match_lines = tuple(str(line or "").strip().lower() for line in getattr(item, "match_lines", ()) or ())
@@ -394,6 +365,7 @@ class ProfileSetupPageBase(BasePage):
         open_profiles,
         open_root,
         on_profile_changed,
+        ui_state_store=None,
     ):
         super().__init__(
             title="",
@@ -415,6 +387,17 @@ class ProfileSetupPageBase(BasePage):
         self._open_root = open_root
         self._on_profile_changed_callback = on_profile_changed
         self._profile_key = ""
+        self._profile_payload_stale = False
+        self._ui_state_unsubscribe = None
+        if ui_state_store is not None:
+            # Пресет правят и в обход этой страницы (редактор текста, список
+            # профилей, автосинк): открытый заново тот же профиль должен
+            # показать файл, а не прежний payload.
+            self._ui_state_unsubscribe = ui_state_store.subscribe(
+                self._on_preset_revision_changed,
+                fields={"active_preset_revision", "preset_content_revision"},
+                emit_initial=False,
+            )
         self._loading = False
         self._setup_load_runtime = OneShotWorkerRuntime()
         self._setup_load_request_id = 0
@@ -472,7 +455,6 @@ class ProfileSetupPageBase(BasePage):
         self._strategy_apply_runtime = OneShotWorkerRuntime()
         self._strategy_apply_request_id = 0
         self._strategy_apply_runtime_strategy_id = ""
-        self._strategy_apply_runtime_branch_id = ""
         self._strategy_apply_state = LatestValueWorkerState(
             self._strategy_apply_runtime,
             empty_value=None,
@@ -493,8 +475,6 @@ class ProfileSetupPageBase(BasePage):
         self._strategy_stack = None
         self._strategy_tabs = None
         self._strategy_list = None
-        self._strategy_branch_bar = None
-        self._strategy_branch_combo = None
         self._strategy_tab = None
         self._list_file_editor_placeholder = None
         self._match_tab_placeholder = None
@@ -803,19 +783,6 @@ class ProfileSetupPageBase(BasePage):
         self._strategy_tabs.currentItemChanged.connect(self._update_strategy_tabs_accessibility)
         self.layout.addWidget(self._strategy_tabs)
 
-        self._strategy_branch_bar = QWidget(self)
-        branch_layout = QHBoxLayout(self._strategy_branch_bar)
-        branch_layout.setContentsMargins(0, 0, 0, 0)
-        branch_layout.setSpacing(8)
-        branch_layout.addWidget(BodyLabel("Ветка"))
-        self._strategy_branch_combo = CompactDisplayComboBox()
-        self._strategy_branch_combo.setMinimumWidth(260)
-        self._strategy_branch_combo.currentIndexChanged.connect(self._on_strategy_branch_changed)
-        self._strategy_branch_combo.currentIndexChanged.connect(self._update_profile_setup_accessibility)
-        branch_layout.addWidget(self._strategy_branch_combo, 1)
-        self._strategy_branch_bar.hide()
-        self.layout.addWidget(self._strategy_branch_bar)
-
         self._strategy_list = ProfileStrategyListWidget(self)
         self._strategy_list.strategy_activated.connect(self._on_strategy_list_activated)
         self._strategy_stack.addWidget(self._strategy_list)
@@ -876,12 +843,6 @@ class ProfileSetupPageBase(BasePage):
             name="Режим out-range",
             description="Выберите режим --out-range для исходящих пакетов.",
         )
-        self._update_combo_accessibility(
-            self.__dict__.get("_strategy_branch_combo"),
-            name="Ветка готовой стратегии",
-            description="Выберите ветку готовой стратегии для этого profile.",
-        )
-        _sync_strategy_branch_combo_items_accessibility(self.__dict__.get("_strategy_branch_combo"))
         self._update_strategy_tabs_accessibility()
 
     def _strategy_tab_accessible_labels(self) -> dict[str, str]:
@@ -955,7 +916,9 @@ class ProfileSetupPageBase(BasePage):
         self._list_file_base_title.setWordWrap(True)
         editor_layout.addWidget(self._list_file_base_title)
 
-        self._list_file_base_text = PlainTextEdit()
+        self._list_file_base_text = CodeEditor(
+            highlighter_factory=lambda document: ListFileSyntaxHighlighter(document),
+        )
         self._list_file_base_text.setReadOnly(True)
         self._list_file_base_text.setMinimumHeight(180)
         self._list_file_base_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
@@ -975,10 +938,23 @@ class ProfileSetupPageBase(BasePage):
         self._list_file_user_title.setWordWrap(True)
         editor_layout.addWidget(self._list_file_user_title)
 
-        self._list_file_text = PlainTextEdit()
+        self._list_file_find_bar = FindReplaceBar(editor_tab)
+        self._list_file_find_bar.setVisible(False)
+        editor_layout.addWidget(self._list_file_find_bar)
+
+        self._list_file_text = CodeEditor(
+            highlighter_factory=lambda document: ListFileSyntaxHighlighter(document),
+        )
+        self._list_file_find_controller = FindController(
+            self._list_file_text,
+            self._list_file_find_bar,
+            parent=self,
+        )
         self._list_file_text.setMinimumHeight(320)
         self._list_file_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._list_file_text.textChanged.connect(self._on_list_file_text_changed)
+        # contentEdited, а не textChanged: перекраска синтаксиса при смене темы
+        # иначе запускала бы валидацию и автосохранение списка.
+        self._list_file_text.contentEdited.connect(self._on_list_file_text_changed)
         set_tooltip(
             self._list_file_text,
             "Пользовательская часть списка. Сохраняется в lists/user и добавляется к базе.",
@@ -986,7 +962,10 @@ class ProfileSetupPageBase(BasePage):
         set_control_accessibility(
             self._list_file_text,
             name="Ваши записи списка profile",
-            description="Пользовательская часть списка. Эти строки можно редактировать и сохранить.",
+            description=(
+                "Пользовательская часть списка. Эти строки можно редактировать и сохранить. "
+                "Ctrl+F — поиск, Ctrl+H — замена, Ctrl+G — переход к строке."
+            ),
         )
         set_state_text(self._list_file_text, "Ваши записи списка profile")
         editor_layout.addWidget(self._list_file_text, 1)
@@ -1035,7 +1014,18 @@ class ProfileSetupPageBase(BasePage):
         match_layout.addWidget(self._match_text, 1)
 
         match_layout.addWidget(BodyLabel("Текст profile в текущем preset"))
-        self._raw_profile_text = PlainTextEdit()
+        self._raw_profile_find_bar = FindReplaceBar(match_tab)
+        self._raw_profile_find_bar.setVisible(False)
+        match_layout.addWidget(self._raw_profile_find_bar)
+
+        self._raw_profile_text = CodeEditor(
+            highlighter_factory=lambda document: PresetSyntaxHighlighter(document),
+        )
+        self._raw_profile_find_controller = FindController(
+            self._raw_profile_text,
+            self._raw_profile_find_bar,
+            parent=self,
+        )
         self._raw_profile_text.setMinimumHeight(150)
         self._raw_profile_text.setMaximumHeight(220)
         set_tooltip(
@@ -1045,10 +1035,29 @@ class ProfileSetupPageBase(BasePage):
         set_control_accessibility(
             self._raw_profile_text,
             name="Текст profile в текущем preset",
-            description="Сырой текст profile. Сохраняется только в текущий preset.",
+            description=(
+                "Сырой текст profile. Сохраняется только в текущий preset. "
+                "Ctrl+F — поиск, Ctrl+H — замена, Ctrl+G — переход к строке, "
+                "Ctrl с колесом мыши — масштаб."
+            ),
         )
         set_state_text(self._raw_profile_text, "Текст profile в текущем preset")
-        self._raw_profile_text.textChanged.connect(self._on_raw_profile_text_changed)
+        # contentEdited, а не textChanged: перекраска синтаксиса при смене темы
+        # тоже эмитит textChanged и сбрасывала бы кэш текста без правки.
+        self._raw_profile_text.contentEdited.connect(self._on_raw_profile_text_changed)
+        self._raw_profile_language = None
+        if is_zapret2_launch_method(self.launch_method):
+            from profile.ui.winws2_editor_language import Winws2EditorLanguageController
+
+            # Проверка и подсказки для текста одного профиля: фейки и lua-файлы
+            # берутся из общих строк пресета.
+            self._raw_profile_language = Winws2EditorLanguageController(
+                self._raw_profile_text,
+                current_text=self._current_raw_profile_text,
+                fragment=True,
+                preset_text=lambda: str(getattr(self._payload, "preset_preamble_text", "") or ""),
+                parent=self,
+            )
         match_layout.addWidget(self._raw_profile_text)
 
         raw_actions = QWidget(match_tab)
@@ -1573,12 +1582,21 @@ class ProfileSetupPageBase(BasePage):
     def _on_user_profile_delete_worker_finished(self, _worker) -> None:
         return self._user_profile_controller_obj()._on_user_profile_delete_worker_finished(_worker)
 
+    def _on_preset_revision_changed(self, _state, _changed) -> None:
+        self._profile_payload_stale = True
+
     def show_profile(self, profile_key: str) -> None:
         next_key = str(profile_key or "").strip()
         current_key = str(self._profile_key or "").strip()
-        if next_key and next_key == current_key and self._payload is not None:
+        stale = bool(self.__dict__.get("_profile_payload_stale", False))
+        if next_key and next_key == current_key and self._payload is not None and not stale:
             return
+        self._profile_payload_stale = False
         if next_key != current_key:
+            # Ждущее автосохранение полей (350 мс) — правка СТАРОГО профиля:
+            # отправляем её сейчас, пока поля и ключ ещё его. Иначе таймер
+            # срабатывал уже с ключом нового профиля и значениями старого.
+            self._save_controller_obj()._flush_settings_autosave_now()
             self._flush_list_file_autosave_before_switch(current_key)
             self._payload = None
             self._pending_profile_setup_payload_apply = None
@@ -1593,6 +1611,50 @@ class ProfileSetupPageBase(BasePage):
             self._list_file_server_text_snapshot = None
         self._profile_key = next_key
         self.reload_current_profile()
+
+    def onboarding_target(self, name: str):
+        if name == "list_type":
+            return [self.__dict__.get("_filter_combo"), self.__dict__.get("_filter_value")]
+        if name == "ranges":
+            return [
+                self.__dict__.get(attr)
+                for attr in (
+                    "_in_range_label",
+                    "_in_range_mode",
+                    "_in_range_value",
+                    "_out_range_label",
+                    "_out_range_mode",
+                    "_out_range_value",
+                )
+            ]
+        if name == "tabs":
+            return self._strategy_tabs
+        if name == "strategies":
+            stack = self._strategy_stack
+            if stack is None or stack.currentIndex() != 0:
+                return None
+            return self._strategy_list
+        if name == "list_entries":
+            stack = self._strategy_stack
+            if stack is None or stack.currentIndex() != 1:
+                return None
+            return self._list_file_editor_placeholder
+        return None
+
+    def onboarding_set_state(self, state: str | None) -> None:
+        """Тур открывает вкладку «Редактор», а потом возвращает «Готовые стратегии»."""
+        if self._strategy_tabs is None:
+            return
+        if state == "editor":
+            if not self._editor_tab_available:
+                return
+            self._onboarding_switched_tab = True
+            set_segmented_current_item_if_changed(self._strategy_tabs, "editor")
+            self._switch_strategy_tab(1)
+            return
+        if self.__dict__.pop("_onboarding_switched_tab", False):
+            set_segmented_current_item_if_changed(self._strategy_tabs, "strategies")
+            self._switch_strategy_tab(0)
 
     def handle_page_command(self, command: str, payload: dict) -> bool:
         if command == "open_profile":
@@ -1710,10 +1772,9 @@ class ProfileSetupPageBase(BasePage):
         *,
         profile_key: str,
         strategy_id: str,
-        strategy_branch_id: str = "",
         parent=None,
     ):
-        return self._create_profile_strategy_apply_worker_fn(request_id, self.launch_method, profile_key=profile_key, strategy_id=strategy_id, strategy_branch_id=strategy_branch_id, parent=parent)
+        return self._create_profile_strategy_apply_worker_fn(request_id, self.launch_method, profile_key=profile_key, strategy_id=strategy_id, parent=parent)
 
     def create_profile_strategy_feedback_save_worker(
         self,
@@ -1794,7 +1855,6 @@ class ProfileSetupPageBase(BasePage):
             self._apply_editable_settings(payload)
             self._set_list_file_editor_available(_profile_has_list_file_editor(payload))
             self._sync_editor_tab_label(payload)
-            self._apply_strategy_branch_selector(payload)
 
             self._strategy_list.set_rows(
                 entries=payload.strategy_entries,
@@ -1810,58 +1870,6 @@ class ProfileSetupPageBase(BasePage):
             self._rebuild_breadcrumb()
         finally:
             self._loading = False
-
-    def _apply_strategy_branch_selector(self, payload) -> None:
-        combo = self._strategy_branch_combo
-        bar = self._strategy_branch_bar
-        if combo is None or bar is None:
-            return
-        branches = tuple(getattr(payload, "strategy_branches", ()) or ())
-        visible = len(branches) > 1
-        set_widget_visible_if_changed(bar, visible)
-        if not visible:
-            return
-
-        current_id = _current_strategy_branch_id(payload) or str(getattr(branches[0], "branch_id", "") or "")
-        branch_rows: list[tuple[str, str]] = []
-        selected_index = 0
-        for index, branch in enumerate(branches):
-            branch_id = str(getattr(branch, "branch_id", "") or "").strip()
-            branch_rows.append((branch_id, _strategy_branch_label(branch)))
-            if branch_id == current_id:
-                selected_index = index
-        combo.blockSignals(True)
-        try:
-            if not _update_strategy_branch_combo_in_place(combo, branch_rows, selected_index):
-                combo.clear()
-                for branch_id, label in branch_rows:
-                    combo.addItem(label, userData=branch_id)
-                combo.setCurrentIndex(selected_index)
-            _sync_strategy_branch_combo_items_accessibility(combo)
-        finally:
-            combo.blockSignals(False)
-        self._update_profile_setup_accessibility()
-
-    def _on_strategy_branch_changed(self, _index: int) -> None:
-        if self._loading or self._payload is None or self._strategy_branch_combo is None:
-            return
-        branch_id = str(self._strategy_branch_combo.itemData(self._strategy_branch_combo.currentIndex()) or "").strip()
-        if not branch_id:
-            return
-        branches = tuple(getattr(self._payload, "strategy_branches", ()) or ())
-        branch = next((item for item in branches if str(getattr(item, "branch_id", "") or "").strip() == branch_id), None)
-        if branch is None:
-            return
-        self._payload = _payload_with_strategy_branch(self._payload, branch_id)
-        self._loading = True
-        try:
-            self._apply_editable_settings(self._payload)
-        finally:
-            self._loading = False
-        self._strategy_list.set_current_strategy_id(str(getattr(branch, "strategy_id", "") or "none").strip() or "none")
-        self._apply_feedback_buttons(self._payload)
-        if self._match_tab_built:
-            self._apply_match_tab_payload()
 
     def _set_list_file_editor_available(self, available: bool) -> None:
         if self._strategy_tabs is None or self._strategy_stack is None:
@@ -2202,15 +2210,16 @@ class ProfileSetupPageBase(BasePage):
             return
         tokens = get_theme_tokens()
         error_color = "#ff6b6b"
+        # Шрифт здесь не задаём: CodeEditor сам ставит моноширинный и меняет
+        # его размер по Ctrl+колесу — QSS-правило font-size это ломало бы.
+        # Отступ слева меньше остальных: там колонка номеров строк.
         normal_style = f"""
             QPlainTextEdit {{
                 background: {tokens.surface_bg};
                 border: 1px solid {tokens.surface_border};
                 border-radius: 8px;
-                padding: 12px;
+                padding: 12px 12px 12px 4px;
                 color: {tokens.fg};
-                font-family: Consolas, 'Courier New', monospace;
-                font-size: 13px;
             }}
             QPlainTextEdit:hover {{
                 background: {tokens.surface_bg_hover};
@@ -2225,10 +2234,8 @@ class ProfileSetupPageBase(BasePage):
                 background: rgba(255, 100, 100, 0.06);
                 border: 1px solid {error_color};
                 border-radius: 8px;
-                padding: 12px;
+                padding: 12px 12px 12px 4px;
                 color: {tokens.fg};
-                font-family: Consolas, 'Courier New', monospace;
-                font-size: 13px;
             }}
             QPlainTextEdit:focus {{
                 border: 1px solid {error_color};
@@ -2494,19 +2501,30 @@ class ProfileSetupPageBase(BasePage):
         item = getattr(self.__dict__.get("_payload"), "item", None)
         if not runtime.is_running() and item is not None and bool(getattr(item, "enabled", False)) == enabled:
             return
+        # Профиль и фильтр фиксируются при щелчке: пока запрос ждёт очереди,
+        # пользователь может открыть другой профиль.
+        target = self._save_controller_obj()._current_enabled_save_target()
+        running_profile_key = str(self.__dict__.get("_enabled_save_runtime_profile_key") or "").strip()
+        if worker_state.is_busy() and running_profile_key not in {"", target["profile_key"]}:
+            # Пишется переключатель ДРУГОГО профиля: общий слот «последнее
+            # значение» его бы вытеснил — ставим операцию в очередь по профилю.
+            self._queue_profile_setup_write_operation({"kind": "enabled_save", "enabled": enabled, **target})
+            return
         if worker_state.is_busy():
             if self.__dict__.get("_enabled_save_runtime_enabled") != enabled:
                 worker_state.pending = enabled
+                self._enabled_save_pending_target = target
             return
         if self._profile_setup_write_is_running():
             if self.__dict__.get("_enabled_save_runtime_enabled") != enabled:
                 worker_state.pending = enabled
-                self._queue_profile_setup_write_operation({"kind": "enabled_save", "enabled": enabled})
+                self._enabled_save_pending_target = target
+                self._queue_profile_setup_write_operation({"kind": "enabled_save", "enabled": enabled, **target})
             return
         self._start_enabled_save_worker(enabled)
 
-    def _start_enabled_save_worker(self, enabled: bool) -> None:
-        return self._save_controller_obj()._start_enabled_save_worker(enabled)
+    def _start_enabled_save_worker(self, enabled: bool, target: dict | None = None) -> None:
+        return self._save_controller_obj()._start_enabled_save_worker(enabled, target=target)
 
     def _on_enabled_save_finished(self, request_id: int, profile_key: str, enabled: bool, payload=None) -> None:
         return self._save_controller_obj()._on_enabled_save_finished(request_id, profile_key, enabled, payload)
@@ -2558,16 +2576,16 @@ class ProfileSetupPageBase(BasePage):
         item = getattr(getattr(self, "_payload", None), "item", None)
         if bool(getattr(item, "in_preset", False)) and not bool(getattr(item, "enabled", False)):
             return
-        if strategy_id == _current_strategy_id(self._payload):
+        if strategy_id == self._strategy_controller_obj()._effective_strategy_id():
             return
-        self._apply_strategy_locally(strategy_id)
+        self._mark_strategy_selection_pending(strategy_id)
         self._request_strategy_apply(strategy_id)
 
     def _request_strategy_apply(self, strategy_id: str) -> None:
         return self._strategy_controller_obj()._request_strategy_apply(strategy_id)
 
-    def _start_strategy_apply_worker(self, strategy_id: str, *, strategy_branch_id: str = "") -> None:
-        return self._strategy_controller_obj()._start_strategy_apply_worker(strategy_id, strategy_branch_id=strategy_branch_id)
+    def _start_strategy_apply_worker(self, strategy_id: str, profile_key: str = "") -> None:
+        return self._strategy_controller_obj()._start_strategy_apply_worker(strategy_id, profile_key=profile_key)
 
     def _on_strategy_apply_finished(
         self,
@@ -2590,110 +2608,20 @@ class ProfileSetupPageBase(BasePage):
 
     _pending_strategy_apply = _worker_pending_property("_strategy_apply_state_obj")
 
-    def _apply_strategy_locally(self, strategy_id: str) -> bool:
-        payload = self._payload
-        if payload is None:
-            return False
-        item = getattr(payload, "item", None)
-        if item is None or not bool(getattr(item, "in_preset", False)):
-            return False
-        entry = (getattr(payload, "strategy_entries", {}) or {}).get(strategy_id)
-        if entry is None:
-            return False
+    def _mark_strategy_selection_pending(self, strategy_id: str) -> bool:
+        """Отметить выбор стратегии до подтверждения записи.
 
-        state = (getattr(payload, "strategy_states", {}) or {}).get(strategy_id, ProfileStrategyState())
-        branches = tuple(getattr(payload, "strategy_branches", ()) or ())
-        current_branch_id = _current_strategy_branch_id(payload)
-        if branches and current_branch_id:
-            entry_args = str(getattr(entry, "args", "") or "").strip()
-            updated_branch_items = []
-            for branch in branches:
-                if str(getattr(branch, "branch_id", "") or "").strip() != current_branch_id:
-                    updated_branch_items.append(branch)
-                    continue
-                raw_strategy_text = _branch_raw_strategy_text(branch, entry_args)
-                updated_branch = replace(
-                    branch,
-                    strategy_id=strategy_id,
-                    strategy_name=str(getattr(entry, "name", "") or strategy_id),
-                    raw_strategy_text=raw_strategy_text,
-                )
-                updated_branch_items.append(
-                    replace(
-                        updated_branch,
-                        match_tab_text=_branch_match_tab_text(payload, updated_branch, raw_strategy_text),
-                    )
-                )
-            updated_branches = tuple(updated_branch_items)
-            selected_branch = next(
-                (
-                    branch
-                    for branch in updated_branches
-                    if str(getattr(branch, "branch_id", "") or "").strip() == current_branch_id
-                ),
-                None,
-            )
-            next_raw_strategy_text = str(getattr(selected_branch, "raw_strategy_text", "") or entry_args)
-            next_strategy_name = str(getattr(entry, "name", "") or strategy_id)
-            if len(updated_branches) <= 1:
-                updated_item = replace(
-                    item,
-                    strategy_id=strategy_id,
-                    strategy_name=next_strategy_name,
-                    enabled=True,
-                    rating=str(getattr(state, "rating", "") or ""),
-                    favorite=bool(getattr(state, "favorite", False)),
-                    strategy_branches=updated_branches,
-                )
-            else:
-                updated_item = replace(
-                    item,
-                    strategy_id="custom",
-                    strategy_name=_strategy_branch_summary_name(updated_branches),
-                    enabled=True,
-                    rating="",
-                    favorite=False,
-                    strategy_branches=updated_branches,
-                )
-            self._payload = replace(
-                payload,
-                item=updated_item,
-                strategy_branches=updated_branches,
-                raw_strategy_text=next_raw_strategy_text,
-                match_tab_text=str(getattr(selected_branch, "match_tab_text", "") or ""),
-                current_strategy_state=state,
-            )
-            self._strategy_list.set_current_strategy_id(strategy_id)
-            self._apply_strategy_branch_selector(self._payload)
-            self._apply_feedback_buttons(self._payload)
-            if self._match_tab_built:
-                self._apply_match_tab_payload()
-            return True
-
-        updated_item = replace(
-            item,
-            strategy_id=strategy_id,
-            strategy_name=str(getattr(entry, "name", "") or strategy_id),
-            enabled=True,
-            rating=str(getattr(state, "rating", "") or ""),
-            favorite=bool(getattr(state, "favorite", False)),
-        )
-        self._payload = replace(
-            payload,
-            item=updated_item,
-            raw_strategy_text=str(getattr(entry, "args", "") or ""),
-            match_tab_text=build_profile_setup_match_tab_text(
-                match_summary=str(getattr(payload, "match_summary", "") or ""),
-                strategy_id=strategy_id,
-                strategy_name=str(getattr(entry, "name", "") or strategy_id),
-                raw_strategy_text=str(getattr(entry, "args", "") or ""),
-            ),
-            current_strategy_state=state,
-        )
-        self._strategy_list.set_current_strategy_id(strategy_id)
-        self._apply_feedback_buttons(self._payload)
-        if self._match_tab_built:
-            self._apply_match_tab_payload()
+        Только подсветка строки в списке: item, аргументы и match-текст
+        остаются такими, какими их прочитал сервис из пресета. Раньше страница
+        пересчитывала их сама — намерение пользователя выглядело как факт даже
+        тогда, когда запись в пресет не состоялась.
+        """
+        # __dict__ вместо getattr: поведенческие тесты создают страницу через
+        # __new__, и обращение к атрибуту QWidget без __init__ бросает RuntimeError.
+        strategy_list = self.__dict__.get("_strategy_list")
+        if strategy_list is None:
+            return False
+        strategy_list.set_current_strategy_id(str(strategy_id or "").strip())
         return True
 
     def _set_current_strategy_feedback(self, *, rating: str) -> None:
@@ -2750,7 +2678,23 @@ class ProfileSetupPageBase(BasePage):
     _strategy_feedback_save_start_scheduled = _worker_start_scheduled_property("_strategy_feedback_save_state_obj")
 
     def cleanup(self) -> None:
+        unsubscribe = self.__dict__.get("_ui_state_unsubscribe")
+        self._ui_state_unsubscribe = None
+        if callable(unsubscribe):
+            try:
+                unsubscribe()
+            except Exception:
+                pass
+        # Собираем несохранённое ДО сброса очередей: закрытие окна через
+        # долю секунды после правки раньше молча теряло её.
+        try:
+            writes_to_save = self._save_controller_obj()._profile_writes_to_save_on_close()
+        except Exception:
+            writes_to_save = []
         self._cleanup_in_progress = True
+        language = self.__dict__.get("_raw_profile_language")
+        if language is not None:
+            language.cleanup()
         timer = self.__dict__.get("_settings_save_timer")
         if timer is not None:
             try:
@@ -2805,15 +2749,28 @@ class ProfileSetupPageBase(BasePage):
             "_strategy_feedback_save_request_id",
         ):
             setattr(self, attr, int(getattr(self, attr, 0) or 0) + 1)
+        terminated = False
         for attr, warning_prefix, blocking in _PROFILE_SETUP_CLEANUP_RUNTIMES:
             runtime = self.__dict__.get(attr)
             if runtime is None:
                 continue
-            runtime.stop(blocking=blocking, log_fn=log, warning_prefix=warning_prefix)
+            terminated = bool(runtime.stop(blocking=blocking, log_fn=log, warning_prefix=warning_prefix)) or terminated
             runtime.cancel()
         self._strategy_apply_runtime_strategy_id = ""
+        self._strategy_apply_runtime_profile_key = ""
+        self._strategy_apply_pending_profile_key = ""
+        self._enabled_save_pending_target = None
         self._enabled_save_runtime_enabled = None
         self._setup_load_runtime_request_id = 0
+        # Идущие записи уже дождались (runtime.stop(blocking=True) выше) —
+        # теперь поверх них ложится то, что ещё ждало очереди. Если запись
+        # пришлось прервать, её замки могли остаться занятыми: синхронная
+        # запись подвесила бы закрытие, поэтому ждущие правки только в лог.
+        if terminated and writes_to_save:
+            log(f"{self.__class__.__name__}: {len(writes_to_save)} правок профиля не сохранены при закрытии: запись зависла и была прервана", "WARNING")
+            writes_to_save = []
+        for operation in writes_to_save:
+            self._save_controller_obj()._save_profile_write_on_close(operation)
         try:
             super().cleanup()
         except Exception:

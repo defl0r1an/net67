@@ -1,5 +1,9 @@
 {
   "name": "GitHub",
+  "category": "direct",
+  "icon": "fa5b.github",
+  "icon_color": "#181717",
+  "sort_order": 24,
   "hosts": [
     {
       "ip": "140.82.114.3",

@@ -18,6 +18,7 @@ from wizard.plans import (
     build_settings_plan,
     hosts_service_profiles,
     normalize_selection,
+    wants_telegram_hosts,
 )
 
 
@@ -39,6 +40,10 @@ class WizardWriters:
     #: Иначе получилось бы наоборот: галка в мастере ничего не включает,
     #: а тумблер стоит в «выкл.» при работающем прокси.
     set_telegram_proxy_with_bypass: Callable[[bool], object]
+    #: Прописывает сайты Telegram блоком страницы Telegram Proxy.
+    #: Возвращает текст ошибки или пустую строку. ``None`` — не писать
+    #: вовсе: так тесты, которым hosts не интересен, его и не трогают.
+    add_telegram_hosts: Callable[[], object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +112,37 @@ def _set_telegram_proxy_with_bypass(enabled: bool) -> str:
         return f"Не удалось сохранить настройку прокси Telegram: {exc}"
 
 
+def _add_telegram_hosts_in_background() -> str:
+    """Прописывает сайты Telegram через страницу прокси.
+
+    Раньше это делала плитка Telegram в редакторе hosts, и мастер
+    включал её вместе с остальными сервисами. Плитку убрали — у доменов
+    Telegram один писатель, ``telegram_proxy/telegram_hosts.py``, — и
+    мастер зовёт его. В фоне по той же причине, что и остальной hosts:
+    запись в системный файл небыстрая, а мы на потоке интерфейса. Порядок
+    с записью сервисов не важен: оба писателя идут под ``HOSTS_EDIT_LOCK``
+    и чужие строки не трогают.
+    """
+    import threading
+
+    from log.log import log
+
+    def _run() -> None:
+        try:
+            from telegram_proxy.telegram_hosts import add_telegram_hosts
+
+            _changed, message = add_telegram_hosts()
+            log(f"Мастер: {message}", "INFO")
+        except Exception as exc:
+            log(f"Мастер: сайты Telegram в hosts не прописаны: {exc}", "⚠ WARNING")
+
+    try:
+        threading.Thread(target=_run, name="wizard-telegram-hosts", daemon=True).start()
+    except Exception as exc:
+        return f"Не удалось прописать сайты Telegram в hosts: {exc}"
+    return ""
+
+
 def build_default_writers() -> WizardWriters:
     from settings.store import (
         set_dpi_autostart,
@@ -123,6 +159,7 @@ def build_default_writers() -> WizardWriters:
         set_wizard_services=set_wizard_services,
         set_wizard_completed=set_wizard_completed,
         set_telegram_proxy_with_bypass=_set_telegram_proxy_with_bypass,
+        add_telegram_hosts=_add_telegram_hosts_in_background,
     )
 
 
@@ -186,6 +223,12 @@ def apply_wizard(
         hosts_problem = writers.apply_hosts(profiles)
         if hosts_problem:
             warnings.append(str(hosts_problem))
+        if writers.add_telegram_hosts is not None and wants_telegram_hosts(
+            selected, hosts_groups
+        ):
+            telegram_problem = writers.add_telegram_hosts()
+            if telegram_problem:
+                warnings.append(str(telegram_problem))
 
         writers.set_wizard_completed(True)
     except Exception as exc:

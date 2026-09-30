@@ -45,7 +45,6 @@ def default_program() -> dict[str, Any]:
         "strategy_launch_method": DEFAULT_LAUNCH_METHOD,
         SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2: "",
         "auto_update_enabled": True,
-        "remove_github_api": True,
         # Перезапуск Discord выключен по умолчанию.
         #
         # Настройка закрывает чужое приложение и открывает заново — при
@@ -60,6 +59,9 @@ def default_program() -> dict[str, Any]:
         # браузер через системный прокси. Выключено по умолчанию —
         # туннель правит таблицу маршрутов и требует прав администратора.
         "vpn_tun_mode": False,
+        # Версия прошлого запуска: по её смене видно первый старт после
+        # обновления.
+        "last_seen_version": "",
         # Поднимать ли прокси Telegram вместе с обходом.
         #
         # Прокси и обход — разные вещи и включались порознь: прокси при
@@ -96,6 +98,8 @@ def default_appearance() -> dict[str, Any]:
         # всех и включить их было нечем. Лента песчинок из-за этого
         # стояла неподвижно.
         "animations_enabled": True,
+        # «Живые» кнопки: покачивание значка, пружина и волна на нажатии.
+        "live_animations_enabled": True,
         "smooth_scroll_enabled": False,
         "editor_smooth_scroll_enabled": False,
         "sidebar_icon_style": "standard",
@@ -109,6 +113,7 @@ def default_warnings() -> dict[str, Any]:
         "disable_kaspersky_warning": False,
         "isp_dns_info_shown": False,
         "tg_proxy_deeplink_done": False,
+        "onboarding_tour_done": False,
     }
 
 
@@ -145,20 +150,22 @@ def default_telegram_proxy() -> dict[str, Any]:
         "buffer_kb": 256,
         "fake_tls_domain": "",
         "proxy_protocol": False,
+        # Открывать ссылку tg://proxy при первом запуске прокси, чтобы
+        # Telegram сам предложил подключиться. Без ключа в схеме нормализация
+        # выбрасывала его при каждой записи, и выключенный тумблер
+        # «Авто-настройка Telegram» сам включался обратно.
+        "auto_deeplink": True,
     }
 
 
 def default_dns() -> dict[str, Any]:
     return {
-        "force_dns_enabled": False,
-        "dns_crash_count": 0,
         "custom_servers": [],
     }
 
 
 def default_hosts() -> dict[str, Any]:
     return {
-        "bootstrap_signature": None,
         "active_domains": [],
         "selection": {},
     }
@@ -199,6 +206,34 @@ def default_profile_strategy_state() -> dict[str, Any]:
     }
 
 
+def default_user_fakes() -> dict[str, Any]:
+    # Свои фейки пользователя: имя blob-а -> файл в user/fakes/ и описание.
+    return {
+        "version": 1,
+        "fakes": {},
+    }
+
+
+def default_remote_presets() -> dict[str, Any]:
+    # Пресеты, скачанные по ссылке: [движок][файл] -> откуда и когда.
+    return {
+        "winws2": {},
+        "winws1": {},
+    }
+
+
+def default_preset_registry() -> dict[str, Any]:
+    # Постоянные идентификаторы пресетов: [движок][файл] -> uid.
+    #
+    # В исходном проекте это таблица SQLite. У net67 настройки в json,
+    # поэтому реестр — обычный раздел: переименование файла меняет ключ,
+    # а uid остаётся прежним.
+    return {
+        "winws2": {},
+        "winws1": {},
+    }
+
+
 def default_user_profiles() -> dict[str, Any]:
     return {
         "version": 1,
@@ -227,7 +262,8 @@ def default_updater() -> dict[str, Any]:
 def default_blockcheck() -> dict[str, Any]:
     return {
         "user_domains": [],
-        "scan_resume": {"domains": {}},
+        # Итоги прошлых подборов стратегии: {"<режим>|<цель>": {"confirmed": [...], "failed": {id: время}}}.
+        "strategy_history": {},
     }
 
 
@@ -264,6 +300,9 @@ def build_default_settings() -> dict[str, Any]:
         "ui_state": default_ui_state(),
         "profile_strategy_state": default_profile_strategy_state(),
         "user_profiles": default_user_profiles(),
+        "user_fakes": default_user_fakes(),
+        "remote_presets": default_remote_presets(),
+        "preset_registry": default_preset_registry(),
         "updater": default_updater(),
         "blockcheck": default_blockcheck(),
         "folders": default_folders(),

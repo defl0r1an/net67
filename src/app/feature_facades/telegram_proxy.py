@@ -6,6 +6,7 @@ from typing import Callable
 from PyQt6.QtCore import QTimer
 
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from ui.queued_worker_state import QueuedWorkerState
 
 
 @dataclass(slots=True)
@@ -14,15 +15,38 @@ class TelegramProxyTrayToggleState:
     start_scheduled: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
+class TelegramProxySettingsSaveState:
+    """Общая очередь сохранения настроек Telegram Proxy.
+
+    Сохранения идут строго по одному в фоновом потоке. Когда очередь
+    опустела, слушатели получают одно итоговое действие применения
+    (перезапуск или горячая замена внешнего прокси).
+    """
+
+    runtime: OneShotWorkerRuntime = field(default_factory=OneShotWorkerRuntime)
+    queue: QueuedWorkerState | None = None
+    in_flight: bool = False
+    restart_pending: str = ""
+    listeners: list = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.queue is None:
+            self.queue = QueuedWorkerState(self.runtime)
+
+
+# weakref_slot обязателен: _start_settings_save_worker подключает к сигналам
+# воркера собственные методы, а PyQt берёт на приёмник слабую ссылку. Без
+# __weakref__ connect падал с «SystemError: QMetaObject.Connection returned
+# a result with an exception set» — и ни одна настройка прокси со страницы
+# не сохранялась. В zapret класс пришёл уже таким, их тесты этого не ловят.
+@dataclass(frozen=True, slots=True, weakref_slot=True)
 class TelegramProxyFeature:
     start_proxy_if_enabled_async: Callable
     get_proxy_manager: Callable
     get_start_config: Callable
     set_enabled: Callable
     build_upstream_config: Callable
-    build_cloudflare_config: Callable
-    build_dc_endpoint_overrides: Callable
     load_page_initial_state: Callable
     save_settings_action: Callable
     check_relay_reachable: Callable
@@ -37,13 +61,14 @@ class TelegramProxyFeature:
     copy_text: Callable
     open_log_file: Callable
     open_external_link: Callable
-    ensure_telegram_hosts: Callable
+    run_telegram_hosts_action: Callable
     run_diagnostics: Callable
     append_log_line: Callable
     consume_auto_deeplink_request: Callable
     _tray_start_runtime: OneShotWorkerRuntime = field(default_factory=OneShotWorkerRuntime)
     _tray_stop_runtime: OneShotWorkerRuntime = field(default_factory=OneShotWorkerRuntime)
     _tray_toggle_state: TelegramProxyTrayToggleState = field(default_factory=TelegramProxyTrayToggleState)
+    _settings_save_state: TelegramProxySettingsSaveState = field(default_factory=TelegramProxySettingsSaveState)
 
     def is_running(self) -> bool:
         try:
@@ -71,46 +96,24 @@ class TelegramProxyFeature:
         self._tray_toggle_state.start_scheduled = False
         self._tray_start_runtime.stop(blocking=False, warning_prefix="Telegram Proxy tray start worker")
         self._tray_stop_runtime.stop(blocking=False, warning_prefix="Telegram Proxy tray stop worker")
+        save_state = self._settings_save_state
+        save_state.runtime.stop(blocking=False, warning_prefix="Telegram Proxy settings save worker")
+        save_state.runtime.cancel()
+        save_state.queue.reset()
+        save_state.in_flight = False
+        save_state.restart_pending = ""
+        save_state.listeners.clear()
         try:
             self.get_proxy_manager().cleanup()
         except Exception:
             pass
 
-    def create_start_worker(
-        self,
-        *,
-        manager,
-        port: int,
-        mode: str,
-        host: str,
-        upstream_config=None,
-        cloudflare_config=None,
-        mtproxy_secret: str = "",
-        dc_endpoint_overrides=None,
-        pool_size: int = 4,
-        buffer_kb: int = 256,
-        fake_tls_domain: str = "",
-        proxy_protocol: bool = False,
-        parent=None,
-    ):
+    def create_start_worker(self, *, manager, parent=None):
         from telegram_proxy.runtime.workers import TelegramProxyStartWorker
 
         return TelegramProxyStartWorker(
             manager=manager,
-            port=port,
-            mode=mode,
-            host=host,
-            upstream_config=upstream_config,
-            cloudflare_config=cloudflare_config,
-            mtproxy_secret=mtproxy_secret,
-            dc_endpoint_overrides=dc_endpoint_overrides,
-            pool_size=pool_size,
-            buffer_kb=buffer_kb,
-            fake_tls_domain=fake_tls_domain,
-            proxy_protocol=proxy_protocol,
-            build_upstream_config=self.build_upstream_config,
-            build_cloudflare_config=self.build_cloudflare_config,
-            build_dc_endpoint_overrides=self.build_dc_endpoint_overrides,
+            load_start_config=self.get_start_config,
             parent=parent,
         )
 
@@ -200,6 +203,7 @@ class TelegramProxyFeature:
             kind=str(kind or "domain"),
             domains=domains,
             check_cloudflare_connectivity=self.check_cloudflare_connectivity,
+            append_log_line_fn=self.append_log_line,
             parent=parent,
         )
 
@@ -212,12 +216,13 @@ class TelegramProxyFeature:
             parent=parent,
         )
 
-    def create_ensure_hosts_worker(self, request_id: int, *, parent=None):
-        from telegram_proxy.runtime.workers import TelegramHostsEnsureWorker
+    def create_hosts_worker(self, request_id: int, *, action: str, parent=None):
+        from telegram_proxy.runtime.workers import TelegramHostsWorker
 
-        return TelegramHostsEnsureWorker(
+        return TelegramHostsWorker(
             request_id,
-            ensure_hosts_fn=self.ensure_telegram_hosts,
+            action=action,
+            run_hosts_action_fn=self.run_telegram_hosts_action,
             parent=parent,
         )
 
@@ -229,6 +234,145 @@ class TelegramProxyFeature:
             save_settings_action=self.save_settings_action,
             **kwargs,
         )
+
+    # -- Очередь сохранения настроек ------------------------------------
+    #
+    # Страницы только просят сохранить значение. Очередь живёт здесь, чтобы
+    # основная страница, вложенная страница и трей видели одно и то же
+    # состояние: пока очередь не пуста, запуск прокси ждёт, иначе он
+    # прочитал бы из хранилища ещё старые значения.
+
+    def request_settings_save(
+        self,
+        action: str,
+        *,
+        restart: str = "",
+        host: str = "",
+        port: int = 0,
+        user: str = "",
+        password: str = "",
+        preset_id: str = "",
+        enabled: bool = False,
+        value: object = "",
+    ) -> None:
+        payload = {
+            "action": str(action or ""),
+            "host": str(host or ""),
+            "port": int(port or 0),
+            "user": str(user or ""),
+            "password": str(password or ""),
+            "preset_id": str(preset_id or ""),
+            "enabled": bool(enabled),
+            "value": value,
+            "restart": str(restart or ""),
+        }
+        if self.has_pending_settings_saves():
+            # Новое значение не должно обогнать уже ждущее в очереди.
+            self._queue_settings_save_payload(payload)
+            return
+        self._start_settings_save_worker(payload)
+
+    def has_pending_settings_saves(self) -> bool:
+        state = self._settings_save_state
+        return bool(state.in_flight or state.queue.has_pending() or state.queue.start_scheduled)
+
+    def add_settings_flushed_listener(self, callback) -> None:
+        listeners = self._settings_save_state.listeners
+        if callback not in listeners:
+            listeners.append(callback)
+
+    def remove_settings_flushed_listener(self, callback) -> None:
+        listeners = self._settings_save_state.listeners
+        if callback in listeners:
+            listeners.remove(callback)
+
+    def _queue_settings_save_payload(self, payload: dict) -> bool:
+        return self._settings_save_state.queue.replace_by_key(
+            dict(payload or {}),
+            key=lambda pending: str(pending.get("action") or ""),
+        )
+
+    def _start_settings_save_worker(self, payload: dict) -> None:
+        state = self._settings_save_state
+        state.in_flight = True
+
+        def bind_worker(worker) -> None:
+            worker.completed.connect(self._on_settings_save_completed)
+            worker.failed.connect(self._on_settings_save_failed)
+
+        state.runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._create_queued_settings_save_worker(request_id, payload),
+            bind_worker=bind_worker,
+            on_finished=self._on_settings_save_worker_finished,
+        )
+
+    def _create_queued_settings_save_worker(self, request_id: int, payload: dict):
+        return self.create_settings_save_worker(
+            request_id,
+            action=str(payload.get("action") or ""),
+            host=str(payload.get("host") or ""),
+            port=int(payload.get("port") or 0),
+            user=str(payload.get("user") or ""),
+            password=str(payload.get("password") or ""),
+            preset_id=str(payload.get("preset_id") or ""),
+            enabled=bool(payload.get("enabled")),
+            value=payload.get("value", ""),
+            context_extra={"restart": str(payload.get("restart") or "")},
+            parent=None,
+        )
+
+    def _on_settings_save_completed(self, request_id: int, _action: str, _result, context) -> None:
+        from telegram_proxy.runtime.settings_save_flow import merge_restart_request
+
+        state = self._settings_save_state
+        if not state.runtime.is_current(request_id):
+            return
+        state.in_flight = False
+        state.restart_pending = merge_restart_request(
+            state.restart_pending,
+            str(dict(context or {}).get("restart") or ""),
+        )
+        self._flush_settings_saves_if_drained()
+
+    def _on_settings_save_failed(self, request_id: int, action: str, error: str, _context) -> None:
+        state = self._settings_save_state
+        if not state.runtime.is_current(request_id):
+            return
+        state.in_flight = False
+        from log.log import log
+
+        log(f"Telegram Proxy: не удалось сохранить настройку ({action}): {error}", "WARNING")
+        # Рестарт от прошлых удачных сохранений не теряем: они уже записаны,
+        # а работающий прокси всё ещё на старых значениях.
+        self._flush_settings_saves_if_drained()
+
+    def _on_settings_save_worker_finished(self, worker) -> None:
+        # OneShotWorkerRuntime вызывает этот обработчик только для текущего
+        # worker-а, поэтому дополнительная проверка не нужна.
+        self._settings_save_state.queue.schedule_next_after_finish(
+            worker,
+            is_current_worker_finish=lambda _runtime, _worker: True,
+            single_shot=QTimer.singleShot,
+            start=self._start_settings_save_worker,
+            queue_item=self._queue_settings_save_payload,
+            is_cleanup_in_progress=lambda: False,
+        )
+
+    def _flush_settings_saves_if_drained(self) -> None:
+        state = self._settings_save_state
+        if state.in_flight or state.queue.has_pending() or state.queue.start_scheduled:
+            return
+        restart = state.restart_pending
+        state.restart_pending = ""
+        for callback in list(state.listeners):
+            try:
+                callback(restart)
+            except Exception as exc:
+                from log.log import log
+
+                log(f"Telegram Proxy: ошибка обработчика сохранения настроек: {exc}", "WARNING")
+        if self._tray_toggle_state.pending_count > 0 and not self._tray_toggle_is_busy():
+            self._schedule_tray_toggle_start()
 
     def create_page_initial_state_worker(self, request_id: int, *, parent=None):
         from telegram_proxy.runtime.workers import TelegramProxyInitialStateWorker
@@ -257,20 +401,15 @@ class TelegramProxyFeature:
                 )
                 return
 
-            config = self.get_start_config()
+            if self.has_pending_settings_saves():
+                # Запуск прочитает настройки из хранилища, поэтому ждём,
+                # пока очередь сохранений допишет последние значения.
+                self._queue_tray_toggle()
+                return
             self._tray_start_runtime.start_qthread_worker(
                 worker_factory=lambda request_id: self._create_tray_start_worker(
                     request_id,
                     manager=manager,
-                    port=config.port,
-                    mode=config.mode,
-                    host=config.host,
-                    upstream_config=config.upstream_config,
-                    cloudflare_config=config.cloudflare_config,
-                    mtproxy_secret=config.mtproxy_secret,
-                    dc_endpoint_overrides=config.dc_endpoint_overrides,
-                    pool_size=config.pool_size,
-                    buffer_kb=config.buffer_kb,
                 ),
                 on_finished=self._on_tray_toggle_worker_finished,
                 signal_includes_request_id=False,
@@ -385,8 +524,6 @@ def build_telegram_proxy_feature() -> TelegramProxyFeature:
         get_start_config=lambda *args, **kwargs: _commands().get_start_config(*args, **kwargs),
         set_enabled=lambda *args, **kwargs: _public().set_enabled(*args, **kwargs),
         build_upstream_config=lambda *args, **kwargs: _commands().build_upstream_config(*args, **kwargs),
-        build_cloudflare_config=lambda *args, **kwargs: _commands().build_cloudflare_config(*args, **kwargs),
-        build_dc_endpoint_overrides=lambda *args, **kwargs: _commands().build_dc_endpoint_overrides(*args, **kwargs),
         load_page_initial_state=lambda *args, **kwargs: _commands().load_page_initial_state(*args, **kwargs),
         save_settings_action=lambda *args, **kwargs: _commands().save_settings_action(*args, **kwargs),
         check_relay_reachable=lambda *args, **kwargs: _commands().check_relay_reachable(*args, **kwargs),
@@ -401,7 +538,7 @@ def build_telegram_proxy_feature() -> TelegramProxyFeature:
         copy_text=lambda *args, **kwargs: _copy_text_via_qt(*args, **kwargs),
         open_log_file=lambda *args, **kwargs: _public().open_log_file(*args, **kwargs),
         open_external_link=lambda *args, **kwargs: _public().open_external_link(*args, **kwargs),
-        ensure_telegram_hosts=lambda *args, **kwargs: _public().ensure_telegram_hosts(*args, **kwargs),
+        run_telegram_hosts_action=lambda *args, **kwargs: _public().run_telegram_hosts_action(*args, **kwargs),
         run_diagnostics=lambda *args, **kwargs: _public().run_diagnostics(*args, **kwargs),
         append_log_line=lambda *args, **kwargs: _public().append_log_line(*args, **kwargs),
         consume_auto_deeplink_request=lambda *args, **kwargs: _public().consume_auto_deeplink_request(*args, **kwargs),

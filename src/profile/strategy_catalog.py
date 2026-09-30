@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 
 from core.paths import AppPaths
+from log.log import log
+from .strategy_shape import is_filter_line, is_lua_desync_line, is_range_line, strategy_shape
 from .strategy_visuals import StrategyVisual, describe_strategy_visual
 
 
@@ -15,6 +17,10 @@ class StrategyEntry:
     name: str
     args: str
     visual: StrategyVisual
+    # Составная стратегия: несколько веток --payload (см. profile.strategy_shape).
+    is_composite: bool = False
+    # --payload каждой ветки составной стратегии, для значка типов пакетов.
+    payload_scopes: tuple[str, ...] = ()
 
 
 _STRATEGY_CATALOGS_CACHE: dict[
@@ -45,6 +51,7 @@ def _tree_signature(root: Path, pattern: str = "*.txt") -> tuple[tuple[str, int,
 
 def _parse_catalog_file(path: Path, catalog_name: str) -> dict[str, StrategyEntry]:
     strategies: dict[str, StrategyEntry] = {}
+    seen_ids: set[str] = set()
     current_id: Optional[str] = None
     current_name = ""
     current_args: list[str] = []
@@ -54,14 +61,27 @@ def _parse_catalog_file(path: Path, catalog_name: str) -> dict[str, StrategyEntr
         if not current_id:
             return
         args = "\n".join(line for line in current_args if line).strip()
-        if _has_profile_scoped_lines(args.splitlines()):
+        scoped_lines = _profile_scoped_lines(args.splitlines())
+        if scoped_lines:
+            log(
+                f"StrategyCatalog: {path.name} [{current_id}] пропущена — "
+                f"строки профиля не допускаются в готовой стратегии: {', '.join(scoped_lines)}",
+                "WARNING",
+            )
             return
+        branch_problem = _branch_filter_problem(args.splitlines())
+        if branch_problem:
+            log(f"StrategyCatalog: {path.name} [{current_id}] пропущена — {branch_problem}", "WARNING")
+            return
+        shape = strategy_shape(args.splitlines())
         strategies[current_id] = StrategyEntry(
             strategy_id=current_id,
             catalog_name=catalog_name,
             name=current_name or current_id,
             args=args,
             visual=describe_strategy_visual(args),
+            is_composite=shape.composite,
+            payload_scopes=shape.payload_scopes if shape.composite else (),
         )
 
     for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -72,6 +92,13 @@ def _parse_catalog_file(path: Path, catalog_name: str) -> dict[str, StrategyEntr
         if stripped.startswith("[") and stripped.endswith("]"):
             _flush()
             current_id = stripped[1:-1].strip()
+            if current_id in seen_ids:
+                log(
+                    f"StrategyCatalog: {path.name} [{current_id}] повторяется — "
+                    "будет использована последняя копия",
+                    "WARNING",
+                )
+            seen_ids.add(current_id)
             current_name = current_id
             current_args = []
             continue
@@ -92,15 +119,56 @@ def _parse_catalog_file(path: Path, catalog_name: str) -> dict[str, StrategyEntr
     return strategies
 
 
-def _has_profile_scoped_lines(lines: list[str]) -> bool:
+def _branch_filter_problem(lines: list[str]) -> str:
+    """Почему строки ``--payload``/диапазонов недопустимы в записи ("" — допустимы).
+
+    Обычная готовая стратегия — только строки ``--lua-desync``. Внутрипрофильные
+    фильтры разрешены лишь в составной стратегии как разделители веток:
+    диапазон до первой ``--lua-desync`` — настройка profile-а, а ``--payload``
+    без второй ветки — тоже настройка profile-а, а не часть стратегии.
+    """
+    clean = [str(line or "").strip() for line in lines if str(line or "").strip()]
+    filters = [line for line in clean if is_filter_line(line)]
+    if not filters:
+        return ""
+    first_lua = next((index for index, line in enumerate(clean) if is_lua_desync_line(line)), None)
+    if first_lua is None:
+        return f"фильтры без строк --lua-desync: {', '.join(filters)}"
+    early_ranges = [line for line in clean[:first_lua] if is_range_line(line)]
+    if early_ranges:
+        return (
+            "диапазон до первой --lua-desync — это настройка profile-а, "
+            f"а не готовой стратегии: {', '.join(early_ranges)}"
+        )
+    if not strategy_shape(clean).composite:
+        return (
+            "--payload в готовой стратегии допустим только как разделитель веток "
+            f"составной стратегии: {', '.join(filters)}"
+        )
+    unknown = [line for line in clean if not (is_lua_desync_line(line) or is_filter_line(line))]
+    if unknown:
+        return f"в составной стратегии допустимы только --payload, диапазоны и --lua-desync: {', '.join(unknown)}"
+    return ""
+
+
+def _profile_scoped_lines(lines: list[str]) -> list[str]:
+    """Строки, которые относятся к профилю, а не к готовой стратегии.
+
+    Такие строки (`--new`, `--filter-*`, `--hostlist=` и т.п.) нельзя держать
+    в каталоге готовых стратегий: они меняют область действия профиля.
+    """
+    found: list[str] = []
     for raw in lines:
-        lowered = str(raw or "").strip().lower()
+        stripped = str(raw or "").strip()
+        lowered = stripped.lower()
         if not lowered:
             continue
         if lowered == "--new" or lowered.startswith("--new="):
-            return True
+            found.append(stripped)
+            continue
         if lowered.startswith("--filter-"):
-            return True
+            found.append(stripped)
+            continue
         if lowered.startswith((
             "--name",
             "--template",
@@ -116,8 +184,8 @@ def _has_profile_scoped_lines(lines: list[str]) -> bool:
             "--ipset-exclude-ip=",
             "--ipset-ip=",
         )):
-            return True
-    return False
+            found.append(stripped)
+    return found
 
 
 def load_strategy_catalogs(paths: AppPaths, engine: str) -> dict[str, dict[str, StrategyEntry]]:

@@ -278,7 +278,6 @@ def normalize_program(data: object) -> dict[str, Any]:
             defaults[SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2],
         ),
         "auto_update_enabled": as_bool(raw.get("auto_update_enabled"), defaults["auto_update_enabled"]),
-        "remove_github_api": as_bool(raw.get("remove_github_api"), defaults["remove_github_api"]),
         "discord_auto_restart": as_bool(raw.get("discord_auto_restart"), defaults["discord_auto_restart"]),
         "max_blocked": as_bool(raw.get("max_blocked"), defaults["max_blocked"]),
         "russian_state_media_blocked": as_bool(
@@ -291,6 +290,7 @@ def normalize_program(data: object) -> dict[str, Any]:
         # молча выбрасывается. Переключатель «весь трафик» именно так и
         # терялся — на экране «Вкл.», а в журнале «режим только браузер».
         "vpn_tun_mode": as_bool(raw.get("vpn_tun_mode"), defaults["vpn_tun_mode"]),
+        "last_seen_version": as_clean_str(raw.get("last_seen_version"), defaults["last_seen_version"]),
         "telegram_proxy_with_bypass": as_bool(
             raw.get("telegram_proxy_with_bypass"),
             defaults["telegram_proxy_with_bypass"],
@@ -334,6 +334,7 @@ def normalize_appearance(data: object) -> dict[str, Any]:
         ),
         "background_preset": as_str_in(raw.get("background_preset"), schema.VALID_BACKGROUND_PRESETS, defaults["background_preset"]),
         "animations_enabled": as_bool(raw.get("animations_enabled"), defaults["animations_enabled"]),
+        "live_animations_enabled": as_bool(raw.get("live_animations_enabled"), defaults["live_animations_enabled"]),
         "smooth_scroll_enabled": as_bool(raw.get("smooth_scroll_enabled"), defaults["smooth_scroll_enabled"]),
         "editor_smooth_scroll_enabled": as_bool(raw.get("editor_smooth_scroll_enabled"), defaults["editor_smooth_scroll_enabled"]),
         "sidebar_icon_style": as_str_in(
@@ -353,6 +354,7 @@ def normalize_warnings(data: object) -> dict[str, Any]:
         "disable_kaspersky_warning": as_bool(raw.get("disable_kaspersky_warning"), defaults["disable_kaspersky_warning"]),
         "isp_dns_info_shown": as_bool(raw.get("isp_dns_info_shown"), defaults["isp_dns_info_shown"]),
         "tg_proxy_deeplink_done": as_bool(raw.get("tg_proxy_deeplink_done"), defaults["tg_proxy_deeplink_done"]),
+        "onboarding_tour_done": as_bool(raw.get("onboarding_tour_done"), defaults["onboarding_tour_done"]),
     }
 
 
@@ -401,15 +403,13 @@ def normalize_telegram_proxy(data: object) -> dict[str, Any]:
         "buffer_kb": as_int(raw.get("buffer_kb"), defaults["buffer_kb"], minimum=4, maximum=4096),
         "fake_tls_domain": normalize_domain(raw.get("fake_tls_domain")),
         "proxy_protocol": as_bool(raw.get("proxy_protocol"), defaults["proxy_protocol"]),
+        "auto_deeplink": as_bool(raw.get("auto_deeplink"), defaults["auto_deeplink"]),
     }
 
 
 def normalize_dns(data: object) -> dict[str, Any]:
     raw = as_dict(data)
-    defaults = schema.default_dns()
     return {
-        "force_dns_enabled": as_bool(raw.get("force_dns_enabled"), defaults["force_dns_enabled"]),
-        "dns_crash_count": as_int(raw.get("dns_crash_count"), defaults["dns_crash_count"], minimum=0),
         "custom_servers": normalize_custom_dns_servers(raw.get("custom_servers")),
     }
 
@@ -424,7 +424,6 @@ def normalize_hosts(data: object) -> dict[str, Any]:
         if service_name and profile_name:
             selection[service_name] = profile_name
     return {
-        "bootstrap_signature": as_nullable_str(raw.get("bootstrap_signature")),
         "active_domains": unique_str_list(raw.get("active_domains")),
         "selection": selection,
     }
@@ -497,6 +496,73 @@ def normalize_profile_strategy_state(data: object) -> dict[str, Any]:
     }
 
 
+def normalize_user_fakes(data: object) -> dict[str, Any]:
+    """Свои фейки: строка без обязательных полей или с чужим форматом отбрасывается.
+
+    Правила имени и файла — те же, что проверяет ``fakes.user_fakes`` при
+    добавлении, поэтому здесь отсекается только испорченная запись.
+    """
+    from fakes.user_fakes import normalize_user_fake_row
+
+    raw = as_dict(data)
+    fakes: dict[str, Any] = {}
+    for raw_name, raw_row in as_dict(raw.get("fakes")).items():
+        name = str(raw_name or "").strip()
+        row = normalize_user_fake_row(name, raw_row)
+        if row is not None:
+            fakes[name] = row
+    return {
+        "version": 1,
+        "fakes": fakes,
+    }
+
+
+def _normalize_remote_preset_binding(data: object) -> dict[str, Any] | None:
+    raw = as_dict(data)
+    url = str(raw.get("url") or "").strip()
+    if not url:
+        return None
+    return {
+        "url": url,
+        "etag": str(raw.get("etag") or ""),
+        "last_modified": str(raw.get("last_modified") or ""),
+        "synced_hash": str(raw.get("synced_hash") or ""),
+        "checked_at": str(raw.get("checked_at") or ""),
+        "updated_at": str(raw.get("updated_at") or ""),
+        "error": str(raw.get("error") or ""),
+        "auto": bool(raw.get("auto", True)),
+        "detached": bool(raw.get("detached", False)),
+    }
+
+
+def normalize_remote_presets(data: object) -> dict[str, Any]:
+    raw = as_dict(data)
+    result: dict[str, Any] = {}
+    for scope in ("winws2", "winws1"):
+        scope_bindings: dict[str, Any] = {}
+        for file_name, binding in as_dict(raw.get(scope)).items():
+            key = str(file_name or "").strip()
+            normalized = _normalize_remote_preset_binding(binding)
+            if key and normalized is not None:
+                scope_bindings[key] = normalized
+        result[scope] = scope_bindings
+    return result
+
+
+def normalize_preset_registry(data: object) -> dict[str, Any]:
+    raw = as_dict(data)
+    result: dict[str, Any] = {}
+    for scope in ("winws2", "winws1"):
+        entries: dict[str, str] = {}
+        for file_name, uid in as_dict(raw.get(scope)).items():
+            key = str(file_name or "").strip()
+            value = str(uid or "").strip()
+            if key and value:
+                entries[key] = value
+        result[scope] = entries
+    return result
+
+
 def normalize_user_profiles(data: object) -> dict[str, Any]:
     raw = as_dict(data)
     profiles: dict[str, Any] = {}
@@ -561,16 +627,25 @@ def normalize_updater(data: object) -> dict[str, Any]:
     }
 
 
-def normalize_blockcheck_scan_resume(data: object) -> dict[str, Any]:
-    raw = as_dict(data)
-    domains: dict[str, dict[str, int]] = {}
-    for raw_key, raw_value in as_dict(raw.get("domains")).items():
+def normalize_blockcheck_strategy_history(data: object) -> dict[str, Any]:
+    history: dict[str, dict[str, Any]] = {}
+    for raw_key, raw_value in as_dict(data).items():
         key = as_clean_str(raw_key).lower()
         if not key:
             continue
-        value_raw = as_dict(raw_value)
-        domains[key] = {"next_index": as_int(value_raw.get("next_index"), 0, minimum=0)}
-    return {"domains": domains}
+        entry = as_dict(raw_value)
+        confirmed = [item for item in unique_str_list(entry.get("confirmed")) if item]
+        failed: dict[str, float] = {}
+        for raw_id, raw_time in as_dict(entry.get("failed")).items():
+            strategy_id = as_clean_str(raw_id)
+            if not strategy_id:
+                continue
+            try:
+                failed[strategy_id] = max(float(raw_time), 0.0)
+            except (TypeError, ValueError):
+                continue
+        history[key] = {"confirmed": confirmed, "failed": failed}
+    return history
 
 
 def normalize_blockcheck(data: object) -> dict[str, Any]:
@@ -581,7 +656,7 @@ def normalize_blockcheck(data: object) -> dict[str, Any]:
             for item in unique_str_list(raw.get("user_domains"))
             if normalize_lookup_key(item)
         ],
-        "scan_resume": normalize_blockcheck_scan_resume(raw.get("scan_resume")),
+        "strategy_history": normalize_blockcheck_strategy_history(raw.get("strategy_history")),
     }
 
 
@@ -625,6 +700,9 @@ def normalize_settings(data: object) -> dict[str, Any]:
         "ui_state": normalize_ui_state(raw.get("ui_state")),
         "profile_strategy_state": normalize_profile_strategy_state(raw.get("profile_strategy_state")),
         "user_profiles": normalize_user_profiles(raw.get("user_profiles")),
+        "user_fakes": normalize_user_fakes(raw.get("user_fakes")),
+        "remote_presets": normalize_remote_presets(raw.get("remote_presets")),
+        "preset_registry": normalize_preset_registry(raw.get("preset_registry")),
         "updater": normalize_updater(raw.get("updater")),
         "blockcheck": normalize_blockcheck(raw.get("blockcheck")),
         "folders": normalize_folders(raw.get("folders")),

@@ -6,18 +6,19 @@ import time
 from typing import Callable
 
 from core.paths import AppPaths
-from settings.schema import SETTINGS_DIR_NAME, SETTINGS_FILE_NAME
 from settings.mode import (
     DEFAULT_PRESET_FILE_NAME_BY_ENGINE,
     ENGINE_BY_LAUNCH_METHOD,
     normalize_launch_method,
 )
+from settings import store as settings_store
 
 from presets.cache_signatures import path_stat_signature
 from presets.file_store import PresetFileStore
 from presets.models import PresetManifest
 from presets.selection_service import PresetSelectionService
 from profile.launch_validation import preset_has_enabled_profiles_for_launch
+from utils.atomic_text import read_preset_file_text
 
 
 class PresetModeError(RuntimeError):
@@ -132,7 +133,7 @@ class PresetModeCoordinator:
             text = ""
             t_read = time.perf_counter()
             try:
-                text = preset_path.read_text(encoding="utf-8").strip()
+                text = read_preset_file_text(preset_path).strip()
             except Exception as exc:
                 raise PresetModeError(f"Failed to read selected source preset: {exc}") from exc
             self._emit_timing(timing_callback, f"{label}.read_preset_text", t_read)
@@ -297,13 +298,11 @@ class PresetModeCoordinator:
         except Exception:
             return None
 
-        settings_path = self._app_paths.user_root / SETTINGS_DIR_NAME / SETTINGS_FILE_NAME
-
         return (
             self._normalize_method(launch_method),
             engine,
             candidate.lower(),
-            *path_stat_signature(settings_path),
+            settings_store.get_settings_revision(),
             *path_stat_signature(preset_path),
         )
 

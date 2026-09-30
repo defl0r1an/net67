@@ -27,12 +27,6 @@ class ControlTopSummaryPlanTests(unittest.TestCase):
         self.assertEqual(build_profiles_value(None, language="ru"), "Проверяем...")
         self.assertEqual(build_profiles_value(None, language="en"), "Checking...")
 
-    def test_premium_summary_keeps_free_and_premium_labels_as_is(self) -> None:
-        from presets.ui.control.top_summary_plan import build_premium_summary
-
-        self.assertEqual(build_premium_summary(False, None, language="ru"), ("Free", "Базовые функции"))
-        self.assertEqual(build_premium_summary(True, 12, language="ru"), ("Premium", "Осталось 12 дней"))
-        self.assertEqual(build_premium_summary(True, 12, language="en"), ("Premium", "12 days left"))
 
     def test_top_summary_items_have_accent_icons(self) -> None:
         with patch.dict("os.environ", {"QT_QPA_PLATFORM": "offscreen"}):
@@ -40,7 +34,7 @@ class ControlTopSummaryPlanTests(unittest.TestCase):
             from presets.ui.control.top_summary_widget import ControlTopSummaryWidget
 
             self.__class__._app = QApplication.instance() or QApplication([])
-            widget = ControlTopSummaryWidget(language="ru", mode_value="Zapret 2")
+            widget = ControlTopSummaryWidget(language="ru", mode_value="net67 v2")
 
             for item in (
                 widget.preset_item,
@@ -110,7 +104,7 @@ class ControlTopSummaryPlanTests(unittest.TestCase):
             from presets.ui.control.top_summary_widget import ControlTopSummaryWidget
 
             self.__class__._app = QApplication.instance() or QApplication([])
-            widget = ControlTopSummaryWidget(language="ru", mode_value="Zapret 2")
+            widget = ControlTopSummaryWidget(language="ru", mode_value="net67 v2")
             widget.set_preset("Default")
             widget.preset_item.set_texts = Mock(side_effect=AssertionError("same preset must not repaint summary"))
             widget.profiles_item.set_texts = Mock(side_effect=AssertionError("same preset must not repaint summary"))
@@ -130,7 +124,7 @@ class ControlTopSummaryPlanTests(unittest.TestCase):
             from presets.ui.control.top_summary_widget import ControlTopSummaryWidget
 
             self.__class__._app = QApplication.instance() or QApplication([])
-            widget = ControlTopSummaryWidget(language="ru", mode_value="Zapret 2")
+            widget = ControlTopSummaryWidget(language="ru", mode_value="net67 v2")
             widget.set_profile_count(3)
             widget.preset_item.set_texts = Mock(side_effect=AssertionError("same profile count must not repaint summary"))
             widget.profiles_item.set_texts = Mock(side_effect=AssertionError("same profile count must not repaint summary"))
@@ -150,7 +144,7 @@ class ControlTopSummaryPlanTests(unittest.TestCase):
             from presets.ui.control.top_summary_widget import ControlTopSummaryWidget
 
             self.__class__._app = QApplication.instance() or QApplication([])
-            widget = ControlTopSummaryWidget(language="ru", mode_value="Zapret 2")
+            widget = ControlTopSummaryWidget(language="ru", mode_value="net67 v2")
             widget.profiles_item.setVisible = Mock()
 
             widget.set_profiles_visible(False)

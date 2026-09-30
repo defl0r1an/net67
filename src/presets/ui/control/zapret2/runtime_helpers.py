@@ -65,6 +65,7 @@ def apply_profile_language(
     internet_cleanup_card,
     folder_card,
     additional_settings_notice,
+    fakes_card=None,
     program_settings_card,
     auto_dpi_toggle,
     gui_autostart_toggle,
@@ -171,6 +172,25 @@ def apply_profile_language(
         description=folder_desc,
     )
 
+
+    if fakes_card is not None:
+        fakes_desc = tr_catalog(
+            "page.winws2_control.button.fakes.desc",
+            language=language,
+            default="Встроенные фейки winws2 и свои .bin-файлы для стратегий",
+        )
+        fakes_card.setTitle(tr_catalog("page.winws2_control.button.fakes", language=language, default="Фейки"))
+        fakes_card.setContent(fakes_desc)
+        set_button_text_accessibility(
+            fakes_card.button,
+            tr_catalog("page.winws2_control.button.open", language=language, default="Открыть"),
+            accessible_name=tr_catalog(
+                "page.winws2_control.button.fakes.accessible_name",
+                language=language,
+                default="Открыть страницу фейков",
+            ),
+            description=fakes_desc,
+        )
 
     update_stop_button_text()
 

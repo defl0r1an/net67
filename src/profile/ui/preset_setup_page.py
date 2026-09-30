@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import QTimer, QUrl
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtCore import QTimer
 
 from log.log import log
 from profile.match_filters import filter_values
 from profile.key_resolution import profile_reference_key
 from profile.list_apply_signature import profile_payload_apply_signature
-from profile.ui.profile_context_menu import ProfileContextMenuActions, show_profile_context_menu
+from profile.ui.profile_context_menu import (
+    ProfileContextMenuActions,
+    build_profile_context_menu,
+    show_profile_context_menu,
+)
+from ui.onboarding.menu_preview import create_menu_preview, place_menu_preview, remove_menu_preview
 from profile.ui.profile_folder_menu import show_profile_folder_menu
 from profile.ui.profile_list_filter_state import ProfileListFilterState
 from profile.ui.profile_payload_controller import (
@@ -21,13 +25,12 @@ from profile.ui.profile_folder_controller import ProfileFolderController
 from profile.ui.profiles_list import ProfilesList
 from profile.ui.shell import build_profile_shell, wire_profile_search_keyboard_activation
 from profile.ui.user_profile_dialog import CreateUserProfileDialog
-from qfluentwidgets import BodyLabel, InfoBar, PushButton
+from qfluentwidgets import BodyLabel, InfoBar
 from settings.mode import ZAPRET1_MODE, ZAPRET2_MODE
 from ui.fluent_dialog import MessageBox
 from ui.pages.base_page import BasePage
 from app.ui_texts import tr as tr_catalog
-from config.urls import PROFILE_INFO_URL
-from ui.accessibility import set_control_accessibility, set_state_text
+from ui.accessibility import set_control_accessibility
 from ui.latest_value_worker_state import LatestValueWorkerState
 from ui.message_box_accessibility import set_message_box_button_accessibility
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
@@ -334,6 +337,60 @@ class PresetSetupPageBase(BasePage):
         """Cleanup-флаг; чтение устойчиво к duck-typed стабам из тестов."""
         return bool(self.__dict__.get("_cleanup_in_progress", False))
 
+    def onboarding_target(self, name: str):
+        if name == "profiles_list":
+            profiles_list = self._profiles_list_widget()
+            if profiles_list is not None:
+                return profiles_list
+            return self.__dict__.get("_empty_state_label")
+        if name == "first_profile":
+            profiles_list = self._profiles_list_widget()
+            return profiles_list.first_visible_profile_row() if profiles_list is not None else None
+        if name == "profiles_toolbar":
+            toolbar = self.__dict__.get("_toolbar_actions_bar")
+            return getattr(toolbar, "container", None)
+        if name == "profile_menu":
+            profiles_list = self._profiles_list_widget()
+            preview = self.__dict__.get("_onboarding_menu_preview")
+            found = profiles_list.first_visible_profile(prefer_enabled_in_preset=True) if profiles_list is not None else None
+            if found is None or preview is None:
+                return None
+            row = found[1]
+            # Окно могли растянуть: держим меню рядом со строкой.
+            place_menu_preview(preview, *row)
+            return [row, preview]
+        return None
+
+    def onboarding_set_state(self, state: str | None) -> None:
+        """Тур показывает настоящее меню первого профиля (см. ui.onboarding.menu_preview)."""
+        remove_menu_preview(self.__dict__.pop("_onboarding_menu_preview", None))
+        if state != "profile_menu":
+            return
+        profiles_list = self._profiles_list_widget()
+        found = profiles_list.first_visible_profile(prefer_enabled_in_preset=True) if profiles_list is not None else None
+        if found is None:
+            return
+        profile_key, row = found
+        item = profiles_list.profile_item_for_key(profile_key)
+        if item is None:
+            return
+        menu, _actions = build_profile_context_menu(parent=self, item=item)
+        preview = create_menu_preview(self, menu)
+        if preview is not None:
+            self._onboarding_menu_preview = preview
+            place_menu_preview(preview, *row)
+
+    def onboarding_open_subpage(self, key: str) -> bool:
+        """Тур открывает профиль со списком — как обычный клик по профилю."""
+        if key != "profile_setup":
+            return False
+        profiles_list = self._profiles_list_widget()
+        profile_key = profiles_list.first_profile_key_with_list() if profiles_list is not None else ""
+        if not profile_key:
+            return False
+        self._open_profile_setup_by_reference(profile_key)
+        return True
+
     def _profiles_list_widget(self) -> ProfilesList | None:
         """Виджет списка; чтение устойчиво к duck-typed стабам из тестов."""
         return self.__dict__.get("_profiles_list")
@@ -555,7 +612,6 @@ class PresetSetupPageBase(BasePage):
             return
         self._last_profile_payload_apply_signature = apply_signature
         self._apply_selected_preset_title(payload)
-        self._show_profile_normalization_info(payload)
         if not payload.items:
             self._show_empty_state(
                 "В выбранном пресете нет профилей, которые можно показать на этой странице. "
@@ -646,32 +702,6 @@ class PresetSetupPageBase(BasePage):
             extra=extra,
             important=label in {"profile_ui.apply_payload.total", "profile_ui.profile_list.build"},
         )
-
-    def _show_profile_normalization_info(self, payload) -> None:
-        split_count = int(getattr(payload, "normalized_split_profiles", 0) or 0)
-        created_count = int(getattr(payload, "normalized_created_profiles", 0) or 0)
-        if split_count <= 0 or created_count <= 0:
-            return
-        is_visible = getattr(self, "isVisible", None)
-        if callable(is_visible):
-            try:
-                if not bool(is_visible()):
-                    return
-            except RuntimeError:
-                return
-        try:
-            InfoBar.info(
-                title="Profile-ы разделены",
-                content=(
-                    f"Найдено сложных profile-ов: {split_count}. "
-                    f"Создано отдельных profile-ов: {created_count}. "
-                    "Теперь каждому списку можно менять стратегию отдельно."
-                ),
-                parent=self.window(),
-                duration=6500,
-            )
-        except Exception as exc:
-            log(f"{self.__class__.__name__}: не удалось показать уведомление о разделении profile-ов: {exc}", "DEBUG")
 
     def _apply_selected_preset_title(self, payload) -> None:
         self._displayed_preset_file_name = str(
@@ -1449,8 +1479,8 @@ class PresetSetupPageBase(BasePage):
 
     def _show_profile_request_form_open_error(self, error: str) -> None:
         InfoBar.warning(
-            title="Не удалось открыть GitHub",
-            content=f"Не удалось открыть форму GitHub:\n{error}",
+            title="Не удалось открыть Forgejo",
+            content=f"Не удалось открыть форму Forgejo:\n{error}",
             parent=self.window(),
         )
 
@@ -1469,16 +1499,9 @@ class PresetSetupPageBase(BasePage):
             "чтобы движок пропустил этот профиль при запуске.",
             self,
         )
-        site_button_text = "Открыть сайт с профилями"
-        site_button = PushButton(site_button_text)
-        site_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(PROFILE_INFO_URL)))
-        set_state_text(site_button, site_button_text)
-        set_control_accessibility(
-            site_button,
-            name=site_button_text,
-            description="Открывает сайт, где можно посмотреть и скачать профили для пресетов.",
-        )
-        box.buttonLayout.insertWidget(0, site_button)
+        # Кнопка «Открыть сайт с профилями» вела на PROFILE_INFO_URL, а он
+        # пуст с тех пор, как из проекта ушли ресурсы автора исходника:
+        # нажатие не открывало ничего. Своего сайта с профилями у net67 нет.
         box.cancelButton.hide()
         set_message_box_button_accessibility(
             box,
@@ -1537,4 +1560,3 @@ def _user_profile_id_from_item(profile_key: str, item) -> str:
     if key.startswith("template:user:"):
         return key.split("template:user:", 1)[1].strip()
     return ""
-

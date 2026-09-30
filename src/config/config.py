@@ -15,7 +15,7 @@ def is_dev_build_channel() -> bool:
     return str(CHANNEL or "").strip().lower() == CHANNEL_DEV
 
 # Настройка количества сохраняемых лог-файлов
-MAX_LOG_FILES = 50           # zapret_log_*.txt - основные логи приложения
+MAX_LOG_FILES = 50           # net67_log_*.txt (и прежние zapret_log_*.txt) - основные логи приложения
 MAX_DEBUG_LOG_FILES = 20     # zapret_winws2_debug_*.log - debug логи winws2
 
 # Discord TCP конфигурации

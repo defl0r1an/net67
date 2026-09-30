@@ -15,6 +15,7 @@ def build_window_feature_deps(window_deps: FeatureWindowDeps, *, appearance_acti
             startup_state=window_deps.startup_state,
             mark_stop_and_exit_requested=window_deps.mark_stop_and_exit_requested,
         ),
+
         tray=TrayFeatureDeps(
             window_port=window_deps.tray_window_port,
             startup_state=window_deps.startup_state,

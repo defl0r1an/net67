@@ -1,0 +1,24 @@
+{
+  "name": "OpenRouter",
+  "category": "ai",
+  "icon": "fa5s.route",
+  "icon_color": "#6566f1",
+  "sort_order": 3,
+  "domains": [
+    {
+      "host": "openrouter.ai",
+      "ips": {
+        "xbox_dns": "87.228.47.198",
+        "xbox_dns_old": "45.155.204.190",
+        "comss_dns": [
+          "45.88.174.254",
+          "89.150.59.128"
+        ],
+        "malw_dns": [
+          "104.18.2.115",
+          "104.18.3.115"
+        ]
+      }
+    }
+  ]
+}

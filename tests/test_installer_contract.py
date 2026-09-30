@@ -63,9 +63,13 @@ class NamesMatchTheApplicationTests(unittest.TestCase):
         self.assertIn(AUTOSTART_TASK_NAME, _iss())
 
     def test_telegram_proxy_service_name(self) -> None:
-        from telegram_proxy.service import TG_SERVICE_NAME
+        """Удаление снимает службу Telegram-прокси от старых версий.
 
-        self.assertIn(TG_SERVICE_NAME, _iss())
+        Модуль telegram_proxy.service, который её ставил, ушёл вместе с
+        переходом на прокси из zapret, и имя теперь живёт только здесь.
+        Строка в установщике — страховка для машин, где служба осталась.
+        """
+        self.assertIn("delete net67TelegramProxy", _iss())
 
     def test_windivert_service_names(self) -> None:
         """Движок переименовывает драйвер, поэтому вариантов несколько."""

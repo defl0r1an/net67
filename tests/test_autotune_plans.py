@@ -264,10 +264,10 @@ class NamedProfileApplyTests(unittest.TestCase):
 
 
 class ScanAdapterTests(unittest.TestCase):
-    """Перебор берёт синхронный сканер, а не Qt-обёртку.
+    """Перебор идёт тем же движком, что и вкладка «Подбор стратегии».
 
-    Автоподбор идёт в обычном потоке, без цикла событий: сигналы Qt там
-    доставлять некому.
+    Старый StrategyScanner исходный проект удалил; автоподбор, звавший
+    его, падал бы на импорте. Движок блокирующий, Qt-сигналы ему не нужны.
     """
 
     def _report(self, *strategies):
@@ -277,30 +277,37 @@ class ScanAdapterTests(unittest.TestCase):
             working_strategies=[
                 SimpleNamespace(strategy_args=args, strategy_name=name, time_ms=ms)
                 for name, args, ms in strategies
-            ]
+            ],
+            fatal_error="",
         )
 
-    def _run(self, report):
-        import blockcheck.strategy_scanner as scanner_module
+    def _run(self, report=None, *, error=None):
+        from unittest import mock
+
+        import blockcheck.strategy_search.engine as engine_module
+        import blockcheck.strategy_search.environment as environment_module
         from autotune.scan import run_strategy_scan
 
-        original = scanner_module.StrategyScanner
-        try:
-            class _Fake:
-                def __init__(self, **kwargs):
-                    self.kwargs = kwargs
+        seen = {}
 
-                def run(self):
-                    return report
+        def _search(request, *, env, events, on_created=None):
+            seen["request"] = request
+            # Сайт открывается и без обхода — автоподбору подбирать нечего.
+            seen["continue"] = events.ask_continue("сайт открывается без обхода")
+            if error is not None:
+                raise error
+            return report
 
-            scanner_module.StrategyScanner = _Fake
-            return run_strategy_scan("youtube.com", "tcp_https", shutdown_sync=lambda **k: None)
-        finally:
-            scanner_module.StrategyScanner = original
+        with (
+            mock.patch.object(engine_module, "run_strategy_search", side_effect=_search),
+            mock.patch.object(environment_module, "RealEnvironment", side_effect=lambda **kwargs: kwargs),
+        ):
+            lines = run_strategy_scan("youtube.com", "tcp_https", shutdown_sync=lambda **k: None)
+        return lines, seen
 
     def test_fastest_working_strategy_wins(self) -> None:
         """Порядок в отчёте — порядок проверки, а не качество."""
-        lines = self._run(
+        lines, seen = self._run(
             self._report(
                 ("медленная", "--lua-desync=slow", 900.0),
                 ("быстрая", "--lua-desync=fast", 120.0),
@@ -308,24 +315,17 @@ class ScanAdapterTests(unittest.TestCase):
         )
 
         self.assertEqual(lines, ["--lua-desync=fast"])
+        self.assertEqual(seen["request"].target, "youtube.com")
+        self.assertEqual(seen["request"].scan_protocol, "tcp_https")
+        self.assertFalse(seen["continue"])
 
     def test_nothing_working_gives_empty(self) -> None:
-        self.assertEqual(self._run(self._report()), [])
+        lines, _seen = self._run(self._report())
+        self.assertEqual(lines, [])
 
     def test_scanner_failure_is_not_fatal(self) -> None:
         """Упавший перебор не должен ронять запуск приложения."""
-        import blockcheck.strategy_scanner as scanner_module
-        from autotune.scan import run_strategy_scan
-
-        original = scanner_module.StrategyScanner
-        try:
-            def _boom(**kwargs):
-                raise RuntimeError("движок занят")
-
-            scanner_module.StrategyScanner = _boom
-            lines = run_strategy_scan("youtube.com", "tcp_https", shutdown_sync=lambda **k: None)
-        finally:
-            scanner_module.StrategyScanner = original
+        lines, _seen = self._run(error=RuntimeError("движок занят"))
 
         self.assertEqual(lines, [])
 

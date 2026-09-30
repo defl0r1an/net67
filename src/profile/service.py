@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from copy import deepcopy
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
@@ -12,7 +11,7 @@ import time
 from folders.defaults import classify_profile_folder
 from log.log import log
 from presets.cache_signatures import path_cache_signature
-from settings.mode import DEFAULT_LAUNCH_METHOD, PRESET_LAUNCH_METHODS, engine_for_launch_method, normalize_launch_method
+from settings.mode import DEFAULT_LAUNCH_METHOD, ENGINE_WINWS2, PRESET_LAUNCH_METHODS, engine_for_launch_method, normalize_launch_method
 from settings.store import (
     get_profile_identity_registry,
     get_user_profiles_revision,
@@ -20,7 +19,13 @@ from settings.store import (
 )
 from ui.performance_metrics import log_ui_timing_since
 
-from .derived_cache import PresetSourcesCache, ProfileDerivedCache, profile_raw_text
+from .derived_cache import (
+    PresetSourcesCache,
+    ProfileDerivedCache,
+    profile_raw_text,
+    profile_strategy_shape,
+    strategy_identity_lines,
+)
 from .folders import (
     load_profile_folder_state,
     materialize_profile_folder_items,
@@ -50,8 +55,7 @@ from .filter_switch import (
     filter_kinds_without_preset_duplicates,
     resolve_filter_kind_switch,
 )
-from .models import EngineName, Preset, Profile, ProfileSegment, build_profile_logical_key
-from .normalizer import normalize_preset_profiles
+from .models import EngineName, Preset, Profile, build_profile_logical_key
 from .parser import parse_preset_text
 from .serializer import (
     append_profile_from_template,
@@ -61,12 +65,13 @@ from .serializer import (
     with_profile_enabled,
     with_profile_moved,
     with_profile_raw_text,
-    with_profile_strategy_lines,
+    with_profile_ready_strategy,
     with_profile_user_match,
 )
 from .setup_match_text import build_profile_setup_match_tab_text
 from .strategy_state import ProfileStrategyState, ProfileStrategyStateStore
 from .strategy_catalog import StrategyEntry, load_strategy_catalogs_with_signature
+from .strategy_shape import composite_identity, strategy_shape
 from .state import (
     ProfileListFileEditorState,
     ProfileListItem,
@@ -79,6 +84,7 @@ from .user_profiles import create_user_profile, delete_user_profile, update_user
 from .editable_settings import (
     EditableProfileSettings,
     filter_value_is_file_reference,
+    new_profile_insert_index,
     normalize_filter_value,
     read_editable_profile_settings,
     with_editable_profile,
@@ -94,6 +100,14 @@ class _SelectedPresetSnapshot:
     revision: tuple[object, ...]
     preset: Preset
     manifest: object
+
+
+def _identity_entry(profile: Profile) -> dict[str, str]:
+    """Запись реестра идентичности — как в _update_identity_registry_for_edit."""
+    return {
+        "name": str(profile.name or "").strip(),
+        "sig": str(build_profile_logical_key(profile.match_signature) or "").strip(),
+    }
 
 
 class ProfilePresetService:
@@ -174,10 +188,22 @@ class ProfilePresetService:
                 for profile in preset.profiles
             ]
             resolution = resolve_profile_identities(entries, registry)
+            legacy_key_mapping: dict[str, str] = {}
             for profile, uid in zip(preset.profiles, resolution.uids):
+                legacy_key = str(profile.persistent_key or "").strip()
+                if legacy_key and not legacy_key.startswith("uid:") and legacy_key != uid:
+                    legacy_key_mapping[legacy_key] = uid
                 profile.persistent_key = uid
             if resolution.registry != normalize_identity_registry(registry):
                 set_profile_identity_registry(self._engine, resolution.registry)
+            if legacy_key_mapping:
+                # Мета, сохранённая до появления uid, ключевалась контентными
+                # ключами парсера (name:/sig:) — переносим её на uid, чтобы
+                # переименование профиля больше ничего не теряло.
+                from profile.folders import migrate_profile_item_keys
+
+                migrate_profile_item_keys(legacy_key_mapping)
+                self._state_store.migrate_profile_keys(legacy_key_mapping)
             if resolution.new_uids:
                 materialize_profile_folder_items(
                     {
@@ -198,13 +224,92 @@ class ProfilePresetService:
     ) -> None:
         source_text = serialize_preset(preset)
         snapshot = self._selected_preset_snapshot
-        if snapshot is not None and serialize_preset(snapshot.preset) == source_text:
+        if (
+            snapshot is not None
+            and serialize_preset(snapshot.preset) == source_text
+            and self._snapshot_matches_disk(snapshot)
+        ):
             return
         self._save_selected_preset_source(source_text, content_change_kind=content_change_kind)
         if str(content_change_kind or "").strip() == "strategy_only" and str(changed_profile_key or "").strip():
             self._refresh_strategy_only_snapshots(str(changed_profile_key or "").strip())
             return
         self._invalidate_selected_preset_snapshot()
+
+    def _commit_preset(
+        self,
+        preset: Preset,
+        *,
+        content_change_kind: str = "",
+        changed_profile_key: str = "",
+        expect=None,
+    ) -> str:
+        """Записать пресет и подтвердить результат чтением файла.
+
+        Единственная точка записи мутаций профиля. `expect` получает
+        перечитанный пресет и возвращает причину расхождения ("" — совпало):
+        без такой проверки «успех» означал бы лишь «мы попросили записать»,
+        и любой молчаливый no-op оставлял UI в состоянии, которого нет на диске.
+        """
+        self.save_selected_preset(
+            preset,
+            content_change_kind=content_change_kind,
+            changed_profile_key=changed_profile_key,
+        )
+        if expect is None:
+            return ""
+        try:
+            stored = self._read_stored_preset()
+        except Exception as exc:
+            log(f"ProfilePresetService: не удалось перечитать пресет после записи: {exc}", "ERROR")
+            return f"reload_failed_after_write: {exc}"
+        reason = str(expect(stored) or "").strip()
+        if reason:
+            log(f"ProfilePresetService: запись пресета не подтверждена: {reason}", "ERROR")
+        return reason
+
+    def edit_selected_preset(self, edit, *, content_change_kind: str = "preset_structure") -> tuple[str, Any]:
+        """Правка выбранного пресета внешней фичей через общий путь записи.
+
+        `edit(preset)` получает текущий пресет (его нельзя менять на месте) и
+        возвращает `(новый_пресет, результат, expect)`. Запись идёт через
+        `_commit_preset`: проверка перечитыванием файла и сброс снапшотов —
+        как у правок со страницы profile-ов. Неподтверждённая запись —
+        исключение, а не молчаливый «успех».
+        """
+        preset, manifest = self.load_selected_preset()
+        updated, result, expect = edit(preset)
+        failure = self._commit_preset(updated, content_change_kind=content_change_kind, expect=expect)
+        if failure:
+            raise RuntimeError(f"Пресет не сохранён: {failure}")
+        return str(getattr(manifest, "file_name", "") or ""), result
+
+    def _read_stored_preset(self) -> Preset:
+        """Пресет прямо из файла, без кэшей и перештамповки идентичностей.
+
+        Верификация записи обязана смотреть на диск, но не должна двигать
+        реестр идентичности: его обновляет вызывающая мутация.
+        """
+        source_text, manifest = self._presets.read_selected_preset_source(self._launch_method)
+        return parse_preset_text(
+            source_text,
+            engine=self._engine,
+            source_name=str(getattr(manifest, "file_name", "") or ""),
+        )
+
+    def _snapshot_matches_disk(self, snapshot: _SelectedPresetSnapshot) -> bool:
+        """Отражает ли снапшот в памяти текущее содержимое файла.
+
+        Пропуск записи опирается на сравнение с этим снапшотом, поэтому его
+        расхождение с диском (внешняя правка файла, неудачная предыдущая
+        запись) превращало «нечего писать» в молчаливую потерю изменений.
+        """
+        try:
+            revision, _manifest, _source_text = self._selected_preset_revision()
+        except Exception as exc:
+            log(f"profile_feature.save_selected_preset.revision_check_failed: {exc}", "DEBUG")
+            return False
+        return snapshot.revision == revision
 
     def _save_selected_preset_source(self, source_text: str, *, content_change_kind: str = "") -> None:
         save = self._presets.save_selected_preset_source
@@ -333,23 +438,10 @@ class ProfilePresetService:
         templates = self._load_profile_templates()
         self._log_timing("profile_feature.templates.load", templates_started_at)
 
-        normalize_started_at = time.perf_counter()
-        normalization = normalize_preset_profiles(
-            preset,
-            preserved_match_signatures=tuple(profile.match_signature for profile in templates.values()),
-        )
-        self._log_timing("profile_feature.profiles.normalize", normalize_started_at)
-        if normalization.changed:
-            preset = normalization.preset
-            # Нормализация пере-парсит пресет и возвращает контентные ключи —
-            # возвращаем профилям стабильные uid из реестра.
-            self._restamp_profile_identities(preset)
-            self._selected_preset_snapshot = _SelectedPresetSnapshot(
-                revision=preset_revision,
-                preset=preset,
-                manifest=manifest,
-            )
-
+        # Список показывает profile-ы ровно такими, как они записаны в файле.
+        # Раньше profile с несколькими hostlist/ipset здесь молча разрезался,
+        # разрез попадал в снапшот под неизменной ревизией файла и первая же
+        # посторонняя правка записывала его на диск (теряя --name и *-exclude*).
         catalogs_started_at = time.perf_counter()
         catalogs_signature, catalogs = load_strategy_catalogs_with_signature(self._app_paths, self._engine)
         self._log_timing("profile_feature.strategy_catalogs.load", catalogs_started_at)
@@ -385,8 +477,6 @@ class ProfilePresetService:
             items=tuple(items),
             selected_preset_file_name=str(getattr(manifest, "file_name", "") or ""),
             selected_preset_name=str(getattr(manifest, "name", "") or ""),
-            normalized_split_profiles=normalization.split_profile_count,
-            normalized_created_profiles=normalization.created_profile_count,
         )
         self._profile_list_snapshot = payload
         self._profile_list_snapshot_revision = list_revision
@@ -521,18 +611,7 @@ class ProfilePresetService:
             user_template_key=getattr(source, "user_template_key", ""),
             resolved_display_name=getattr(source, "resolved_display_name", ""),
         )
-        strategy_branches = core.strategy_branches_with_match
-        current_branch = strategy_branches[0] if strategy_branches else None
-        current_strategy_id = (
-            str(current_branch.strategy_id or "").strip()
-            if current_branch is not None
-            else str(item.strategy_id or "").strip()
-        )
-        raw_strategy_text = (
-            current_branch.raw_strategy_text
-            if current_branch is not None
-            else "\n".join(getattr(profile.strategy, "strategy_lines", ()) or ())
-        )
+        raw_strategy_text = "\n".join(getattr(profile.strategy, "strategy_lines", ()) or ())
         editable = core.editable
         strategy_states = self._state_store.get_strategy_states(
             profile.persistent_key,
@@ -545,18 +624,12 @@ class ProfilePresetService:
             raw_profile_text=core.raw_profile_text,
             raw_strategy_text=raw_strategy_text,
             match_summary=core.match_summary,
-            match_tab_text=(
-                str(current_branch.match_tab_text or "")
-                if current_branch is not None
-                else build_profile_setup_match_tab_text(
-                    match_summary=core.match_summary,
-                    strategy_id=item.strategy_id,
-                    strategy_name=item.strategy_name,
-                    raw_strategy_text=raw_strategy_text,
-                )
+            match_tab_text=build_profile_setup_match_tab_text(
+                match_summary=core.match_summary,
+                strategy_id=item.strategy_id,
+                strategy_name=item.strategy_name,
+                raw_strategy_text=raw_strategy_text,
             ),
-            strategy_branches=strategy_branches,
-            current_strategy_branch_id=str(getattr(current_branch, "branch_id", "") or ""),
             editable_filter_kind=editable.filter_kind,
             editable_filter_value=editable.filter_value,
             editable_filter_enabled=editable.filter_editable,
@@ -572,7 +645,8 @@ class ProfilePresetService:
             ),
             in_range=editable.in_range,
             out_range=editable.out_range,
-            current_strategy_state=strategy_states.get(current_strategy_id, ProfileStrategyState()),
+            current_strategy_state=strategy_states.get(str(item.strategy_id or "").strip(), ProfileStrategyState()),
+            preset_preamble_text="\n".join(preset.preamble_lines),
         )
 
     def set_profile_enabled(
@@ -589,7 +663,8 @@ class ProfilePresetService:
             if bool(preset.profiles[index].enabled) == bool(enabled):
                 return preset.profiles[index].key
             preset = with_profile_enabled(preset, index, bool(enabled))
-            self.save_selected_preset(preset)
+            if self._commit_preset(preset, expect=_expect_profile_enabled(index, bool(enabled))):
+                return None
             return preset.profiles[index].key if 0 <= index < len(preset.profiles) else None
 
         if profile_key.startswith("template:") and enabled:
@@ -605,29 +680,14 @@ class ProfilePresetService:
             return resolved_key
         return None
 
-    def apply_strategy(self, profile_key: str, strategy_id: str, *, strategy_branch_id: str = "") -> StrategyApplyResult:
-        result = self._apply_strategy_once(
-            profile_key,
-            strategy_id,
-            strategy_branch_id=strategy_branch_id,
-        )
+    def apply_strategy(self, profile_key: str, strategy_id: str) -> StrategyApplyResult:
+        result = self._apply_strategy_once(profile_key, strategy_id)
         if result.status in {"profile_missing", "stale_reloaded"} and result.should_reload:
             self._invalidate_selected_preset_snapshot()
-            retried = self._apply_strategy_once(
-                profile_key,
-                strategy_id,
-                strategy_branch_id=strategy_branch_id,
-            )
-            return retried
+            return self._apply_strategy_once(profile_key, strategy_id)
         return result
 
-    def _apply_strategy_once(
-        self,
-        profile_key: str,
-        strategy_id: str,
-        *,
-        strategy_branch_id: str = "",
-    ) -> StrategyApplyResult:
+    def _apply_strategy_once(self, profile_key: str, strategy_id: str) -> StrategyApplyResult:
         strategy_id = str(strategy_id or "").strip()
         if not strategy_id or strategy_id in {"none", "custom"}:
             return _strategy_apply_result("not_applicable", strategy_id=strategy_id)
@@ -660,76 +720,13 @@ class ProfilePresetService:
                 should_reload=True,
                 message="strategy_entry_missing",
             )
-        branch_id = str(strategy_branch_id or "").strip()
-        if not branch_id:
-            branch_id = str(getattr(setup, "current_strategy_branch_id", "") or "").strip()
-        strategy_branches = tuple(getattr(setup, "strategy_branches", ()) or ())
-        if branch_id and strategy_branches and setup.item.in_preset:
-            branch = next((item for item in strategy_branches if item.branch_id == branch_id), None)
-            if branch is None:
-                return _strategy_apply_result(
-                    "stale_reloaded",
-                    profile_key=setup.item.key,
-                    strategy_id=strategy_id,
-                    should_reload=True,
-                    message="strategy_branch_missing",
-                )
-            if (
-                setup.item.in_preset
-                and setup.item.enabled
-                and str(branch.strategy_id or "").strip() == strategy_id
-            ):
-                return _strategy_apply_result(
-                    "already_applied",
-                    profile_key=setup.item.key,
-                    strategy_id=strategy_id,
-                )
-            preset, _manifest = self.load_selected_preset()
-            index = resolve_preset_profile_reference_index(preset, profile_key)
-            if index is None:
-                return _strategy_apply_result(
-                    "stale_reloaded",
-                    profile_key=setup.item.key,
-                    strategy_id=strategy_id,
-                    should_reload=True,
-                    message="profile_index_missing",
-                )
-            preset = _with_profile_strategy_branch_lines(preset, index, branch_id, entry.args.splitlines())
-            preset = with_profile_enabled(preset, index, True)
-            self.save_selected_preset(
-                preset,
-                content_change_kind="strategy_only",
-                changed_profile_key=profile_key,
-            )
-            applied_key = preset.profiles[index].key if 0 <= index < len(preset.profiles) else ""
-            return _strategy_apply_result(
-                "applied",
-                profile_key=applied_key,
-                strategy_id=strategy_id,
-                change_kind="strategy_only",
-                profile_payload_changed=True,
-                profile_list_item_changed=True,
-                summary_changed=True,
-                runtime_apply_needed=True,
-            )
-        if setup.item.in_preset and strategy_branches and len(strategy_branches) > 1:
-            return _strategy_apply_result(
-                "stale_reloaded",
-                profile_key=setup.item.key,
-                strategy_id=strategy_id,
-                should_reload=True,
-                message="strategy_branch_required",
-            )
+        entry_lines = entry.args.splitlines()
         if (
             setup.item.in_preset
             and setup.item.enabled
             and str(setup.item.strategy_id or "").strip() == strategy_id
         ):
-            return _strategy_apply_result(
-                "already_applied",
-                profile_key=setup.item.key,
-                strategy_id=strategy_id,
-            )
+            return self._declare_blobs_of_applied_strategy(setup.item.key, strategy_id, entry_lines)
 
         preset, _manifest = self.load_selected_preset()
         resolved_key = profile_key
@@ -753,25 +750,131 @@ class ProfilePresetService:
                 should_reload=True,
                 message="profile_index_missing",
             )
-        preset = with_profile_strategy_lines(preset, index, entry.args.splitlines())
-        preset = with_profile_enabled(preset, index, True)
-        self.save_selected_preset(
-            preset,
-            content_change_kind="preset_structure" if list_structure_changed else "strategy_only",
+        preset, whole_strategy_lines = with_profile_ready_strategy(preset, index, entry_lines)
+        return self._commit_applied_strategy(
+            with_profile_enabled(preset, index, True),
+            index=index,
+            strategy_lines=entry_lines,
+            whole_strategy_lines=whole_strategy_lines,
+            strategy_id=strategy_id,
             changed_profile_key="" if list_structure_changed else resolved_key,
+            fallback_profile_key=resolved_key,
+            list_structure_changed=list_structure_changed,
+        )
+
+    def _commit_applied_strategy(
+        self,
+        preset: Preset,
+        *,
+        index: int,
+        strategy_lines: list[str],
+        whole_strategy_lines: tuple[str, ...] | None,
+        strategy_id: str,
+        changed_profile_key: str,
+        fallback_profile_key: str,
+        list_structure_changed: bool = False,
+    ) -> StrategyApplyResult:
+        """Общий конец явного выбора готовой стратегии: фейки, запись, результат.
+
+        Пользователь выбрал стратегию — в преамбулу пресета дописываются
+        объявления ``--blob=`` для её фейков, которых в пресете ещё нет
+        (см. ``profile.preset_blob_declarations``). Пресет сохраняется обычным
+        путём, поэтому эти строки видны в тексте пресета.
+        """
+        preset, blob_report = self._with_strategy_blob_declarations(preset, strategy_lines)
+        blob_warnings = blob_report.user_warnings()
+        change_kind = "preset_structure" if list_structure_changed else "strategy_only"
+        write_failure = self._commit_preset(
+            preset,
+            content_change_kind=change_kind,
+            changed_profile_key=changed_profile_key,
+            expect=_expect_strategy_lines(index, strategy_lines, whole_strategy_lines=whole_strategy_lines),
         )
         applied_key = preset.profiles[index].key if 0 <= index < len(preset.profiles) else ""
-        return _strategy_apply_result(
+        if write_failure:
+            return _strategy_apply_result(
+                "write_failed",
+                profile_key=applied_key or fallback_profile_key,
+                strategy_id=strategy_id,
+                should_reload=True,
+                message=write_failure,
+            )
+        result = _strategy_apply_result(
             "applied",
             profile_key=applied_key,
             strategy_id=strategy_id,
-            change_kind="preset_structure" if list_structure_changed else "strategy_only",
+            change_kind=change_kind,
             list_structure_changed=list_structure_changed,
             profile_payload_changed=True,
             profile_list_item_changed=True,
             summary_changed=True,
             runtime_apply_needed=True,
         )
+        return replace(result, blob_warnings=blob_warnings) if blob_warnings else result
+
+    def _declare_blobs_of_applied_strategy(
+        self,
+        profile_key: str,
+        strategy_id: str,
+        strategy_lines: list[str],
+    ) -> StrategyApplyResult:
+        """Повторный явный выбор уже стоящей стратегии.
+
+        Стратегия в пресете уже есть, но пользователь снова её выбрал — это
+        явное действие, поэтому недостающие объявления её фейков (``--blob=``)
+        дописываются в пресет. Больше ничего не меняется; если всё объявлено,
+        запись не делается.
+        """
+        preset, _manifest = self.load_selected_preset()
+        updated, blob_report = self._with_strategy_blob_declarations(preset, strategy_lines)
+        blob_warnings = blob_report.user_warnings()
+        if updated is preset:
+            result = _strategy_apply_result("already_applied", profile_key=profile_key, strategy_id=strategy_id)
+            return replace(result, blob_warnings=blob_warnings) if blob_warnings else result
+        write_failure = self._commit_preset(
+            updated,
+            content_change_kind="strategy_only",
+            changed_profile_key=profile_key,
+            expect=_expect_blobs_declared(blob_report.added),
+        )
+        if write_failure:
+            return _strategy_apply_result(
+                "write_failed",
+                profile_key=profile_key,
+                strategy_id=strategy_id,
+                should_reload=True,
+                message=write_failure,
+            )
+        result = _strategy_apply_result(
+            "already_applied",
+            profile_key=profile_key,
+            strategy_id=strategy_id,
+            runtime_apply_needed=True,
+        )
+        return replace(result, blob_warnings=blob_warnings) if blob_warnings else result
+
+    def _with_strategy_blob_declarations(self, preset: Preset, strategy_lines):
+        from .preset_blob_declarations import BlobDeclarationReport, with_declared_blobs
+
+        if self._engine != ENGINE_WINWS2:
+            return preset, BlobDeclarationReport()
+
+        updated, report = with_declared_blobs(
+            preset,
+            strategy_lines,
+            getattr(self._profile_services, "load_fakes_catalog", None),
+        )
+        if report.added:
+            log(f"ProfilePresetService: в пресет добавлены фейки стратегии: {', '.join(report.added)}", "INFO")
+        if report.conflicts:
+            log(
+                "ProfilePresetService: пресет объявляет фейки иначе, чем реестр (оставлено как в пресете): "
+                + ", ".join(report.conflicts),
+                "INFO",
+            )
+        for warning in report.user_warnings():
+            log(f"ProfilePresetService: {warning}", "WARNING")
+        return updated, report
 
     def set_current_strategy_state(
         self,
@@ -836,6 +939,12 @@ class ProfilePresetService:
         in_range: str,
         out_range: str,
     ) -> tuple[str, str] | None:
+        """Правит только изменённые настройки profile.
+
+        Диапазоны — настройки profile-а: строки до первой ``--lua-desync``
+        (см. ``profile.strategy_shape``); строки внутри составной стратегии
+        не меняются.
+        """
         preset, _manifest = self.load_selected_preset()
         index = resolve_preset_profile_reference_index(preset, profile_key)
         if index is None:
@@ -875,12 +984,9 @@ class ProfilePresetService:
             and current.out_range == next_settings.out_range
         ):
             return old_persistent_key, old_persistent_key
-        preset = with_editable_profile_settings(
-            preset,
-            index,
-            next_settings,
-        )
-        self.save_selected_preset(preset)
+        preset = with_editable_profile_settings(preset, index, next_settings)
+        if self._commit_preset(preset, expect=_expect_editable_settings(index, next_settings)):
+            return None
         return self._profile_edit_result(preset, index, old_persistent_key)
 
     def update_profile_raw_text(self, profile_key: str, raw_text: str) -> tuple[str, str] | None:
@@ -893,7 +999,13 @@ class ProfilePresetService:
         if profile_raw_text(preset.profiles[index]) == normalized_text:
             return old_persistent_key, old_persistent_key
         preset = with_profile_raw_text(preset, index, raw_text)
-        self.save_selected_preset(preset)
+        # Сверяем с тем, как текст ляжет в файл после разбора, а не с вводом:
+        # ведущий «# комментарий» первого профиля (у него нет строки --new)
+        # по формату относится к шапке пресета — он сохраняется там, и это не
+        # «файл не совпал после записи».
+        expected_text = profile_raw_text(preset.profiles[index]) if index < len(preset.profiles) else normalized_text
+        if self._commit_preset(preset, expect=_expect_profile_raw_text(index, expected_text)):
+            return None
         return self._profile_edit_result(preset, index, old_persistent_key)
 
     def _profile_edit_result(self, preset: Preset, index: int, old_persistent_key: str) -> tuple[str, str] | None:
@@ -930,10 +1042,7 @@ class ProfilePresetService:
             registry = normalize_identity_registry(get_profile_identity_registry(self._engine))
             if edited_uid not in registry:
                 return
-            entry = {
-                "name": str(profile.name or "").strip(),
-                "sig": str(build_profile_logical_key(profile.match_signature) or "").strip(),
-            }
+            entry = _identity_entry(profile)
             if registry.get(edited_uid) != entry:
                 registry[edited_uid] = entry
                 set_profile_identity_registry(self._engine, registry)
@@ -1013,18 +1122,16 @@ class ProfilePresetService:
         if filter_kind_switch_creates_preset_duplicate(profile, preset.profiles, current, resolved):
             return None
 
-        preset = with_editable_profile_settings(
-            preset,
-            index,
-            EditableProfileSettings(
-                filter_kind=resolved.filter_kind,
-                filter_value=resolved.filter_value,
-                filter_role=current.filter_role,
-                in_range=current.in_range,
-                out_range=current.out_range,
-            ),
+        next_settings = EditableProfileSettings(
+            filter_kind=resolved.filter_kind,
+            filter_value=resolved.filter_value,
+            filter_role=current.filter_role,
+            in_range=current.in_range,
+            out_range=current.out_range,
         )
-        self.save_selected_preset(preset)
+        preset = with_editable_profile_settings(preset, index, next_settings)
+        if self._commit_preset(preset, expect=_expect_editable_settings(index, next_settings)):
+            return None
         return self._profile_edit_result(preset, index, old_persistent_key)
 
     def delete_profile(self, profile_key: str) -> bool:
@@ -1158,94 +1265,112 @@ class ProfilePresetService:
         return PresetProfileMoveResult(profile_key=key_map.get(moved_key, moved_key), key_map=key_map)
 
     def update_user_profile(self, profile_id: str, *, name: str, protocol: str, ports: str) -> int:
-        old_name, row = update_user_profile(self._app_paths, profile_id, name=name, protocol=protocol, ports=ports)
+        old_row, new_row = update_user_profile(self._app_paths, profile_id, name=name, protocol=protocol, ports=ports)
         # Сброс нужен не из-за user_profiles (их ревизия в ключах кэшей),
         # а потому что ниже переписываются файлы пресетов в обход save_selected_preset.
         self._invalidate_profile_list_snapshot()
-        if not old_name:
-            return 0
-        return self._update_user_profile_in_all_presets(old_name, row)
+
+        def _update(preset: Preset, indexes: list[int]) -> Preset:
+            for index in indexes:
+                preset = with_profile_user_match(
+                    preset,
+                    index,
+                    name=new_row["name"],
+                    protocol=new_row["protocol"],
+                    ports=new_row["ports"],
+                    hostlist=new_row["hostlist"],
+                    ipset=new_row["ipset"],
+                )
+            return preset
+
+        return self._edit_profiles_created_from_user_profile(old_row, _update, keep_identity=True)
 
     def delete_user_profile(self, profile_id: str) -> int:
-        old_name, _row = delete_user_profile(self._app_paths, profile_id)
+        old_row = delete_user_profile(self._app_paths, profile_id)
         self._invalidate_profile_list_snapshot()
-        if not old_name:
-            return 0
-        return self._delete_user_profile_from_all_presets(old_name)
 
-    def _update_user_profile_in_all_presets(self, old_name: str, row: dict[str, str]) -> int:
-        changed_profiles = 0
-        old_key = str(old_name or "").strip().casefold()
-        if not old_key:
+        def _delete(preset: Preset, indexes: list[int]) -> Preset:
+            for index in sorted(indexes, reverse=True):
+                preset = with_profile_deleted(preset, index)
+            return preset
+
+        return self._edit_profiles_created_from_user_profile(old_row, _delete)
+
+    def _edit_profiles_created_from_user_profile(self, row: dict[str, str], edit, *, keep_identity: bool = False) -> int:
+        """Правит во всех пользовательских пресетах только profile-ы, созданные
+        из этого пользовательского profile.
+
+        Такой profile узнаётся по двум признакам сразу: имя (`--name` /
+        `--comment`) совпадает с именем пользовательского profile, и его
+        hostlist/ipset — это собственные файлы этого profile
+        (`lists/<id>.txt` / `lists/ipset-<id>.txt`). Одноимённые profile-ы с
+        другими списками — чужие, их не трогаем. Встроенные пресеты не
+        меняются вовсе: правка создала бы их пользовательскую копию.
+        """
+        if not str(row.get("name") or "").strip():
             return 0
+        list_manifests = getattr(self._presets, "list_preset_manifests", None)
+        read_source = getattr(self._presets, "read_preset_source_by_file_name", None)
+        save_source = getattr(self._presets, "save_preset_source_by_file_name", None)
+        if not callable(list_manifests) or not callable(read_source) or not callable(save_source):
+            return 0
+        changed_profiles = 0
+        identity_moves: dict[str, list[tuple[dict[str, str], dict[str, str]]]] = {}
         for launch_method in sorted(PRESET_LAUNCH_METHODS):
-            list_manifests = getattr(self._presets, "list_preset_manifests", None)
-            read_source = getattr(self._presets, "read_preset_source_by_file_name", None)
-            save_source = getattr(self._presets, "save_preset_source_by_file_name", None)
-            if not callable(list_manifests) or not callable(read_source) or not callable(save_source):
-                continue
             engine = _engine_for_method(launch_method)
             for manifest in list_manifests(launch_method):
                 file_name = str(getattr(manifest, "file_name", "") or "").strip()
-                if not file_name:
+                if not file_name or _is_builtin_preset_manifest(manifest):
                     continue
                 source_text = str(read_source(launch_method, file_name) or "")
-                if old_name not in source_text:
+                if str(row["name"]).casefold() not in source_text.casefold():
                     continue
                 preset = parse_preset_text(source_text, engine=engine, source_name=file_name)
-                changed_indexes = [
+                indexes = [
                     profile.index
                     for profile in preset.profiles
-                    if str(getattr(profile, "name", "") or "").strip().casefold() == old_key
+                    if _profile_created_from_user_profile(profile, row)
                 ]
-                if not changed_indexes:
+                if not indexes:
                     continue
-                for index in changed_indexes:
-                    preset = with_profile_user_match(
-                        preset,
-                        index,
-                        name=str(row.get("name") or ""),
-                        protocol=str(row.get("protocol") or ""),
-                        ports=str(row.get("ports") or ""),
-                        hostlist=str(row.get("hostlist") or ""),
-                        ipset=str(row.get("ipset") or ""),
+                edited = edit(preset, indexes)
+                save_source(launch_method, file_name, serialize_preset(edited))
+                changed_profiles += len(indexes)
+                if keep_identity:
+                    identity_moves.setdefault(engine, []).extend(
+                        (_identity_entry(preset.profiles[index]), _identity_entry(edited.profiles[index]))
+                        for index in indexes
+                        if index < len(edited.profiles)
                     )
-                save_source(launch_method, file_name, serialize_preset(preset))
-                changed_profiles += len(changed_indexes)
+        for engine, moves in identity_moves.items():
+            self._move_identity_registry_entries(engine, moves)
+        if changed_profiles:
+            self._invalidate_selected_preset_snapshot()
         return changed_profiles
 
-    def _delete_user_profile_from_all_presets(self, old_name: str) -> int:
-        changed_profiles = 0
-        old_key = str(old_name or "").strip().casefold()
-        if not old_key:
-            return 0
-        for launch_method in sorted(PRESET_LAUNCH_METHODS):
-            list_manifests = getattr(self._presets, "list_preset_manifests", None)
-            read_source = getattr(self._presets, "read_preset_source_by_file_name", None)
-            save_source = getattr(self._presets, "save_preset_source_by_file_name", None)
-            if not callable(list_manifests) or not callable(read_source) or not callable(save_source):
-                continue
-            engine = _engine_for_method(launch_method)
-            for manifest in list_manifests(launch_method):
-                file_name = str(getattr(manifest, "file_name", "") or "").strip()
-                if not file_name:
+    def _move_identity_registry_entries(
+        self,
+        engine: str,
+        moves: list[tuple[dict[str, str], dict[str, str]]],
+    ) -> None:
+        """Переименование пользовательского profile меняет и имя, и списки
+        (а значит сигнатуру) созданных из него profile-ов. Resolver не узнал
+        бы их и выдал новые uid — папка и оценки стратегий потерялись бы.
+        Поэтому записи реестра переезжают на новые (имя, сигнатура)."""
+        try:
+            registry = normalize_identity_registry(get_profile_identity_registry(engine))
+            changed = False
+            for old_entry, new_entry in moves:
+                if old_entry == new_entry:
                     continue
-                source_text = str(read_source(launch_method, file_name) or "")
-                if old_name not in source_text:
-                    continue
-                preset = parse_preset_text(source_text, engine=engine, source_name=file_name)
-                changed_indexes = [
-                    profile.index
-                    for profile in preset.profiles
-                    if str(getattr(profile, "name", "") or "").strip().casefold() == old_key
-                ]
-                if not changed_indexes:
-                    continue
-                for index in sorted(changed_indexes, reverse=True):
-                    preset = with_profile_deleted(preset, index)
-                save_source(launch_method, file_name, serialize_preset(preset))
-                changed_profiles += len(changed_indexes)
-        return changed_profiles
+                for uid, entry in list(registry.items()):
+                    if entry == old_entry:
+                        registry[uid] = dict(new_entry)
+                        changed = True
+            if changed:
+                set_profile_identity_registry(engine, registry)
+        except Exception as exc:
+            log(f"ProfilePresetService: не удалось перенести идентичность после правки пользовательского profile: {exc}", "DEBUG")
 
     def profile_folder_reset_assignments(self) -> dict[str, str]:
         """Раскладка «по начальному правилу» для сброса папок: ключ каждого
@@ -1329,8 +1454,9 @@ class ProfilePresetService:
             filter_value=filter_value or current.filter_value,
             out_range="-d8",
         )
-        updated = append_profile_from_template(preset, template, enabled=True, position="top")
-        return updated, updated.profiles[0].key if updated.profiles else ""
+        insert_at = new_profile_insert_index(preset)
+        updated = append_profile_from_template(preset, template, enabled=True, position=insert_at)
+        return updated, updated.profiles[insert_at].key if 0 <= insert_at < len(updated.profiles) else ""
 
     def _profile_with_filter_override(
         self,
@@ -1425,7 +1551,7 @@ class ProfilePresetService:
             group_collapsed=folder.collapsed,
             user_profile_id=_user_profile_id_from_template_key(user_template_key),
             profile_name=profile.name,
-            strategy_branches=core.strategy_branches,
+            strategy_payload_scopes=core.strategy_payload_scopes if effective_strategy_id != "none" else (),
         )
 
     def _load_profile_templates(self) -> dict[str, Profile]:
@@ -1673,63 +1799,118 @@ def _profile_folder_state_revision(folder_state: dict[str, Any]) -> tuple[object
     return tuple(folder_rows), tuple(item_rows)
 
 
-def _with_profile_strategy_branch_lines(
-    preset: Preset,
-    profile_index: int,
-    branch_id: str,
-    strategy_lines,
-) -> Preset:
-    updated = deepcopy(preset)
-    profile = updated.profiles[int(profile_index)]
-    groups = _strategy_branch_segment_groups(profile)
-    target = groups.get(str(branch_id or "").strip())
-    if not target:
-        return preset
+def _expect_profile(profile_index: int, check):
+    """Ожидание к профилю по индексу в перечитанном пресете."""
 
-    normalized_lines = [str(line or "").strip() for line in strategy_lines or () if str(line or "").strip()]
-    replacement = [_strategy_segment(line) for line in normalized_lines]
-    start, end = target
-    profile.segments = [*profile.segments[:start], *replacement, *profile.segments[end + 1 :]]
-    return parse_preset_text(
-        serialize_preset(updated),
-        engine=updated.engine,
-        source_name=updated.source_name,
-    )
+    def _expect(stored: Preset) -> str:
+        profiles = tuple(getattr(stored, "profiles", ()) or ())
+        if not (0 <= int(profile_index) < len(profiles)):
+            return f"profile_missing_after_write: index={profile_index}"
+        return str(check(profiles[int(profile_index)]) or "")
+
+    return _expect
 
 
-def _strategy_branch_segment_groups(profile: Profile) -> dict[str, tuple[int, int]]:
-    groups: dict[str, tuple[int, int]] = {}
-    current: list[int] = []
+def _expect_strategy_lines(profile_index: int, strategy_lines, *, whole_strategy_lines=None):
+    """Ожидание: стратегия профиля равна выбранной.
 
-    def flush() -> None:
-        nonlocal current
-        if not current:
-            return
-        groups[f"branch:{len(groups)}"] = (current[0], current[-1])
-        current = []
+    ``whole_strategy_lines`` — стратегия записана целиком (составная или
+    обычная поверх составной): сверяются все строки стратегии, кроме
+    диапазонов profile-а. Иначе сверяются строки ``--lua-desync``.
+    """
+    requested = tuple(str(line or "").strip() for line in strategy_lines or () if str(line or "").strip())
 
-    for index, segment in enumerate(tuple(getattr(profile, "segments", ()) or ())):
-        if segment.kind == "strategy_filter":
-            flush()
-            continue
-        if segment.kind == "strategy":
-            current.append(index)
+    def _check(profile: Profile) -> str:
+        if whole_strategy_lines is not None:
+            expected = composite_identity(strategy_shape(whole_strategy_lines).body_lines)
+            actual = composite_identity(profile_strategy_shape(profile).body_lines)
+        else:
+            expected = strategy_identity_lines(profile, requested)
+            actual = strategy_identity_lines(
+                profile,
+                [segment.text for segment in profile.segments if segment.kind == "strategy"],
+            )
+        if actual == expected:
+            return ""
+        return f"strategy_mismatch_after_write: expected={list(expected)} actual={list(actual)}"
 
-    flush()
-    return groups
+    return _expect_profile(profile_index, _check)
 
 
-def _strategy_segment(line: str) -> ProfileSegment:
-    name, value = _split_profile_option(line)
-    return ProfileSegment(kind="strategy", text=str(line or "").strip(), name=name, value=value)
+def _expect_blobs_declared(names):
+    """Ожидание: в перечитанном пресете объявлены все дописанные фейки."""
+    wanted = {str(name) for name in names or ()}
+
+    def _expect(stored: Preset) -> str:
+        from .preset_blob_declarations import declared_blob_names
+
+        missing = sorted(wanted - declared_blob_names(serialize_preset(stored)))
+        return f"blob_missing_after_write: {missing}" if missing else ""
+
+    return _expect
 
 
-def _split_profile_option(line: str) -> tuple[str, str]:
-    text = str(line or "").strip()
-    if "=" not in text:
-        return text, ""
-    name, _sep, value = text.partition("=")
-    return name.strip(), value.strip()
+def _expect_profile_enabled(profile_index: int, enabled: bool):
+    def _check(profile: Profile) -> str:
+        if bool(profile.enabled) == bool(enabled):
+            return ""
+        return f"enabled_mismatch_after_write: expected={bool(enabled)} actual={bool(profile.enabled)}"
+
+    return _expect_profile(profile_index, _check)
+
+
+def _expect_editable_settings(profile_index: int, settings: EditableProfileSettings):
+    def _check(profile: Profile) -> str:
+        actual = read_editable_profile_settings(profile)
+        if (
+            actual.filter_kind == settings.filter_kind
+            and actual.filter_value == settings.filter_value
+            and actual.filter_role == settings.filter_role
+            and actual.in_range == settings.in_range
+            and actual.out_range == settings.out_range
+        ):
+            return ""
+        return f"settings_mismatch_after_write: expected={settings} actual={actual}"
+
+    return _expect_profile(profile_index, _check)
+
+
+def _expect_profile_raw_text(profile_index: int, raw_text: str):
+    expected = str(raw_text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+    def _check(profile: Profile) -> str:
+        actual = profile_raw_text(profile)
+        if actual == expected:
+            return ""
+        return "raw_text_mismatch_after_write"
+
+    return _expect_profile(profile_index, _check)
+
+
+def _is_builtin_preset_manifest(manifest) -> bool:
+    for attribute in ("storage_scope", "kind"):
+        if str(getattr(manifest, attribute, "") or "").strip().lower() == "builtin":
+            return True
+    return False
+
+
+def _profile_created_from_user_profile(profile: Profile, row: dict[str, str]) -> bool:
+    wanted_name = str(row.get("name") or "").strip().casefold()
+    if not wanted_name or str(profile.name or "").strip().casefold() != wanted_name:
+        return False
+    own_lists = {_list_file_key(row.get("hostlist", "")), _list_file_key(row.get("ipset", ""))} - {""}
+    values = [
+        part
+        for line in (*profile.match.hostlist_lines, *profile.match.ipset_lines)
+        for part in str(line or "").partition("=")[2].split(",")
+        if part.strip()
+    ]
+    return bool(values) and all(_list_file_key(value) in own_lists for value in values)
+
+
+def _list_file_key(value: str) -> str:
+    clean = str(value or "").strip().strip('"').strip("'").lstrip("@").replace("\\", "/")
+    return clean.rsplit("/", 1)[-1].lower()
 
 
 def _profile_status_name(*, in_preset: bool, enabled: bool, strategy_name: str) -> str:

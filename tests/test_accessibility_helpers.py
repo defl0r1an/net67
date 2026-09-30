@@ -84,11 +84,11 @@ class AccessibilityHelpersTests(unittest.TestCase):
 
         set_control_accessibility(
             widget,
-            name="Остановить Zapret",
+            name="Остановить net67",
             description="Останавливает запущенный процесс обхода блокировок.",
         )
 
-        self.assertEqual(widget.accessible_name, "Остановить Zapret")
+        self.assertEqual(widget.accessible_name, "Остановить net67")
         self.assertEqual(widget.accessible_description, "Останавливает запущенный процесс обхода блокировок.")
 
     def test_set_control_accessibility_enables_enter_for_push_button(self) -> None:

@@ -1,43 +1,10 @@
+"""Чистые решения страницы DNS: без Qt и без вызовов Windows."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from app.ui_texts import tr as tr_catalog
-
-
-@dataclass(slots=True)
-class NetworkPageInitPlan:
-    should_start_initial_load: bool
-    load_delay_ms: int
-
-
-@dataclass(slots=True)
-class NetworkForceDnsStatusPlan:
-    text: str
-    enabled: bool
-
-
-@dataclass(slots=True)
-class NetworkForceDnsTogglePlan:
-    final_checked: bool
-    force_dns_active: bool
-    details_key: str | None
-    details_kwargs: dict
-    details_fallback: str
-
-
-@dataclass(slots=True)
-class NetworkConnectivityTestPlan:
-    test_hosts: list[tuple[str, str]]
-
-
-@dataclass(slots=True)
-class NetworkConnectivityTestResultPlan:
-    all_ok: bool
-    report: str
-    infobar_level: str
-    title: str
-    content: str
 
 
 @dataclass(slots=True)
@@ -51,19 +18,11 @@ class NetworkProviderDnsPlan:
 
 @dataclass(slots=True)
 class NetworkDnsApplyResultPlan:
-    should_refresh: bool
     log_level: str | None
     log_message: str
-
-
-@dataclass(slots=True)
-class NetworkResetDhcpResultPlan:
-    force_dns_active: bool
-    should_select_auto: bool
-    status_details_key: str
-    infobar_level: str
-    infobar_title: str
-    infobar_content: str
+    adapter_count: int = 0
+    success_count: int = 0
+    error: str = ""
 
 
 @dataclass(slots=True)
@@ -83,193 +42,24 @@ class NetworkIspDnsWarningPlan:
     dismiss_text: str
 
 
-@dataclass(slots=True)
-class NetworkIspDnsActionPlan:
-    hide_warning: bool
-    apply_recommended_dns: bool
-
-
-@dataclass(slots=True)
-class NetworkAdapterDnsRefreshEntry:
-    adapter_name: str
-    adapter_data: dict
-    ipv4: list[str]
-    ipv6: list[str]
-
-
-@dataclass(slots=True)
-class NetworkAdapterDnsRefreshPlan:
-    entries: list[NetworkAdapterDnsRefreshEntry]
-    log_level: str
-    log_message: str
-
-
-@dataclass(slots=True)
-class NetworkDnsSelectionPlan:
-    kind: str
-    selected_provider: str | None
-    custom_primary: str
-    custom_secondary: str
-
-
 def normalize_dns_list(value) -> list[str]:
     if isinstance(value, str):
-        return [item.strip() for item in value.replace(",", " ").split() if item.strip()]
-    if isinstance(value, list):
-        result: list[str] = []
-        for item in value:
-            item_s = str(item).strip()
-            if item_s:
-                result.append(item_s)
-        return result
-    return []
+        items = value.replace(",", " ").split()
+    elif isinstance(value, (list, tuple)):
+        items = [str(item) for item in value]
+    else:
+        return []
+    return list(dict.fromkeys(item.strip() for item in items if item.strip()))
 
 
-def build_page_init_plan(*, runtime_initialized: bool) -> NetworkPageInitPlan:
-    return NetworkPageInitPlan(
-        should_start_initial_load=not bool(runtime_initialized),
-        load_delay_ms=0,
-    )
+# ── применение ────────────────────────────────────────────────────────────
 
 
-def build_force_dns_status_plan(
-    *,
-    enabled: bool,
-    details_key: str | None = None,
-    details_kwargs: dict | None = None,
-    details_fallback: str = "",
-    language: str = "ru",
-) -> NetworkForceDnsStatusPlan:
-    _ = enabled
-    details_text = ""
-    if details_key:
-        details_default = details_fallback or ""
-        template = tr_catalog(details_key, language=language, default=details_default)
-        try:
-            details_text = template.format(**(details_kwargs or {}))
-        except Exception:
-            details_text = template
-    elif details_fallback:
-        details_text = details_fallback
-
-    return NetworkForceDnsStatusPlan(text=details_text, enabled=bool(enabled))
-
-
-def build_force_dns_toggle_plan(
-    *,
-    requested_enabled: bool,
-    success: bool,
-    ok_count: int = 0,
-    total: int = 0,
-) -> NetworkForceDnsTogglePlan:
-    if requested_enabled:
-        if success:
-            return NetworkForceDnsTogglePlan(
-                final_checked=True,
-                force_dns_active=True,
-                details_key="page.network.force_dns.action.enable.description",
-                details_kwargs={},
-                details_fallback="Выберите DNS из списка или добавьте свой адрес. Программа применит его только по вашему нажатию.",
-            )
-        return NetworkForceDnsTogglePlan(
-            final_checked=False,
-            force_dns_active=False,
-            details_key="page.network.force_dns.status.details.enable_failed",
-            details_kwargs={},
-            details_fallback="",
-        )
-
-    if success:
-        return NetworkForceDnsTogglePlan(
-            final_checked=False,
-            force_dns_active=False,
-            details_key="page.network.force_dns.action.disable.description",
-            details_kwargs={},
-            details_fallback="DNS меняется только вручную: выберите сервер, добавьте свой адрес или верните автоматическое получение через DHCP.",
-        )
-
-    return NetworkForceDnsTogglePlan(
-        final_checked=True,
-        force_dns_active=True,
-        details_key="page.network.force_dns.status.details.disable_failed",
-        details_kwargs={},
-        details_fallback="",
-    )
-
-
-def build_force_dns_toggle_error_plan(*, requested_enabled: bool) -> NetworkForceDnsTogglePlan:
-    return NetworkForceDnsTogglePlan(
-        final_checked=not requested_enabled,
-        force_dns_active=not requested_enabled,
-        details_key="page.network.force_dns.status.details.apply_error",
-        details_kwargs={},
-        details_fallback="",
-    )
-
-
-def build_connectivity_test_plan(*, language: str = "ru") -> NetworkConnectivityTestPlan:
-    return NetworkConnectivityTestPlan(
-        test_hosts=[
-            (tr_catalog("page.network.test.host.google_dns", language=language, default="Google DNS"), "8.8.8.8"),
-            (tr_catalog("page.network.test.host.cloudflare_dns", language=language, default="Cloudflare DNS"), "1.1.1.1"),
-            ("google.com", "google.com"),
-            ("youtube.com", "youtube.com"),
-        ]
-    )
-
-
-def build_connectivity_test_result_plan(
-    results: list[tuple[str, str, bool]],
-    *,
-    language: str = "ru",
-) -> NetworkConnectivityTestResultPlan:
-    report_lines: list[str] = []
-    all_ok = True
-    for name, host, success in results:
-        status = "✓" if success else "✗"
-        report_lines.append(f"{status} {name} ({host})")
-        if not success:
-            all_ok = False
-
-    report = "\n".join(report_lines)
-    title = tr_catalog("page.network.test.infobar.title", language=language, default="Тест соединения")
-    if all_ok:
-        content = tr_catalog(
-            "page.network.test.infobar.all_ok",
-            language=language,
-            default="Все проверки пройдены:\n\n{report}",
-        ).format(report=report)
-        return NetworkConnectivityTestResultPlan(
-            all_ok=True,
-            report=report,
-            infobar_level="success",
-            title=title,
-            content=content,
-        )
-
-    content = tr_catalog(
-        "page.network.test.infobar.partial",
-        language=language,
-        default="Некоторые проверки не пройдены:\n\n{report}",
-    ).format(report=report)
-    return NetworkConnectivityTestResultPlan(
-        all_ok=False,
-        report=report,
-        infobar_level="warning",
-        title=title,
-        content=content,
-    )
-
-
-def build_provider_dns_plan(
-    *,
-    name: str,
-    data: dict,
-    ipv6_available: bool,
-) -> NetworkProviderDnsPlan:
+def build_provider_dns_plan(*, name: str, data: dict, ipv6_available: bool) -> NetworkProviderDnsPlan:
+    """Какие адреса сервера прописать. IPv6-адреса пишутся всегда: без IPv6 они не мешают."""
     ipv4 = normalize_dns_list(data.get("ipv4", []))
-    ipv6 = normalize_dns_list(data.get("ipv6", [])) if ipv6_available else []
-    if not ipv4 and not ipv6:
+    ipv6 = normalize_dns_list(data.get("ipv6", []))
+    if not ipv4 and not (ipv6 and ipv6_available):
         return NetworkProviderDnsPlan(
             valid=False,
             ipv4=[],
@@ -277,27 +67,22 @@ def build_provider_dns_plan(
             log_level="WARNING",
             log_message=f"DNS: у провайдера {name} нет DNS адресов для текущей системы",
         )
-
-    return NetworkProviderDnsPlan(
-        valid=True,
-        ipv4=ipv4,
-        ipv6=ipv6,
-        log_level=None,
-        log_message="",
-    )
+    return NetworkProviderDnsPlan(valid=True, ipv4=ipv4, ipv6=ipv6, log_level=None, log_message="")
 
 
-def build_auto_dns_apply_result_plan(*, adapter_count: int, success_count: int) -> NetworkDnsApplyResultPlan:
-    log_message = ""
-    log_level = None
-    if adapter_count > 0 and success_count == adapter_count:
-        log_message = f"DNS: Автоматический (IPv4+IPv6) применён к {success_count} адаптерам"
-        log_level = "INFO"
+def _apply_result(what: str, *, adapter_count: int, success_count: int, error: str) -> NetworkDnsApplyResultPlan:
+    done = adapter_count > 0 and success_count == adapter_count
     return NetworkDnsApplyResultPlan(
-        should_refresh=bool(adapter_count),
-        log_level=log_level,
-        log_message=log_message,
+        log_level="INFO" if done else None,
+        log_message=f"DNS: {what} применён к адаптерам: {success_count}" if done else "",
+        adapter_count=int(adapter_count),
+        success_count=int(success_count),
+        error=str(error or ""),
     )
+
+
+def build_auto_dns_apply_result_plan(*, adapter_count: int, success_count: int, error: str = "") -> NetworkDnsApplyResultPlan:
+    return _apply_result("автоматический DNS", adapter_count=adapter_count, success_count=success_count, error=error)
 
 
 def build_provider_dns_apply_result_plan(
@@ -305,81 +90,16 @@ def build_provider_dns_apply_result_plan(
     name: str,
     adapter_count: int,
     success_count: int,
-    ipv6_available: bool,
     ipv6: list[str],
+    error: str = "",
 ) -> NetworkDnsApplyResultPlan:
-    log_message = ""
-    log_level = None
-    if adapter_count > 0 and success_count == adapter_count:
-        if ipv6_available and ipv6:
-            log_message = f"DNS: {name} (IPv4+IPv6) применён к {success_count} адаптерам"
-        else:
-            log_message = f"DNS: {name} применён к {success_count} адаптерам"
-        log_level = "INFO"
-    return NetworkDnsApplyResultPlan(
-        should_refresh=bool(adapter_count),
-        log_level=log_level,
-        log_message=log_message,
-    )
+    what = f"{name} (IPv4+IPv6)" if ipv6 else name
+    return _apply_result(what, adapter_count=adapter_count, success_count=success_count, error=error)
 
 
-def build_custom_dns_apply_result_plan(*, primary: str, adapter_count: int, success_count: int) -> NetworkDnsApplyResultPlan:
-    log_message = ""
-    log_level = None
-    if adapter_count > 0 and success_count == adapter_count:
-        log_message = f"DNS: {primary} применён к {success_count} адаптерам"
-        log_level = "INFO"
-    return NetworkDnsApplyResultPlan(
-        should_refresh=bool(adapter_count),
-        log_level=log_level,
-        log_message=log_message,
-    )
-
-
-def build_reset_dhcp_result_plan(
-    *,
-    success: bool,
-    message: str,
-    force_dns_active: bool,
-    language: str = "ru",
-) -> NetworkResetDhcpResultPlan:
-    title = tr_catalog("page.network.info.title", language=language, default="DNS")
+def build_flush_dns_cache_result_plan(*, success: bool, message: str, language: str = "ru") -> NetworkFlushDnsCacheResultPlan:
     if success:
-        return NetworkResetDhcpResultPlan(
-            force_dns_active=bool(force_dns_active),
-            should_select_auto=not force_dns_active,
-            status_details_key="page.network.force_dns.action.reset.description",
-            infobar_level="success",
-            infobar_title=title,
-            infobar_content=tr_catalog(
-                "page.network.info.dhcp_reset_all",
-                language=language,
-                default="DNS сброшен на DHCP для всех адаптеров",
-            ),
-        )
-    return NetworkResetDhcpResultPlan(
-        force_dns_active=bool(force_dns_active),
-        should_select_auto=not force_dns_active,
-        status_details_key="page.network.force_dns.status.details.dhcp_not_applied",
-        infobar_level="warning",
-        infobar_title=title,
-        infobar_content=message,
-    )
-
-
-def build_flush_dns_cache_result_plan(
-    *,
-    success: bool,
-    message: str,
-    language: str = "ru",
-) -> NetworkFlushDnsCacheResultPlan:
-    if success:
-        return NetworkFlushDnsCacheResultPlan(
-            success=True,
-            infobar_level=None,
-            title="",
-            content="",
-        )
+        return NetworkFlushDnsCacheResultPlan(success=True, infobar_level=None, title="", content="")
     return NetworkFlushDnsCacheResultPlan(
         success=False,
         infobar_level="warning",
@@ -392,184 +112,90 @@ def build_flush_dns_cache_result_plan(
     )
 
 
-def should_show_isp_dns_warning(
-    adapters: list[tuple[str, str]],
-    dns_info: dict[str, dict[str, list[str]]],
-    *,
-    force_dns_active: bool,
-    warning_already_shown: bool,
-    normalize_alias_fn,
-) -> bool:
-    if force_dns_active:
-        return False
+# ── совет про DNS провайдера ──────────────────────────────────────────────
+
+
+def should_show_isp_dns_warning(adapters, *, warning_already_shown: bool) -> bool:
+    """Показываем один раз, если на всех подключённых адаптерах DNS автоматический."""
     if warning_already_shown:
         return False
-
-    has_adapters = False
-    all_dhcp = True
-    for name, _desc in adapters:
-        has_adapters = True
-        clean = normalize_alias_fn(name)
-        adapter_data = dns_info.get(clean, {"ipv4": [], "ipv6": []})
-        ipv4 = normalize_dns_list(adapter_data.get("ipv4", []))
-        if ipv4:
-            all_dhcp = False
-            break
-    return bool(has_adapters and all_dhcp)
+    connected = [adapter for adapter in adapters if adapter.connected]
+    return bool(connected) and all(adapter.is_automatic for adapter in connected)
 
 
-def build_isp_dns_warning_plan(
-    adapters: list[tuple[str, str]],
-    dns_info: dict[str, dict[str, list[str]]],
-    *,
-    force_dns_active: bool,
-    warning_already_shown: bool,
-    normalize_alias_fn,
-    language: str = "ru",
-) -> NetworkIspDnsWarningPlan:
-    should_show = should_show_isp_dns_warning(
-        adapters,
-        dns_info,
-        force_dns_active=force_dns_active,
-        warning_already_shown=warning_already_shown,
-        normalize_alias_fn=normalize_alias_fn,
-    )
+def build_isp_dns_warning_plan(adapters, *, warning_already_shown: bool, language: str = "ru") -> NetworkIspDnsWarningPlan:
     return NetworkIspDnsWarningPlan(
-        should_show=should_show,
-        title=tr_catalog(
-            "page.network.isp_dns.infobar.title",
-            language=language,
-            default="DNS от провайдера",
-        ),
+        should_show=should_show_isp_dns_warning(adapters, warning_already_shown=warning_already_shown),
+        title=tr_catalog("page.network.isp_dns.infobar.title", language=language, default="DNS от провайдера"),
         content=tr_catalog(
             "page.network.isp_dns.infobar.content",
             language=language,
             default=(
                 "У вас установлен DNS от провайдера (получен автоматически через DHCP). "
                 "Провайдерский DNS может подменять ответы и мешать обходу блокировок.\n\n"
-                "Рекомендуем установить публичный DNS (Google + OpenDNS) для стабильной работы."
+                "Можно вручную применить публичный DNS Quad9 или выбрать другой DNS из списка ниже."
             ),
         ),
-        action_text=tr_catalog(
-            "page.network.isp_dns.infobar.action",
-            language=language,
-            default="Установить рекомендуемый DNS",
-        ),
-        dismiss_text=tr_catalog(
-            "page.network.isp_dns.infobar.dismiss",
-            language=language,
-            default="Нет, спасибо",
-        ),
+        action_text=tr_catalog("page.network.isp_dns.infobar.action", language=language, default="Установить рекомендуемый DNS"),
+        dismiss_text=tr_catalog("page.network.isp_dns.infobar.dismiss", language=language, default="Нет, спасибо"),
     )
 
 
-def build_accept_isp_dns_warning_plan() -> NetworkIspDnsActionPlan:
-    return NetworkIspDnsActionPlan(
-        hide_warning=True,
-        apply_recommended_dns=True,
+# ── текущий DNS отмеченных адаптеров ──────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentDnsPlan:
+    """Что сейчас стоит на отмеченных адаптерах.
+
+    kind: "none" — адаптеры не отмечены; "auto" — DNS получается
+    автоматически (ipv4/ipv6 — адреса, выданные роутером); "provider" — один
+    из известных серверов (provider — его имя); "custom" — адреса, которых
+    нет в списке; "mixed" — на отмеченных адаптерах стоят разные DNS.
+    """
+
+    kind: str
+    provider: str | None = None
+    ipv4: tuple[str, ...] = ()
+    ipv6: tuple[str, ...] = ()
+
+
+def find_provider_for_dns(providers: dict, ipv4, ipv6) -> str | None:
+    """Имя сервера из списка, чей основной адрес стоит первым на адаптере."""
+    for group in providers.values():
+        for name, data in group.items():
+            provider_v4 = normalize_dns_list(data.get("ipv4", []))
+            provider_v6 = normalize_dns_list(data.get("ipv6", []))
+            if ipv4 and provider_v4 and provider_v4[0] == ipv4[0]:
+                return name
+            if not ipv4 and ipv6 and provider_v6 and provider_v6[0] == ipv6[0]:
+                return name
+    return None
+
+
+def describe_adapter_dns(adapter, providers: dict) -> CurrentDnsPlan:
+    if adapter.is_automatic:
+        return CurrentDnsPlan(kind="auto", ipv4=tuple(adapter.auto_ipv4), ipv6=tuple(adapter.auto_ipv6))
+    provider = find_provider_for_dns(providers, adapter.static_ipv4, adapter.static_ipv6)
+    return CurrentDnsPlan(
+        kind="provider" if provider else "custom",
+        provider=provider,
+        ipv4=tuple(adapter.static_ipv4),
+        ipv6=tuple(adapter.static_ipv6),
     )
 
 
-def build_dismiss_isp_dns_warning_plan() -> NetworkIspDnsActionPlan:
-    return NetworkIspDnsActionPlan(
-        hide_warning=True,
-        apply_recommended_dns=False,
-    )
+def build_current_dns_plan(*, adapters, providers: dict) -> CurrentDnsPlan:
+    plans = [describe_adapter_dns(adapter, providers) for adapter in adapters]
+    if not plans:
+        return CurrentDnsPlan(kind="none")
+    first = plans[0]
 
+    def same(plan: CurrentDnsPlan) -> bool:
+        if plan.kind != first.kind:
+            return False
+        if plan.kind == "auto":
+            return True
+        return (plan.provider, plan.ipv4[:1], plan.ipv6[:1]) == (first.provider, first.ipv4[:1], first.ipv6[:1])
 
-def is_current_dns(provider_ips: list, current_ips: list) -> bool:
-    return (
-        len(provider_ips) > 0
-        and len(current_ips) > 0
-        and provider_ips[0] == current_ips[0]
-    )
-
-
-def get_selected_adapter_dns(
-    selected_adapters: list[str],
-    dns_info: dict[str, dict[str, list[str]]],
-    *,
-    normalize_alias_fn,
-) -> tuple[list[str], list[str]] | None:
-    if not selected_adapters:
-        return None
-
-    clean = normalize_alias_fn(selected_adapters[0])
-    adapter_data = dns_info.get(clean, {"ipv4": [], "ipv6": []})
-    current_dns_v4 = normalize_dns_list(adapter_data.get("ipv4", []))
-    current_dns_v6 = normalize_dns_list(adapter_data.get("ipv6", []))
-    return current_dns_v4, current_dns_v6
-
-
-def build_dns_selection_plan(
-    *,
-    selected_adapters: list[str],
-    dns_info: dict[str, dict[str, list[str]]],
-    providers: dict,
-    normalize_alias_fn,
-) -> NetworkDnsSelectionPlan:
-    selected_dns = get_selected_adapter_dns(
-        selected_adapters,
-        dns_info,
-        normalize_alias_fn=normalize_alias_fn,
-    )
-    if selected_dns is None:
-        return NetworkDnsSelectionPlan(
-            kind="none",
-            selected_provider=None,
-            custom_primary="",
-            custom_secondary="",
-        )
-
-    current_dns_v4, current_dns_v6 = selected_dns
-    _ = current_dns_v6
-    if not current_dns_v4 and not current_dns_v6:
-        return NetworkDnsSelectionPlan(
-            kind="auto",
-            selected_provider=None,
-            custom_primary="",
-            custom_secondary="",
-        )
-
-    for providers_group in providers.values():
-        for name, data in providers_group.items():
-            if is_current_dns(data.get("ipv4", []), current_dns_v4):
-                return NetworkDnsSelectionPlan(
-                    kind="provider",
-                    selected_provider=name,
-                    custom_primary="",
-                    custom_secondary="",
-                )
-
-    return NetworkDnsSelectionPlan(
-        kind="custom",
-        selected_provider=None,
-        custom_primary=current_dns_v4[0] if current_dns_v4 else "",
-        custom_secondary=current_dns_v4[1] if len(current_dns_v4) > 1 else "",
-    )
-
-
-def build_adapter_dns_refresh_plan(
-    adapter_names: list[str],
-    dns_info: dict[str, dict[str, list[str]]],
-    *,
-    normalize_alias_fn,
-) -> NetworkAdapterDnsRefreshPlan:
-    entries: list[NetworkAdapterDnsRefreshEntry] = []
-    for adapter_name in adapter_names:
-        clean_name = normalize_alias_fn(adapter_name)
-        adapter_data = dns_info.get(clean_name, {})
-        entries.append(
-            NetworkAdapterDnsRefreshEntry(
-                adapter_name=adapter_name,
-                adapter_data=adapter_data,
-                ipv4=adapter_data.get("ipv4", []),
-                ipv6=adapter_data.get("ipv6", []),
-            )
-        )
-
-    return NetworkAdapterDnsRefreshPlan(
-        entries=entries,
-        log_level="DEBUG",
-        log_message="DNS информация адаптеров обновлена",
-    )
+    return first if all(same(plan) for plan in plans[1:]) else CurrentDnsPlan(kind="mixed")

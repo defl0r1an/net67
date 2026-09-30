@@ -24,6 +24,8 @@ class PresetListModel(QAbstractListModel):
     SystemRole = Qt.ItemDataRole.UserRole + 16
     ServiceRole = Qt.ItemDataRole.UserRole + 17
     CanResetRole = Qt.ItemDataRole.UserRole + 18
+    RemoteRole = Qt.ItemDataRole.UserRole + 19
+    RemoteStateRole = Qt.ItemDataRole.UserRole + 20
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -191,8 +193,13 @@ class PresetListModel(QAbstractListModel):
 
         source_folder = str(source_row.get("folder_key") or "").strip()
         source_row["folder_key"] = target_folder
+        target_folder_name = _folder_name(rows, target_folder)
+        if target_folder_name:
+            source_row["folder_name"] = target_folder_name
         if _folder_is_expanded(rows, target_folder):
             rows.insert(insert_index, source_row)
+        else:
+            self._collapsed_rows_by_folder.setdefault(target_folder, []).append(source_row)
 
         visible_after_move = _folder_is_expanded(rows, target_folder)
         if source_folder != target_folder:
@@ -215,6 +222,15 @@ class PresetListModel(QAbstractListModel):
         if source_folder != target_folder:
             self._emit_folder_count_changed(source_folder)
             self._emit_folder_count_changed(target_folder)
+        if visible_after_move and source_folder != target_folder:
+            moved_row = self.find_preset_row(source_name)
+            if moved_row >= 0:
+                moved_index = self.index(moved_row, 0)
+                self.dataChanged.emit(
+                    moved_index,
+                    moved_index,
+                    [self.FolderKeyRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+                )
         return True
 
     def _emit_folder_count_changed(self, folder_key: str) -> None:
@@ -222,7 +238,11 @@ class PresetListModel(QAbstractListModel):
         if folder_index < 0:
             return
         model_index = self.index(folder_index, 0)
-        self.dataChanged.emit(model_index, model_index, [self.CountRole])
+        self.dataChanged.emit(
+            model_index,
+            model_index,
+            [self.CountRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+        )
 
     def update_preset_row(self, file_name: str, **changes) -> bool:
         row_index = self.find_preset_row(file_name)
@@ -240,6 +260,9 @@ class PresetListModel(QAbstractListModel):
             "can_reset_to_builtin": [self.CanResetRole, int(Qt.ItemDataRole.AccessibleTextRole)],
             "is_pinned": [self.PinnedRole, int(Qt.ItemDataRole.AccessibleTextRole)],
             "rating": [self.RatingRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+            "folder_name": [int(Qt.ItemDataRole.AccessibleTextRole)],
+            "is_remote": [self.RemoteRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+            "remote_state": [self.RemoteStateRole, int(Qt.ItemDataRole.AccessibleTextRole)],
         }
 
         changed_roles: set[int] = set()
@@ -311,7 +334,11 @@ class PresetListModel(QAbstractListModel):
             self._rebuild_row_index()
             self.endInsertRows()
             model_index = self.index(folder_index, 0)
-            self.dataChanged.emit(model_index, model_index, [self.CollapsedRole])
+            self.dataChanged.emit(
+                model_index,
+                model_index,
+                [self.CollapsedRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+            )
             return True
 
         remove_start = folder_index + 1
@@ -337,7 +364,11 @@ class PresetListModel(QAbstractListModel):
             self._collapsed_rows_by_folder.pop(key, None)
 
         model_index = self.index(folder_index, 0)
-        self.dataChanged.emit(model_index, model_index, [self.CollapsedRole])
+        self.dataChanged.emit(
+            model_index,
+            model_index,
+            [self.CollapsedRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+        )
         return True
 
     def remove_preset(self, file_name: str) -> bool:
@@ -361,7 +392,11 @@ class PresetListModel(QAbstractListModel):
         folder_index = _row_index_for_folder(self._rows, folder_key)
         if folder_index >= 0:
             model_index = self.index(folder_index, 0)
-            self.dataChanged.emit(model_index, model_index, [self.CountRole])
+            self.dataChanged.emit(
+                model_index,
+                model_index,
+                [self.CountRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+            )
         return True
 
     def insert_preset(self, row: dict[str, object]) -> bool:
@@ -387,7 +422,11 @@ class PresetListModel(QAbstractListModel):
         if folder_index >= 0 and bool(self._rows[folder_index].get("is_collapsed", False)):
             _shift_folder_count(self._rows, folder_key, 1)
             model_index = self.index(folder_index, 0)
-            self.dataChanged.emit(model_index, model_index, [self.CountRole])
+            self.dataChanged.emit(
+                model_index,
+                model_index,
+                [self.CountRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+            )
             return True
 
         insert_index = _folder_insert_index(self._rows, folder_key) if folder_index >= 0 else len(self._rows)
@@ -398,7 +437,11 @@ class PresetListModel(QAbstractListModel):
         self.endInsertRows()
         if folder_index >= 0:
             model_index = self.index(folder_index, 0)
-            self.dataChanged.emit(model_index, model_index, [self.CountRole])
+            self.dataChanged.emit(
+                model_index,
+                model_index,
+                [self.CountRole, int(Qt.ItemDataRole.AccessibleTextRole)],
+            )
         return True
 
     def rename_preset(self, current_file_name: str, next_file_name: str, *, name: str = "") -> bool:
@@ -427,7 +470,13 @@ class PresetListModel(QAbstractListModel):
         self.dataChanged.emit(
             model_index,
             model_index,
-            [int(Qt.ItemDataRole.DisplayRole), self.FileNameRole, self.NameRole, self.ActiveRole],
+            [
+                int(Qt.ItemDataRole.DisplayRole),
+                self.FileNameRole,
+                self.NameRole,
+                self.ActiveRole,
+                int(Qt.ItemDataRole.AccessibleTextRole),
+            ],
         )
         return True
 
@@ -550,6 +599,10 @@ class PresetListModel(QAbstractListModel):
             return bool(row.get("is_system", False))
         if role == self.ServiceRole:
             return bool(row.get("is_service", False))
+        if role == self.RemoteRole:
+            return bool(row.get("is_remote", False))
+        if role == self.RemoteStateRole:
+            return str(row.get("remote_state", "") or "")
 
         return None
 
@@ -561,6 +614,18 @@ def _folder_is_expanded(rows: list[dict[str, object]], folder_key: str) -> bool:
         if str(row.get("folder_key") or "") == folder_key:
             return not bool(row.get("is_collapsed", False))
     return True
+
+
+def _folder_name(rows: list[dict[str, object]], folder_key: str) -> str:
+    key = str(folder_key or "").strip()
+    if not key:
+        return ""
+    for row in rows:
+        if str(row.get("kind") or "") != "folder":
+            continue
+        if str(row.get("folder_key") or "") == key:
+            return str(row.get("name") or row.get("text") or "").strip()
+    return ""
 
 
 def _folder_insert_index(rows: list[dict[str, object]], folder_key: str) -> int:
@@ -706,6 +771,8 @@ def _all_data_roles() -> list[int]:
         PresetListModel.SystemRole,
         PresetListModel.ServiceRole,
         PresetListModel.CanResetRole,
+        PresetListModel.RemoteRole,
+        PresetListModel.RemoteStateRole,
         int(Qt.ItemDataRole.AccessibleTextRole),
     ]
 
@@ -722,6 +789,14 @@ def _preset_accessible_text(row: dict[str, object]) -> str:
             parts.append(f"папка: {folder_name}")
         if bool(row.get("is_pinned", False)):
             parts.append("закреплённый")
+        if bool(row.get("is_remote", False)):
+            remote_state = str(row.get("remote_state") or "")
+            if remote_state == "detached":
+                parts.append("обновляется по ссылке, изменён локально, автообновление приостановлено")
+            elif remote_state == "error":
+                parts.append("обновляется по ссылке, последняя проверка с ошибкой")
+            else:
+                parts.append("обновляется по ссылке")
         rating = _safe_int(row.get("rating"))
         if rating:
             parts.append(f"оценка {rating}")

@@ -805,11 +805,6 @@ class SystemTrayManager:
             )
             return
 
-        if cmd.lower() == "апигитхаб":
-            self._tray_feature.toggle_github_api_removal(
-                status_callback=lambda m: self.show_notification("Консоль", m),
-            )
-
     def show_window(self):
         try:
             self._cleanup_transient_overlays()

@@ -1,5 +1,9 @@
 {
   "name": "Решение от Flowseal для стабильной работы голосовых серверов в Discord",
+  "category": "direct",
+  "icon": "fa5b.discord",
+  "icon_color": "#5865f2",
+  "sort_order": 29,
   "hosts": [
     {
       "ip": "104.25.158.178",

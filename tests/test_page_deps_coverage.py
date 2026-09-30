@@ -82,8 +82,8 @@ class BrandingCoverageTests(unittest.TestCase):
         # Имена движков (Zapret 1/2) и файлов установщика на сервере
         # обновлений — не бренд, их проверяем отдельно и не трогаем.
         allowed_substrings = (
-            "Zapret 1",
-            "Zapret 2",
+            "net67 v1",
+            "net67 v2",
             "Zapret2Setup",
             "zapret-win-bundle",
             "net67",  # только в комментариях о старых маркерах hosts
@@ -95,7 +95,7 @@ class BrandingCoverageTests(unittest.TestCase):
             PROJECT_SRC / "support_request_bundle.py",
         ):
             for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-                if "Zapret" not in line:
+                if "net67" not in line:
                     continue
                 if any(token in line for token in allowed_substrings):
                     continue

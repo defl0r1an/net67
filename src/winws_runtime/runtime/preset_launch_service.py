@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-from pathlib import Path
 import time
 from typing import Callable
 
 from log.log import log
 from settings.mode import ENGINE_WINWS2, is_orchestra_launch_method, is_preset_launch_method
-from winws_runtime.health.process_health_check import diagnose_startup_error
+from winws_runtime.health.installation_preflight import check_installation_before_launch
+from winws_runtime.health.process_health_check import (
+    diagnose_startup_error,
+    publish_startup_diagnosis,
+)
 from winws_runtime.runtime.sync_shutdown import shutdown_runtime_sync
 from winws_runtime.runtime.system_ops import force_kill_all_winws_processes
+from utils.atomic_text import read_preset_file_text
 
 
 STARTUP_AUTOSTART_STABLE_WINDOW_SECONDS = 0.35
@@ -166,7 +170,7 @@ class PresetLaunchService:
             from winws_runtime.runners.runner_factory import get_strategy_runner
 
             try:
-                preset_text = Path(preset_path).read_text(encoding="utf-8", errors="replace")
+                preset_text = read_preset_file_text(preset_path)
             except Exception as e:
                 self.last_error_message = f"Ошибка чтения preset: {e}"
                 self._progress(self.last_error_message)
@@ -222,6 +226,7 @@ class PresetLaunchService:
             include_cleanup=False,
             cleanup_services=False,
             update_runtime_state=False,
+            keep_runner=True,
         )
         if not shutdown_result.still_running:
             time.sleep(0.5)
@@ -312,16 +317,15 @@ class PresetLaunchService:
 
         except Exception as e:
             exe_path = self._get_winws_exe()
-            diagnosis = diagnose_startup_error(e, exe_path)
-            for line in diagnosis.split("\n"):
-                log(line, "❌ ERROR")
+            summary = publish_startup_diagnosis(diagnose_startup_error(e, exe_path))
+            log(summary, "вќЊ ERROR")
             # Ветка оркестратора traceback уже пишет, а эта — нет, и по
             # одной строке диагноза место падения не восстановить.
             import traceback
 
-            log(traceback.format_exc(), "❌ ERROR")
-            self.last_error_message = diagnosis.split("\n")[0]
-            self._progress(self.last_error_message)
+            log(traceback.format_exc(), "вќЊ ERROR")
+            self.last_error_message = summary
+            self._progress(summary)
             return False
 
     def _start_orchestra(self) -> bool:
@@ -385,13 +389,12 @@ class PresetLaunchService:
 
         except Exception as e:
             exe_path = self._get_winws_exe()
-            diagnosis = diagnose_startup_error(e, exe_path)
-            for line in diagnosis.split("\n"):
-                log(line, "❌ ERROR")
+            summary = publish_startup_diagnosis(diagnose_startup_error(e, exe_path))
+            log(summary, "❌ ERROR")
             import traceback
 
             log(traceback.format_exc(), "DEBUG")
-            self.last_error_message = diagnosis.split("\n")[0]
+            self.last_error_message = summary
             return False
 
     def _run_launch_method(self) -> bool:
@@ -403,9 +406,37 @@ class PresetLaunchService:
         self.last_error_message = f"Неизвестный метод запуска: {self.launch_method}"
         return False
 
+    def _check_installation(self) -> PresetLaunchResult | None:
+        """Отказ запуска, если поставке не хватает своих же файлов.
+
+        Одновременно просит слой приложения починить установку: движок чаще
+        всего пропадает не сам по себе, а после обновления или карантина
+        антивируса, и пользователю нечего чинить руками.
+        """
+        preflight = check_installation_before_launch(self.launch_method)
+        if preflight.ok:
+            return None
+
+        log(
+            f"Запуск остановлен проверкой целостности ({preflight.cause}): "
+            f"{', '.join(preflight.missing) or 'нет данных'}",
+            "WARNING",
+        )
+        try:
+            self._runtime_feature.events.publish_installation_damaged(preflight.report)
+        except Exception:
+            pass
+
+        log(preflight.message, "❌ ERROR")
+        return self._fail(preflight.message)
+
     def run(self) -> PresetLaunchResult:
         try:
             self._progress("Подготовка к запуску...")
+
+            integrity_failure = self._check_installation()
+            if integrity_failure is not None:
+                return integrity_failure
 
             deferred_result = self._resolve_startup_preset_snapshot_if_needed()
             if deferred_result is not None:
@@ -453,7 +484,6 @@ class PresetLaunchService:
 
         except Exception as e:
             exe_path = getattr(self.launch_runtime_api, "expected_exe_path", self._get_winws_exe())
-            diagnosis = diagnose_startup_error(e, exe_path)
-            for line in diagnosis.split("\n"):
-                log(line, "❌ ERROR")
-            return self._result(False, diagnosis.split("\n")[0])
+            summary = publish_startup_diagnosis(diagnose_startup_error(e, exe_path))
+            log(summary, "❌ ERROR")
+            return self._result(False, summary)

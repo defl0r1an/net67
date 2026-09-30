@@ -22,6 +22,7 @@ class RuntimeFeatureDeps:
 
 
 @dataclass(frozen=True, slots=True)
+
 class TrayFeatureDeps:
     window_port: Any
     startup_state: Any
@@ -56,6 +57,7 @@ def build_preset_profile_features(paths: Any) -> PresetProfileFeatures:
     profile_feature = ProfileFeature(
         _presets_feature=presets_feature,
         _app_paths=paths,
+        _fakes_catalog_loader=load_installed_fakes_catalog,
     )
     presets_feature.attach_profile_feature(profile_feature)
     emit_startup_metric(
@@ -66,6 +68,15 @@ def build_preset_profile_features(paths: Any) -> PresetProfileFeatures:
         presets=presets_feature,
         profile=profile_feature,
     )
+
+
+def load_installed_fakes_catalog():
+    """Фейки winws2 для явного выбора стратегии: реестр установки
+    (system/fakes_catalog.sqlite3) и свои фейки пользователя (user/fakes)."""
+    from config.runtime_layout import APPLICATION_PATHS
+    from fakes.public import load_effective_fakes_catalog
+
+    return load_effective_fakes_catalog(APPLICATION_PATHS)
 
 
 def _timed_facade_import(facade_name: str):
@@ -88,9 +99,9 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
         for name in (
             "appearance",
             "blockcheck",
-            "diagnostics",
             "dns",
             "external",
+            "fakes",
             "hosts",
             "lists",
             "logs",
@@ -104,9 +115,9 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
     }
     build_appearance_feature = facades["appearance"].build_appearance_feature
     BlockcheckFeature = facades["blockcheck"].BlockcheckFeature
-    build_diagnostics_feature = facades["diagnostics"].build_diagnostics_feature
     build_dns_feature = facades["dns"].build_dns_feature
     build_external_actions_feature = facades["external"].build_external_actions_feature
+    build_fakes_feature = facades["fakes"].build_fakes_feature
     build_hosts_feature = facades["hosts"].build_hosts_feature
     build_lists_feature = facades["lists"].build_lists_feature
     build_logs_feature = facades["logs"].build_logs_feature
@@ -158,6 +169,11 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
         f"{(_time.perf_counter() - t_tray) * 1000:.0f}ms",
     )
 
+    updater_feature = build_updater_feature()
+    # Runtime сообщает только факт «поставка повреждена»; чинит установку слой
+    # приложения через updater, поэтому порт связывается здесь.
+    runtime_feature.configure_installation_repair(updater_feature=updater_feature)
+
     t_secondary = _time.perf_counter()
     features = AppFeatures(
         appearance=build_appearance_feature(),
@@ -168,14 +184,14 @@ def build_app_features(*, deps: AppFeatureAssemblyDeps, paths: Any, state: Any) 
             presets_feature=preset_profile.presets,
             profile_feature=preset_profile.profile,
         ),
-        diagnostics=build_diagnostics_feature(),
         dns=build_dns_feature(),
+        fakes=build_fakes_feature(paths),
         hosts=build_hosts_feature(),
         lists=build_lists_feature(),
         logs=build_logs_feature(),
         telegram_proxy=telegram_proxy_feature,
         tray=tray_feature,
-        updater=build_updater_feature(),
+        updater=updater_feature,
         external_actions=build_external_actions_feature(),
         program_settings=build_program_settings_feature(),
         window_geometry=build_window_geometry_feature(),

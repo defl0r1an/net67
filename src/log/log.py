@@ -45,10 +45,22 @@ def _is_verbose_logging_enabled() -> bool:
 
     return False
 
+#: Журнал программы: net67_log_<дата>_<время>.txt.
+APP_LOG_PATTERN = "net67_log_*.txt"
+
+#: Имя, под которым журнал писался до переименования, — осталось от
+#: zapret. Такие файлы уже лежат в logs/ у всех, кто ставил прежние
+#: версии: их по-прежнему показываем в списке и чистим по лимиту, иначе
+#: они пропали бы со страницы «Логи» и копились бы вечно.
+LEGACY_APP_LOG_PATTERN = "zapret_log_*.txt"
+
+APP_LOG_PATTERNS = (APP_LOG_PATTERN, LEGACY_APP_LOG_PATTERN)
+
+
 def get_current_log_filename():
     """Генерирует имя файла лога с текущей датой и временем"""
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return f"zapret_log_{timestamp}.txt"
+    return f"net67_log_{timestamp}.txt"
 
 
 def _cleanup_files_by_pattern(logs_folder: str, pattern: str, max_files: int) -> tuple:
@@ -86,7 +98,8 @@ def _cleanup_files_by_pattern(logs_folder: str, pattern: str, max_files: int) ->
 def cleanup_old_logs(logs_folder, max_files=MAX_LOG_FILES):
     """
     Удаляет старые лог файлы с раздельными лимитами для каждого типа:
-    - zapret_log_*.txt: max_files (по умолчанию 50)
+    - net67_log_*.txt: max_files (по умолчанию 50)
+    - zapret_log_*.txt: прежнее имя журнала, тот же лимит отдельно
     - zapret_winws2_debug_*.log: MAX_DEBUG_LOG_FILES (20)
     - zapret_[0-9]*.log: старый формат, включается в общий лимит
     - blockcheck_run_*.log: отдельная история запусков BlockCheck
@@ -95,11 +108,13 @@ def cleanup_old_logs(logs_folder, max_files=MAX_LOG_FILES):
     all_errors = []
     total_found = 0
 
-    # 1. Основные логи приложения (zapret_log_*.txt) - макс 50
-    d, e, t = _cleanup_files_by_pattern(logs_folder, "zapret_log_*.txt", max_files)
-    total_deleted += d
-    all_errors.extend(e)
-    total_found += t
+    # 1. Основные логи приложения - макс 50, новое и прежнее имя порознь:
+    # общий лимит на оба выбросил бы свежие прежде старых, если их меньше.
+    for pattern in APP_LOG_PATTERNS:
+        d, e, t = _cleanup_files_by_pattern(logs_folder, pattern, max_files)
+        total_deleted += d
+        all_errors.extend(e)
+        total_found += t
 
     # 2. Debug логи winws2 (zapret_winws2_debug_*.log) - макс 20
     d, e, t = _cleanup_files_by_pattern(logs_folder, "zapret_winws2_debug_*.log", MAX_DEBUG_LOG_FILES)
@@ -457,7 +472,7 @@ class Logger:
         header = (
             f"=== net67 v2 GUI Log - Started {datetime.now():%Y-%m-%d %H:%M:%S} ===\n"
             f"Log file: {os.path.basename(self.log_file)}\n"
-            f"Total log files in folder: {len(glob.glob(os.path.join(log_dir, 'zapret_log_*.txt')))}\n"
+            f"Total log files in folder: {sum(len(glob.glob(os.path.join(log_dir, p))) for p in APP_LOG_PATTERNS)}\n"
             f"{'=' * 60}\n\n"
         )
         self._store = _AsyncLogStore(self.log_file, header)
@@ -697,7 +712,12 @@ class Logger:
         # Замеры отрисовки — не для человека. Их поток («UiMetric:
         # scope=page name=... elapsed=... budget=...») забивал окно
         # «Логи» целиком, а нужен он при разборе медленного старта.
-        if _is_measurement(message):
+        #
+        # Предупреждения и ошибки не трогаем, даже если строка начинается
+        # как замер. «Startup: build_ui failed: …» — ошибка, после которой
+        # окно остаётся пустым, — уходила в DEBUG по приставке «Startup», и
+        # в обычном журнале причины чёрного экрана не было ни строки.
+        if _is_measurement(message) and level in ("DEBUG", "INFO"):
             level = "DEBUG"
 
         if not self._should_emit_level(level):

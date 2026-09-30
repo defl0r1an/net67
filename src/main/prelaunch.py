@@ -31,12 +31,12 @@ Directory contents: {os.listdir(app_dir) if os.path.exists(app_dir) else 'N/A'}
 ========================
 """
             APPLICATION_PATHS.logs_dir.mkdir(parents=True, exist_ok=True)
-            with open(APPLICATION_PATHS.logs_dir / "zapret_startup.log", "w", encoding="utf-8") as handle:
+            with open(APPLICATION_PATHS.logs_dir / "net67_startup.log", "w", encoding="utf-8") as handle:
                 handle.write(debug_info)
     except Exception as exc:
         try:
             APPLICATION_PATHS.logs_dir.mkdir(parents=True, exist_ok=True)
-            with open(APPLICATION_PATHS.logs_dir / "zapret_startup_error.log", "w", encoding="utf-8") as handle:
+            with open(APPLICATION_PATHS.logs_dir / "net67_startup_error.log", "w", encoding="utf-8") as handle:
                 handle.write(f"Error setting workdir: {exc}\n")
                 import traceback
 

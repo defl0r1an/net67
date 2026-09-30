@@ -59,7 +59,9 @@ def install_autotune(
             from autotune.scan import run_strategy_scan
 
             presets_feature = features.presets
-            shutdown_sync = features.runtime.shutdown_sync
+            # Автоподбор идёт в обычном потоке: состояние обхода должен
+            # менять GUI-поток, как и при подборе со страницы BlockCheck.
+            shutdown_sync = features.runtime.shutdown_sync_from_worker
 
             def _scan(target: str, protocol: str) -> list[str]:
                 return run_strategy_scan(target, protocol, shutdown_sync=shutdown_sync)

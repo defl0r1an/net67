@@ -26,13 +26,13 @@ def main() -> int:
 
     # Импортируются внутри функций. PyInstaller обычно такое находит, но
     # промах означал бы, что в собранном приложении не откроются кнопка
-    # «Включить» и мастер первого запуска.
+    # «Включить» и вопросы первичной настройки в туре.
     modules |= {
         "oneclick.ui.button",
         "oneclick.deps",
         "oneclick.runner",
         "oneclick.plans",
-        "wizard.ui.dialog",
+        "ui.onboarding.setup_choices",
         "wizard.apply",
         "wizard.plans",
     }

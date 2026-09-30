@@ -12,6 +12,13 @@ class DnsPageDeps:
 @dataclass(frozen=True, slots=True)
 class HostsPageDeps:
     hosts_feature: object
+    open_file_page: Callable[[], object]
+
+
+@dataclass(frozen=True, slots=True)
+class HostsFilePageDeps:
+    hosts_feature: object
+    open_hosts_page: Callable[[], object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +39,7 @@ class UpdateRuntimeActions:
 __all__ = [
     "DpiRuntimeActions",
     "DnsPageDeps",
+    "HostsFilePageDeps",
     "HostsPageDeps",
     "UpdateRuntimeActions",
 ]

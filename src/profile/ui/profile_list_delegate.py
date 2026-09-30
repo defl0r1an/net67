@@ -7,10 +7,12 @@ from PyQt6.QtGui import QFontMetrics, QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import QListView, QStyledItemDelegate, QStyle, QStyleOptionViewItem
 
 from profile.ui.profile_icon import profile_icon_pixmap
+from profile.ui.widgets.payload_badge import PAYLOAD_BADGE_HEIGHT, paint_payload_badge, payload_badge_width
 from ui.theme import get_theme_tokens, to_qcolor
 from ui.widgets.fluent_item_tooltip import FluentItemToolTipController
 from ui.widgets.folder_header import FOLDER_HEADER_HEIGHT, is_folder_toggle_click, paint_folder_header_row
 from ui.widgets.hover_row import paint_profile_hover_row, profile_hover_row_rect
+from ui.widgets.row_hover_motion import attach_row_hover_motion, paint_icon_motion, row_hover_motion
 from ui.widgets.profile_row_style import (
     PROFILE_BADGE_HOSTLIST_BG,
     PROFILE_BADGE_HOSTLIST_FG,
@@ -40,6 +42,7 @@ class ProfileListDelegate(QStyledItemDelegate):
         self._pressed_row = -1
         self._selected_rows: set[int] = set()
         self._tooltip = FluentItemToolTipController(view.viewport())
+        attach_row_hover_motion(view, row_filter=_is_profile_row)
 
     def setHoverRow(self, row: int) -> None:
         self._hover_row = int(row)
@@ -174,26 +177,35 @@ class ProfileListDelegate(QStyledItemDelegate):
 
         tokens = get_theme_tokens()
         rect = profile_hover_row_rect(option.rect)
+        selected = bool(option.state & QStyle.StateFlag.State_Selected) or bool(
+            option.state & QStyle.StateFlag.State_HasFocus
+        )
         hovered = _profile_row_is_interactive(
             index.row(),
             hovered=bool(option.state & QStyle.StateFlag.State_MouseOver),
-            selected=bool(option.state & QStyle.StateFlag.State_Selected) or bool(
-                option.state & QStyle.StateFlag.State_HasFocus
-            ),
+            selected=selected,
             hover_row=self._hover_row,
             pressed_row=self._pressed_row,
             selected_rows=self._selected_rows,
         )
         active = str(index.data(ProfileListModel.StrategyIdRole) or "") not in {"", "none"}
+        hover_motion = row_hover_motion(self._view)
+        # Выделенная или нажатая строка подсвечена всегда, плавно — только наведение мышью.
+        live_hover = hover_motion is not None and not (
+            selected or self._pressed_row == index.row() or index.row() in self._selected_rows
+        )
         paint_profile_hover_row(
             painter,
             rect,
             active=False,
             hovered=hovered,
             show_active_marker=False,
+            hover_level=hover_motion.hover_level(index) if live_hover else None,
+            sheen=hover_motion.sheen_progress(index) if live_hover else None,
         )
 
         strategy_name = str(index.data(ProfileListModel.StrategyNameRole) or "")
+        payload_badge = str(index.data(ProfileListModel.StrategyPayloadBadgeRole) or "")
         rating = str(index.data(ProfileListModel.RatingRole) or "").strip().lower()
         favorite = bool(index.data(ProfileListModel.FavoriteRole))
         feedback_text = _feedback_text(rating, favorite)
@@ -204,6 +216,9 @@ class ProfileListDelegate(QStyledItemDelegate):
         meta_font.setBold(False)
         meta_metrics = QFontMetrics(meta_font)
         strategy_text_width = meta_metrics.horizontalAdvance(strategy_name) + 8 if strategy_name else 0
+        payload_badge_full_width = payload_badge_width(meta_metrics, payload_badge) if strategy_name else 0
+        if payload_badge_full_width:
+            strategy_text_width += payload_badge_full_width + _PAYLOAD_BADGE_GAP
         feedback_text_width = meta_metrics.horizontalAdvance(feedback_text) + 8 if feedback_text else 0
         badge_width = meta_metrics.horizontalAdvance(badge_text) + self._BADGE_H_PADDING * 2 if badge_text else 0
         name = str(index.data(ProfileListModel.DisplayNameRole) or "")
@@ -225,14 +240,23 @@ class ProfileListDelegate(QStyledItemDelegate):
         icon_color = str(index.data(ProfileListModel.IconColorRole) or "#888888")
         if not bool(index.data(ProfileListModel.InPresetRole)):
             icon_color = "#888888"
+        # Пока значок наклоняется, он рисуется из картинки двойного размера:
+        # так при повороте и увеличении края остаются чёткими.
+        moving = hover_motion is not None and hover_motion.icon_moving(index)
         pixmap = profile_icon_pixmap(
             str(index.data(ProfileListModel.IconNameRole) or ""),
             color=icon_color,
-            size=self._ICON_SIZE,
+            size=self._ICON_SIZE * (2 if moving else 1),
             theme_name=tokens.theme_name,
         )
         if not pixmap.isNull():
-            painter.drawPixmap(row_layout.icon_rect, pixmap)
+            paint_icon_motion(
+                painter,
+                row_layout.icon_rect,
+                hover_motion,
+                index,
+                lambda: painter.drawPixmap(row_layout.icon_rect, pixmap),
+            )
 
         painter.setFont(name_font)
         painter.setPen(to_qcolor(tokens.fg, "#f5f5f5"))
@@ -269,11 +293,17 @@ class ProfileListDelegate(QStyledItemDelegate):
 
         strategy_color = tokens.fg if active else tokens.fg_muted
         if row_layout.strategy_rect.isValid():
+            payload_badge_rect, strategy_text_rect = _strategy_payload_badge_rects(
+                row_layout.strategy_rect,
+                payload_badge_full_width,
+            )
+            paint_payload_badge(painter, payload_badge_rect, payload_badge, meta_metrics, tokens)
+            painter.setFont(meta_font)
             painter.setPen(to_qcolor(strategy_color, "#b7bec8"))
             painter.drawText(
-                row_layout.strategy_rect,
+                strategy_text_rect,
                 int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
-                meta_metrics.elidedText(strategy_name, Qt.TextElideMode.ElideRight, row_layout.strategy_rect.width()),
+                meta_metrics.elidedText(strategy_name, Qt.TextElideMode.ElideRight, strategy_text_rect.width()),
             )
 
         if feedback_text and row_layout.feedback_rect.isValid():
@@ -285,6 +315,34 @@ class ProfileListDelegate(QStyledItemDelegate):
             )
 
         painter.restore()
+
+
+_PAYLOAD_BADGE_GAP = 6
+# Сколько места оставить имени стратегии рядом со значком (дальше — многоточие).
+_PAYLOAD_BADGE_MIN_NAME_WIDTH = 24
+
+
+def _strategy_payload_badge_rects(strategy_rect: QRect, badge_width: int) -> tuple[QRect, QRect]:
+    """(значок типов пакетов, имя стратегии) внутри области стратегии.
+
+    Значок составной стратегии стоит слева и виден всегда; имя стратегии
+    сокращается многоточием в оставшемся месте. Если места совсем мало,
+    сокращается и сам значок.
+    """
+    text_rect = QRect(strategy_rect)
+    if badge_width <= 0 or not strategy_rect.isValid():
+        return QRect(), text_rect
+    width = min(int(badge_width), strategy_rect.width() - _PAYLOAD_BADGE_GAP - _PAYLOAD_BADGE_MIN_NAME_WIDTH)
+    if width <= 0:
+        return QRect(), text_rect
+    badge_rect = QRect(
+        strategy_rect.left(),
+        strategy_rect.center().y() - PAYLOAD_BADGE_HEIGHT // 2,
+        width,
+        PAYLOAD_BADGE_HEIGHT,
+    )
+    text_rect.setLeft(badge_rect.right() + 1 + _PAYLOAD_BADGE_GAP)
+    return badge_rect, text_rect
 
 
 @dataclass(frozen=True)
@@ -425,6 +483,10 @@ def _status_dot_color(
     if bool(active):
         return str(active_color or "#5caee8")
     return str(fallback or "#8f9aa6")
+
+
+def _is_profile_row(index) -> bool:
+    return str(index.data(ProfileListModel.KindRole) or "") not in {"folder", "empty"}
 
 
 def _profile_row_is_interactive(

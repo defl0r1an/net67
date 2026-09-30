@@ -29,7 +29,7 @@ qframelesswindow это уже умеет, лежит в зависимостя�
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QHBoxLayout,
@@ -313,6 +313,17 @@ class AppShellWindow(FramelessWindow):
         if title_bar_layout is not None:
             title_bar_layout.insertWidget(
                 title_bar_layout.indexOf(self.groupTabs) + 1, self.advancedButton
+            )
+
+        # Колокольчик уведомлений — перед кнопкой режима. Фоновые ошибки
+        # и проверки больше не всплывают плашками, а копятся здесь; см.
+        # ui/notification_inbox.py. Подключает его центр уведомлений.
+        from ui.widgets.notification_bell import NotificationBell
+
+        self.notificationBell = NotificationBell(self.titleBar)
+        if title_bar_layout is not None:
+            title_bar_layout.insertWidget(
+                title_bar_layout.indexOf(self.advancedButton), self.notificationBell
             )
 
     #: Насколько кнопка проседает под нажатием.
@@ -656,6 +667,100 @@ class AppShellWindow(FramelessWindow):
         # Рамка окна красится вслед за темой: в светлой она должна
         # оставаться светлой, иначе окно получит тёмный кант.
         self._apply_window_border_colour()
+
+    # ------------------------------------------------------------------
+    # Возврат из развёрнутого окна
+    # ------------------------------------------------------------------
+
+    def changeEvent(self, event):  # noqa: N802 (сигнатура Qt)
+        """Ловит выход из развёрнутого состояния.
+
+        Окно после нажатия на «свернуть в окно» оказывалось сдвинутым
+        влево и обведённым белой каймой — до первого перетаскивания мышью.
+        Рамы у окна своей нет, её рисует qframelesswindow, и размеры полей
+        она считает по-разному для развёрнутого окна и обычного. Пересчёт
+        запускает WM_NCCALCSIZE, а Windows шлёт его не всегда: при обычном
+        ShowWindow(SW_RESTORE) рама остаётся посчитанной по прежнему
+        состоянию. Перетаскивание сообщение вызывает — отсюда и «чинится,
+        когда потащишь».
+
+        Этот обработчик раньше стоял в ui/fluent_app_window.py, в классе
+        окна qfluentwidgets. Главное окно net67 давно собрано на
+        AppShellWindow, тот класс нигде не создаётся — поэтому исправление
+        ни разу не срабатывало и вживую его никто не видел.
+        """
+        super().changeEvent(event)
+
+        try:
+            if event.type() != QEvent.Type.WindowStateChange:
+                return
+            was_zoomed = bool(event.oldState() & Qt.WindowState.WindowMaximized)
+            now_zoomed = bool(self.isMaximized() or self.isFullScreen())
+        except Exception:
+            return
+
+        if not was_zoomed or now_zoomed:
+            return
+
+        # Следующим тактом: Qt в этот момент ещё внутри обработки смены
+        # состояния, и просить у него окно пересчитать раму рано.
+        QTimer.singleShot(0, self._recalculate_native_frame)
+
+    def _recalculate_native_frame(self) -> None:
+        """Просит Windows пересчитать поля окна, ничего не двигая.
+
+        SetWindowPos с SWP_FRAMECHANGED и без перемещения, размера и
+        смены порядка окон — единственный смысл вызова в том, чтобы Windows
+        прислала WM_NCCALCSIZE. Обработчик рамы получает сообщение уже с
+        правильным состоянием окна и считает поля заново.
+
+        argtypes задаём явно: без них ctypes режет HWND до 32 бит, и на
+        64-разрядной Windows вызов уходит в никуда, молча возвращая ложь.
+        """
+        import sys
+
+        if sys.platform != "win32":
+            return
+
+        try:
+            import ctypes
+
+            SWP_NOSIZE = 0x0001
+            SWP_NOMOVE = 0x0002
+            SWP_NOZORDER = 0x0004
+            SWP_NOACTIVATE = 0x0010
+            SWP_FRAMECHANGED = 0x0020
+
+            user32 = ctypes.windll.user32
+            user32.SetWindowPos.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint,
+            ]
+            user32.SetWindowPos.restype = ctypes.c_bool
+            user32.SetWindowPos(
+                int(self.winId()),
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            )
+        except Exception as exc:
+            from log.log import log
+
+            log(f"[WINDOW] рама не пересчитана: {exc}", "DEBUG")
+            return
+
+        try:
+            self.update()
+        except Exception:
+            pass
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

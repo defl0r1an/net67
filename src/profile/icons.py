@@ -58,6 +58,11 @@ _KNOWN_ICONS: dict[str, ProfileIconSpec] = {
     "riot": ProfileIconSpec("simple:riotgames:RI", "#D13639"),
     "valorant": ProfileIconSpec("simple:valorant:VA", "#FA4454"),
     "deepseek": ProfileIconSpec("simple:deepseek:DS", "#4D6BFE"),
+    "claude": ProfileIconSpec("simple:claude:CL", "#D97757"),
+    # Логотипа OpenAI нет в Simple Icons, откуда берутся остальные: его
+    # оттуда убрали. Та же иконка и тот же зелёный, что у ChatGPT на
+    # странице «Сервисы», — один сервис выглядит одинаково по всей программе.
+    "chatgpt": ProfileIconSpec("mdi.robot", "#10A37F"),
     "obsidian": ProfileIconSpec("simple:obsidian:OB", "#7C3AED"),
     "rutracker": ProfileIconSpec("fa5s.link", "#6AA2FF"),
     "rutor": ProfileIconSpec("fa5s.link", "#6AA2FF"),
@@ -77,6 +82,9 @@ _KNOWN_ICONS: dict[str, ProfileIconSpec] = {
 }
 
 _ICON_ALIASES: dict[str, str] = {
+    "openai": "chatgpt",
+    "anthropic": "claude",
+    "google-backend": "google",
     "youtube-v2": "youtube",
     "youtubeq": "youtube",
     "youtubegv": "youtube",
@@ -91,6 +99,7 @@ _ICON_ALIASES: dict[str, str] = {
     "com-cloudflarecp": "cloudflare",
     "cloudfront": "amazon",
     "usa-google": "google",
+    "google-backend": "google",
     "txrevive": "cloudflare",
     "lol-ru": "lol",
     "lol-euw": "lol",

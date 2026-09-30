@@ -1,5 +1,9 @@
 {
   "name": "YouTube (иногда может не работать с ним! Отключите тумблер если YouTube не работает с пресетами)",
+  "category": "direct",
+  "icon": "fa5b.youtube",
+  "icon_color": "#ff0000",
+  "sort_order": 22,
   "hosts": [
     {
       "ip": "64.233.162.198",

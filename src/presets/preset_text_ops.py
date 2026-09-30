@@ -1,66 +1,9 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
-from log.log import log
+from presets.preset_contract import DEBUG_LOG_DIR, relocate_legacy_debug_log_file, strip_utf8_bom
 from settings.mode import ENGINE_WINWS2
-
-
-
-def _normalize_strategy_selection_value(value: object) -> str:
-    return str(value or "").strip() or "none"
-
-
-def _collect_changed_strategy_selections(current: dict | None, requested: dict | None) -> dict[str, str]:
-    current_map = {
-        str(key or "").strip().lower(): _normalize_strategy_selection_value(val)
-        for key, val in (current or {}).items()
-        if str(key or "").strip()
-    }
-    changed: dict[str, str] = {}
-    for key, value in (requested or {}).items():
-        normalized_key = str(key or "").strip().lower()
-        if not normalized_key:
-            continue
-        normalized_value = _normalize_strategy_selection_value(value)
-        if current_map.get(normalized_key, "none") == normalized_value:
-            continue
-        changed[normalized_key] = normalized_value
-    return changed
-
-
-def _log_startup_payload_metric(scope: str | None, section: str, elapsed_ms: float, *, extra: str | None = None) -> None:
-    resolved_scope = str(scope or "").strip()
-    if not resolved_scope:
-        return
-    try:
-        rounded = int(round(float(elapsed_ms)))
-    except Exception:
-        rounded = 0
-    suffix = f" ({extra})" if extra else ""
-    log(f"⏱ Startup UI Section: {resolved_scope} {section} {rounded}ms{suffix}", "⏱ STARTUP")
-
-
-def _rewrite_preset_header_name(source_text: str, preset_name: str) -> str:
-    text = (source_text or "").replace("\r\n", "\n").replace("\r", "\n")
-    lines = text.splitlines()
-    replaced = False
-
-    for idx, raw in enumerate(lines):
-        stripped = raw.strip()
-        if stripped.lower().startswith("# preset:"):
-            lines[idx] = f"# Preset: {preset_name}"
-            replaced = True
-            break
-        if stripped and not stripped.startswith("#"):
-            break
-
-    if not replaced:
-        lines.insert(0, f"# Preset: {preset_name}")
-
-    rewritten = "\n".join(lines).rstrip("\n")
-    return rewritten + "\n"
 
 
 def _rewrite_preset_headers(
@@ -69,7 +12,7 @@ def _rewrite_preset_headers(
     *,
     preset_kind: str | None = None,
 ) -> str:
-    text = (source_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = strip_utf8_bom(source_text).replace("\r\n", "\n").replace("\r", "\n")
     lines = text.splitlines()
 
     header_end = 0
@@ -126,36 +69,42 @@ def _header_preset_kind(kind: str | None) -> str | None:
     return None
 
 
-def _normalize_presets_source_text(source_text: str) -> str:
-    text = (source_text or "").replace("\r\n", "\n").replace("\r", "\n")
-    lines = [
-        line
-        for line in text.splitlines()
-        if not line.strip().lower().startswith("# activepreset:")
-        and not line.strip().lower().startswith("# modified:")
-    ]
-    return "\n".join(lines).rstrip("\n") + "\n"
+def validate_preset_source_text(source_text: str, *, engine: str = "") -> str:
+    """Минимальная структурная проверка импортируемого пресета.
 
+    Возвращает пустую строку для валидного текста или человекочитаемую
+    причину отказа. Пресет winws состоит из строк-опций «--…», комментариев
+    «#» и пустых строк; любой другой текст (лог, JSON, случайный файл) не
+    должен превращаться в «пресет» при импорте.
 
-def normalize_preset_source_text_for_engine(source_text: str, engine: str) -> str:
-    normalized = _normalize_presets_source_text(source_text)
-    if str(engine or "").strip().lower() != ENGINE_WINWS2:
-        return normalized
-
-    from profile.winws2_preset_source import ensure_winws2_lua_init_lines
-
-    return _normalize_presets_source_text(ensure_winws2_lua_init_lines(normalized))
-
-
-def _extract_debug_log_file(source_text: str) -> str:
-    text = (source_text or "").replace("\r\n", "\n").replace("\r", "\n")
-    for raw in text.splitlines():
+    Рабочему пресету нужны и содержательные опции: без фильтра «--wf…»
+    winws не перехватывает трафик, а пресет winws2 без единого
+    «--lua-desync» ничего не делает с перехваченным. Для zapret1 опции
+    --lua-desync не существует, поэтому там требуется только фильтр.
+    """
+    text = (source_text or "").lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    option_lines = 0
+    has_wf_filter = False
+    has_lua_desync = False
+    for line_no, raw in enumerate(text.splitlines(), start=1):
         stripped = raw.strip()
-        if not stripped.lower().startswith("--debug="):
+        if not stripped or stripped.startswith("#"):
             continue
-        value = stripped.split("=", 1)[1].strip() if "=" in stripped else ""
-        value = value.lstrip("@").replace("\\", "/").lstrip("/")
-        return value
+        if not stripped.startswith("--"):
+            preview = stripped if len(stripped) <= 60 else f"{stripped[:57]}…"
+            return f"строка {line_no} не является опцией winws: «{preview}»"
+        option_lines += 1
+        lowered = stripped.lower()
+        if lowered.startswith("--wf"):
+            has_wf_filter = True
+        if lowered.startswith("--lua-desync"):
+            has_lua_desync = True
+    if not option_lines:
+        return "в файле нет ни одной опции winws (строк вида «--…»)"
+    if not has_wf_filter:
+        return "нет ни одной опции фильтра «--wf…» — такой пресет не перехватывает трафик"
+    if str(engine or "").strip().lower() == ENGINE_WINWS2 and not has_lua_desync:
+        return "нет ни одной опции «--lua-desync» — такой пресет ничего не делает с трафиком"
     return ""
 
 
@@ -163,7 +112,9 @@ def _build_stable_debug_log_file(preset_name: str) -> str:
     safe_name = re.sub(r"[^\w.-]+", "_", str(preset_name or "").strip(), flags=re.UNICODE).strip("._")
     if not safe_name:
         safe_name = "preset"
-    return f"logs/{safe_name}_debug.log"
+    # Путь относителен корня установки (cwd запуска winws2), где логи
+    # живут в user\logs.
+    return f"{DEBUG_LOG_DIR}/{safe_name}_debug.log"
 
 
 def _default_debug_insert_index(lines: list[str]) -> int:
@@ -203,7 +154,7 @@ def _rewrite_debug_log_setting(source_text: str, preset_name: str, enabled: bool
         cleaned.append(raw)
 
     if enabled:
-        debug_file = existing_value or _build_stable_debug_log_file(preset_name)
+        debug_file = relocate_legacy_debug_log_file(existing_value) or _build_stable_debug_log_file(preset_name)
         debug_line = f"--debug=@{debug_file}"
         insert_at = existing_insert_at if existing_insert_at is not None else _default_debug_insert_index(cleaned)
         if insert_at < 0:
@@ -214,77 +165,3 @@ def _rewrite_debug_log_setting(source_text: str, preset_name: str, enabled: bool
 
     return "\n".join(cleaned).rstrip("\n") + "\n"
 
-
-def _ports_include_443(value: str) -> bool:
-    for raw_part in str(value or "").split(","):
-        part = raw_part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            try:
-                start_s, end_s = part.split("-", 1)
-                start = int(start_s.strip())
-                end = int(end_s.strip())
-            except Exception:
-                continue
-            if start <= 443 <= end:
-                return True
-            continue
-        try:
-            if int(part) == 443:
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _split_arg_lines(args_text: str) -> list[str]:
-    return [str(raw or "").strip() for raw in str(args_text or "").splitlines() if str(raw or "").strip()]
-
-
-def _join_arg_lines(lines: list[str]) -> str:
-    return "\n".join(str(line or "").strip() for line in lines if str(line or "").strip()).strip()
-
-
-def _settings_payload_to_dict(value) -> dict[str, object]:
-    if value is None:
-        return {}
-    if isinstance(value, dict):
-        return dict(value)
-    to_dict = getattr(value, "to_dict", None)
-    if callable(to_dict):
-        try:
-            data = to_dict()
-            if isinstance(data, dict):
-                return dict(data)
-        except Exception:
-            pass
-
-    payload: dict[str, object] = {}
-    for field in (
-        "enabled",
-        "blob",
-        "tls_mod",
-        "autottl_delta",
-        "autottl_min",
-        "autottl_max",
-        "tcp_flags_unset",
-        "out_range",
-        "out_range_mode",
-        "send_enabled",
-        "send_repeats",
-        "send_ip_ttl",
-        "send_ip6_ttl",
-        "send_ip_id",
-        "send_badsum",
-    ):
-        if hasattr(value, field):
-            payload[field] = getattr(value, field)
-    return payload
-
-
-def _coerce_int(value, default: int) -> int:
-    try:
-        return int(value)
-    except Exception:
-        return int(default)

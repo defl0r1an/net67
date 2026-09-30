@@ -19,7 +19,7 @@ LANGUAGE_OPTIONS = (
 
 TEXTS: dict[str, dict[str, str]] = {
     "nav.header.settings": {
-        "ru": "Настройки Запрета",
+        "ru": "Настройки net67",
         "en": "net67 Settings",
     },
     "nav.header.system": {
@@ -82,6 +82,34 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Разбор debug-лога: соединения, протоколы, профили и вердикты",
         "en": "Debug log breakdown: connections, protocols, profiles and verdicts",
     },
+    "nav.page.fakes": {
+        "ru": "Фейки",
+        "en": "Fakes",
+    },
+    "page.fakes.title": {
+        "ru": "Фейки",
+        "en": "Fakes",
+    },
+    "page.fakes.subtitle": {
+        "ru": "Фейки winws2: пакеты, которые стратегия отправляет вместо настоящих. Здесь можно посмотреть встроенные и добавить свои",
+        "en": "winws2 fakes: packets a strategy sends instead of real ones. Browse built-in fakes and add your own",
+    },
+    "page.fakes.breadcrumb.control": {
+        "ru": "Управление",
+        "en": "Control",
+    },
+    "page.winws2_control.button.fakes": {
+        "ru": "Фейки",
+        "en": "Fakes",
+    },
+    "page.winws2_control.button.fakes.desc": {
+        "ru": "Встроенные фейки winws2 и свои .bin-файлы для стратегий",
+        "en": "Built-in winws2 fakes and your own .bin files for strategies",
+    },
+    "page.winws2_control.button.fakes.accessible_name": {
+        "ru": "Открыть страницу фейков",
+        "en": "Open fakes page",
+    },
     "nav.page.appearance": {
         "ru": "Оформление",
         "en": "Appearance",
@@ -126,6 +154,26 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Ошибка",
         "en": "Error",
     },
+    "common.preset_drop.title": {
+        "ru": "Отпустите файл для импорта",
+        "en": "Drop the file to import",
+    },
+    "common.preset_drop.single": {
+        "ru": "{file_name}",
+        "en": "{file_name}",
+    },
+    "common.preset_drop.multiple": {
+        "ru": "Количество TXT-файлов: {count}",
+        "en": "TXT files: {count}",
+    },
+    "common.preset_drop.accepted": {
+        "ru": "Файл принят — импортирую…",
+        "en": "File accepted — importing…",
+    },
+    "common.preset_drop.any_txt": {
+        "ru": "TXT-файл с пресетом",
+        "en": "TXT preset file",
+    },
     "page.control.status": {
         "ru": "Статус работы",
         "en": "Service Status",
@@ -158,13 +206,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Текущий режим",
         "en": "Current mode",
     },
+    "page.control.summary.premium.checking": {
+        "ru": "Проверка...",
+        "en": "Checking...",
+    },
+    "page.control.summary.premium.checking_details": {
+        "ru": "Узнаём статус подписки",
+        "en": "Checking subscription status",
+    },
     "page.control.summary.premium.free_details": {
         "ru": "Базовые функции",
         "en": "Basic features",
-    },
-    "page.control.summary.premium.days_left": {
-        "ru": "Осталось {days} дней",
-        "en": "{days} days left",
     },
     "page.control.summary.premium.active_details": {
         "ru": "Активен",
@@ -474,6 +526,22 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Сервисы",
         "en": "Services",
     },
+    "page.blockcheck.scope": {
+        "ru": "Что проверить:",
+        "en": "What to check:",
+    },
+    "page.blockcheck.scope_main": {
+        "ru": "Discord и YouTube",
+        "en": "Discord and YouTube",
+    },
+    "page.blockcheck.scope_all": {
+        "ru": "Все сайты",
+        "en": "All sites",
+    },
+    "page.blockcheck.report": {
+        "ru": "Отчёт",
+        "en": "Report",
+    },
     "page.blockcheck.title": {
         "ru": "BlockCheck",
         "en": "BlockCheck",
@@ -483,8 +551,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Live Network Monitoring",
     },
     "page.blockcheck.subtitle": {
-        "ru": "Автоматический анализ блокировок и диагностика сети в один клик",
-        "en": "Automatic blocking analysis and network diagnostics in one click",
+        "ru": "Какие сайты открываются, почему не открываются остальные и что с этим делать",
+        "en": "Which sites open, why others don't and what to do about it",
     },
     "page.blockcheck.tab.blockcheck": {
         "ru": "BlockCheck",
@@ -494,53 +562,29 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Подбор стратегии",
         "en": "Strategy Selection",
     },
-    "page.blockcheck.tab.diagnostics": {
-        "ru": "Диагностика",
-        "en": "Diagnostics",
-    },
     "page.blockcheck.tab.dns_spoofing": {
         "ru": "DNS подмена",
         "en": "DNS Spoofing",
     },
-    "page.blockcheck.control": {
-        "ru": "Управление",
-        "en": "Control",
-    },
-    "page.blockcheck.mode": {
-        "ru": "Режим:",
-        "en": "Mode:",
-    },
-    "page.blockcheck.mode_quick": {
-        "ru": "Быстрая",
-        "en": "Quick",
-    },
-    "page.blockcheck.mode_full": {
-        "ru": "Полная",
-        "en": "Full",
-    },
-    "page.blockcheck.mode_dpi": {
-        "ru": "Только DPI",
-        "en": "DPI Only",
-    },
     "page.blockcheck.start": {
-        "ru": "Запустить",
-        "en": "Start",
+        "ru": "Проверить",
+        "en": "Check",
     },
     "page.blockcheck.stop": {
         "ru": "Остановить",
         "en": "Stop",
     },
     "page.blockcheck.ready": {
-        "ru": "Готово",
-        "en": "Ready",
+        "ru": "Проверяем так же, как браузер. Займёт 5–30 секунд",
+        "en": "Checked the way a browser opens sites. Takes 5–30 seconds",
     },
     "page.blockcheck.running": {
-        "ru": "Запуск тестов...",
-        "en": "Running tests...",
+        "ru": "Проверяем… обычно это 5–30 секунд",
+        "en": "Checking… usually 5–30 seconds",
     },
     "page.blockcheck.stopping": {
-        "ru": "Остановка...",
-        "en": "Stopping...",
+        "ru": "Останавливаем…",
+        "en": "Stopping…",
     },
     "page.blockcheck.done": {
         "ru": "Готово",
@@ -550,29 +594,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Ошибка выполнения",
         "en": "Execution error",
     },
-    "page.blockcheck.results": {
-        "ru": "Результаты",
-        "en": "Results",
-    },
-    "page.blockcheck.col_target": {
-        "ru": "Цель",
-        "en": "Target",
-    },
-    "page.blockcheck.dpi_summary": {
-        "ru": "DPI Анализ",
-        "en": "DPI Analysis",
-    },
-    "page.blockcheck.no_dpi": {
-        "ru": "DPI не обнаружен на проверенных ресурсах",
-        "en": "No DPI detected on tested resources",
-    },
-    "page.blockcheck.log": {
-        "ru": "Подробный лог",
-        "en": "Detailed Log",
-    },
     "page.blockcheck.custom_domains": {
-        "ru": "Пользовательские домены",
-        "en": "Custom Domains",
+        "ru": "Проверить ещё и свои домены:",
+        "en": "Also check your own domains:",
     },
     "page.blockcheck.domain_placeholder": {
         "ru": "example.com",
@@ -670,13 +694,101 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Ссылки",
         "en": "Links",
     },
-    "page.about.help.group.docs": {
-        "ru": "Документация",
-        "en": "Documentation",
+    "page.about.help.group.learn": {
+        "ru": "Научиться",
+        "en": "Learn",
     },
-    "page.about.help.group.news": {
-        "ru": "Новости",
-        "en": "News",
+    "page.about.help.group.ask": {
+        "ru": "Спросить",
+        "en": "Ask",
+    },
+    "page.about.help.group.follow": {
+        "ru": "Следить за новостями",
+        "en": "Follow the news",
+    },
+    "page.about.help.learn.youtube.title": {
+        "ru": "Видеокурс на YouTube",
+        "en": "Video course on YouTube",
+    },
+    "page.about.help.learn.youtube.desc": {
+        "ru": "Все видео курса по net67 v2 одним списком",
+        "en": "All net67 v2 course videos in one playlist",
+    },
+    "page.about.help.learn.youtube.accessible_name": {
+        "ru": "Открыть видеокурс на YouTube",
+        "en": "Open the video course on YouTube",
+    },
+    "page.about.help.ask.folder.title": {
+        "ru": "Папка со всеми чатами",
+        "en": "Folder with all chats",
+    },
+    "page.about.help.ask.folder.desc": {
+        "ru": "Все наши чаты в Telegram одной папкой — добавьте её целиком",
+        "en": "All our Telegram chats in one folder — add it at once",
+    },
+    "page.about.help.ask.folder.accessible_name": {
+        "ru": "Открыть папку со всеми чатами в Telegram",
+        "en": "Open the folder with all Telegram chats",
+    },
+    "page.about.help.ask.telegram.title": {
+        "ru": "Telegram-чат",
+        "en": "Telegram chat",
+    },
+    "page.about.help.ask.telegram.accessible_name": {
+        "ru": "Открыть Telegram-чат",
+        "en": "Open the Telegram chat",
+    },
+    "page.about.help.ask.issues.title": {
+        "ru": "Сообщить о проблеме",
+        "en": "Report a problem",
+    },
+    "page.about.help.ask.issues.desc": {
+        "ru": "Forgejo Issues: ошибки, пожелания и обмен конфигами",
+        "en": "Forgejo Issues: bugs, requests and config sharing",
+    },
+    "page.about.help.ask.issues.accessible_name": {
+        "ru": "Открыть Forgejo Issues",
+        "en": "Open Forgejo Issues",
+    },
+    "page.about.help.news.links.title": {
+        "ru": "Канал со всеми ссылками",
+        "en": "Channel with all links",
+    },
+    "page.about.help.news.links.desc": {
+        "ru": "Все наши каналы, чаты и сайты в одном месте",
+        "en": "All our channels, chats and sites in one place",
+    },
+    "page.about.help.news.links.accessible_name": {
+        "ru": "Открыть канал со всеми ссылками",
+        "en": "Open the channel with all links",
+    },
+    "page.about.help.news.source.title": {
+        "ru": "Исходный код",
+        "en": "Source code",
+    },
+    "page.about.help.news.source.desc": {
+        "ru": "Репозиторий программы в Forgejo",
+        "en": "The program repository on Forgejo",
+    },
+    "page.about.help.news.source.accessible_name": {
+        "ru": "Открыть исходный код в Forgejo",
+        "en": "Open the source code on Forgejo",
+    },
+    "page.about.help_link.title": {
+        "ru": "Нужна помощь?",
+        "en": "Need help?",
+    },
+    "page.about.help_link.desc": {
+        "ru": "Вики, видеокурс, чаты и новости собраны на вкладке «Справка»",
+        "en": "Wiki, video course, chats and news are on the Help tab",
+    },
+    "page.about.help_link.button": {
+        "ru": "Открыть справку",
+        "en": "Open help",
+    },
+    "page.about.help_link.accessible_name": {
+        "ru": "Открыть вкладку «Справка»",
+        "en": "Open the Help tab",
     },
     "page.about.help.button.open": {
         "ru": "Открыть",
@@ -817,66 +929,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.autostart.tip.recommendation": {
         "ru": "Используется один тип автозапуска: ярлык net67 в папке автозагрузки Windows.",
         "en": "Only one autostart type is used: a net67 shortcut in the Windows Startup folder.",
-    },
-    "page.connection.title": {
-        "ru": "Диагностика соединения",
-        "en": "Connection Diagnostics",
-    },
-    "page.connection.subtitle": {
-        "ru": "Автотест Discord и YouTube, проверка DNS подмены и быстрая подготовка обращения в GitHub Discussions",
-        "en": "Auto-test Discord and YouTube, check DNS spoofing, and quickly prepare a GitHub Discussions report",
-    },
-    "page.connection.hero.title": {
-        "ru": "Диагностика сетевых соединений",
-        "en": "Network Connection Diagnostics",
-    },
-    "page.connection.hero.subtitle": {
-        "ru": "Проверьте доступность Discord и YouTube, а затем одной кнопкой соберите ZIP с логами и откройте GitHub Discussions.",
-        "en": "Check Discord and YouTube availability, then create a ZIP with logs and open GitHub Discussions in one click.",
-    },
-    "page.connection.card.testing": {
-        "ru": "Тестирование",
-        "en": "Testing",
-    },
-    "page.connection.card.result": {
-        "ru": "Результат тестирования",
-        "en": "Test Result",
-    },
-    "page.connection.test.select": {
-        "ru": "Выбор теста:",
-        "en": "Test selection:",
-    },
-    "page.connection.test.all": {
-        "ru": "🌐 Все тесты (Discord + YouTube)",
-        "en": "🌐 All tests (Discord + YouTube)",
-    },
-    "page.connection.test.discord_only": {
-        "ru": "🎮 Только Discord",
-        "en": "🎮 Discord only",
-    },
-    "page.connection.test.youtube_only": {
-        "ru": "🎬 Только YouTube",
-        "en": "🎬 YouTube only",
-    },
-    "page.connection.button.start": {
-        "ru": "Запустить тест",
-        "en": "Start test",
-    },
-    "page.connection.button.stop": {
-        "ru": "Стоп",
-        "en": "Stop",
-    },
-    "page.connection.button.send_log": {
-        "ru": "Подготовить обращение",
-        "en": "Prepare report",
-    },
-    "page.connection.status.ready": {
-        "ru": "Готово к тестированию",
-        "en": "Ready for testing",
-    },
-    "page.connection.progress.waiting": {
-        "ru": "Ожидает запуска",
-        "en": "Waiting to start",
     },
     "page.custom_domains.title": {
         "ru": "Кастомные (мои) домены (hostlist) для работы с net67",
@@ -1098,45 +1150,21 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Проверка резолвинга доменов YouTube и Discord через различные DNS серверы",
         "en": "Check resolution of YouTube and Discord domains via different DNS servers",
     },
-    "page.dns_check.card.what_we_check": {
-        "ru": "Что проверяем",
-        "en": "What we check",
-    },
-    "page.dns_check.info.blocking": {
-        "ru": "Блокирует ли провайдер сайты через DNS подмену",
-        "en": "Whether the provider blocks sites via DNS spoofing",
-    },
-    "page.dns_check.info.servers": {
-        "ru": "Какие DNS серверы возвращают корректные адреса",
-        "en": "Which DNS servers return correct addresses",
-    },
-    "page.dns_check.info.recommended": {
-        "ru": "Какой DNS сервер рекомендуется использовать",
-        "en": "Which DNS server is recommended",
-    },
-    "page.dns_check.card.testing": {
-        "ru": "Тестирование",
-        "en": "Testing",
-    },
     "page.dns_check.button.start": {
         "ru": "Начать проверку",
         "en": "Start check",
     },
-    "page.dns_check.button.quick": {
-        "ru": "Быстрая проверка",
-        "en": "Quick check",
+    "page.dns_check.button.log": {
+        "ru": "Подробный лог",
+        "en": "Detailed log",
     },
     "page.dns_check.button.save": {
         "ru": "Сохранить результаты",
         "en": "Save results",
     },
     "page.dns_check.status.ready": {
-        "ru": "Готово к проверке",
-        "en": "Ready to check",
-    },
-    "page.dns_check.card.results": {
-        "ru": "Результаты",
-        "en": "Results",
+        "ru": "Сравниваем ответ DNS с эталоном и видим, подменяет ли провайдер адреса",
+        "en": "Compares the DNS answer with a reference to see whether the ISP spoofs addresses",
     },
     "page.dpi_settings.subtitle": {
         "ru": "Параметры обхода блокировок",
@@ -1271,44 +1299,156 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Writes winws logs to the logs folder",
     },
     "page.hosts.subtitle": {
-        "ru": "Управление разблокировкой сервисов через hosts файл",
-        "en": "Manage service unblocking via hosts file",
+        "ru": "Щёлкните по плитке — адреса сервиса сразу запишутся в системный файл hosts.",
+        "en": "Click a tile — the service addresses are written to the system hosts file right away.",
     },
-    "page.hosts.section.additional": {
-        "ru": "Дополнительно",
-        "en": "Additional",
+    "page.hosts.summary.writing": {
+        "ru": "Записываю…",
+        "en": "Writing…",
+    },
+    "page.hosts.summary.written": {
+        "ru": "Записано — перезапустите браузер, чтобы изменения заработали",
+        "en": "Written — restart the browser for the changes to take effect",
+    },
+    "page.hosts.button.file": {
+        "ru": "Файл hosts",
+        "en": "Hosts file",
+    },
+    "page.hosts.button.file.description": {
+        "ru": "Весь файл hosts с раскраской строк по владельцам.",
+        "en": "The whole hosts file with lines colored by owner.",
+    },
+    "page.hosts.dns_all.button": {
+        "ru": "DNS для всех",
+        "en": "DNS for all",
+    },
+    "page.hosts.adobe.title": {
+        "ru": "Блокировать активацию Adobe",
+        "en": "Block Adobe activation",
+    },
+    "page.hosts.group.blocks": {
+        "ru": "Блокировки",
+        "en": "Blocking",
+    },
+    "page.hosts_file.notepad": {
+        "ru": "Открыть в Блокноте",
+        "en": "Open in Notepad",
+    },
+    "page.hosts_file.notepad_failed": {
+        "ru": "Не удалось открыть Блокнот",
+        "en": "Could not open Notepad",
+    },
+    "page.hosts.group.direct.hint": {
+        "ru": "адрес прописывается как есть",
+        "en": "the address is written as is",
+    },
+    "page.hosts.group.ai.hint": {
+        "ru": "сами закрыты для России, нужен DNS-профиль",
+        "en": "blocked for Russia by themselves, a DNS profile is needed",
+    },
+    "page.hosts.group.other.hint": {
+        "ru": "через DNS-профиль",
+        "en": "via a DNS profile",
+    },
+    "page.hosts.group.counter": {
+        "ru": "{on} из {total}",
+        "en": "{on} of {total}",
+    },
+    "page.hosts.summary.services": {
+        "ru": "Сервисов включено в hosts",
+        "en": "Services enabled in hosts",
+    },
+    "page.hosts.summary.lines": {
+        "ru": "Строк от net67 в файле: {lines}",
+        "en": "net67 lines in the file: {lines}",
+    },
+    "page.hosts.adobe.note": {
+        "ru": "Закрывает серверы проверки лицензии Adobe",
+        "en": "Blocks Adobe license check servers",
+    },
+    "page.hosts.loading": {
+        "ru": "Загрузка…",
+        "en": "Loading…",
+    },
+    "page.hosts.summary.off": {
+        "ru": "Сейчас net67 ничего не прописывает в hosts",
+        "en": "net67 writes nothing to hosts right now",
     },
     "page.hosts.section.services": {
         "ru": "Сервисы",
         "en": "Services",
     },
     "page.hosts.button.restore_access": {
-        "ru": " Восстановить права доступа",
-        "en": " Restore Access Permissions",
+        "ru": "Снять защиту и восстановить права",
+        "en": "Remove protection and restore access",
     },
-    "page.hosts.button.restoring_access": {
-        "ru": " Восстановление...",
-        "en": " Restoring...",
+    "page.hosts.notice.read_only": {
+        "ru": "Файл hosts защищён от записи (стоит «только чтение»). Программа сама защиту не снимает — нажмите кнопку справа, если хотите менять файл.",
+        "en": "The hosts file is write-protected (read-only). The app never removes the protection by itself — press the button on the right if you want to change the file.",
     },
-    "page.hosts.button.clear": {
-        "ru": " Очистить",
-        "en": " Clear",
+    "page.hosts.notice.no_access": {
+        "ru": "Нет доступа к файлу hosts. Часто его блокирует антивирус. Кнопка справа вернёт стандартные права Windows.",
+        "en": "No access to the hosts file. Antivirus software often locks it. The button on the right restores the standard Windows permissions.",
     },
-    "page.hosts.button.open": {
-        "ru": " Открыть",
-        "en": " Open",
+    "page.hosts.search.placeholder": {
+        "ru": "Найти сервис",
+        "en": "Find a service",
+    },
+    "page.hosts_file.title": {
+        "ru": "Файл hosts",
+        "en": "Hosts file",
+    },
+    "page.hosts_file.search": {
+        "ru": "Поиск по файлу hosts",
+        "en": "Search the hosts file",
+    },
+    "page.hosts_file.save": {
+        "ru": "Сохранить",
+        "en": "Save",
+    },
+    "page.hosts_file.revert": {
+        "ru": "Отменить правки",
+        "en": "Discard edits",
+    },
+    "page.hosts_file.hint": {
+        "ru": "Строки раскрашены по владельцу. Блок net67 можно править, но при следующем переключении сервиса на странице Hosts он перепишется. Ctrl+F — поиск.",
+        "en": "Lines are colored by owner. You can edit the net67 block, but the next service switch on the Hosts page rewrites it. Ctrl+F — search.",
+    },
+    "page.hosts_file.editor": {
+        "ru": "Текст файла hosts",
+        "en": "Hosts file text",
+    },
+    "page.hosts_file.editor.description": {
+        "ru": "Весь файл hosts. Ctrl+F — поиск, Ctrl+H — замена. Изменения записываются кнопкой «Сохранить».",
+        "en": "The whole hosts file. Ctrl+F — search, Ctrl+H — replace. Changes are written with the “Save” button.",
+    },
+    "page.hosts_file.load_failed": {
+        "ru": "Не удалось прочитать hosts",
+        "en": "Could not read hosts",
+    },
+    "page.hosts_file.saved": {
+        "ru": "Сохранено",
+        "en": "Saved",
+    },
+    "page.hosts_file.saved.content": {
+        "ru": "Перезапустите браузер, чтобы изменения заработали.",
+        "en": "Restart the browser for the changes to take effect.",
+    },
+    "page.hosts_file.saved.managed": {
+        "ru": "Вы поменяли блок net67 вручную: при следующем переключении сервиса на странице Hosts он перепишется.",
+        "en": "You changed the net67 block by hand: the next service switch on the Hosts page will rewrite it.",
     },
     "page.hosts.status.active_domains": {
         "ru": "Активно {count} доменов",
         "en": "{count} active domains",
     },
-    "page.hosts.status.none_active": {
-        "ru": "Нет активных",
-        "en": "No active domains",
+    "page.hosts_file.notice.no_access": {
+        "ru": "Нет доступа к файлу hosts. Часто его блокирует антивирус. Восстановить права можно кнопкой на странице Hosts.",
+        "en": "No access to the hosts file. Antivirus software often locks it. Permissions can be restored with the button on the Hosts page.",
     },
-    "page.hosts.error.no_access.long": {
-        "ru": "Нет доступа для изменения файла hosts.\nЕсли файл редактируется вручную, возможно защитник/антивирус блокирует запись.\nПуть: {path}",
-        "en": "No access to modify the hosts file.\nIf the file is edited manually, defender/antivirus may block write access.\nPath: {path}",
+    "page.hosts_file.notice.read_only": {
+        "ru": "Файл защищён от записи (стоит «только чтение»). Сохранить не получится, пока защита стоит — снять её можно кнопкой на странице Hosts.",
+        "en": "The file is write-protected (read-only). Saving is impossible while protection is on — remove it with the button on the Hosts page.",
     },
     "page.hosts.error.no_access.short": {
         "ru": "Нет доступа для изменения файла hosts. Скорее всего защитник/антивирус заблокировал запись.\nПуть: {path}",
@@ -1322,45 +1462,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Ошибка: {error}",
         "en": "Error: {error}",
     },
-    "page.hosts.error.operation_with_path": {
-        "ru": "{message}\nПуть: {path}",
-        "en": "{message}\nPath: {path}",
+    "page.hosts.dns_all.hint": {
+        "ru": "Ставит выбранный профиль всем сервисам с DNS-профилем. Потом любой можно поменять отдельно.",
+        "en": "Sets the chosen profile for every DNS service. You can still change any of them separately.",
     },
-    "page.hosts.permissions.restore.success.title": {
-        "ru": "Успех",
-        "en": "Success",
-    },
-    "page.hosts.permissions.restore.success.content": {
-        "ru": "Права доступа к файлу hosts успешно восстановлены!",
-        "en": "Hosts file access permissions restored successfully!",
-    },
-    "page.hosts.permissions.restore.fail.title": {
-        "ru": "Ошибка",
-        "en": "Error",
-    },
-    "page.hosts.permissions.restore.fail.content": {
-        "ru": "Не удалось восстановить права:\n{message}\n\nПопробуйте временно отключить защиту файла hosts в настройках антивируса (Kaspersky, Dr.Web и т.д.)",
-        "en": "Failed to restore permissions:\n{message}\n\nTry temporarily disabling hosts file protection in antivirus settings (Kaspersky, Dr.Web, etc.).",
-    },
-    "page.hosts.info.note": {
-        "ru": "Некоторые сервисы (ChatGPT, Spotify и др.) сами блокируют доступ из России — это не блокировка РКН. Решается не через net67, а через проксирование: домены направляются через отдельный прокси-сервер в файле hosts.",
-        "en": "Some services (ChatGPT, Spotify, etc.) block access from Russia themselves - this is not a Roskomnadzor block. It is solved not through net67 but via proxying: domains are routed through a dedicated proxy server in hosts.",
-    },
-    "page.hosts.warning.browser_restart": {
-        "ru": "После добавления или удаления доменов необходимо перезапустить браузер, чтобы изменения вступили в силу.",
-        "en": "After adding or removing domains, restart your browser for changes to take effect.",
-    },
-    "page.hosts.dialog.clear.title": {
-        "ru": "Очистить записи net67?",
-        "en": "Clear net67 entries?",
-    },
-    "page.hosts.dialog.clear.body": {
-        "ru": "Будет удалён только блок записей net67. Ручные записи в файле hosts останутся на месте.",
-        "en": "Only the net67 managed block will be removed. Manual hosts entries will remain untouched.",
-    },
-    "page.hosts.open.error.title": {
-        "ru": "Ошибка",
-        "en": "Error",
+    "page.hosts.dns_all.skipped.title": {
+        "ru": "Не у всех сервисов есть этот профиль",
+        "en": "Not every service has this profile",
     },
     "page.hosts.open.error.content": {
         "ru": "Не удалось открыть: {error}",
@@ -1371,20 +1479,52 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Off",
     },
     "page.hosts.group.direct": {
-        "ru": "Напрямую из hosts",
-        "en": "Direct from hosts",
+        "ru": "Напрямую",
+        "en": "Direct",
     },
     "page.hosts.group.ai": {
-        "ru": "ИИ",
-        "en": "AI",
+        "ru": "ИИ-сервисы",
+        "en": "AI services",
     },
     "page.hosts.group.other": {
-        "ru": "Остальные",
-        "en": "Other",
+        "ru": "Остальные сервисы",
+        "en": "Other services",
     },
-    "page.hosts.adobe.description": {
-        "ru": "⚠️ Блокирует серверы проверки активации Adobe. Включите, если у вас установлена пиратская версия.",
-        "en": "⚠️ Blocks Adobe activation-check servers. Enable this if you use a pirated version.",
+    "page.hosts.hint.ipv6": {
+        "ru": "Нужен IPv6 — сейчас его нет",
+        "en": "Needs IPv6 — not available right now",
+    },
+    "page.hosts.empty": {
+        "ru": "Ничего не найдено",
+        "en": "Nothing found",
+    },
+    "page.hosts.state.on": {
+        "ru": "включён",
+        "en": "on",
+    },
+    "page.hosts.state.off": {
+        "ru": "выключен",
+        "en": "off",
+    },
+    "page.hosts.state.changed": {
+        "ru": "записывается",
+        "en": "being written",
+    },
+    "page.hosts.apply_failed.title": {
+        "ru": "Не удалось записать hosts",
+        "en": "Could not write hosts",
+    },
+    "page.hosts.error.read.title": {
+        "ru": "Не удалось прочитать hosts",
+        "en": "Could not read hosts",
+    },
+    "page.hosts.permissions.restored.title": {
+        "ru": "Права восстановлены",
+        "en": "Access restored",
+    },
+    "page.hosts.permissions.restored.content": {
+        "ru": "Теперь сервисы снова можно включать.",
+        "en": "Services can be switched on again.",
     },
     "page.hosts.adobe.title": {
         "ru": "Блокировка Adobe",
@@ -1451,16 +1591,16 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "📊 Logs: {logs} (max {max_logs}) | 🔧 Debug: {debug} (max {max_debug}) | 💾 Size: {size:.2f} MB",
     },
     "page.logs.send.card.title": {
-        "ru": "Поддержка через GitHub Discussions",
-        "en": "Support via GitHub Discussions",
+        "ru": "Поддержка через Forgejo Issues",
+        "en": "Support via Forgejo Issues",
     },
     "page.logs.send.orchestra.active": {
         "ru": "В режиме оркестратора проверьте основной лог и файл orchestra_*.log",
         "en": "In orchestrator mode, check both the main log and the orchestra_*.log file",
     },
     "page.logs.send.desc": {
-        "ru": "Нажмите кнопку, чтобы собрать ZIP из свежих логов, скопировать шаблон обращения и открыть GitHub Discussions.",
-        "en": "Press the button to build a ZIP with fresh logs, copy a report template, and open GitHub Discussions.",
+        "ru": "Нажмите кнопку, чтобы собрать ZIP из свежих логов, скопировать шаблон обращения и открыть Forgejo Issues.",
+        "en": "Press the button to build a ZIP with fresh logs, copy a report template, and open Forgejo Issues.",
     },
     "page.logs.send.info": {
         "ru": "Будет создан архив в папке logs/support_bundles. Шаблон обращения автоматически попадёт в буфер обмена.",
@@ -1471,84 +1611,16 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Prepare report",
     },
     "page.network.subtitle": {
-        "ru": "Здесь можно посмотреть текущие DNS, выбрать другие серверы и проверить, помогает ли настройка обходу блокировок.",
-        "en": "View current DNS servers, choose different servers, and check whether the setting helps bypass blocking.",
-    },
-    "page.network.section.dns_servers": {
-        "ru": "DNS Серверы",
-        "en": "DNS Servers",
-    },
-    "page.network.section.adapters": {
-        "ru": "Сетевые адаптеры",
-        "en": "Network Adapters",
-    },
-    "page.network.section.tools": {
-        "ru": "Утилиты",
-        "en": "Utilities",
-    },
-    "page.network.section.force_dns": {
-        "ru": "",
-        "en": "",
-    },
-    "page.network.loading": {
-        "ru": "⏳ Загрузка...",
-        "en": "⏳ Loading...",
-    },
-    "page.network.custom.label": {
-        "ru": "Свой:",
-        "en": "Custom:",
-    },
-    "page.network.custom.apply": {
-        "ru": "OK",
-        "en": "OK",
+        "ru": "Выберите DNS-сервер — он сразу встанет на отмеченные сетевые адаптеры. Кнопка «Замерить скорость» покажет, какой сервер отвечает быстрее.",
+        "en": "Pick a DNS server — it is applied right away to the checked network adapters. “Measure speed” shows which server answers fastest.",
     },
     "page.network.dns.auto": {
         "ru": "Автоматически (DHCP)",
         "en": "Automatic (DHCP)",
     },
-    "page.network.button.test": {
-        "ru": "Тест соединения",
-        "en": "Connection Test",
-    },
-    "page.network.button.test.in_progress": {
-        "ru": "Проверка...",
-        "en": "Checking...",
-    },
     "page.network.button.flush_dns_cache": {
         "ru": "Сбросить DNS кэш",
         "en": "Flush DNS Cache",
-    },
-    "page.network.button.flush_dns_cache.confirm": {
-        "ru": "Сбросить?",
-        "en": "Flush?",
-    },
-    "page.network.force_dns.action.enable.button": {
-        "ru": "Применить выбранный DNS",
-        "en": "Apply selected DNS",
-    },
-    "page.network.force_dns.action.disable.button": {
-        "ru": "Ручная настройка DNS",
-        "en": "Manual DNS setup",
-    },
-    "page.network.force_dns.action.enable.description": {
-        "ru": "Выберите DNS из списка или добавьте свой адрес. Программа применит его только по вашему нажатию.",
-        "en": "Choose DNS from the list or add your own address. The app applies it only when you ask.",
-    },
-    "page.network.force_dns.action.enable.confirm": {
-        "ru": "Программа применит выбранный DNS на отмеченных сетевых адаптерах. Это может помочь, если провайдер подменяет ответы DNS и сайты открываются неправильно. Продолжить?",
-        "en": "The app will apply the selected DNS to the checked network adapters. This may help when the provider tampers with DNS answers and sites open incorrectly. Continue?",
-    },
-    "page.network.force_dns.action.disable.description": {
-        "ru": "DNS меняется только вручную: выберите сервер, добавьте свой адрес или верните автоматическое получение через DHCP.",
-        "en": "DNS changes only manually: choose a server, add your own address, or restore automatic DNS through DHCP.",
-    },
-    "page.network.force_dns.action.disable.confirm": {
-        "ru": "DNS меняется только вручную. Уже прописанные адреса останутся до следующей настройки или сброса на DHCP. Продолжить?",
-        "en": "DNS changes only manually. Already applied addresses remain until the next setup or DHCP reset. Continue?",
-    },
-    "page.network.force_dns.action.reset.description": {
-        "ru": "DNS будет снова получаться автоматически от роутера или провайдера через DHCP. Это полезно, если интернет работает нестабильно после ручной настройки DNS.",
-        "en": "DNS will be received automatically from the router or provider through DHCP again. This is useful if the internet is unstable after manual DNS setup.",
     },
     "page.network.force_dns.reset.button": {
         "ru": "Вернуть DNS автоматически",
@@ -1558,22 +1630,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Программа вернёт автоматическое получение DNS через DHCP для выбранных адаптеров. DHCP — это обычный режим, когда DNS выдаёт роутер или провайдер. Продолжить?",
         "en": "The app will restore automatic DNS through DHCP for selected adapters. DHCP is the normal mode where DNS is provided by the router or provider. Continue?",
     },
-    "page.network.force_dns.status.details.enable_failed": {
-        "ru": "Не удалось включить",
-        "en": "Failed to enable",
-    },
-    "page.network.force_dns.status.details.disable_failed": {
-        "ru": "Не удалось отключить",
-        "en": "Failed to disable",
-    },
-    "page.network.force_dns.status.details.apply_error": {
-        "ru": "Ошибка применения",
-        "en": "Apply error",
-    },
-    "page.network.force_dns.status.details.dhcp_not_applied": {
-        "ru": "DHCP не применён",
-        "en": "DHCP was not applied",
-    },
     "page.network.error.title": {
         "ru": "Ошибка",
         "en": "Error",
@@ -1582,37 +1638,225 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Не удалось очистить кэш: {error}",
         "en": "Failed to flush cache: {error}",
     },
-    "page.network.error.reset_dhcp_failed": {
-        "ru": "Не удалось сбросить DNS: {error}",
-        "en": "Failed to reset DNS: {error}",
+    "page.network.now.eyebrow": {
+        "ru": "Сейчас на отмеченных адаптерах",
+        "en": "Now on the checked adapters",
     },
-    "page.network.info.title": {
-        "ru": "DNS",
-        "en": "DNS",
+    "page.network.now.loading": {
+        "ru": "Загружаю настройки сети…",
+        "en": "Loading network settings…",
     },
-    "page.network.info.dhcp_reset_all": {
-        "ru": "DNS сброшен на DHCP для всех адаптеров",
-        "en": "DNS reset to DHCP for all adapters",
+    "page.network.now.applying": {
+        "ru": "Применяю…",
+        "en": "Applying…",
     },
-    "page.network.test.host.google_dns": {
-        "ru": "Google DNS",
-        "en": "Google DNS",
+    "page.network.now.auto.detail": {
+        "ru": "DNS выдаёт роутер или провайдер.",
+        "en": "DNS is provided by your router or ISP.",
     },
-    "page.network.test.host.cloudflare_dns": {
-        "ru": "Cloudflare DNS",
-        "en": "Cloudflare DNS",
+    "page.network.now.custom.title": {
+        "ru": "Свой DNS",
+        "en": "Custom DNS",
     },
-    "page.network.test.infobar.title": {
-        "ru": "Тест соединения",
-        "en": "Connection Test",
+    "page.network.now.mixed.title": {
+        "ru": "На адаптерах разные DNS",
+        "en": "Adapters use different DNS",
     },
-    "page.network.test.infobar.all_ok": {
-        "ru": "Все проверки пройдены:\n\n{report}",
-        "en": "All checks passed:\n\n{report}",
+    "page.network.now.mixed.detail": {
+        "ru": "Выберите сервер — он встанет на все отмеченные адаптеры.",
+        "en": "Pick a server — it will be applied to all checked adapters.",
     },
-    "page.network.test.infobar.partial": {
-        "ru": "Некоторые проверки не пройдены:\n\n{report}",
-        "en": "Some checks failed:\n\n{report}",
+    "page.network.now.no_adapters.title": {
+        "ru": "Адаптеры не отмечены",
+        "en": "No adapters checked",
+    },
+    "page.network.now.no_adapters.detail": {
+        "ru": "Отметьте адаптер ниже — выбранный DNS встанет на него.",
+        "en": "Check an adapter below — the chosen DNS will be applied to it.",
+    },
+    "page.network.adapter.internet": {
+        "ru": "интернет",
+        "en": "internet",
+    },
+    "page.network.adapter.disconnected": {
+        "ru": "не подключён",
+        "en": "disconnected",
+    },
+    "page.network.adapters.caption": {
+        "ru": "Применять к:",
+        "en": "Apply to:",
+    },
+    "page.network.adapters.empty": {
+        "ru": "Сетевые адаптеры не найдены",
+        "en": "No network adapters found",
+    },
+    "page.network.button.reset": {
+        "ru": "Вернуть автоматически",
+        "en": "Reset to automatic",
+    },
+    "page.network.button.measure": {
+        "ru": "Замерить скорость",
+        "en": "Measure speed",
+    },
+    "page.network.button.measure.running": {
+        "ru": "Замеряю…",
+        "en": "Measuring…",
+    },
+    "page.network.filter.name": {
+        "ru": "Группа DNS-серверов",
+        "en": "DNS server group",
+    },
+    "page.network.filter.all": {
+        "ru": "Все",
+        "en": "All",
+    },
+    "page.network.filter.custom": {
+        "ru": "Свои",
+        "en": "Custom",
+    },
+    "page.network.group.popular": {
+        "ru": "Популярные",
+        "en": "Popular",
+    },
+    "page.network.group.secure": {
+        "ru": "Безопасные",
+        "en": "Secure",
+    },
+    "page.network.group.ai": {
+        "ru": "Для ИИ",
+        "en": "For AI",
+    },
+    "page.network.group.custom": {
+        "ru": "Свои DNS",
+        "en": "Custom DNS",
+    },
+    "page.network.grid.name": {
+        "ru": "DNS-серверы",
+        "en": "DNS servers",
+    },
+    "page.network.grid.description": {
+        "ru": "Стрелки — выбор плитки, Enter или пробел — применить DNS.",
+        "en": "Arrows move between tiles, Enter or Space applies the DNS.",
+    },
+    "page.network.tile.selected": {
+        "ru": "выбран",
+        "en": "selected",
+    },
+    "page.network.tile.not_selected": {
+        "ru": "не выбран",
+        "en": "not selected",
+    },
+    "page.network.tile.applying": {
+        "ru": "применяю…",
+        "en": "applying…",
+    },
+    "page.network.tile.fastest": {
+        "ru": "быстрее всех",
+        "en": "fastest",
+    },
+    "page.network.tile.custom_note": {
+        "ru": "Свой сервер",
+        "en": "Your server",
+    },
+    "page.network.tile.custom_hint": {
+        "ru": "свой DNS, меню правки — клавиша меню",
+        "en": "custom DNS, edit menu — Menu key",
+    },
+    "page.network.tile.custom_menu": {
+        "ru": "Правая кнопка мыши — изменить или удалить",
+        "en": "Right-click to edit or delete",
+    },
+    "page.network.add_tile.title": {
+        "ru": "Свой DNS",
+        "en": "Custom DNS",
+    },
+    "page.network.add_tile.note": {
+        "ru": "Добавить свой адрес",
+        "en": "Add your own address",
+    },
+    "page.network.custom.button.description": {
+        "ru": "Открывает окно добавления нового DNS сервера.",
+        "en": "Opens a window to add a new DNS server.",
+    },
+    "page.network.custom.menu.edit": {
+        "ru": "Редактировать",
+        "en": "Edit",
+    },
+    "page.network.custom.menu.duplicate": {
+        "ru": "Создать копию",
+        "en": "Duplicate",
+    },
+    "page.network.custom.menu.copy": {
+        "ru": "Копировать DNS в буфер обмена",
+        "en": "Copy DNS to clipboard",
+    },
+    "page.network.custom.menu.delete": {
+        "ru": "Удалить",
+        "en": "Delete",
+    },
+    "page.network.custom.copied.title": {
+        "ru": "DNS скопирован",
+        "en": "DNS copied",
+    },
+    "page.network.custom.copied.content": {
+        "ru": "Адреса DNS в буфере обмена.",
+        "en": "DNS addresses are in the clipboard.",
+    },
+    "page.network.latency.measuring": {
+        "ru": "замер…",
+        "en": "measuring…",
+    },
+    "page.network.latency.timeout": {
+        "ru": "нет ответа",
+        "en": "no reply",
+    },
+    "page.network.latency.ms": {
+        "ru": "{ms} мс",
+        "en": "{ms} ms",
+    },
+    "page.network.latency.best": {
+        "ru": "Быстрее всех: {name} — {ms} мс",
+        "en": "Fastest: {name} — {ms} ms",
+    },
+    "page.network.latency.none": {
+        "ru": "Ни один сервер не ответил",
+        "en": "No server replied",
+    },
+    "page.network.latency.failed": {
+        "ru": "Замер не удался",
+        "en": "Measurement failed",
+    },
+    "page.network.latency.intercepted": {
+        "ru": "Похоже, DNS-запросы перехватываются по пути (провайдером или роутером): ответил даже адрес, где DNS-сервера нет. Цифры показывают перехватчик, а не выбранные серверы.",
+        "en": "DNS queries seem to be intercepted on the way (by your ISP or router): even an address with no DNS server replied. The numbers show the interceptor, not the chosen servers.",
+    },
+    "page.network.info.wait": {
+        "ru": "Секунду — загружаю список адаптеров",
+        "en": "One moment — loading the adapter list",
+    },
+    "page.network.info.no_adapters.title": {
+        "ru": "Нет отмеченных адаптеров",
+        "en": "No adapters checked",
+    },
+    "page.network.info.no_adapters.content": {
+        "ru": "Отметьте хотя бы один адаптер в панели сверху.",
+        "en": "Check at least one adapter in the panel above.",
+    },
+    "page.network.info.flush_done": {
+        "ru": "Кэш DNS очищен",
+        "en": "DNS cache flushed",
+    },
+    "page.network.error.apply.title": {
+        "ru": "DNS не применён",
+        "en": "DNS was not applied",
+    },
+    "page.network.error.apply.partial.title": {
+        "ru": "DNS встал не везде",
+        "en": "DNS was not applied everywhere",
+    },
+    "page.network.error.apply.partial.content": {
+        "ru": "Не удалось изменить DNS на адаптерах: {failed} из {total}.",
+        "en": "Could not change DNS on {failed} of {total} adapters.",
     },
     "page.network.isp_dns.infobar.title": {
         "ru": "DNS от провайдера",
@@ -1629,10 +1873,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.network.isp_dns.infobar.dismiss": {
         "ru": "Нет, спасибо",
         "en": "No, thanks",
-    },
-    "page.network.dns.doh_supported": {
-        "ru": "DoH",
-        "en": "DoH",
     },
     "page.orchestra.subtitle": {
         "ru": "Автоматическое обучение стратегий DPI bypass. Система находит лучшую стратегию для каждого домена (TCP: TLS/HTTP, UDP: QUIC/Discord Voice/STUN).\nЧтобы начать обучение зайдите на сайт и через несколько секунд обновите вкладку. Продолжайте это пока стратегия не будет помечена как LOCKED",
@@ -1819,8 +2059,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "[ERROR] Failed to restart orchestrator",
     },
     "page.orchestra.log.not_running_user_lock_saved": {
-        "ru": "[WARNING] Оркестратор не запущен, user lock сохранён в settings.json",
-        "en": "[WARNING] Orchestrator is not running, user lock is saved in settings.json",
+        "ru": "[WARNING] Оркестратор не запущен, user lock сохранён в settings.sqlite3",
+        "en": "[WARNING] Orchestrator is not running, user lock is saved in settings.sqlite3",
     },
     "page.orchestra.log.not_initialized": {
         "ru": "[ERROR] Оркестратор не инициализирован",
@@ -2186,6 +2426,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Удалить все пользовательские домены ({count})?\n\nСистемные домены останутся.",
         "en": "Delete all custom domains ({count})?\n\nSystem domains will remain.",
     },
+
     "page.servers.title": {
         "ru": "Серверы",
         "en": "Servers",
@@ -2464,25 +2705,33 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Осталось: {minutes} мин",
         "en": "Remaining: {minutes} min",
     },
+    "page.hosts_file.title": {
+        "ru": "Файл hosts",
+        "en": "Hosts file",
+    },
+    "page.telegram_proxy_advanced.title": {
+        "ru": "Продвинутые настройки",
+        "en": "Advanced settings",
+    },
     "page.support.title": {
         "ru": "Поддержка",
         "en": "Support",
     },
     "page.support.subtitle": {
-        "ru": "GitHub Discussions и каналы сообщества",
-        "en": "GitHub Discussions and community channels",
+        "ru": "Forgejo Issues и каналы сообщества",
+        "en": "Forgejo Issues and community channels",
     },
     "page.support.section.discussions": {
-        "ru": "GitHub Discussions",
-        "en": "GitHub Discussions",
+        "ru": "Forgejo Issues",
+        "en": "Forgejo Issues",
     },
     "page.support.section.community": {
         "ru": "Каналы сообщества",
         "en": "Community Channels",
     },
     "page.support.discussions.title": {
-        "ru": "GitHub Discussions",
-        "en": "GitHub Discussions",
+        "ru": "Forgejo Issues",
+        "en": "Forgejo Issues",
     },
     "page.support.discussions.description": {
         "ru": "Основной канал поддержки. Здесь можно задать вопрос, описать проблему и приложить нужные материалы вручную.",
@@ -2493,8 +2742,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Open",
     },
     "page.support.error.open_discussions": {
-        "ru": "Не удалось открыть GitHub Discussions:\n{error}",
-        "en": "Failed to open GitHub Discussions:\n{error}",
+        "ru": "Не удалось открыть Forgejo Issues:\n{error}",
+        "en": "Failed to open Forgejo Issues:\n{error}",
     },
     "page.support.channel.telegram.title": {
         "ru": "Telegram",
@@ -2629,8 +2878,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Control",
     },
     "page.winws1_user_presets.configs.title": {
-        "ru": "Обменивайтесь пресетами и профилями в разделе GitHub Discussions",
-        "en": "Share presets and profiles in GitHub Discussions",
+        "ru": "Обменивайтесь пресетами и профилями в разделе Forgejo Issues",
+        "en": "Share presets and profiles in Forgejo Issues",
     },
     "page.winws1_user_presets.configs.button": {
         "ru": "Получить конфиги",
@@ -2707,6 +2956,126 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.winws1_user_presets.dialog.button.cancel": {
         "ru": "Отмена",
         "en": "Cancel",
+    },
+    "page.winws1_user_presets.dialog.import.title": {
+        "ru": "Импортировать пресет",
+        "en": "Import preset",
+    },
+    "page.winws1_user_presets.dialog.import.subtitle": {
+        "ru": "Перетащите файл пресета или вставьте ссылку — пресет по ссылке сможет обновляться автоматически.",
+        "en": "Drop a preset file or paste a link — a preset imported by link can update automatically.",
+    },
+    "page.winws1_user_presets.dialog.import.drop.hint": {
+        "ru": "Перетащите сюда файл пресета (.txt или .zip)",
+        "en": "Drop a preset file here (.txt or .zip)",
+    },
+    "page.winws1_user_presets.dialog.import.drop.browse": {
+        "ru": "Выбрать файл",
+        "en": "Browse file",
+    },
+    "page.winws1_user_presets.dialog.import.or": {
+        "ru": "или",
+        "en": "or",
+    },
+    "page.winws1_user_presets.dialog.import.url.label": {
+        "ru": "Вставьте ссылку",
+        "en": "Paste a link",
+    },
+    "page.winws1_user_presets.dialog.import.url.placeholder": {
+        "ru": "https://…/preset.txt",
+        "en": "https://…/preset.txt",
+    },
+    "page.winws1_user_presets.dialog.import.auto_update.label": {
+        "ru": "Автоматически обновлять по ссылке",
+        "en": "Update automatically from the link",
+    },
+    "page.winws1_user_presets.dialog.import.button": {
+        "ru": "Импортировать",
+        "en": "Import",
+    },
+    "page.winws1_user_presets.dialog.import.validation.empty": {
+        "ru": "Перетащите файл или вставьте ссылку на пресет.",
+        "en": "Drop a file or paste a preset link.",
+    },
+    "page.winws1_user_presets.dialog.import.error.url": {
+        "ru": "Некорректная ссылка: {error}",
+        "en": "Invalid link: {error}",
+    },
+    "page.winws1_user_presets.dialog.import.error.ssl": {
+        "ru": "Не удалось проверить SSL-сертификат: {error}",
+        "en": "SSL certificate check failed: {error}",
+    },
+    "page.winws1_user_presets.dialog.import.error.timeout": {
+        "ru": "Сервер не ответил вовремя. Попробуйте ещё раз.",
+        "en": "The server did not respond in time. Try again.",
+    },
+    "page.winws1_user_presets.dialog.import.error.network": {
+        "ru": "Не удалось скачать пресет: {error}",
+        "en": "Failed to download the preset: {error}",
+    },
+    "page.winws1_user_presets.dialog.import.error.http": {
+        "ru": "Сервер вернул ошибку: {error}",
+        "en": "The server returned an error: {error}",
+    },
+    "page.winws1_user_presets.dialog.import.error.too_large": {
+        "ru": "Файл по ссылке слишком большой.",
+        "en": "The file behind the link is too large.",
+    },
+    "page.winws1_user_presets.dialog.import.error.content": {
+        "ru": "Файл по ссылке пуст или не похож на пресет.",
+        "en": "The file behind the link is empty or is not a preset.",
+    },
+    "page.winws1_user_presets.menu.update_remote": {
+        "ru": "Обновить из источника",
+        "en": "Update from source",
+    },
+    "page.winws1_user_presets.menu.unlink_remote": {
+        "ru": "Отвязать от источника",
+        "en": "Unlink from source",
+    },
+    "page.winws1_user_presets.remote.confirm_overwrite.title": {
+        "ru": "Перезаписать локальные правки?",
+        "en": "Overwrite local changes?",
+    },
+    "page.winws1_user_presets.remote.confirm_overwrite.body": {
+        "ru": "Этот пресет был изменён локально, поэтому автообновление приостановлено.\nОбновление из источника перезапишет ваши правки и снова включит автообновление.",
+        "en": "This preset was modified locally, so automatic updates are paused.\nUpdating from the source will overwrite your changes and re-enable automatic updates.",
+    },
+    "page.winws1_user_presets.remote.updated.title": {
+        "ru": "Пресет обновлён из источника",
+        "en": "Preset updated from source",
+    },
+    "page.winws1_user_presets.remote.updated.content": {
+        "ru": "Пресет «{name}» обновлён по ссылке.",
+        "en": "Preset '{name}' was updated from its link.",
+    },
+    "page.winws1_user_presets.remote.up_to_date.title": {
+        "ru": "Пресет актуален",
+        "en": "Preset is up to date",
+    },
+    "page.winws1_user_presets.remote.up_to_date.content": {
+        "ru": "Пресет «{name}» уже совпадает с источником.",
+        "en": "Preset '{name}' already matches the source.",
+    },
+    "page.winws1_user_presets.remote.detached.title": {
+        "ru": "Автообновление приостановлено",
+        "en": "Automatic updates paused",
+    },
+    "page.winws1_user_presets.remote.detached.content": {
+        "ru": "Пресет «{name}» изменён локально. Обновите его из источника вручную, чтобы вернуть автообновление.",
+        "en": "Preset '{name}' was modified locally. Update it from the source manually to re-enable automatic updates.",
+    },
+    "page.winws1_user_presets.remote.unlinked.title": {
+        "ru": "Автообновление отключено",
+        "en": "Automatic updates disabled",
+    },
+    "page.winws1_user_presets.remote.unlinked.content": {
+        "ru": "Пресет «{name}» больше не привязан к ссылке.",
+        "en": "Preset '{name}' is no longer linked to a URL.",
+    },
+    "page.winws1_user_presets.remote.error.generic": {
+        "ru": "Не удалось выполнить действие.",
+        "en": "The action could not be completed.",
     },
     "page.winws1_user_presets.dialog.reset_single.title": {
         "ru": "Вернуть встроенный пресет?",
@@ -3070,8 +3439,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Not selected",
     },
     "page.winws2_pages.request.button": {
-        "ru": "ОТКРЫТЬ ФОРМУ НА GITHUB",
-        "en": "OPEN GITHUB FORM",
+        "ru": "ОТКРЫТЬ ФОРМУ В FORGEJO",
+        "en": "OPEN FORGEJO FORM",
     },
     "page.winws2_pages.toolbar.title": {
         "ru": "Профили",
@@ -3118,8 +3487,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Control",
     },
     "page.winws2_user_presets.configs.title": {
-        "ru": "Обменивайтесь пресетами и профилями в разделе GitHub Discussions",
-        "en": "Share presets and profiles in GitHub Discussions",
+        "ru": "Обменивайтесь пресетами и профилями в разделе Forgejo Issues",
+        "en": "Share presets and profiles in Forgejo Issues",
     },
     "page.winws2_user_presets.configs.button": {
         "ru": "Получить конфиги",
@@ -3196,6 +3565,126 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.winws2_user_presets.dialog.button.cancel": {
         "ru": "Отмена",
         "en": "Cancel",
+    },
+    "page.winws2_user_presets.dialog.import.title": {
+        "ru": "Импортировать пресет",
+        "en": "Import preset",
+    },
+    "page.winws2_user_presets.dialog.import.subtitle": {
+        "ru": "Перетащите файл пресета или вставьте ссылку — пресет по ссылке сможет обновляться автоматически.",
+        "en": "Drop a preset file or paste a link — a preset imported by link can update automatically.",
+    },
+    "page.winws2_user_presets.dialog.import.drop.hint": {
+        "ru": "Перетащите сюда файл пресета (.txt или .zip)",
+        "en": "Drop a preset file here (.txt or .zip)",
+    },
+    "page.winws2_user_presets.dialog.import.drop.browse": {
+        "ru": "Выбрать файл",
+        "en": "Browse file",
+    },
+    "page.winws2_user_presets.dialog.import.or": {
+        "ru": "или",
+        "en": "or",
+    },
+    "page.winws2_user_presets.dialog.import.url.label": {
+        "ru": "Вставьте ссылку",
+        "en": "Paste a link",
+    },
+    "page.winws2_user_presets.dialog.import.url.placeholder": {
+        "ru": "https://…/preset.txt",
+        "en": "https://…/preset.txt",
+    },
+    "page.winws2_user_presets.dialog.import.auto_update.label": {
+        "ru": "Автоматически обновлять по ссылке",
+        "en": "Update automatically from the link",
+    },
+    "page.winws2_user_presets.dialog.import.button": {
+        "ru": "Импортировать",
+        "en": "Import",
+    },
+    "page.winws2_user_presets.dialog.import.validation.empty": {
+        "ru": "Перетащите файл или вставьте ссылку на пресет.",
+        "en": "Drop a file or paste a preset link.",
+    },
+    "page.winws2_user_presets.dialog.import.error.url": {
+        "ru": "Некорректная ссылка: {error}",
+        "en": "Invalid link: {error}",
+    },
+    "page.winws2_user_presets.dialog.import.error.ssl": {
+        "ru": "Не удалось проверить SSL-сертификат: {error}",
+        "en": "SSL certificate check failed: {error}",
+    },
+    "page.winws2_user_presets.dialog.import.error.timeout": {
+        "ru": "Сервер не ответил вовремя. Попробуйте ещё раз.",
+        "en": "The server did not respond in time. Try again.",
+    },
+    "page.winws2_user_presets.dialog.import.error.network": {
+        "ru": "Не удалось скачать пресет: {error}",
+        "en": "Failed to download the preset: {error}",
+    },
+    "page.winws2_user_presets.dialog.import.error.http": {
+        "ru": "Сервер вернул ошибку: {error}",
+        "en": "The server returned an error: {error}",
+    },
+    "page.winws2_user_presets.dialog.import.error.too_large": {
+        "ru": "Файл по ссылке слишком большой.",
+        "en": "The file behind the link is too large.",
+    },
+    "page.winws2_user_presets.dialog.import.error.content": {
+        "ru": "Файл по ссылке пуст или не похож на пресет.",
+        "en": "The file behind the link is empty or is not a preset.",
+    },
+    "page.winws2_user_presets.menu.update_remote": {
+        "ru": "Обновить из источника",
+        "en": "Update from source",
+    },
+    "page.winws2_user_presets.menu.unlink_remote": {
+        "ru": "Отвязать от источника",
+        "en": "Unlink from source",
+    },
+    "page.winws2_user_presets.remote.confirm_overwrite.title": {
+        "ru": "Перезаписать локальные правки?",
+        "en": "Overwrite local changes?",
+    },
+    "page.winws2_user_presets.remote.confirm_overwrite.body": {
+        "ru": "Этот пресет был изменён локально, поэтому автообновление приостановлено.\nОбновление из источника перезапишет ваши правки и снова включит автообновление.",
+        "en": "This preset was modified locally, so automatic updates are paused.\nUpdating from the source will overwrite your changes and re-enable automatic updates.",
+    },
+    "page.winws2_user_presets.remote.updated.title": {
+        "ru": "Пресет обновлён из источника",
+        "en": "Preset updated from source",
+    },
+    "page.winws2_user_presets.remote.updated.content": {
+        "ru": "Пресет «{name}» обновлён по ссылке.",
+        "en": "Preset '{name}' was updated from its link.",
+    },
+    "page.winws2_user_presets.remote.up_to_date.title": {
+        "ru": "Пресет актуален",
+        "en": "Preset is up to date",
+    },
+    "page.winws2_user_presets.remote.up_to_date.content": {
+        "ru": "Пресет «{name}» уже совпадает с источником.",
+        "en": "Preset '{name}' already matches the source.",
+    },
+    "page.winws2_user_presets.remote.detached.title": {
+        "ru": "Автообновление приостановлено",
+        "en": "Automatic updates paused",
+    },
+    "page.winws2_user_presets.remote.detached.content": {
+        "ru": "Пресет «{name}» изменён локально. Обновите его из источника вручную, чтобы вернуть автообновление.",
+        "en": "Preset '{name}' was modified locally. Update it from the source manually to re-enable automatic updates.",
+    },
+    "page.winws2_user_presets.remote.unlinked.title": {
+        "ru": "Автообновление отключено",
+        "en": "Automatic updates disabled",
+    },
+    "page.winws2_user_presets.remote.unlinked.content": {
+        "ru": "Пресет «{name}» больше не привязан к ссылке.",
+        "en": "Preset '{name}' is no longer linked to a URL.",
+    },
+    "page.winws2_user_presets.remote.error.generic": {
+        "ru": "Не удалось выполнить действие.",
+        "en": "The action could not be completed.",
     },
     "page.winws2_user_presets.dialog.reset_single.title": {
         "ru": "Вернуть встроенный пресет?",
@@ -3434,42 +3923,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Настройка профиля",
         "en": "Profile setup",
     },
-    "page.winws2_profile_setup.preset_dialog.create.title": {
-        "ru": "Создать пресет",
-        "en": "Create preset",
-    },
-    "page.winws2_profile_setup.preset_dialog.rename.title": {
-        "ru": "Переименовать пресет",
-        "en": "Rename preset",
-    },
-    "page.winws2_profile_setup.preset_dialog.rename.current_name": {
-        "ru": "Текущее имя: {name}",
-        "en": "Current name: {name}",
-    },
-    "page.winws2_profile_setup.preset_dialog.name_label": {
-        "ru": "Название",
-        "en": "Name",
-    },
-    "page.winws2_profile_setup.preset_dialog.name_placeholder": {
-        "ru": "Введите название пресета...",
-        "en": "Enter preset name...",
-    },
-    "page.winws2_profile_setup.preset_dialog.button.create": {
-        "ru": "Создать",
-        "en": "Create",
-    },
-    "page.winws2_profile_setup.preset_dialog.button.rename": {
-        "ru": "Переименовать",
-        "en": "Rename",
-    },
-    "page.winws2_profile_setup.preset_dialog.button.cancel": {
-        "ru": "Отмена",
-        "en": "Cancel",
-    },
-    "page.winws2_profile_setup.preset_dialog.error.empty": {
-        "ru": "Введите название пресета",
-        "en": "Enter preset name",
-    },
     "page.winws2_profile_setup.breadcrumb.control": {
         "ru": "Управление",
         "en": "Control",
@@ -3658,38 +4111,6 @@ TEXTS: dict[str, dict[str, str]] = {
 
 
 TEXTS_EXTRA: dict[str, dict[str, str]] = {
-    "page.blockcheck.domains_section": {
-        "ru": "Часть 1: Проверка доменов (TLS + HTTP injection)",
-        "en": "Part 1: Domain Checks (TLS + HTTP injection)",
-    },
-    "page.blockcheck.col_dns_isp": {
-        "ru": "DNS/ISP",
-        "en": "DNS/ISP",
-    },
-    "page.blockcheck.tcp_section": {
-        "ru": "Часть 2: Проверка TCP 16-20KB",
-        "en": "Part 2: TCP 16-20KB Checks",
-    },
-    "page.blockcheck.col_provider": {
-        "ru": "Провайдер",
-        "en": "Provider",
-    },
-    "page.blockcheck.col_status": {
-        "ru": "Статус",
-        "en": "Status",
-    },
-    "page.blockcheck.col_error_details": {
-        "ru": "Ошибка / Детали",
-        "en": "Error / Details",
-    },
-    "page.blockcheck.warning": {
-        "ru": "Предупреждение",
-        "en": "Warning",
-    },
-    "page.blockcheck.col_details": {
-        "ru": "Детали",
-        "en": "Details",
-    },
     "page.control.button.stop_only_template": {
         "ru": "Остановить только {exe_name}",
         "en": "Stop only {exe_name}",
@@ -3703,64 +4124,60 @@ TEXTS_EXTRA: dict[str, dict[str, str]] = {
         "en": "Strategy Scanner",
     },
     "page.strategy_scan.subtitle": {
-        "ru": "Автоматический перебор стратегий обхода DPI",
-        "en": "Automatic scan of DPI bypass strategies",
+        "ru": "Найдёт стратегию обхода DPI, которая работает у вашего провайдера",
+        "en": "Finds a DPI bypass strategy that works with your ISP",
     },
     "page.strategy_scan.back": {
         "ru": "Назад",
         "en": "Back",
     },
-    "page.strategy_scan.control": {
-        "ru": "Управление сканированием",
-        "en": "Scan Controls",
-    },
     "page.strategy_scan.protocol": {
-        "ru": "Протокол:",
-        "en": "Protocol:",
+        "ru": "Что должно заработать?",
+        "en": "What should work?",
     },
     "page.strategy_scan.protocol_tcp": {
-        "ru": "TCP/HTTPS",
-        "en": "TCP/HTTPS",
+        "ru": "Сайты и приложения",
+        "en": "Sites and apps",
     },
     "page.strategy_scan.protocol_stun": {
-        "ru": "STUN Voice (Discord/Telegram)",
-        "en": "STUN Voice (Discord/Telegram)",
+        "ru": "Голосовые звонки",
+        "en": "Voice calls",
     },
     "page.strategy_scan.protocol_games": {
-        "ru": "UDP Games (Roblox/Amazon/Steam)",
-        "en": "UDP Games (Roblox/Amazon/Steam)",
+        "ru": "Онлайн-игры",
+        "en": "Online games",
     },
     "page.strategy_scan.udp_scope": {
-        "ru": "Охват UDP:",
-        "en": "UDP Scope:",
+        "ru": "Какие адреса игр:",
+        "en": "Game addresses:",
     },
     "page.strategy_scan.udp_scope_all": {
-        "ru": "Все ipset (по умолчанию)",
-        "en": "All ipset (default)",
+        "ru": "Все списки адресов (по умолчанию)",
+        "en": "All address lists (default)",
     },
     "page.strategy_scan.udp_scope_games_only": {
-        "ru": "Только игровые ipset",
-        "en": "Games-only ipset",
+        "ru": "Только игровые списки",
+        "en": "Game lists only",
     },
     "page.strategy_scan.mode": {
-        "ru": "Режим:",
-        "en": "Mode:",
+        "ru": "Тщательность:",
+        "en": "Thoroughness:",
     },
     "page.strategy_scan.mode_quick": {
-        "ru": "Быстрый (30)",
-        "en": "Quick (30)",
+        "ru": "Быстро · 30",
+        "en": "Quick · 30",
     },
     "page.strategy_scan.mode_standard": {
-        "ru": "Стандартный (80)",
-        "en": "Standard (80)",
+        "ru": "Тщательно · 80",
+        "en": "Thorough · 80",
     },
     "page.strategy_scan.mode_full": {
-        "ru": "Полный (все)",
-        "en": "Full (all)",
+        "ru": "Все стратегии",
+        "en": "All strategies",
     },
     "page.strategy_scan.target": {
-        "ru": "Цель:",
-        "en": "Target:",
+        "ru": "Какой сайт проверить:",
+        "en": "Which site to check:",
     },
     "page.strategy_scan.target.default": {
         "ru": "discord.com",
@@ -3771,56 +4188,44 @@ TEXTS_EXTRA: dict[str, dict[str, str]] = {
         "en": "discord.com",
     },
     "page.strategy_scan.quick_domains": {
-        "ru": "Быстрый выбор",
-        "en": "Quick Pick",
+        "ru": "Выбрать из списка",
+        "en": "Pick from list",
     },
     "page.strategy_scan.quick_domains_hint": {
-        "ru": "Выберите домен из готового списка",
-        "en": "Choose a domain from the preset list",
+        "ru": "Готовые адреса: Discord, YouTube, Telegram и другие",
+        "en": "Ready addresses: Discord, YouTube, Telegram and more",
     },
     "page.strategy_scan.start": {
-        "ru": "Начать сканирование",
-        "en": "Start Scan",
+        "ru": "Найти рабочую стратегию",
+        "en": "Find a working strategy",
     },
     "page.strategy_scan.stop": {
         "ru": "Остановить",
         "en": "Stop",
     },
     "page.strategy_scan.ready": {
-        "ru": "Готово к сканированию",
-        "en": "Ready to scan",
-    },
-    "page.strategy_scan.warning_title": {
-        "ru": "Внимание",
-        "en": "Attention",
-    },
-    "page.strategy_scan.warning_text": {
-        "ru": f"Во время сканирования текущий обход DPI будет остановлен. Каждая стратегия тестируется отдельно через {ENGINE_WINWS2}. После завершения можно перезапустить обход.",
-        "en": f"During scanning, the current DPI bypass will be stopped. Each strategy is tested separately through {ENGINE_WINWS2}. You can restart bypass after the scan finishes.",
-    },
-    "page.strategy_scan.results": {
-        "ru": "Результаты",
-        "en": "Results",
+        "ru": "net67 на время поиска выключится",
+        "en": "net67 is off while searching",
     },
     "page.strategy_scan.col_strategy": {
         "ru": "Стратегия",
         "en": "Strategy",
     },
     "page.strategy_scan.col_status": {
-        "ru": "Статус",
-        "en": "Status",
+        "ru": "Результат",
+        "en": "Result",
     },
     "page.strategy_scan.col_time": {
-        "ru": "Время (мс)",
-        "en": "Time (ms)",
+        "ru": "Ответ, мс",
+        "en": "Response, ms",
     },
     "page.strategy_scan.col_action": {
-        "ru": "Действие",
-        "en": "Action",
+        "ru": "Применить",
+        "en": "Apply",
     },
     "page.strategy_scan.log": {
         "ru": "Подробный лог",
-        "en": "Detailed Log",
+        "en": "Detailed log",
     },
     "page.strategy_scan.starting": {
         "ru": "Запуск сканирования...",
@@ -3843,28 +4248,88 @@ TEXTS_EXTRA: dict[str, dict[str, str]] = {
         "en": "STUN/UDP already reachable",
     },
     "page.strategy_scan.baseline_ok_text_stun": {
-        "ru": "STUN/UDP уже доступен без обхода DPI — результаты могут быть ложноположительными",
-        "en": "STUN/UDP is already reachable without DPI bypass - results may be false positives",
+        "ru": "Цель отвечает и без обхода: результаты подбора — только для сведения",
+        "en": "The target answers without bypass: scan results are for reference only",
     },
     "page.strategy_scan.baseline_ok_title": {
         "ru": "Домен уже доступен",
         "en": "Domain is already reachable",
     },
     "page.strategy_scan.baseline_ok_text": {
-        "ru": "Домен доступен без обхода DPI — результаты могут быть ложноположительными",
-        "en": "Domain is reachable without DPI bypass - results may be false positives",
+        "ru": "Сайт открывается и без обхода: результаты подбора — только для сведения",
+        "en": "The site opens without bypass: scan results are for reference only",
     },
     "page.strategy_scan.found": {
-        "ru": "Найдены рабочие стратегии",
-        "en": "Working strategies found",
+        "ru": "Найдены надёжные стратегии",
+        "en": "Reliable strategies found",
     },
     "page.strategy_scan.not_found": {
         "ru": "Рабочих стратегий не найдено",
         "en": "No working strategies found",
     },
     "page.strategy_scan.try_full": {
-        "ru": "Попробуйте полный режим сканирования",
-        "en": "Try full scan mode",
+        "ru": "Запустите подбор ещё раз: проверятся следующие стратегии, или выберите «Все стратегии»",
+        "en": "Run the scan again to test the next strategies, or choose «All strategies»",
+    },
+    "page.strategy_scan.protocol_tcp.hint": {
+        "ru": "YouTube, Discord, Instagram — всё, что в браузере",
+        "en": "YouTube, Discord, Instagram — anything in a browser",
+    },
+    "page.strategy_scan.protocol_stun.hint": {
+        "ru": "Звонки в Discord и Telegram",
+        "en": "Discord and Telegram calls",
+    },
+    "page.strategy_scan.protocol_games.hint": {
+        "ru": "Roblox, Steam, Amazon и другие",
+        "en": "Roblox, Steam, Amazon and more",
+    },
+    "page.strategy_scan.mode_quick.hint": {
+        "ru": "≈ 1–3 минуты",
+        "en": "≈ 1–3 minutes",
+    },
+    "page.strategy_scan.mode_standard.hint": {
+        "ru": "≈ 3–7 минут",
+        "en": "≈ 3–7 minutes",
+    },
+    "page.strategy_scan.mode_full.hint": {
+        "ru": "Долго — самое время для чая",
+        "en": "long — perfect time for tea ☕",
+    },
+    "page.strategy_scan.baseline_question_title": {
+        "ru": "Подбирать нечего",
+        "en": "Nothing to find",
+    },
+    "page.strategy_scan.baseline_question_text": {
+        "ru": "Всё равно проверить стратегии? Результаты будут только для сведения.",
+        "en": "Test the strategies anyway? Results will be for reference only.",
+    },
+    "page.strategy_scan.baseline_question_yes": {
+        "ru": "Всё равно проверить",
+        "en": "Test anyway",
+    },
+    "page.strategy_scan.baseline_question_no": {
+        "ru": "Не проверять",
+        "en": "Don't test",
+    },
+    "page.strategy_scan.resume_question_title": {
+        "ru": "Подбор уже начинался",
+        "en": "The search was started before",
+    },
+    "page.strategy_scan.resume_question_text": {
+        "ru": "Для {target} уже проверено стратегий: {count} — они не сработали (подбор помнит их 14 дней).\n\n«Продолжить» — проверить следующие, ещё не проверенные стратегии.\n«Начать заново» — проверить список с самого начала, как в первый раз.",
+        "en": "Strategies already tested for {target}: {count} — they did not work (the search remembers them for 14 days).\n\n\"Continue\" tests the next strategies that have not been tried yet.\n\"Start over\" tests the list from the very beginning, like the first time.",
+    },
+    "page.strategy_scan.resume_question_continue": {
+        "ru": "Продолжить с места остановки",
+        "en": "Continue where it stopped",
+    },
+    "page.strategy_scan.resume_question_restart": {
+        "ru": "Начать заново",
+        "en": "Start over",
+    },
+    "page.strategy_scan.resume_question_cancel": {
+        "ru": "Отмена",
+        "en": "Cancel",
     },
     "page.strategy_scan.applied": {
         "ru": "Стратегия добавлена",
@@ -3915,6 +4380,54 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
     "page.about.app_name": {
         "ru": "net67 v2 GUI",
         "en": "net67 v2 GUI",
+    },
+    "common.premium.tier.free": {
+        "ru": "Free",
+        "en": "Free",
+    },
+    "common.premium.tier.premium": {
+        "ru": "Premium",
+        "en": "Premium",
+    },
+    "common.premium.days_left": {
+        "ru": "Осталось {days} {unit}",
+        "en": "{days} {unit} left",
+    },
+    "common.premium.days_unit.one": {
+        "ru": "день",
+        "en": "day",
+    },
+    "common.premium.days_unit.few": {
+        "ru": "дня",
+        "en": "days",
+    },
+    "common.premium.days_unit.many": {
+        "ru": "дней",
+        "en": "days",
+    },
+    "titlebar.subscription.free": {
+        "ru": "FREE",
+        "en": "FREE",
+    },
+    "titlebar.subscription.premium": {
+        "ru": "PREMIUM",
+        "en": "PREMIUM",
+    },
+    "titlebar.subscription.premium_days": {
+        "ru": "PREMIUM · {days} дн.",
+        "en": "PREMIUM · {days} d",
+    },
+    "titlebar.subscription.free.tooltip": {
+        "ru": "Бесплатная версия. Нажмите, чтобы узнать о Premium",
+        "en": "Free version. Click to learn about Premium",
+    },
+    "titlebar.subscription.premium.tooltip": {
+        "ru": "Premium активен. Нажмите, чтобы открыть страницу подписки",
+        "en": "Premium is active. Click to open the subscription page",
+    },
+    "titlebar.subscription.premium_days.tooltip": {
+        "ru": "Premium активен. {days_left}. Нажмите, чтобы открыть страницу подписки",
+        "en": "Premium is active: {days_left}. Click to open the subscription page",
     },
     "common.toggle.on_off": {
         "ru": "Вкл/Выкл",
@@ -3979,6 +4492,14 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
     "page.appearance.performance.scroll.description": {
         "ru": "Инерционная прокрутка страниц настроек",
         "en": "Inertial scrolling on settings pages",
+    },
+    "page.appearance.performance.live_animations.title": {
+        "ru": "Живые анимации",
+        "en": "Live animations",
+    },
+    "page.appearance.performance.live_animations.description": {
+        "ru": "Логотип, точка статуса, сводка на главной и кнопки запуска коротко оживают при изменениях. Почти не нагружает процессор",
+        "en": "The logo, status dot, home summary and start buttons briefly come alive on changes. Almost no CPU load",
     },
     "page.appearance.performance.editor_scroll.title": {
         "ru": "Плавная прокрутка редакторов",
@@ -4045,6 +4566,1688 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
 TEXTS.update(TEXTS_PAGES_FINAL)
 
 
+# Обучающий тур первого запуска (ui/onboarding) и карточка его повтора.
+TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
+    "onboarding.accessible_name": {
+        "ru": "Обучающий тур по программе",
+        "en": "Guided tour of the app",
+    },
+    "onboarding.counter": {
+        "ru": "Шаг {current} из {total}",
+        "en": "Step {current} of {total}",
+    },
+    "onboarding.button.start": {"ru": "Начнём", "en": "Let's go"},
+    "onboarding.button.next": {"ru": "Далее", "en": "Next"},
+    "onboarding.button.back": {"ru": "Назад", "en": "Back"},
+    "onboarding.button.skip": {"ru": "Пропустить", "en": "Skip"},
+    "onboarding.button.done": {"ru": "Готово", "en": "Done"},
+    "onboarding.button.wiki": {"ru": "Подробнее в вики", "en": "Read more in the wiki"},
+    "onboarding.step.welcome.title": {
+        "ru": "Добро пожаловать в net67!",
+        "en": "Welcome to net67!",
+    },
+    "onboarding.step.welcome.body": {
+        "ru": (
+            "net67 помогает открыть сайты и приложения, которые провайдер блокирует или замедляет: "
+            "YouTube, Discord и многие другие.\n\n"
+            "За пару минут покажем, как программа устроена и где что находится. Листать можно кнопкой "
+            "«Далее» или стрелками на клавиатуре, закрыть — клавишей Esc."
+        ),
+        "en": (
+            "net67 helps you open sites and apps that your provider blocks or slows down: "
+            "YouTube, Discord and many others.\n\n"
+            "In a couple of minutes we will show how the app works and where everything is. Use "
+            "Next or the arrow keys to move on, press Esc to close the tour."
+        ),
+    },
+    "onboarding.step.how_it_works.title": {
+        "ru": "Как работает обход",
+        "en": "How the bypass works",
+    },
+    "onboarding.step.how_it_works.body": {
+        "ru": (
+            "Провайдер следит за трафиком с помощью фильтра — DPI. Фильтр читает начало каждого "
+            "соединения, видит в нём адрес сайта и, если сайт в чёрном списке, обрывает соединение "
+            "или замедляет его.\n\n"
+            "net67 запускает у вас на компьютере движок winws2 (в режиме net67 v1 — winws). Движок "
+            "пропускает через себя сетевые пакеты и для нужных сайтов слегка их меняет: делит на части, "
+            "переставляет, отправляет перед настоящим пакетом поддельный — фейк. Фильтр путается и "
+            "пропускает соединение, а сайт получает обычный запрос.\n\n"
+            "Это не VPN: трафик идёт напрямую через ваш интернет, без сервера в другой стране."
+        ),
+        "en": (
+            "Your provider watches traffic with a filter called DPI. It reads the start of every "
+            "connection, sees the site address there and, if the site is blacklisted, drops or slows "
+            "the connection.\n\n"
+            "net67 runs the winws2 engine on your computer (winws in net67 v1 mode). The engine passes "
+            "network packets through itself and slightly changes them for selected sites: splits them, "
+            "reorders them, sends a fake packet before the real one. The filter gets confused and lets "
+            "the connection through, while the site receives a normal request.\n\n"
+            "This is not a VPN: traffic goes directly through your own connection, with no server abroad."
+        ),
+    },
+    "onboarding.step.building_blocks.title": {
+        "ru": "Пресет, профиль, стратегия",
+        "en": "Preset, profile, strategy",
+    },
+    "onboarding.step.building_blocks.body": {
+        "ru": (
+            "Три главных слова в программе:\n\n"
+            "• Пресет — вся настройка целиком. Это обычный текстовый файл, и запускается ровно то, "
+            "что в нём записано.\n"
+            "• Профиль — правило внутри пресета: какой трафик обрабатывать. Например, YouTube, "
+            "Discord или игры.\n"
+            "• Стратегия — способ обхода для профиля: как именно менять пакеты, чтобы фильтр "
+            "не узнал сайт.\n\n"
+            "Пресет состоит из профилей, у каждого профиля своя стратегия. Дальше покажем всё это "
+            "прямо в программе."
+        ),
+        "en": (
+            "Three key words in the app:\n\n"
+            "• Preset — the whole configuration. It is a plain text file, and exactly what is written "
+            "in it is what runs.\n"
+            "• Profile — a rule inside the preset: which traffic to handle. For example YouTube, "
+            "Discord or games.\n"
+            "• Strategy — the bypass method for a profile: how exactly to change packets so the filter "
+            "does not recognize the site.\n\n"
+            "A preset is made of profiles, and each profile has its own strategy. Next we will show all "
+            "of this right in the app."
+        ),
+    },
+    "onboarding.step.control_nav.title": {
+        "ru": "Главная страница",
+        "en": "Main page",
+    },
+    "onboarding.step.control_nav.body": {
+        "ru": (
+            "«Управление» — главная страница программы: запуск, текущее состояние и основные "
+            "настройки. Если запутались в разделах, возвращайтесь сюда."
+        ),
+        "en": (
+            "Control is the main page of the app: start button, current state and basic settings. "
+            "If you get lost, come back here."
+        ),
+    },
+    "onboarding.step.start.title": {
+        "ru": "Кнопка запуска",
+        "en": "Start button",
+    },
+    "onboarding.step.start.body": {
+        "ru": (
+            "Включает обход: программа запускает движок с выбранным пресетом. Пока движок работает, "
+            "обход действует не только в браузере, а во всей системе — в Discord, играх и других "
+            "программах, но только для того трафика, который описан в профилях пресета.\n\n"
+            "Когда обход включён, здесь появятся кнопки, чтобы остановить только движок или "
+            "остановить его и закрыть программу."
+        ),
+        "en": (
+            "Turns the bypass on: the app starts the engine with the selected preset. While the engine "
+            "runs, the bypass works system-wide, not only in the browser — in Discord, games and other "
+            "programs, but only for the traffic described in the preset profiles.\n\n"
+            "When the bypass is on, buttons appear here to stop only the engine or to stop it and "
+            "close the app."
+        ),
+    },
+    "onboarding.step.status.title": {
+        "ru": "Статус работы",
+        "en": "Status",
+    },
+    "onboarding.step.status.body": {
+        "ru": "Показывает, запущен ли обход прямо сейчас. Если что-то пошло не так, здесь появится подсказка.",
+        "en": "Shows whether the bypass is running right now. If something goes wrong, a hint appears here.",
+    },
+    "onboarding.step.preset.title": {
+        "ru": "Какой пресет выбран",
+        "en": "Selected preset",
+    },
+    "onboarding.step.preset.body": {
+        "ru": "Здесь видно, какой пресет сейчас выбран. Нажмите на плашку — откроется список пресетов.",
+        "en": "Shows which preset is selected now. Click it to open the list of presets.",
+    },
+    "onboarding.step.presets_list.title": {
+        "ru": "Что такое пресеты",
+        "en": "What presets are",
+    },
+    "onboarding.step.presets_list.body": {
+        "ru": (
+            "Это страница «Мои пресеты». Пресет — текстовый файл (.txt) с настройками движка: в нём "
+            "перечислены профили и их стратегии. Программа запускает его как есть, ничего не "
+            "добавляя от себя.\n\n"
+            "Готовые пресеты уже есть в программе. Выбранный отмечен в списке, чтобы сменить его, "
+            "просто нажмите на другой. Провайдеры блокируют по-разному, поэтому, если сайт не открывается, "
+            "первым делом попробуйте другой пресет."
+        ),
+        "en": (
+            "This is the My presets page. A preset is a text file (.txt) with engine settings: it lists "
+            "profiles and their strategies. The app runs it as is and adds nothing on its own.\n\n"
+            "Ready presets are already included. The selected one is marked in the list; click another "
+            "one to switch. Providers block in different ways, so if a site does not open, try another "
+            "preset first."
+        ),
+    },
+    "onboarding.step.preset_menu.title": {
+        "ru": "Что можно делать с пресетом",
+        "en": "What you can do with a preset",
+    },
+    "onboarding.step.preset_menu.body": {
+        "ru": (
+            "Это меню открывается, если нажать на пресет правой кнопкой мыши.\n\n"
+            "Открыть — посмотреть и поправить текст пресета. Рейтинг — оценить пресет, чтобы помнить, "
+            "какой работает лучше. Выше и ниже — переставить его в списке. Дублировать — сделать "
+            "копию и менять её, не трогая оригинал. Экспорт — сохранить файл пресета, например чтобы "
+            "поделиться им.\n\n"
+            "Переименовать и Удалить есть только у ваших пресетов, а выбранный сейчас удалить нельзя. "
+            "Вернуть встроенный появляется, если вы меняли встроенный пресет, — он вернёт исходный "
+            "вид. У пресетов, добавленных по ссылке, есть ещё пункты, чтобы обновить их из источника "
+            "или отвязать от него."
+        ),
+        "en": (
+            "This menu opens when you right-click a preset.\n\n"
+            "Open shows the preset text so you can edit it. Rating lets you score a preset to "
+            "remember which one works best. Up and down move it in the list. Duplicate makes a copy "
+            "you can change without touching the original. Export saves the preset file, for example "
+            "to share it.\n\n"
+            "Rename and Delete exist only for your own presets, and the selected preset cannot be "
+            "deleted. Restore built-in appears when you have changed a built-in preset and brings "
+            "back its original version. Presets added from a link also have items to update them from "
+            "the source or unlink them."
+        ),
+    },
+    "onboarding.step.preset_file.title": {
+        "ru": "Пресет — это обычный текстовый файл",
+        "en": "A preset is a plain text file",
+    },
+    "onboarding.step.preset_file.body": {
+        "ru": (
+            "Любой пресет — просто файл .txt. Здесь он открыт целиком: каждая строка — одна настройка "
+            "движка, и запускается ровно то, что здесь написано. Где лежит файл, видно в карточке сверху.\n\n"
+            "Править пресет можно прямо здесь. Изменения сохраняются сами через секунду, а если этот "
+            "пресет сейчас запущен, программа сразу применит их. Открыть это окно можно пунктом "
+            "«Открыть» в меню пресета."
+        ),
+        "en": (
+            "Any preset is just a .txt file. Here it is open in full: every line is one engine "
+            "setting, and exactly what is written here is what runs. The card at the top shows where "
+            "the file is.\n\n"
+            "You can edit the preset right here. Changes save on their own after a second, and if "
+            "this preset is running, the app applies them right away. You can open this view with "
+            "Open in the preset menu."
+        ),
+    },
+    "onboarding.step.preset_header.title": {
+        "ru": "Служебные строки",
+        "en": "Service lines",
+    },
+    "onboarding.step.preset_header.body": {
+        "ru": (
+            "Файл начинается со строк с #. Для движка это комментарии — он их пропускает. Их читает "
+            "программа: имя пресета («{name}»), версия встроенного пресета и цвет значка в списке."
+        ),
+        "en": (
+            "The file starts with lines beginning with #. The engine treats them as comments and "
+            "skips them. The app reads them: the preset name (\"{name}\"), the built-in preset "
+            "version and the icon colour in the list."
+        ),
+    },
+    "onboarding.step.preset_lua_init.title": {
+        "ru": "Подключение техник: --lua-init",
+        "en": "Loading techniques: --lua-init",
+    },
+    "onboarding.step.preset_lua_init.body": {
+        "ru": (
+            "Строки --lua-init подключают Lua-файлы, в которых записаны сами техники обхода — fake, "
+            "multisplit и другие. Здесь их {count}.\n\n"
+            "Для net67 v2 этот блок обязателен: без него стратегии не найдут нужных функций. "
+            "Трогать его не нужно."
+        ),
+        "en": (
+            "The --lua-init lines load the Lua files that contain the bypass techniques themselves "
+            "— fake, multisplit and others. There are {count} of them here.\n\n"
+            "This block is required for net67 v2: without it strategies cannot find their "
+            "functions. Leave it as is."
+        ),
+    },
+    "onboarding.step.preset_engine_options.title": {
+        "ru": "Общие настройки движка",
+        "en": "Engine-wide settings",
+    },
+    "onboarding.step.preset_engine_options.body": {
+        "ru": "Эти настройки действуют на весь пресет сразу, а не на один профиль. Здесь: {lines}.",
+        "en": "These settings apply to the whole preset, not to a single profile. Here: {lines}.",
+    },
+    "onboarding.step.preset_interception.title": {
+        "ru": "Какой трафик перехватывается: --wf-…",
+        "en": "Which traffic is captured: --wf-…",
+    },
+    "onboarding.step.preset_interception.body": {
+        "ru": (
+            "Эти строки решают, какие соединения Windows вообще отдаёт программе. Перехватом "
+            "занимается драйвер WinDivert. TCP-порты: {tcp}. UDP-порты: {udp}. Строки --wf-raw-part "
+            "добавляют особые случаи, например голосовые звонки Discord.\n\n"
+            "Если порта здесь нет, его не увидит ни один профиль ниже."
+        ),
+        "en": (
+            "These lines decide which connections Windows hands to the app at all. Capturing is "
+            "done by the WinDivert driver. TCP ports: {tcp}. UDP ports: {udp}. The --wf-raw-part "
+            "lines add special cases, such as Discord voice calls.\n\n"
+            "If a port is not listed here, no profile below will ever see it."
+        ),
+    },
+    "onboarding.step.preset_blobs.title": {
+        "ru": "Фейки: --blob",
+        "en": "Fakes: --blob",
+    },
+    "onboarding.step.preset_blobs.body": {
+        "ru": (
+            "Здесь объявлены фейки — готовые поддельные пакеты из папки bin, всего {count}. Строка "
+            "даёт фейку короткое имя, например {example}, и стратегии зовут его по этому имени.\n\n"
+            "Фейк должен быть объявлен здесь: при запуске программа сама ничего не подставляет."
+        ),
+        "en": (
+            "Fakes are declared here — ready-made decoy packets from the bin folder, {count} in "
+            "total. Each line gives a fake a short name, such as {example}, and strategies refer to "
+            "it by that name.\n\n"
+            "A fake must be declared here: the app adds nothing on its own at launch."
+        ),
+    },
+    "onboarding.step.preset_profile.title": {
+        "ru": "Профили",
+        "en": "Profiles",
+    },
+    "onboarding.step.preset_profile.body": {
+        "ru": (
+            "Дальше идут профили — правила: какой трафик и какой стратегией обходить. В этом "
+            "пресете их {count}. Разберём один — «{name}», остальные устроены так же."
+        ),
+        "en": (
+            "Profiles come next — rules saying which traffic to handle and with which strategy. "
+            "This preset has {count} of them. Let's look at one — \"{name}\"; the rest are built the "
+            "same way."
+        ),
+    },
+    "onboarding.step.preset_profile_name.title": {
+        "ru": "--name — имя профиля",
+        "en": "--name — the profile name",
+    },
+    "onboarding.step.preset_profile_name.body": {
+        "ru": (
+            "Так профиль называется в программе: «{name}». Если рядом стоит строка --skip, профиль "
+            "выключен и движок его пропускает."
+        ),
+        "en": (
+            "This is how the profile is named in the app: \"{name}\". If there is a --skip line next "
+            "to it, the profile is turned off and the engine skips it."
+        ),
+    },
+    "onboarding.step.preset_profile_match.title": {
+        "ru": "Когда срабатывает профиль",
+        "en": "When the profile applies",
+    },
+    "onboarding.step.preset_profile_match.body": {
+        "ru": (
+            "Здесь условия: {match}. --filter-tcp и --filter-udp задают протокол и порты, "
+            "--hostlist — список сайтов, --ipset — список IP-адресов. Профиль берёт соединение, "
+            "только если подходят все условия сразу."
+        ),
+        "en": (
+            "These are the conditions: {match}. --filter-tcp and --filter-udp set the protocol and "
+            "ports, --hostlist is a list of sites, --ipset is a list of IP addresses. The profile "
+            "takes a connection only if all conditions match."
+        ),
+    },
+    "onboarding.step.preset_profile_packets.title": {
+        "ru": "К каким пакетам применять",
+        "en": "Which packets to handle",
+    },
+    "onboarding.step.preset_profile_packets.body": {
+        "ru": (
+            "Здесь: {packets}. --payload говорит, какие данные обрабатывать — например, начало "
+            "защищённого соединения (tls_client_hello). --out-range и --in-range — какие по счёту "
+            "пакеты.\n\n"
+            "Порядок важен: эти строки должны стоять перед --lua-desync, к которому относятся."
+        ),
+        "en": (
+            "Here: {packets}. --payload says which data to handle — for example the start of a "
+            "secure connection (tls_client_hello). --out-range and --in-range say which packets by "
+            "number.\n\n"
+            "Order matters: these lines must come before the --lua-desync they apply to."
+        ),
+    },
+    "onboarding.step.preset_profile_strategy.title": {
+        "ru": "Стратегия: --lua-desync",
+        "en": "The strategy: --lua-desync",
+    },
+    "onboarding.step.preset_profile_strategy.body": {
+        "ru": (
+            "Это и есть стратегия: техника «{technique}» и её настройки. Когда вы выбираете для "
+            "профиля готовую стратегию, программа меняет именно эти строки. Строк --lua-desync "
+            "может быть несколько — тогда техники работают вместе."
+        ),
+        "en": (
+            "This is the strategy itself: the \"{technique}\" technique and its settings. When you "
+            "pick a ready strategy for a profile, the app changes exactly these lines. There can be "
+            "several --lua-desync lines — then the techniques work together."
+        ),
+    },
+    "onboarding.step.preset_profile_new.title": {
+        "ru": "--new — граница профилей",
+        "en": "--new — the profile boundary",
+    },
+    "onboarding.step.preset_profile_new.body": {
+        "ru": (
+            "Строка --new закрывает профиль и начинает следующий — «{next}». Так до конца файла.\n\n"
+            "Порядок профилей важен: если к соединению подходят несколько, сработает верхний."
+        ),
+        "en": (
+            "The --new line closes a profile and starts the next one — \"{next}\". And so on until "
+            "the end of the file.\n\n"
+            "The order of profiles matters: if several match a connection, the upper one wins."
+        ),
+    },
+    "onboarding.step.presets_toolbar.title": {
+        "ru": "Свои пресеты",
+        "en": "Your own presets",
+    },
+    "onboarding.step.presets_toolbar.body": {
+        "ru": (
+            "Кнопки над списком: создать свой пресет, импортировать его из файла или по ссылке и "
+            "открыть папку с файлами пресетов. Пресет по ссылке может обновляться сам, когда автор "
+            "его поменяет."
+        ),
+        "en": (
+            "Buttons above the list: create your own preset, import one from a file or a link, and open "
+            "the preset folder. A preset imported from a link can update itself when its author "
+            "changes it."
+        ),
+    },
+    "onboarding.step.profiles_list.title": {
+        "ru": "Что такое профили",
+        "en": "What profiles are",
+    },
+    "onboarding.step.profiles_list.body": {
+        "ru": (
+            "Это «Профили пресета» — из чего состоит выбранный пресет. Профиль — правило: какой трафик "
+            "обрабатывать и какой стратегией. Какой трафик, задаёт список сайтов или адресов — о нём "
+            "чуть дальше."
+        ),
+        "en": (
+            "This is Preset profiles — what the selected preset is made of. A profile is a rule: which "
+            "traffic to handle and with which strategy. The traffic is set by a list of sites or "
+            "addresses — more on that a bit later."
+        ),
+    },
+    "onboarding.step.profile_row.title": {
+        "ru": "Профиль и его стратегия",
+        "en": "A profile and its strategy",
+    },
+    "onboarding.step.profile_row.body": {
+        "ru": (
+            "Слева — название профиля и тип списка (Hostlist или IPset), справа — выбранная стратегия. "
+            "Горящая точка значит, что стратегия выбрана и профиль работает.\n\n"
+            "Нажмите на профиль, чтобы выбрать для него другую готовую стратегию. Если сервис не "
+            "открывается, попробуйте несколько стратегий по очереди — какая-то подойдёт вашему "
+            "провайдеру."
+        ),
+        "en": (
+            "On the left are the profile name and list type (Hostlist or IPset), on the right is the "
+            "selected strategy. A lit dot means a strategy is selected and the profile works.\n\n"
+            "Click a profile to choose another ready strategy for it. If a service does not open, try "
+            "several strategies one by one — one of them will suit your provider."
+        ),
+    },
+    "onboarding.step.profile_menu.title": {
+        "ru": "Что можно делать с профилем",
+        "en": "What you can do with a profile",
+    },
+    "onboarding.step.profile_menu.body": {
+        "ru": (
+            "Это меню открывается, если нажать на профиль правой кнопкой мыши.\n\n"
+            "Открыть — настройки профиля: список, стратегия, диапазоны. Выключить — профиль останется "
+            "в пресете, но движок будет его пропускать: в текст пресета добавится строка --skip. "
+            "Дублировать — копия профиля, например чтобы попробовать другую стратегию. Удалить из "
+            "preset — убрать профиль из файла пресета совсем.\n\n"
+            "У профилей, которые вы создали сами, в меню есть ещё пункты, чтобы изменить или удалить "
+            "их."
+        ),
+        "en": (
+            "This menu opens when you right-click a profile.\n\n"
+            "Open shows the profile settings: list, strategy, ranges. Turn off keeps the profile in "
+            "the preset, but the engine skips it: a --skip line is added to the preset text. "
+            "Duplicate makes a copy of the profile, for example to try another strategy. Remove from "
+            "preset deletes the profile from the preset file.\n\n"
+            "Profiles you created yourself also have menu items to edit or delete them."
+        ),
+    },
+    "onboarding.step.profiles_toolbar.title": {
+        "ru": "Новые профили",
+        "en": "More profiles",
+    },
+    "onboarding.step.profiles_toolbar.body": {
+        "ru": (
+            "Здесь можно добавить в пресет ещё профиль, найти нужный поиском и поменять вид списка. "
+            "Кнопка «Порядок в пресете» показывает, в каком порядке профили записаны в файле. Если "
+            "нужного сервиса нет, отправьте запрос на новый профиль."
+        ),
+        "en": (
+            "Here you can add another profile to the preset, search for one and change the list view. "
+            "The Order in preset button shows the order of profiles in the file. If the service you "
+            "need is missing, send a request for a new profile."
+        ),
+    },
+    "onboarding.step.profile_order.title": {
+        "ru": "Порядок в пресете важен",
+        "en": "Order in the preset matters",
+    },
+    "onboarding.step.profile_order.body": {
+        "ru": (
+            "Это страница «Порядок в пресете», она открывается кнопкой над списком профилей. Здесь "
+            "профили стоят так же, как записаны в файле пресета.\n\n"
+            "Движок проверяет профили сверху вниз. Если к одному сайту или IP подходят два профиля, "
+            "сработает тот, что выше. Поэтому исключения и узкие правила ставьте выше общих. Чтобы "
+            "поменять порядок, перетащите профиль мышью."
+        ),
+        "en": (
+            "This is the Order in preset page, opened with a button above the profile list. Profiles "
+            "here are in the same order as in the preset file.\n\n"
+            "The engine checks profiles from top to bottom. If two profiles match the same site or "
+            "IP, the upper one wins. So put exceptions and narrow rules above general ones. Drag a "
+            "profile with the mouse to change the order."
+        ),
+    },
+    "onboarding.step.list_type.title": {
+        "ru": "Hostlist или IPset",
+        "en": "Hostlist or IPset",
+    },
+    "onboarding.step.list_type.body": {
+        "ru": (
+            "Это страница одного профиля. Слева — чем профиль выбирает трафик, справа — файл со списком.\n\n"
+            "Hostlist — список имён сайтов, например youtube.com. Движок узнаёт сайт по имени, "
+            "которое программа сообщает при подключении. Подходит для сайтов и большинства приложений.\n\n"
+            "IPset — список IP-адресов и подсетей. Он нужен, когда имени сайта в трафике не видно: "
+            "игры, голосовые звонки, некоторые приложения. Минус в том, что на одном адресе бывает "
+            "много сайтов, а адреса сервиса могут меняться."
+        ),
+        "en": (
+            "This is the page of a single profile. On the left is how the profile picks traffic, on "
+            "the right is the list file.\n\n"
+            "A hostlist is a list of site names such as youtube.com. The engine recognises the site "
+            "by the name an app sends when it connects. It suits sites and most apps.\n\n"
+            "An IPset is a list of IP addresses and subnets. It is needed when the site name is not "
+            "visible in the traffic: games, voice calls, some apps. The downside is that one address "
+            "can host many sites, and a service's addresses can change."
+        ),
+    },
+    "onboarding.step.ranges.title": {
+        "ru": "К каким пакетам применять",
+        "en": "Which packets to handle",
+    },
+    "onboarding.step.ranges.body": {
+        "ru": (
+            "--out-range — пакеты от вас к сайту, --in-range — от сайта к вам. Эти поля решают, к "
+            "каким пакетам соединения применять стратегию.\n\n"
+            "a — всегда, x — никогда, n — по номеру пакета, d — по номеру пакета с данными. Например, "
+            "d и 8 — стратегия работает только на первых 8 пакетах с данными. Блокировка обычно "
+            "смотрит на начало соединения, а дальше обработка только нагружает процессор."
+        ),
+        "en": (
+            "--out-range covers packets from you to the site, --in-range covers packets from the site "
+            "to you. These fields decide which packets of a connection the strategy handles.\n\n"
+            "a means always, x never, n by packet number, d by number of packets with data. For "
+            "example, d and 8 means the strategy works only on the first 8 data packets. Blocking "
+            "usually looks at the start of a connection, and handling the rest only loads the CPU."
+        ),
+    },
+    "onboarding.step.profile_tabs.title": {
+        "ru": "Вкладки профиля",
+        "en": "Profile tabs",
+    },
+    "onboarding.step.profile_tabs.body": {
+        "ru": (
+            "Готовые стратегии — выбрать способ обхода для этого профиля. Редактор — записи списка "
+            "сайтов или адресов. Когда применяется — условия профиля и его текст внутри пресета."
+        ),
+        "en": (
+            "Ready strategies — choose the bypass method for this profile. Editor — the entries of "
+            "the site or address list. When it applies — the profile conditions and its text inside "
+            "the preset."
+        ),
+    },
+    "onboarding.scene.you": {"ru": "Вы", "en": "You"},
+    "onboarding.scene.provider": {"ru": "Провайдер", "en": "Provider"},
+    "onboarding.scene.site": {"ru": "Сайт", "en": "Site"},
+    "onboarding.scene.check": {"ru": "проверка", "en": "inspection"},
+    "onboarding.scene.junk": {"ru": "мусор", "en": "junk"},
+    "onboarding.scene.syn_data": {"ru": "SYN + данные", "en": "SYN + data"},
+    "onboarding.scene.bubble.blocked": {"ru": "Узнал — блок!", "en": "Recognised — blocked!"},
+    "onboarding.scene.bubble.fake": {"ru": "google.com — пропущу", "en": "google.com — let it pass"},
+    "onboarding.scene.bubble.unknown": {"ru": "Не узнал…", "en": "Can't tell…"},
+    "onboarding.scene.bubble.which_real": {"ru": "Где тут настоящее?", "en": "Which one is real?"},
+    "onboarding.scene.bubble.fake_host": {"ru": "abc.ru — пропущу", "en": "abc.ru — let it pass"},
+    "onboarding.scene.bubble.junk": {"ru": "Мусор — пропущу", "en": "Junk — let it pass"},
+    "onboarding.scene.bubble.odd": {"ru": "Странно, но пропущу", "en": "Odd, but let it pass"},
+    "onboarding.step.strategy_choice.title": {
+        "ru": "Какую стратегию выбрать? Лучшей нет",
+        "en": "Which strategy to pick? There is no best one",
+    },
+    "onboarding.step.strategy_choice.body": {
+        "ru": (
+            "Универсальной хорошей стратегии не существует: провайдеры блокируют по-разному, и что "
+            "помогает одному, у другого не работает.\n\n"
+            "Сверху — как обычно работает блокировка: проверка у провайдера читает имя сайта в "
+            "первом пакете и обрывает соединение. Стратегия — это набор техник, которые мешают ей "
+            "прочитать имя. Где-то помогает нарезка, где-то подсунутый фейк, где-то их сочетание.\n\n"
+            "Дальше — коротко о главных техниках. Разберитесь, что делает каждая, и оставляйте то, "
+            "что работает у вашего провайдера: поменяли стратегию — проверили сайт."
+        ),
+        "en": (
+            "There is no universal good strategy: providers block in different ways, and what helps "
+            "one person does not work for another.\n\n"
+            "Above is how blocking usually works: the provider's inspection reads the site name in "
+            "the first packet and cuts the connection. A strategy is a set of techniques that stop "
+            "it from reading the name. Sometimes splitting helps, sometimes a fake, sometimes both.\n\n"
+            "Next is a short look at the main techniques. Learn what each one does and keep what "
+            "works for your provider: change the strategy, then check the site."
+        ),
+    },
+    "onboarding.step.technique_fake.title": {
+        "ru": "fake — подсунуть фейк",
+        "en": "fake — slip in a decoy",
+    },
+    "onboarding.step.technique_fake.body": {
+        "ru": (
+            "Перед настоящим пакетом уходит поддельный — с именем другого, разрешённого сайта. "
+            "Поддельный специально «испорчен», поэтому до сайта не доходит, а проверка видит его "
+            "первым и пропускает соединение. Следом спокойно проходит настоящий.\n\n"
+            "В названиях стратегий: fake."
+        ),
+        "en": (
+            "A fake packet with the name of another, allowed site goes before the real one. The "
+            "fake is deliberately \"broken\", so it never reaches the site, but the inspection sees "
+            "it first and lets the connection through. The real packet follows.\n\n"
+            "In strategy names: fake."
+        ),
+    },
+    "onboarding.step.technique_multisplit.title": {
+        "ru": "multisplit — нарезка",
+        "en": "multisplit — splitting",
+    },
+    "onboarding.step.technique_multisplit.body": {
+        "ru": (
+            "Первый пакет режется на части — например «you» и «tube.com», — и они уходят по "
+            "отдельности. Проверка видит обрывки и не узнаёт имя сайта, а сайт сам склеивает части.\n\n"
+            "В названиях стратегий: multisplit, split."
+        ),
+        "en": (
+            "The first packet is cut into pieces — for example \"you\" and \"tube.com\" — sent "
+            "separately. The inspection sees fragments and does not recognise the site name, while "
+            "the site glues the pieces back.\n\n"
+            "In strategy names: multisplit, split."
+        ),
+    },
+    "onboarding.step.technique_multidisorder.title": {
+        "ru": "multidisorder — нарезка задом наперёд",
+        "en": "multidisorder — splitting in reverse",
+    },
+    "onboarding.step.technique_multidisorder.body": {
+        "ru": (
+            "Та же нарезка, но части уходят в обратном порядке: сначала вторая, потом первая. "
+            "Некоторые проверки ждут части по порядку и сбиваются, а сайт всё равно расставит их по "
+            "местам.\n\n"
+            "В названиях стратегий: multidisorder, disorder."
+        ),
+        "en": (
+            "The same splitting, but the pieces go in reverse order: the second one first. Some "
+            "inspections expect pieces in order and get confused, while the site still puts them "
+            "back in place.\n\n"
+            "In strategy names: multidisorder, disorder."
+        ),
+    },
+    "onboarding.step.technique_fakedsplit.title": {
+        "ru": "fakedsplit — нарезка с фейками",
+        "en": "fakedsplit — splitting with fakes",
+    },
+    "onboarding.step.technique_fakedsplit.body": {
+        "ru": (
+            "Настоящие части идут вперемешку с поддельными такого же размера. Проверка не может "
+            "понять, где настоящие данные, а поддельные до сайта не доходят. fakeddisorder — то же "
+            "самое в обратном порядке.\n\n"
+            "В названиях стратегий: fakedsplit, fakeddisorder."
+        ),
+        "en": (
+            "Real pieces go mixed with fake ones of the same size. The inspection cannot tell which "
+            "data is real, and the fakes never reach the site. fakeddisorder does the same in "
+            "reverse order.\n\n"
+            "In strategy names: fakedsplit, fakeddisorder."
+        ),
+    },
+    "onboarding.step.technique_hostfakesplit.title": {
+        "ru": "hostfakesplit — чужие имена вокруг",
+        "en": "hostfakesplit — decoy names around",
+    },
+    "onboarding.step.technique_hostfakesplit.body": {
+        "ru": (
+            "Пакет режется точно по границам имени сайта, а вокруг настоящего имени уходят "
+            "поддельные. Проверка видит чужие имена, сайт получает только настоящее.\n\n"
+            "В названиях стратегий: hostfakesplit."
+        ),
+        "en": (
+            "The packet is cut exactly at the edges of the site name, and fake names are sent "
+            "around the real one. The inspection sees other names, the site gets only the real one.\n\n"
+            "In strategy names: hostfakesplit."
+        ),
+    },
+    "onboarding.step.technique_tcpseg.title": {
+        "ru": "tcpseg — мусор спереди",
+        "en": "tcpseg — junk in front",
+    },
+    "onboarding.step.technique_tcpseg.body": {
+        "ru": (
+            "Кусок данных уходит отдельным пакетом, а с приёмом seqovl к нему спереди приклеивается "
+            "мусор. Сайт мусор отбрасывает, а проверка может принять его за начало сообщения и "
+            "пропустить.\n\n"
+            "В готовых стратегиях этот приём встречается как seqovl — например, «multisplit seqovl700»."
+        ),
+        "en": (
+            "A piece of data is sent as a separate packet, and with seqovl some junk is glued in "
+            "front of it. The site drops the junk, while the inspection may take it for the start "
+            "of the message and let it pass.\n\n"
+            "In ready strategies this trick shows up as seqovl — for example, \"multisplit seqovl700\"."
+        ),
+    },
+    "onboarding.step.technique_oob.title": {
+        "ru": "oob — лишний байт",
+        "en": "oob — an extra byte",
+    },
+    "onboarding.step.technique_oob.body": {
+        "ru": (
+            "В сообщение вставляется один «срочный» байт. Система на стороне сайта его выкидывает, "
+            "а проверка видит испорченное имя — например «you#tube.com» — и не узнаёт сайт.\n\n"
+            "В готовых стратегиях его пока нет — его можно дописать вручную в тексте профиля."
+        ),
+        "en": (
+            "One \"urgent\" byte is inserted into the message. The system on the site's side throws "
+            "it away, while the inspection sees a broken name — for example \"you#tube.com\" — and "
+            "does not recognise the site.\n\n"
+            "Ready strategies do not use it yet — you can add it by hand in the profile text."
+        ),
+    },
+    "onboarding.step.technique_syndata.title": {
+        "ru": "syndata — данные в первом пакете",
+        "en": "syndata — data in the first packet",
+    },
+    "onboarding.step.technique_syndata.body": {
+        "ru": (
+            "Данные кладутся прямо в самый первый пакет соединения — тот, которым компьютер только "
+            "«стучится» к сайту. Это сбивает часть проверок, а соединение устанавливается как "
+            "обычно.\n\n"
+            "В названиях стратегий: syndata."
+        ),
+        "en": (
+            "Data is put right into the very first packet of the connection — the one the computer "
+            "only \"knocks\" with. This confuses some inspections, while the connection is set up as "
+            "usual.\n\n"
+            "In strategy names: syndata."
+        ),
+    },
+    "onboarding.step.list_entries.title": {
+        "ru": "Системные и ваши записи",
+        "en": "Built-in and your entries",
+    },
+    "onboarding.step.list_entries.body": {
+        "ru": (
+            "Сверху — «База»: системные записи. Они приходят с программой и обновляются вместе с ней.\n\n"
+            "Снизу — «Ваши записи». Добавляйте сюда свои сайты или адреса, по одному на строку. Они "
+            "лежат в отдельном файле в папке lists/user и не пропадут при обновлении.\n\n"
+            "Движок получает общий список: базу плюс ваши записи."
+        ),
+        "en": (
+            "At the top is Base: the built-in entries. They come with the app and are updated with it.\n\n"
+            "Below are Your entries. Add your own sites or addresses here, one per line. They are "
+            "kept in a separate file in the lists/user folder and survive updates.\n\n"
+            "The engine gets one combined list: the base plus your entries."
+        ),
+    },
+    "onboarding.step.fakes.title": {
+        "ru": "Фейки",
+        "en": "Fakes",
+    },
+    "onboarding.step.fakes.body": {
+        "ru": (
+            "Фейк — пакет-обманка, который движок отправляет перед настоящим. Фильтр провайдера "
+            "принимает его за начало соединения и пропускает остальное, а сам сайт такой пакет "
+            "не получает или отбрасывает.\n\n"
+            "Содержимое фейков лежит в .bin-файлах — встроенных и ваших. Здесь их можно посмотреть, "
+            "а какие фейки использовать, указано в стратегиях."
+        ),
+        "en": (
+            "A fake is a decoy packet the engine sends before the real one. The provider filter takes it "
+            "for the start of the connection and lets the rest through, while the site itself never "
+            "gets that packet or drops it.\n\n"
+            "Fake contents live in .bin files — built-in and your own. You can view them here; which "
+            "fakes to use is set in the strategies."
+        ),
+    },
+    "onboarding.step.dpi_mode.title": {
+        "ru": "Режим работы",
+        "en": "Operating mode",
+    },
+    "onboarding.step.dpi_mode.body": {
+        "ru": (
+            "Здесь выбирается движок:\n"
+            "• net67 v2 (winws2) — основной режим с готовыми пресетами, поддерживает свои стратегии "
+            "на Lua;\n"
+            "• net67 v1 (winws) — более старый и простой движок;\n"
+            "• Оркестратор — сам подбирает рабочие стратегии для каждого сайта и запоминает удачные.\n\n"
+            "Если не знаете, что выбрать, оставьте net67 v2."
+        ),
+        "en": (
+            "Choose the engine here:\n"
+            "• net67 v2 (winws2) — the main mode with ready presets, supports custom Lua strategies;\n"
+            "• net67 v1 (winws) — an older and simpler engine;\n"
+            "• Orchestra — picks working strategies for each site by itself and remembers good ones.\n\n"
+            "If unsure, keep net67 v2."
+        ),
+    },
+    "onboarding.step.program_settings.title": {
+        "ru": "Настройки программы",
+        "en": "App settings",
+    },
+    "onboarding.step.program_settings.body": {
+        "ru": (
+            "Можно запускать программу вместе с Windows, сразу включать обход после её старта и прятать "
+            "окно в трей — к значку возле часов. Так обход будет работать сам, без лишних нажатий."
+        ),
+        "en": (
+            "Start the app with Windows, turn the bypass on right after it starts and hide the window to "
+            "the tray next to the clock. This way the bypass works on its own."
+        ),
+    },
+    "onboarding.step.tools.title": {
+        "ru": "Инструменты",
+        "en": "Tools",
+    },
+    "onboarding.step.tools.body": {
+        "ru": (
+            "Помощь в особых случаях:\n"
+            "• Настройка DNS — сменить DNS-серверы, если провайдер подменяет адреса сайтов;\n"
+            "• Редактор hosts — открыть отдельные сервисы через системный файл hosts;\n"
+            "• Telegram Proxy — прокси прямо на компьютере, чтобы Telegram работал, когда его замедляют."
+        ),
+        "en": (
+            "Help for special cases:\n"
+            "• DNS settings — change DNS servers if your provider spoofs site addresses;\n"
+            "• Hosts editor — unblock individual services through the system hosts file;\n"
+            "• Telegram Proxy — a proxy right on your computer so Telegram works when it is throttled."
+        ),
+    },
+    "onboarding.step.geo_blocks.title": {
+        "ru": "Гео-ограничения стратегиями не обойти",
+        "en": "Strategies cannot bypass geo-restrictions",
+    },
+    "onboarding.step.geo_blocks.body": {
+        "ru": (
+            "Важно: если сервис пишет «недоступно в вашей стране» или «not available in your region», "
+            "это не блокировка провайдера. Сам сервис закрыл доступ для России — так делают ChatGPT, "
+            "Gemini и другие ИИ-сервисы, некоторые игры и магазины. Стратегии net67 такие ограничения "
+            "не обходят, сколько их ни перебирай: они помогают только против блокировок провайдера.\n\n"
+            "Гео-ограничения обходят по-другому:\n"
+            "• Редактор hosts — отметьте сервис, и программа пропишет в файл hosts адреса, через которые "
+            "он откроется;\n"
+            "• Настройка DNS — в группе «Для ИИ» есть DNS-серверы, которые открывают ChatGPT и похожие "
+            "сервисы."
+        ),
+        "en": (
+            "Important: if a service says \"not available in your country\" or \"not available in your "
+            "region\", it is not your provider blocking it. The service itself has closed access for "
+            "Russia — ChatGPT, Gemini and other AI services, some games and stores do this. net67 "
+            "strategies do not bypass such restrictions no matter how many you try: they only help "
+            "against provider blocks.\n\n"
+            "Geo-restrictions are bypassed differently:\n"
+            "• Hosts editor — tick a service and the app writes addresses to the hosts file through "
+            "which it opens;\n"
+            "• DNS settings — the For AI group has DNS servers that open ChatGPT and similar services."
+        ),
+    },
+    "onboarding.step.diagnostics.title": {
+        "ru": "Диагностика",
+        "en": "Diagnostics",
+    },
+    "onboarding.step.diagnostics.body": {
+        "ru": (
+            "BlockCheck в один клик проверит, какие сайты блокируются и каким способом, — так проще "
+            "понять, что происходит с вашим интернетом. В режиме net67 v2 здесь же есть разбор "
+            "подробного журнала движка."
+        ),
+        "en": (
+            "BlockCheck checks in one click which sites are blocked and how, so it is easier to see what "
+            "is happening with your connection. In net67 v2 mode there is also a detailed engine log "
+            "analyzer here."
+        ),
+    },
+    "onboarding.step.appearance.title": {
+        "ru": "Оформление и помощь",
+        "en": "Appearance and help",
+    },
+    "onboarding.step.appearance.body": {
+        "ru": (
+            "Темы и цвета окна, поддержка проекта, логи программы и страница «О программе» с версией и "
+            "обновлениями. Если пишете в поддержку, приложите логи — так проблему найдут быстрее."
+        ),
+        "en": (
+            "Window themes and colors, project support, app logs and the About page with version and "
+            "updates. If you contact support, attach the logs so the problem is found faster."
+        ),
+    },
+    "onboarding.step.finish.title": {
+        "ru": "Всё готово!",
+        "en": "All set!",
+    },
+    "onboarding.step.finish.body": {
+        "ru": (
+            "Нажмите «Запустить net67» и откройте нужный сайт. Не открылся — попробуйте другой пресет "
+            "или другую стратегию в профилях.\n\n"
+            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» на этой карточке."
+        ),
+        "en": (
+            "Press Start net67 and open the site you need. If it does not open, try another preset or "
+            "another strategy in the profiles.\n\n"
+            "You can take this tour again with the Show button on this card."
+        ),
+    },
+    "onboarding.step.finish.body_no_target": {
+        "ru": (
+            "Запустите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или другую "
+            "стратегию в профилях.\n\n"
+            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» на главной странице режимов "
+            "net67 v1 и net67 v2."
+        ),
+        "en": (
+            "Start the bypass and open the site you need. If it does not open, try another preset or "
+            "another strategy in the profiles.\n\n"
+            "You can take this tour again with the Show button on the main page in net67 v1 and "
+            "net67 v2 modes."
+        ),
+    },
+    "page.control.onboarding_tour.title": {
+        "ru": "Как пользоваться программой",
+        "en": "How to use the app",
+    },
+    "page.control.onboarding_tour.desc": {
+        "ru": "Пошаговая экскурсия: как устроен net67, что такое пресеты, профили и стратегии и где что находится",
+        "en": "A step-by-step tour: how net67 works, what presets, profiles and strategies are and where everything is",
+    },
+    "page.control.onboarding_tour.button": {"ru": "Показать", "en": "Show"},
+    "page.control.onboarding_tour.accessible_name": {
+        "ru": "Показать обучающий тур",
+        "en": "Show the guided tour",
+    },
+}
+
+TEXTS.update(TEXTS_ONBOARDING)
+
+
+#: Тексты страницы hosts (плитки) и файла hosts.
+#:
+#: Взяты из исходного проекта вместе со страницей; «ZapretGUI» в них
+#: заменено на net67. Ставятся поверх общего словаря: там они пришли
+#: слиянием как есть, с чужим названием.
+TEXTS_HOSTS_PAGE_V2: dict[str, dict[str, str]] = {
+    'page.hosts.adobe.note': {
+        'ru': 'Закрывает серверы проверки лицензии Adobe',
+        'en': 'Blocks Adobe license check servers',
+    },
+    'page.hosts.adobe.title': {
+        'ru': 'Блокировать активацию Adobe',
+        'en': 'Block Adobe activation',
+    },
+    'page.hosts.apply_failed.title': {
+        'ru': 'Не удалось записать hosts',
+        'en': 'Could not write hosts',
+    },
+    'page.hosts.button.all_off': {
+        'ru': 'Выключить все',
+        'en': 'Turn all off',
+    },
+    'page.hosts.button.file': {
+        'ru': 'Файл hosts',
+        'en': 'Hosts file',
+    },
+    'page.hosts.button.file.description': {
+        'ru': 'Весь файл hosts с раскраской строк по владельцам.',
+        'en': 'The whole hosts file with lines colored by owner.',
+    },
+    'page.hosts.button.restore_access': {
+        'ru': 'Снять защиту и восстановить права',
+        'en': 'Remove protection and restore access',
+    },
+    'page.hosts.dns_all.button': {
+        'ru': 'DNS для всех',
+        'en': 'DNS for all',
+    },
+    'page.hosts.dns_all.hint': {
+        'ru': 'Ставит выбранный профиль всем сервисам с DNS-профилем. Потом любой можно поменять отдельно.',
+        'en': 'Sets the chosen profile for every DNS service. You can still change any of them separately.',
+    },
+    'page.hosts.dns_all.skipped.content': {
+        'ru': 'Оставлены как были: {names}',
+        'en': 'Left unchanged: {names}',
+    },
+    'page.hosts.dns_all.skipped.title': {
+        'ru': 'Не у всех сервисов есть этот профиль',
+        'en': 'Not every service has this profile',
+    },
+    'page.hosts.empty': {
+        'ru': 'Ничего не найдено',
+        'en': 'Nothing found',
+    },
+    'page.hosts.error.read.title': {
+        'ru': 'Не удалось прочитать hosts',
+        'en': 'Could not read hosts',
+    },
+    'page.hosts.group.ai': {
+        'ru': 'ИИ-сервисы',
+        'en': 'AI services',
+    },
+    'page.hosts.group.ai.hint': {
+        'ru': 'сами закрыты для России, нужен DNS-профиль',
+        'en': 'blocked for Russia by themselves, a DNS profile is needed',
+    },
+    'page.hosts.group.blocks': {
+        'ru': 'Блокировки',
+        'en': 'Blocking',
+    },
+    'page.hosts.group.counter': {
+        'ru': '{on} из {total}',
+        'en': '{on} of {total}',
+    },
+    'page.hosts.group.direct': {
+        'ru': 'Напрямую',
+        'en': 'Direct',
+    },
+    'page.hosts.group.direct.hint': {
+        'ru': 'адрес прописывается как есть',
+        'en': 'the address is written as is',
+    },
+    'page.hosts.group.other': {
+        'ru': 'Остальные сервисы',
+        'en': 'Other services',
+    },
+    'page.hosts.group.other.hint': {
+        'ru': 'через DNS-профиль',
+        'en': 'via a DNS profile',
+    },
+    'page.hosts.hint.ipv6': {
+        'ru': 'Нужен IPv6 — сейчас его нет',
+        'en': 'Needs IPv6 — not available right now',
+    },
+    'page.hosts.loading': {
+        'ru': 'Загрузка…',
+        'en': 'Loading…',
+    },
+    'page.hosts.notice.no_access': {
+        'ru': 'Нет доступа к файлу hosts. Часто его блокирует антивирус. Кнопка справа вернёт стандартные права Windows.',
+        'en': 'No access to the hosts file. Antivirus software often locks it. The button on the right restores the standard Windows permissions.',
+    },
+    'page.hosts.notice.read_only': {
+        'ru': 'Файл hosts защищён от записи (стоит «только чтение»). Программа сама защиту не снимает — нажмите кнопку справа, если хотите менять файл.',
+        'en': 'The hosts file is write-protected (read-only). The app never removes the protection by itself — press the button on the right if you want to change the file.',
+    },
+    'page.hosts.permissions.failed.title': {
+        'ru': 'Не удалось восстановить права',
+        'en': 'Could not restore access',
+    },
+    'page.hosts.permissions.restored.content': {
+        'ru': 'Теперь сервисы снова можно включать.',
+        'en': 'Services can be switched on again.',
+    },
+    'page.hosts.permissions.restored.title': {
+        'ru': 'Права восстановлены',
+        'en': 'Access restored',
+    },
+    'page.hosts.profile.off': {
+        'ru': 'Выкл.',
+        'en': 'Off',
+    },
+    'page.hosts.search.placeholder': {
+        'ru': 'Найти сервис',
+        'en': 'Find a service',
+    },
+    'page.hosts.state.changed': {
+        'ru': 'записывается',
+        'en': 'being written',
+    },
+    'page.hosts.state.off': {
+        'ru': 'выключен',
+        'en': 'off',
+    },
+    'page.hosts.state.on': {
+        'ru': 'включён',
+        'en': 'on',
+    },
+    'page.hosts.subtitle': {
+        'ru': 'Щёлкните по плитке — адреса сервиса сразу запишутся в системный файл hosts.',
+        'en': 'Click a tile — the service addresses are written to the system hosts file right away.',
+    },
+    'page.hosts.summary.lines': {
+        'ru': 'Строк от net67 в файле: {lines}',
+        'en': 'net67 lines in the file: {lines}',
+    },
+    'page.hosts.summary.off': {
+        'ru': 'Сейчас net67 ничего не прописывает в hosts',
+        'en': 'net67 writes nothing to hosts right now',
+    },
+    'page.hosts.summary.services': {
+        'ru': 'Сервисов включено в hosts',
+        'en': 'Services enabled in hosts',
+    },
+    'page.hosts.summary.writing': {
+        'ru': 'Записываю…',
+        'en': 'Writing…',
+    },
+    'page.hosts.summary.written': {
+        'ru': 'Записано — перезапустите браузер, чтобы изменения заработали',
+        'en': 'Written — restart the browser for the changes to take effect',
+    },
+    'page.hosts.title': {
+        'ru': 'Редактор hosts',
+        'en': 'Hosts Editor',
+    },
+    'page.hosts_file.editor': {
+        'ru': 'Текст файла hosts',
+        'en': 'Hosts file text',
+    },
+    'page.hosts_file.editor.description': {
+        'ru': 'Весь файл hosts. Ctrl+F — поиск, Ctrl+H — замена. Изменения записываются кнопкой «Сохранить».',
+        'en': 'The whole hosts file. Ctrl+F — search, Ctrl+H — replace. Changes are written with the “Save” button.',
+    },
+    'page.hosts_file.hint': {
+        'ru': 'Строки раскрашены по владельцу. Блок net67 можно править, но при следующем переключении сервиса на странице Hosts он перепишется. Ctrl+F — поиск.',
+        'en': 'Lines are colored by owner. You can edit the net67 block, but the next service switch on the Hosts page rewrites it. Ctrl+F — search.',
+    },
+    'page.hosts_file.load_failed': {
+        'ru': 'Не удалось прочитать hosts',
+        'en': 'Could not read hosts',
+    },
+    'page.hosts_file.notepad': {
+        'ru': 'Открыть в Блокноте',
+        'en': 'Open in Notepad',
+    },
+    'page.hosts_file.notepad_failed': {
+        'ru': 'Не удалось открыть Блокнот',
+        'en': 'Could not open Notepad',
+    },
+    'page.hosts_file.notice.no_access': {
+        'ru': 'Нет доступа к файлу hosts. Часто его блокирует антивирус. Восстановить права можно кнопкой на странице Hosts.',
+        'en': 'No access to the hosts file. Antivirus software often locks it. Permissions can be restored with the button on the Hosts page.',
+    },
+    'page.hosts_file.notice.read_only': {
+        'ru': 'Файл защищён от записи (стоит «только чтение»). Сохранить не получится, пока защита стоит — снять её можно кнопкой на странице Hosts.',
+        'en': 'The file is write-protected (read-only). Saving is impossible while protection is on — remove it with the button on the Hosts page.',
+    },
+    'page.hosts_file.owner.adobe': {
+        'ru': 'Adobe',
+        'en': 'Adobe',
+    },
+    'page.hosts_file.owner.max': {
+        'ru': 'Блокировка MAX',
+        'en': 'MAX blocking',
+    },
+    'page.hosts_file.owner.state_media': {
+        'ru': 'Блокировка госСМИ',
+        'en': 'State media blocking',
+    },
+    'page.hosts_file.owner.telegram': {
+        'ru': 'Telegram Proxy',
+        'en': 'Telegram Proxy',
+    },
+    'page.hosts_file.owner.user': {
+        'ru': 'Ваши строки',
+        'en': 'Your lines',
+    },
+    'page.hosts_file.owner.zapretgui': {
+        'ru': 'net67',
+        'en': 'net67',
+    },
+    'page.hosts_file.revert': {
+        'ru': 'Отменить правки',
+        'en': 'Discard edits',
+    },
+    'page.hosts_file.save': {
+        'ru': 'Сохранить',
+        'en': 'Save',
+    },
+    'page.hosts_file.save_failed': {
+        'ru': 'Не удалось сохранить hosts',
+        'en': 'Could not save hosts',
+    },
+    'page.hosts_file.saved': {
+        'ru': 'Сохранено',
+        'en': 'Saved',
+    },
+    'page.hosts_file.saved.content': {
+        'ru': 'Перезапустите браузер, чтобы изменения заработали.',
+        'en': 'Restart the browser for the changes to take effect.',
+    },
+    'page.hosts_file.saved.managed': {
+        'ru': 'Вы поменяли блок net67 вручную: при следующем переключении сервиса на странице Hosts он перепишется.',
+        'en': 'You changed the net67 block by hand: the next service switch on the Hosts page will rewrite it.',
+    },
+    'page.hosts_file.search': {
+        'ru': 'Поиск по файлу hosts',
+        'en': 'Search the hosts file',
+    },
+    'page.hosts_file.title': {
+        'ru': 'Файл hosts',
+        'en': 'Hosts file',
+    },
+}
+
+TEXTS.update(TEXTS_HOSTS_PAGE_V2)
+
+
+#: Тур net67: свои шаги и переписанные тексты общих.
+#:
+#: Тексты апстрима рассказывали о режиме net67 v1 и Оркестраторе, которых
+#: в net67 нет, и молчали об «одной кнопке» и простом виде — о том, что
+#: человек видит первым. Ставятся поверх TEXTS_ONBOARDING, поэтому общие
+#: ключи здесь переопределены, а не продублированы.
+TEXTS_ONBOARDING_NET67: dict[str, dict[str, str]] = {
+    "onboarding.step.welcome.title": {
+        "ru": "Добро пожаловать в net67",
+        "en": "Welcome to net67",
+    },
+    "onboarding.step.welcome.body": {
+        "ru": (
+            "net67 возвращает сайты и приложения, которые провайдер блокирует или замедляет: "
+            "YouTube, Discord, Telegram, а ещё ChatGPT, Claude и другие ИИ-сервисы.\n\n"
+            "За пару минут покажем, что здесь где и зачем. Листать можно кнопкой «Далее» или "
+            "стрелками на клавиатуре, закрыть — клавишей Esc."
+        ),
+        "en": (
+            "net67 brings back sites and apps that your provider blocks or slows down: YouTube, "
+            "Discord, Telegram, as well as ChatGPT, Claude and other AI services.\n\n"
+            "In a couple of minutes we will show what is where and why. Use Next or the arrow keys "
+            "to page through, Esc to close."
+        ),
+    },
+    "onboarding.step.how_it_works.body": {
+        "ru": (
+            "Провайдер следит за трафиком с помощью фильтра — DPI. Фильтр читает начало каждого "
+            "соединения, видит в нём адрес сайта и, если сайт в чёрном списке, обрывает "
+            "соединение или замедляет его.\n\n"
+            "net67 запускает у вас на компьютере движок winws2. Он пропускает через себя сетевые "
+            "пакеты и для нужных сайтов слегка их меняет: делит на части, переставляет, "
+            "отправляет перед настоящим пакетом поддельный. Фильтр путается и пропускает "
+            "соединение, а сайт получает обычный запрос.\n\n"
+            "Это не VPN: трафик идёт напрямую через ваш интернет, без сервера в другой стране."
+        ),
+        "en": (
+            "Your provider watches traffic with a filter called DPI. The filter reads the start of "
+            "every connection, sees the site address there and, if the site is on a blacklist, "
+            "drops or slows the connection.\n\n"
+            "net67 runs the winws2 engine on your computer. It passes network packets through "
+            "itself and slightly changes them for the sites that need it: splits them, reorders "
+            "them, sends a fake packet before the real one. The filter gets confused and lets the "
+            "connection through, while the site receives an ordinary request.\n\n"
+            "This is not a VPN: traffic goes straight through your own connection, with no server "
+            "in another country."
+        ),
+    },
+    "onboarding.step.oneclick.title": {
+        "ru": "Одна кнопка",
+        "en": "One button",
+    },
+    "onboarding.step.oneclick.body": {
+        "ru": (
+            "«Включить обход» — главная кнопка программы. Она сама проверяет, не мешают ли "
+            "другие программы обхода, запускает движок, прописывает адреса выбранных сервисов "
+            "в файл hosts и, если вы это включили, поднимает прокси для Telegram.\n\n"
+            "Повторное нажатие выключает ровно то, что кнопка включила. Ваши настройки при этом "
+            "не меняются."
+        ),
+        "en": (
+            "Enable bypass is the main button of the program. It checks that no other bypass "
+            "tools get in the way, starts the engine, writes the addresses of the selected "
+            "services into the hosts file and, if you turned it on, starts the Telegram proxy.\n\n"
+            "Pressing it again turns off exactly what it turned on. Your settings stay as they are."
+        ),
+    },
+    "onboarding.step.status.body": {
+        "ru": (
+            "Показывает, работает ли обход прямо сейчас. Если что-то пошло не так, здесь "
+            "появится подсказка, что именно."
+        ),
+        "en": "Shows whether the bypass is running right now. If something goes wrong, a hint appears here.",
+    },
+    "onboarding.step.services.title": {
+        "ru": "ChatGPT, Claude и «недоступно в вашей стране»",
+        "en": "ChatGPT, Claude and \u201cnot available in your country\u201d",
+    },
+    "onboarding.step.services.body": {
+        "ru": (
+            "Не всякая недоступность — блокировка провайдера. Если сервис пишет «недоступно в "
+            "вашей стране» или «not available in your region», это сам сервис закрыл доступ из "
+            "России: так делают ChatGPT, Claude, Gemini и другие ИИ-сервисы. Против этого обход "
+            "бессилен, сколько стратегий ни перебирай.\n\n"
+            "Для таких сервисов net67 записывает в системный файл hosts адреса прокси-серверов, "
+            "через которые сервис видит вас не из России. Адреса обновляются вместе с программой "
+            "и при её запуске сами заменяют устаревшие."
+        ),
+        "en": (
+            "Not every outage is a provider block. If a service says \u201cnot available in your "
+            "region\u201d, the service itself has closed access from Russia: ChatGPT, Claude, "
+            "Gemini and other AI services do this. The bypass cannot help here, no matter how many "
+            "strategies you try.\n\n"
+            "For such services net67 writes proxy server addresses into the system hosts file, so "
+            "the service does not see you as coming from Russia. The addresses are updated with "
+            "the program and replace outdated ones on startup."
+        ),
+    },
+    "onboarding.step.program_settings.body": {
+        "ru": (
+            "Здесь включается запуск net67 вместе с Windows: программа стартует сама и прячется "
+            "в трей — к значку возле часов. Тут же кнопка «Показать», которая проведёт эту "
+            "экскурсию ещё раз."
+        ),
+        "en": (
+            "Here you can start net67 together with Windows: the program starts on its own and "
+            "hides in the tray, next to the clock. The Show button here runs this tour again."
+        ),
+    },
+    "onboarding.step.view_switch.title": {
+        "ru": "Простой и расширенный вид",
+        "en": "Simple and advanced view",
+    },
+    "onboarding.step.view_switch.body": {
+        "ru": (
+            "Простой вид — это одна кнопка и ничего лишнего. Кнопка «Расширенные настройки» в "
+            "заголовке окна открывает всё остальное: боковое меню, пресеты и профили, hosts, DNS, "
+            "прокси для Telegram, VPN и диагностику.\n\n"
+            "В расширенном виде на ней написано «Простой режим» — нажмите, чтобы вернуться. "
+            "Если сейчас включён расширенный вид, экскурсия расскажет и о нём."
+        ),
+        "en": (
+            "The simple view is one button and nothing else. The Advanced settings button in the "
+            "window title opens everything else: the side menu, presets and profiles, hosts, DNS, "
+            "the Telegram proxy, VPN and diagnostics.\n\n"
+            "In the advanced view it reads Simple mode \u2014 press it to go back. If the advanced "
+            "view is on right now, the tour will cover it too."
+        ),
+    },
+    "onboarding.step.view_switch.body_simple": {
+        "ru": (
+            "Сейчас включён простой вид: одна кнопка и ничего лишнего. Кнопка «Расширенные "
+            "настройки» в заголовке окна открывает всё остальное: боковое меню, пресеты и "
+            "профили, hosts, DNS, прокси для Telegram, VPN и диагностику.\n\n"
+            "Нажмите «Включить расширенные настройки» ниже — экскурсия продолжится по этим "
+            "разделам. Вернуться к простому виду можно той же кнопкой в заголовке, на ней будет "
+            "написано «Простой режим». Если хватает одной кнопки — нажмите «Далее»."
+        ),
+        "en": (
+            "The simple view is on: one button and nothing else. The Advanced settings button in "
+            "the window title opens everything else: the side menu, presets and profiles, hosts, "
+            "DNS, the Telegram proxy, VPN and diagnostics.\n\n"
+            "Press Enable advanced settings below and the tour will continue through those "
+            "sections. The same title button brings the simple view back \u2014 it will read "
+            "Simple mode. If one button is enough, press Next."
+        ),
+    },
+    "onboarding.action.enable_advanced": {
+        "ru": "Включить расширенные настройки",
+        "en": "Enable advanced settings",
+    },
+    "onboarding.step.hosts.title": {
+        "ru": "Редактор hosts",
+        "en": "Hosts editor",
+    },
+    "onboarding.step.hosts.body": {
+        "ru": (
+            "Здесь выбирается, какие сервисы открывать через файл hosts, и для каждого — через "
+            "какие серверы. Сервисы, закрытые для России сами по себе (ChatGPT, Claude и другие "
+            "ИИ-сервисы), открываются именно так.\n\n"
+            "Строки hosts, которые не относятся к выбранным сервисам, программа не трогает."
+        ),
+        "en": (
+            "Choose which services to open through the hosts file and which servers to use for "
+            "each. Services that closed access from Russia themselves (ChatGPT, Claude and other "
+            "AI services) are opened this way.\n\n"
+            "Lines in hosts that do not belong to the selected services are left untouched."
+        ),
+    },
+    "onboarding.step.dns.title": {
+        "ru": "Настройка DNS",
+        "en": "DNS settings",
+    },
+    "onboarding.step.dns.body": {
+        "ru": (
+            "DNS-сервер отвечает компьютеру, по какому адресу находится сайт. Некоторые "
+            "провайдеры подменяют эти ответы, и сайт не открывается ещё до всякого обхода. "
+            "Здесь можно сменить DNS-серверы. Проверить, подменяет ли ответы ваш провайдер, "
+            "можно в BlockCheck на вкладке «DNS подмена»."
+        ),
+        "en": (
+            "A DNS server tells your computer at which address a site lives. Some providers "
+            "spoof these answers, and the site fails before any bypass comes into play. Here you "
+            "can change DNS servers. Whether your provider spoofs the answers can be checked in "
+            "BlockCheck on the DNS spoofing tab."
+        ),
+    },
+    "onboarding.step.telegram_proxy.title": {
+        "ru": "Прокси для Telegram",
+        "en": "Telegram proxy",
+    },
+    "onboarding.step.telegram_proxy.body": {
+        "ru": (
+            "Локальный прокси прямо на вашем компьютере: Telegram Desktop подключается к нему, а "
+            "он доводит трафик до серверов Telegram обходными путями. Помогает, когда Telegram "
+            "замедляют или не пускают к серверам.\n\n"
+            "Здесь его включают, подключают к Telegram одной кнопкой и проверяют, почему не "
+            "работает, если что-то пошло не так."
+        ),
+        "en": (
+            "A local proxy right on your computer: Telegram Desktop connects to it, and it "
+            "carries the traffic to Telegram servers by other routes. It helps when Telegram is "
+            "slowed down or cannot reach its servers.\n\n"
+            "Here you turn it on, connect Telegram to it with one button and check what is wrong "
+            "if something fails."
+        ),
+    },
+    "onboarding.step.vpn.title": {
+        "ru": "VPN — весь трафик через туннель",
+        "en": "VPN \u2014 all traffic through a tunnel",
+    },
+    "onboarding.step.vpn.body": {
+        "ru": (
+            "Когда обхода мало, можно пустить весь трафик компьютера через туннель AmneziaWG или "
+            "WireGuard. Здесь добавляют профили туннелей и включают их.\n\n"
+            "В отличие от обхода, это настоящий VPN: трафик идёт через сервер туннеля, и скорость "
+            "зависит от него."
+        ),
+        "en": (
+            "When the bypass is not enough, you can send all of the computer's traffic through an "
+            "AmneziaWG or WireGuard tunnel. Here you add tunnel profiles and turn them on.\n\n"
+            "Unlike the bypass, this is a real VPN: traffic goes through the tunnel server, and "
+            "the speed depends on it."
+        ),
+    },
+    "onboarding.step.diagnostics.body": {
+        "ru": (
+            "BlockCheck в один клик проверит, какие сайты блокируются и каким способом, и "
+            "подскажет, что делать. На вкладке «DNS подмена» — не подменяет ли провайдер адреса "
+            "сайтов. «Подбор стратегии» сам переберёт способы обхода для нужного "
+            "сайта и предложит применить рабочий. Пока идёт подбор, обход выключен — программа "
+            "включит его обратно, когда закончит."
+        ),
+        "en": (
+            "BlockCheck checks in one click which sites are blocked and how, and suggests what to "
+            "do. Strategy search tries bypass methods for the site you need and offers to apply "
+            "the one that works. The bypass is off during the search \u2014 the program turns it "
+            "back on when done."
+        ),
+    },
+    "onboarding.step.appearance.body": {
+        "ru": (
+            "Логи программы и страница «О программе» с версией. Если пишете о проблеме, приложите "
+            "логи — так причину найдут быстрее."
+        ),
+        "en": (
+            "Program logs and the About page with the version. If you report a problem, attach "
+            "the logs \u2014 the cause will be found faster."
+        ),
+    },
+    "onboarding.step.finish.body": {
+        "ru": (
+            "Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните "
+            "в диагностику: BlockCheck подскажет, в чём дело.\n\n"
+            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» в «Настройках программы»."
+        ),
+        "en": (
+            "Press Enable bypass and open the site you need. If something does not open, check the "
+            "diagnostics: BlockCheck will tell you what is wrong.\n\n"
+            "You can take this tour again with the Show button in Program settings."
+        ),
+    },
+    "page.control.onboarding_tour.desc": {
+        "ru": "Пошаговая экскурсия по программе: что делает кнопка, где настройки и что делать, если сайт не открылся",
+        "en": "A step-by-step tour: what the button does, where the settings are and what to do if a site does not open",
+    },
+}
+
+TEXTS.update(TEXTS_ONBOARDING_NET67)
+
+
+#: Тур по вкладкам меню и вопросы первичной настройки.
+#:
+#: Боковую панель убрали с экрана, и тур, целившийся в её пункты, молча
+#: пропускал hosts, DNS и диагностику. Меню теперь — вкладки, и у каждой
+#: свой шаг. Варианты *_setup показываются на первом запуске: тогда тур
+#: заодно задаёт вопросы бывшего мастера. Правки устаревшего — про
+#: «боковое меню» и режимы net67 v1, которых больше нет.
+TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
+    'onboarding.step.welcome.body_setup': {
+        'ru': 'net67 возвращает то, что провайдер блокирует или замедляет: YouTube, Discord, Telegram, а ещё ChatGPT, Claude и другие ИИ-сервисы.\n\nСейчас настроим программу под вас и покажем, где что лежит, — по дороге будет четыре коротких вопроса. Листать можно кнопкой «Далее» или стрелками. «Пропустить» оставит настройки по умолчанию, поменять их можно в любой момент.',
+        'en': "net67 brings back what your provider blocks or slows down: YouTube, Discord, Telegram, as well as ChatGPT, Claude and other AI services.\n\nLet's set the app up for you and show what is where — there are four short questions on the way. Use Next or the arrow keys to page through. Skip keeps the default settings, and you can change them at any time.",
+    },
+    'onboarding.step.program_settings.title_setup': {
+        'ru': 'Как запускаться',
+        'en': 'How to start',
+    },
+    'onboarding.step.program_settings.body_setup': {
+        'ru': 'Здесь, на главной, живут настройки самой программы. Выберите, как ей вести себя дальше, — поменять это можно здесь же в любой момент.',
+        'en': "The app's own settings live here on the main page. Choose how it should behave from now on — you can change this here at any time.",
+    },
+    'onboarding.step.view_switch.body_setup': {
+        'ru': 'Остальные вопросы стоят у разделов расширенного вида, поэтому сейчас включим его — это кнопка «Расширенные настройки» в заголовке. Вернуть простой вид можно ей же: в расширенном на ней написано «Простой режим».',
+        'en': "The remaining questions sit next to the sections of the advanced view, so let's turn it on now — it is the Advanced settings button in the title bar. The same button brings the simple view back: in the advanced view it says Simple mode.",
+    },
+    'onboarding.step.menu_presets.title_setup': {
+        'ru': 'Какой у вас провайдер?',
+        'en': 'Who is your provider?',
+    },
+    'onboarding.step.menu_presets.body_setup': {
+        'ru': 'От провайдера зависит, с какого пресета начать: оборудование блокировок у всех разное. Если не знаете или вашего нет в списке, выберите «Не знаю» — тогда начнём с универсального.',
+        'en': "The provider decides which preset to start with: blocking equipment differs from one to another. If you are not sure or yours is not listed, choose I don't know — we will start with a universal one.",
+    },
+    'onboarding.step.hosts.title_setup': {
+        'ru': 'Что должно работать без VPN?',
+        'en': 'What should work without a VPN?',
+    },
+    'onboarding.step.hosts.body_setup': {
+        'ru': 'Эти сервисы сами закрывают доступ из России, и обход провайдерских блокировок им не поможет. Для отмеченных net67 пропишет в файл hosts адреса, через которые они откроются. Поменять выбор можно здесь же в любой момент.',
+        'en': "These services block access from Russia themselves, so bypassing provider blocks won't help. For the ones you tick, net67 writes addresses into the hosts file that let them open. You can change the choice here at any time.",
+    },
+    'onboarding.step.blockcheck.title_setup': {
+        'ru': 'Проверим, что закрыто',
+        'en': "Let's see what is blocked",
+    },
+    'onboarding.step.blockcheck.body_setup': {
+        'ru': 'Пока вы читаете, net67 проверяет, что из популярного открывается без обхода. Ждать не обязательно: на настройки это не влияет, просто видно, что делает ваш провайдер.',
+        'en': 'While you read, net67 checks which popular services open without the bypass. No need to wait: it does not change any settings, it just shows what your provider does.',
+    },
+    'onboarding.step.finish.body_setup': {
+        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+    },
+    'onboarding.step.bell.title': {
+        'ru': 'Уведомления',
+        'en': 'Notifications',
+    },
+    'onboarding.step.bell.body': {
+        'ru': 'Предупреждения и ошибки, которые программа замечает сама, больше не всплывают поверх работы — они копятся здесь. Цифра на колокольчике показывает, сколько новых. Всплывает только ответ на то, что вы сделали сами: например, если обход не включился.',
+        'en': 'Warnings and errors the app notices on its own no longer pop up over your work — they collect here. The number on the bell shows how many are new. Only answers to your own actions still pop up, for example if the bypass failed to start.',
+    },
+    'onboarding.step.menu_root.title': {
+        'ru': 'Обход',
+        'en': 'Bypass',
+    },
+    'onboarding.step.menu_root.body': {
+        'ru': 'Меню — это вкладки наверху. «Обход» — главная: кнопка включения, состояние и настройки программы. Запутались в разделах — возвращайтесь сюда.',
+        'en': 'The menu is the tabs at the top. Bypass is the main page: the power button, the status and the app settings. If you get lost in the sections, come back here.',
+    },
+    'onboarding.step.menu_presets.title': {
+        'ru': 'Пресеты',
+        'en': 'Presets',
+    },
+    'onboarding.step.menu_presets.body': {
+        'ru': 'Здесь готовые наборы настроек обхода — пресеты — и то, из чего состоит каждый. Провайдеры блокируют по-разному, поэтому если сайт не открывается, первым делом попробуйте другой пресет.',
+        'en': 'Here are ready-made sets of bypass settings — presets — and what each of them is made of. Providers block in different ways, so if a site does not open, try another preset first.',
+    },
+    'onboarding.step.presets_list.body': {
+        'ru': 'Это «Мои пресеты». Пресет — обычный текстовый файл с настройками движка: в нём перечислены профили и их стратегии, и запускается ровно то, что в нём написано.\n\nГотовые пресеты уже есть в программе. Выбранный отмечен в списке — чтобы сменить его, нажмите на другой. Хотите узнать, как пресет устроен изнутри, — нажмите «Разобрать пресет подробно». Нет — просто «Далее».',
+        'en': 'This is My presets. A preset is a plain text file with engine settings: it lists profiles and their strategies, and exactly what is written there gets launched.\n\nReady-made presets come with the app. The selected one is marked in the list — click another to switch. Want to see how a preset works inside? Press Explain presets in detail. If not, just press Next.',
+    },
+    'onboarding.action.branch_presets': {
+        'ru': 'Разобрать пресет подробно',
+        'en': 'Explain presets in detail',
+    },
+    'onboarding.step.menu_tools.title': {
+        'ru': 'Инструменты',
+        'en': 'Tools',
+    },
+    'onboarding.step.menu_tools.body': {
+        'ru': 'Помощь там, где обхода мало: свои DNS-серверы, файл hosts для сервисов, закрытых для России, прокси для Telegram и VPN — когда через туннель нужен весь трафик.',
+        'en': 'Help where the bypass is not enough: your own DNS servers, the hosts file for services closed to Russia, a proxy for Telegram and a VPN for when all traffic has to go through a tunnel.',
+    },
+    'onboarding.step.hosts.body': {
+        'ru': 'Здесь выбирается, какие сервисы открывать через файл hosts и через какие серверы. Так открываются сервисы, закрытые для России сами по себе: ChatGPT, Claude и другие ИИ.\n\nЩелчок по плитке пишет сразу: тумблер включает сервис, значок в ряду выбирает, через какой DNS-сервис его открывать. Весь файл целиком — кнопка «Файл hosts» наверху. Чужие строки программа не трогает.',
+        'en': "Here you choose which services to open through the hosts file and through which servers. This is how services that close themselves to Russia open: ChatGPT, Claude and other AI.\n\nA click on a tile writes right away: the switch turns a service on, an icon in the row picks which DNS service opens it. The whole file is behind the Hosts file button at the top. Lines that are not the app's are left alone.",
+    },
+    'onboarding.step.menu_diagnostics.title': {
+        'ru': 'Диагностика',
+        'en': 'Diagnostics',
+    },
+    'onboarding.step.menu_diagnostics.body': {
+        'ru': 'Сюда — когда что-то не работает: проверка блокировок, подбор стратегии, журналы и сведения о программе.',
+        'en': 'Come here when something does not work: block checks, strategy search, logs and information about the app.',
+    },
+    'onboarding.step.blockcheck.title': {
+        'ru': 'BlockCheck',
+        'en': 'BlockCheck',
+    },
+    'onboarding.step.blockcheck.body': {
+        'ru': 'Проверяет, какие сайты блокируются и как именно, и подсказывает, что делать. На вкладке «Подбор стратегии» программа сама переберёт способы обхода для нужного сайта и предложит рабочий, а «DNS подмена» покажет, не подменяет ли провайдер адреса сайтов.',
+        'en': 'Checks which sites are blocked and how, and suggests what to do. On the Strategy search tab the app tries bypass methods for the site you need and offers one that works, and DNS spoofing shows whether your provider fakes site addresses.',
+    },
+    'onboarding.step.log_analyzer.title': {
+        'ru': 'Анализ лога winws2',
+        'en': 'winws2 log analysis',
+    },
+    'onboarding.step.log_analyzer.body': {
+        'ru': 'Разбирает подробный журнал движка: какие соединения он видел, каким профилем обработал и что с ними сделал. Пригодится, чтобы понять, почему конкретная стратегия не сработала.',
+        'en': "Breaks down the engine's detailed log: which connections it saw, which profile handled them and what it did. Useful to find out why a particular strategy did not work.",
+    },
+    'onboarding.step.logs.title': {
+        'ru': 'Логи',
+        'en': 'Logs',
+    },
+    'onboarding.step.logs.body': {
+        'ru': 'Журнал работы программы: что она делала и где споткнулась. Если обращаетесь с проблемой, приложите логи — так причину найдут гораздо быстрее.',
+        'en': "The app's log: what it did and where it stumbled. If you report a problem, attach the logs — the cause will be found much faster.",
+    },
+    'onboarding.step.configs.title': {
+        'ru': 'Конфигурации',
+        'en': 'Configurations',
+    },
+    'onboarding.step.configs.body': {
+        'ru': 'Все настройки программы одним файлом: сохранить набор, перенести его на другой компьютер или вернуть всё как было.',
+        'en': 'All app settings in one file: save a set, move it to another computer or roll everything back.',
+    },
+    'onboarding.step.view_switch.body': {
+        'ru': 'Кнопка в заголовке переключает вид. Простой — одна кнопка «Включить обход» и ничего лишнего. Расширенный — все разделы: пресеты, hosts, DNS, прокси для Telegram, VPN и диагностика.\n\nСейчас включён расширенный: на кнопке написано «Простой режим», она вернёт одну кнопку.',
+        'en': 'The button in the title bar switches the view. Simple is one Turn on bypass button and nothing else. Advanced shows every section: presets, hosts, DNS, the Telegram proxy, VPN and diagnostics.\n\nThe advanced view is on now: the button says Simple mode and brings the single button back.',
+    },
+    'onboarding.step.view_switch.body_simple': {
+        'ru': 'Сейчас включён простой вид: одна кнопка и ничего лишнего. Кнопка «Расширенные настройки» в заголовке открывает остальное — пресеты, hosts, DNS, прокси для Telegram, VPN и диагностику.\n\nНажмите «Включить расширенные настройки» — экскурсия пройдёт по этим разделам. Вернуть простой вид можно той же кнопкой: в расширенном на ней написано «Простой режим». Если хватает одной кнопки, нажмите «Далее».',
+        'en': 'The simple view is on: one button and nothing else. The Advanced settings button in the title bar opens the rest — presets, hosts, DNS, the Telegram proxy, VPN and diagnostics.\n\nPress Turn on advanced settings and the tour will walk through these sections. The same button brings the simple view back: in the advanced view it says Simple mode. If one button is enough for you, press Next.',
+    },
+    'onboarding.step.finish.body': {
+        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+    },
+    'onboarding.step.finish.body_no_target': {
+        'ru': 'Включите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или загляните в «Диагностику».\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Turn the bypass on and open the site you need. If it does not open, try another preset or look into Diagnostics.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+    },
+}
+
+TEXTS.update(TEXTS_ONBOARDING_NET67_MENU)
+
+
+#: Экскурсия «Как работает обход» — отдельно от основного тура. Техники
+#: и схемы берут тексты основного тура (ключи technique_*), здесь только
+#: вход, выход и кнопки.
+TEXTS_ONBOARDING_NET67_BYPASS: dict[str, dict[str, str]] = {
+    'onboarding.step.bypass_welcome.title': {
+        'ru': 'Как net67 обманывает провайдера',
+        'en': 'How net67 fools the provider',
+    },
+    'onboarding.step.bypass_welcome.body': {
+        'ru': 'Короткая экскурсия без кнопок и настроек — только о том, как провайдер узнаёт сайт и какими приёмами net67 мешает ему это сделать.\n\nСхемы на карточках живые: пакеты бегут от вас к сайту мимо проверки провайдера. Листать — «Далее» или стрелками, закрыть — Esc.',
+        'en': "A short tour with no buttons or settings — just how your provider recognises a site and which tricks net67 uses to stop it.\n\nThe diagrams on the cards are live: packets run from you to the site past the provider's check. Use Next or the arrow keys to page through, Esc to close.",
+    },
+    'onboarding.step.bypass_practice.title': {
+        'ru': 'Как выбрать стратегию',
+        'en': 'How to choose a strategy',
+    },
+    'onboarding.step.bypass_practice.body': {
+        'ru': 'Стратегия — это сочетание приёмов с настройками, и задаётся она для каждого профиля пресета. Какая сработает у вашего провайдера, заранее не скажешь.\n\nПроще всего доверить выбор программе: «Диагностика» → BlockCheck → «Подбор стратегии» сам переберёт приёмы для нужного сайта и предложит рабочий. Вручную — «Пресеты» → «Профили пресета»: нажмите на профиль и пробуйте стратегии по очереди, проверяя сайт после каждой.',
+        'en': 'A strategy is a combination of tricks with settings, and it is set for each profile of a preset. Which one works with your provider cannot be known in advance.\n\nThe easiest way is to let the app choose: Diagnostics → BlockCheck → Strategy search tries the tricks for the site you need and offers one that works. By hand: Presets → Preset profiles — click a profile and try strategies one by one, checking the site after each.',
+    },
+    'onboarding.step.bypass_finish.title': {
+        'ru': 'Теперь вы знаете главное',
+        'en': 'Now you know the essentials',
+    },
+    'onboarding.step.bypass_finish.body': {
+        'ru': 'Провайдер узнаёт сайт по имени в самом начале соединения, а обход прячет это имя: режет пакет, переставляет куски, подсовывает фейки. Ни один приём не работает везде — поэтому стратегий много.\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в строке «Как работает обход» в «Настройках программы» на главной.',
+        'en': 'The provider recognises a site by its name at the very start of a connection, and the bypass hides that name: it splits the packet, reorders the pieces, slips in fakes. No trick works everywhere — that is why there are so many strategies.\n\nYou can take this tour again with the Show button in the How the bypass works row of Program settings on the main page.',
+    },
+    'onboarding.action.bypass_tour': {
+        'ru': 'Как работает обход',
+        'en': 'How the bypass works',
+    },
+    'page.control.bypass_tour.title': {
+        'ru': 'Как работает обход',
+        'en': 'How the bypass works',
+    },
+    'page.control.bypass_tour.desc': {
+        'ru': 'Экскурсия со схемами: как провайдер узнаёт сайт и какими приёмами обход ему мешает',
+        'en': 'A tour with diagrams: how the provider recognises a site and which tricks the bypass uses',
+    },
+    'page.control.bypass_tour.button': {
+        'ru': 'Показать',
+        'en': 'Show',
+    },
+    'page.control.bypass_tour.accessible_name': {
+        'ru': 'Показать экскурсию по обходу',
+        'en': 'Show the bypass tour',
+    },
+    'onboarding.step.finish.body': {
+        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nХотите понять, как обход обманывает провайдера, — нажмите «Как работает обход». Пройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nWant to know how the bypass fools the provider? Press How the bypass works. You can take this tour again with the Show button in Program settings on the main page.',
+    },
+    'onboarding.step.finish.body_no_target': {
+        'ru': 'Включите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или загляните в «Диагностику».\n\nКак обход обманывает провайдера, покажет «Как работает обход». Пройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Turn the bypass on and open the site you need. If it does not open, try another preset or look into Diagnostics.\n\nHow the bypass fools the provider is shown in How the bypass works. You can take this tour again with the Show button in Program settings on the main page.',
+    },
+    'onboarding.step.finish.body_setup': {
+        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nХотите понять, как обход обманывает провайдера, — нажмите «Как работает обход».',
+        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nWant to know how the bypass fools the provider? Press How the bypass works.',
+    },
+    # Для тех, кто прошёл подробный разбор пресета: схемы техник они уже
+    # видели, и кнопки «Как работает обход» на карточке нет.
+    'onboarding.step.finish.body_explained': {
+        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+    },
+    'onboarding.step.finish.body_setup_explained': {
+        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
+        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+    },
+}
+
+TEXTS.update(TEXTS_ONBOARDING_NET67_BYPASS)
+
+
 NAV_PAGE_TEXT_KEYS: dict[PageName, str] = {
     PageName.ZAPRET2_MODE_CONTROL: "nav.page.zapret2_mode_control",
     PageName.NETWORK: "nav.page.network",
@@ -4060,6 +6263,8 @@ NAV_PAGE_TEXT_KEYS: dict[PageName, str] = {
     PageName.ZAPRET2_PRESET_SETUP: "nav.page.zapret2_mode",
     PageName.ZAPRET2_USER_PRESETS: "nav.page.zapret2_user_presets",
     PageName.ZAPRET2_PROFILE_SETUP: "page.winws2_profile_setup.title",
+    PageName.TELEGRAM_PROXY_ADVANCED: "page.telegram_proxy_advanced.title",
+    PageName.HOSTS_FILE: "page.hosts_file.title",
 }
 
 

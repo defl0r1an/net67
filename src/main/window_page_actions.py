@@ -21,6 +21,7 @@ class WindowPageActions:
     on_background_preset_changed: Callable[..., Any]
     on_opacity_changed: Callable[..., Any]
     on_mica_changed: Callable[..., Any]
+    start_onboarding_tour: Callable[..., Any]
     on_animations_changed: Callable[..., Any]
     on_smooth_scroll_changed: Callable[..., Any]
     on_editor_smooth_scroll_changed: Callable[..., Any]
@@ -91,6 +92,12 @@ def on_background_preset_changed(window, preset) -> None:
     from ui.window_appearance_state import on_background_preset_changed as _on_background_preset_changed
 
     _on_background_preset_changed(window, preset)
+
+
+def start_onboarding_tour(window, *, kind: str = "main") -> bool:
+    from ui.onboarding import start_onboarding_tour as _start_onboarding_tour
+
+    return bool(_start_onboarding_tour(window, kind=kind))
 
 
 def on_mica_changed(window, enabled) -> None:
@@ -171,6 +178,10 @@ def build_window_page_actions(*, window, appearance_actions) -> WindowPageAction
         on_opacity_changed=appearance_actions.set_window_opacity,
         on_mica_changed=lambda enabled: on_mica_changed(window, enabled),
         on_animations_changed=lambda enabled: on_animations_changed(window, enabled),
+        # Вид тура — параметром того же действия, а не новым действием:
+        # новое пришлось бы прописывать в зависимостях страницы, а
+        # пропущенное там однажды уже оставило окно чёрным.
+        start_onboarding_tour=lambda kind="main": start_onboarding_tour(window, kind=kind),
         on_smooth_scroll_changed=lambda enabled: on_smooth_scroll_changed(window, enabled),
         on_editor_smooth_scroll_changed=lambda enabled: on_editor_smooth_scroll_changed(window, enabled),
         on_ui_language_changed=lambda language: on_ui_language_changed(window, language),

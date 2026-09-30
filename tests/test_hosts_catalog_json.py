@@ -32,7 +32,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
                 {
                     "version": 1,
                     "profiles": [
-                        {"id": "zapret_dns", "name": "Zapret DNS"},
+                        {"id": "zapret_dns", "name": "net67 DNS"},
                         {"id": "xbox_dns", "name": "XBOX DNS"},
                         {"id": "xbox_dns_old", "name": "XBOX DNS (old)"},
                         {"id": "direct", "name": "Вкл. (активировать hosts)"},
@@ -78,7 +78,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
                 {
                     "version": 1,
                     "dns_sources": [
-                        {"id": "zapret_dns", "name": "Zapret DNS"},
+                        {"id": "zapret_dns", "name": "net67 DNS"},
                         {"id": "xbox_dns", "name": "XBOX DNS"},
                         {"id": "xbox_dns_old", "name": "XBOX DNS (old)"},
                     ],
@@ -152,7 +152,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
 
     def test_packaged_runtime_reads_catalog_from_installation_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            install_root = Path(tmp) / "Zapret" / "Dev"
+            install_root = Path(tmp) / "net67" / "Dev"
 
             with (
                 patch.object(self.proxy_domains, "PACKAGED_RUNTIME", True),
@@ -212,7 +212,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     self.proxy_domains.get_dns_profile_display_name("zapret_dns"),
-                    "Zapret DNS",
+                    "net67 DNS",
                 )
                 self.assertEqual(self.proxy_domains.get_all_services(), ["ChatGPT", "Instagram"])
                 self.assertEqual(
@@ -381,7 +381,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         catalog = {
             "version": 1,
             "profiles": [
-                {"id": "zapret_dns", "name": "Zapret DNS"},
+                {"id": "zapret_dns", "name": "net67 DNS"},
                 {"id": "direct", "name": "Вкл. (активировать hosts)"},
             ],
             "services": [
@@ -426,7 +426,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         catalog = {
             "version": 1,
             "profiles": [
-                {"id": "zapret_dns", "name": "Zapret DNS"},
+                {"id": "zapret_dns", "name": "net67 DNS"},
                 {"id": "direct", "name": "Вкл. (активировать hosts)"},
             ],
             "services": [
@@ -498,7 +498,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         catalog = {
             "version": 1,
             "profiles": [
-                {"id": "zapret_dns", "name": "Zapret DNS"},
+                {"id": "zapret_dns", "name": "net67 DNS"},
                 {"id": "direct", "name": "Вкл. (активировать hosts)"},
             ],
             "services": [
@@ -544,7 +544,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         catalog = {
             "version": 1,
             "profiles": [
-                {"id": "zapret_dns", "name": "Zapret DNS"},
+                {"id": "zapret_dns", "name": "net67 DNS"},
                 {"id": "direct", "name": "Вкл. (активировать hosts)"},
             ],
             "services": [
@@ -590,7 +590,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         catalog = {
             "version": 1,
             "profiles": [
-                {"id": "zapret_dns", "name": "Zapret DNS"},
+                {"id": "zapret_dns", "name": "net67 DNS"},
                 {"id": "direct", "name": "Вкл. (активировать hosts)"},
             ],
             "services": [
@@ -637,7 +637,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         catalog = {
             "version": 1,
             "profiles": [
-                {"id": "zapret_dns", "name": "Zapret DNS"},
+                {"id": "zapret_dns", "name": "net67 DNS"},
                 {"id": "direct", "name": "Вкл. (активировать hosts)"},
             ],
             "services": [
@@ -727,25 +727,34 @@ class HostsCatalogJsonTests(unittest.TestCase):
         self.assertNotIn("Остальное", rows)
 
     def test_services_catalog_plan_groups_current_ai_service_names(self) -> None:
+        """Кто в группе «ИИ», решает поле category каталога.
+
+        Раньше группу угадывали по списку имён в коде — и он разошёлся с
+        каталогом в первый же месяц. Значки без поля icon берутся из
+        прежнего списка QUICK_SERVICES.
+        """
         from hosts import page_plans
 
         catalog = {
             "version": 1,
-            "profiles": [{"id": "zapret_dns", "name": "Zapret DNS"}],
+            "profiles": [{"id": "zapret_dns", "name": "net67 DNS"}],
             "services": [
                 {
                     "name": "Meta AI",
                     "mode": "dns",
+                    "category": "ai",
                     "domains": [{"host": "meta.ai", "ips": {"zapret_dns": "72.56.93.144"}}],
                 },
                 {
                     "name": "Trae.ai",
                     "mode": "dns",
+                    "category": "ai",
                     "domains": [{"host": "trae.ai", "ips": {"zapret_dns": "72.56.93.144"}}],
                 },
                 {
                     "name": "Windsurf",
                     "mode": "dns",
+                    "category": "ai",
                     "domains": [{"host": "windsurf.com", "ips": {"zapret_dns": "72.56.93.144"}}],
                 },
                 {
@@ -857,15 +866,16 @@ class HostsCatalogJsonTests(unittest.TestCase):
                 self.proxy_domains.invalidate_hosts_catalog_cache()
                 profile_index = self.proxy_domains.get_services_profile_index()
 
-        def _old_catalog_path_used(*_args, **_kwargs):
-            raise AssertionError("build_services_catalog_plan должен использовать общий индекс каталога")
+        for old_name in (
+            "get_direct_profile_name",
+            "service_has_active_domains",
+            "infer_profile_from_hosts",
+            "infer_direct_toggle_from_hosts",
+        ):
+            self.assertFalse(hasattr(page_plans, old_name), old_name)
 
         with (
             patch("hosts.proxy_domains.get_services_profile_index", return_value=profile_index),
-            patch.object(page_plans, "get_direct_profile_name", side_effect=_old_catalog_path_used),
-            patch.object(page_plans, "service_has_active_domains", side_effect=_old_catalog_path_used),
-            patch.object(page_plans, "infer_profile_from_hosts", side_effect=_old_catalog_path_used),
-            patch.object(page_plans, "infer_direct_toggle_from_hosts", side_effect=_old_catalog_path_used),
         ):
             plan = page_plans.build_services_catalog_plan(
                 current_selection={},
@@ -1018,37 +1028,14 @@ class HostsCatalogJsonTests(unittest.TestCase):
         with (
             patch.object(hosts_module, "safe_read_hosts_file", return_value="") as read_hosts,
             patch.object(hosts_module, "safe_write_hosts_file", return_value=True) as write_hosts,
-            patch("settings.store.get_hosts_bootstrap_signature", return_value=None),
-            patch("settings.store.set_hosts_bootstrap_signature", return_value=True),
-            patch("settings.store.get_remove_github_api", return_value=False),
         ):
             hosts_module.HostsManager()
 
         read_hosts.assert_not_called()
         write_hosts.assert_not_called()
 
-    def test_hosts_bootstrap_signature_has_no_domain_payload(self) -> None:
-        from hosts import hosts as hosts_module
-
-        self.assertEqual(hosts_module._get_hosts_bootstrap_signature(), "v3")
-
-    def test_hosts_bootstrap_does_not_write_when_github_cleanup_is_disabled(self) -> None:
-        from hosts import hosts as hosts_module
-
-        with (
-            patch.object(hosts_module, "safe_read_hosts_file", return_value="127.0.0.1 localhost\n") as read_hosts,
-            patch.object(hosts_module, "safe_write_hosts_file", return_value=True) as write_hosts,
-            patch("settings.store.get_hosts_bootstrap_signature", return_value="old"),
-            patch("settings.store.set_hosts_bootstrap_signature", return_value=True) as set_signature,
-            patch("settings.store.get_remove_github_api", return_value=False),
-        ):
-            hosts_module.HostsManager().apply_hosts_bootstrap_if_needed()
-
-        read_hosts.assert_called_once()
-        write_hosts.assert_not_called()
-        set_signature.assert_called_once_with("v3")
-
-    def test_execute_hosts_operation_runs_bootstrap_only_for_explicit_operation(self) -> None:
+    def test_execute_hosts_operation_does_not_run_legacy_bootstrap(self) -> None:
+        """Разовую чистку api.github.com убрали: она переписывала строки человека."""
         from hosts import commands as hosts_commands
 
         calls: list[str] = []
@@ -1068,7 +1055,7 @@ class HostsCatalogJsonTests(unittest.TestCase):
         )
 
         self.assertTrue(result.success)
-        self.assertEqual(calls, ["bootstrap", "apply:fin_dns"])
+        self.assertEqual(calls, ["apply:fin_dns"])
 
     def test_get_hosts_state_uses_read_only_access_check(self) -> None:
         from hosts import commands as hosts_commands
@@ -1235,41 +1222,6 @@ class HostsCatalogJsonTests(unittest.TestCase):
         self.assertLess(written[0].index("2.2.2.2 chatgpt.com"), written[0].index("10.0.0.1 manual.example"))
         self.assertLess(written[0].index("2.2.2.2 chatgpt.com"), written[0].index("10.0.0.2 another.example"))
 
-    def test_apply_domain_rows_updates_top_domain_entry_without_adding_duplicate(self) -> None:
-        from hosts import hosts as hosts_module
-
-        original = "\n".join(
-            [
-                "# user header",
-                "10.0.0.1 chatgpt.com",
-                "10.0.0.2 another.example",
-                "10.0.0.3 chatgpt.com",
-                "",
-            ]
-        )
-        written: list[str] = []
-        manager = hosts_module.HostsManager()
-        manager.is_hosts_file_accessible = lambda: True
-
-        with (
-            patch.object(hosts_module, "safe_read_hosts_file", return_value=original),
-            patch.object(hosts_module, "safe_write_hosts_file", side_effect=lambda text: written.append(text) or True),
-            patch.object(hosts_module, "is_ipv6_available", return_value=True),
-        ):
-            self.assertTrue(manager.apply_domain_ip_rows([("chatgpt.com", "2.2.2.2")]))
-
-        self.assertEqual(len(written), 1)
-        chatgpt_lines = [
-            line
-            for line in written[0].splitlines()
-            if line.strip()
-            and not line.lstrip().startswith("#")
-            and "chatgpt.com" in line.split()[1:]
-        ]
-        self.assertEqual(chatgpt_lines, ["2.2.2.2 chatgpt.com", "10.0.0.3 chatgpt.com"])
-        self.assertIn("10.0.0.2 another.example", written[0])
-        self.assertEqual(manager.last_status, "Файл hosts обновлён: применено 1 запись")
-
     def test_apply_domain_rows_does_not_shift_block_down_on_repeated_updates(self) -> None:
         from hosts import hosts as hosts_module
 
@@ -1306,33 +1258,6 @@ class HostsCatalogJsonTests(unittest.TestCase):
         second_begin = second_lines.index("# >>> net67:hosts managed begin >>>")
         self.assertEqual(second_begin, first_begin)
         self.assertNotIn("\n\n\n# >>> net67:hosts managed begin >>>", written[1])
-
-    def test_apply_domain_rows_keeps_other_domains_from_same_hosts_line(self) -> None:
-        from hosts import hosts as hosts_module
-
-        original = "\n".join(
-            [
-                "# user header",
-                "10.0.0.1 chatgpt.com manual.example # keep",
-                "10.0.0.3 chatgpt.com",
-                "",
-            ]
-        )
-        written: list[str] = []
-        manager = hosts_module.HostsManager()
-        manager.is_hosts_file_accessible = lambda: True
-
-        with (
-            patch.object(hosts_module, "safe_read_hosts_file", return_value=original),
-            patch.object(hosts_module, "safe_write_hosts_file", side_effect=lambda text: written.append(text) or True),
-            patch.object(hosts_module, "is_ipv6_available", return_value=True),
-        ):
-            self.assertTrue(manager.apply_domain_ip_rows([("chatgpt.com", "2.2.2.2")]))
-
-        self.assertEqual(len(written), 1)
-        self.assertIn("2.2.2.2 chatgpt.com", written[0])
-        self.assertIn("10.0.0.1 manual.example # keep", written[0])
-        self.assertNotIn("10.0.0.1 chatgpt.com manual.example", written[0])
 
     def test_apply_service_selection_with_unknown_rows_does_not_clear_existing_block(self) -> None:
         from hosts import hosts as hosts_module

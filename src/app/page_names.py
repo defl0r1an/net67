@@ -27,6 +27,7 @@ class PageName(Enum):
     # === Настройки системы ===
     NETWORK = auto()                 # Сеть
     HOSTS = auto()                   # Разблокировка сервисов
+    HOSTS_FILE = auto()              # Весь файл hosts с раскраской (вложенная в Hosts)
     BLOCKCHECK = auto()              # BlockCheck
     WINWS_LOG_ANALYZER = auto()      # Анализ debug-лога winws2
     LOGS = auto()                    # Логи
@@ -36,6 +37,7 @@ class PageName(Enum):
 
     # === Telegram Proxy ===
     TELEGRAM_PROXY = auto()          # Telegram WebSocket Proxy
+    TELEGRAM_PROXY_ADVANCED = auto() # Продвинутые настройки Telegram Proxy (вложенная)
 
     # === VPN ===
     VPN = auto()                     # Профили AmneziaWG и WireGuard

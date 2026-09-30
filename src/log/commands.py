@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from config.config import MAX_DEBUG_LOG_FILES, MAX_LOG_FILES
 from config.runtime_layout import APPLICATION_PATHS
-from log.log import LOG_FILE, cleanup_old_logs, global_logger, log
+from log.log import APP_LOG_PATTERNS, LOG_FILE, cleanup_old_logs, global_logger, log
 from app.performance_metrics import log_ui_timing_since
 
 from support_request_bundle import prepare_support_request
@@ -113,7 +113,8 @@ def list_logs(*, run_cleanup: bool) -> LogsListState:
 
     glob_started_at = time.perf_counter()
     log_files: list[str] = []
-    log_files.extend(glob.glob(os.path.join(LOGS_FOLDER, "zapret_log_*.txt")))
+    for pattern in APP_LOG_PATTERNS:
+        log_files.extend(glob.glob(os.path.join(LOGS_FOLDER, pattern)))
     log_files.extend(glob.glob(os.path.join(LOGS_FOLDER, "zapret_[0-9]*.log")))
     log_files.extend(glob.glob(os.path.join(LOGS_FOLDER, "blockcheck_run_*.log")))
     _log_timing("logs_feature.list_logs.glob", glob_started_at)
@@ -155,7 +156,7 @@ def list_logs(*, run_cleanup: bool) -> LogsListState:
 def build_stats() -> LogsStatsState:
     total_started_at = time.perf_counter()
     glob_started_at = time.perf_counter()
-    app_logs = glob.glob(os.path.join(LOGS_FOLDER, "zapret_log_*.txt"))
+    app_logs = [path for pattern in APP_LOG_PATTERNS for path in glob.glob(os.path.join(LOGS_FOLDER, pattern))]
     app_logs.extend(glob.glob(os.path.join(LOGS_FOLDER, "zapret_[0-9]*.log")))
     app_logs.extend(glob.glob(os.path.join(LOGS_FOLDER, "blockcheck_run_*.log")))
     debug_logs = glob.glob(os.path.join(LOGS_FOLDER, "zapret_winws2_debug_*.log"))
@@ -311,7 +312,7 @@ def build_support_feedback(result) -> LogsSupportFeedbackPlan:
     if result.copied_to_clipboard:
         status_parts.append("шаблон скопирован")
     if result.discussions_opened:
-        status_parts.append("GitHub открыт")
+        status_parts.append("Forgejo открыт")
     if result.bundle_folder_opened:
         status_parts.append("папка открыта")
 

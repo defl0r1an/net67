@@ -42,9 +42,37 @@
       "doh": "https://dns.comss.one/dns-query"
     },
     "malw_dns": {
+      "_": [
+        "84.21.189.133 и 64.188.98.242 замолчали (замер 2026-09-30); новые",
+        "адреса — те же, что на странице «Настройка DNS»",
+        "(OUTDATED_DNS_ADDRESS_REPLACEMENTS в src/dns/dns_providers.py)."
+      ],
       "name": "Malw DNS",
-      "servers": ["84.21.189.133", "64.188.98.242"],
+      "servers": ["95.216.204.218", "80.253.249.40"],
       "doh": "https://dns.malw.link/dns-query"
+    },
+
+    "astracat": {
+      "_": [
+        "Профиль net67, в каталоге zapret его нет. overlay — адреса пишутся",
+        "не в файлы dns/, а в json/hosts_catalog/net67_dns_sources.json:",
+        "свою колонку в файлах zapret каждое слияние превращало бы в",
+        "конфликт. Адреса резолвера — как на странице «Настройка DNS»."
+      ],
+      "name": "AstraCat",
+      "overlay": true,
+      "servers": ["135.106.217.200", "135.106.197.22"],
+      "doh": "https://dns.astracat.network/dns-query"
+    },
+    "geohide": {
+      "_": [
+        "Профиль net67, см. astracat. Подменяет ответы только для сайтов",
+        "из своего списка — у остальных профиль будет недоступен."
+      ],
+      "name": "GeoHide",
+      "overlay": true,
+      "servers": ["193.233.112.67", "193.233.112.68"],
+      "doh": "https://geohide.ru/dns-query"
     },
 
     "malw_dns_v2": {

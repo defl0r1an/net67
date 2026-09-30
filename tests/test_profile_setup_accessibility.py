@@ -150,11 +150,6 @@ class ProfileSetupAccessibilityTests(unittest.TestCase):
             page._out_range_mode.property("screenReaderStateText"),
             "Режим out-range, выбрано: a — всегда",
         )
-        self.assertEqual(page._strategy_branch_combo.accessibleName(), "Ветка готовой стратегии, не выбрано")
-        self.assertEqual(
-            page._strategy_branch_combo.property("screenReaderStateText"),
-            "Ветка готовой стратегии, не выбрано",
-        )
         self.assertEqual(page._list_file_base_text.accessibleName(), "Базовая часть списка profile")
         self.assertEqual(
             page._list_file_base_text.property("screenReaderStateText"),
@@ -246,43 +241,6 @@ class ProfileSetupAccessibilityTests(unittest.TestCase):
 
         self.assertTrue(page._strategy_list._search_row.isVisible())
         self.assertIs(self.app.focusWidget(), page._strategy_list._search)
-
-    def test_strategy_branch_combo_options_are_named_for_screen_reader(self) -> None:
-        page = self._make_page()
-        self.addCleanup(page.deleteLater)
-        payload = SimpleNamespace(
-            current_strategy_branch_id="branch:2",
-            strategy_branches=(
-                SimpleNamespace(
-                    branch_id="branch:1",
-                    payload="tls",
-                    in_range="",
-                    out_range="",
-                    strategy_name="TLS fake",
-                ),
-                SimpleNamespace(
-                    branch_id="branch:2",
-                    payload="http",
-                    in_range="",
-                    out_range="",
-                    strategy_name="HTTP fake",
-                ),
-            ),
-        )
-
-        page._apply_strategy_branch_selector(payload)
-        create_menu = getattr(page._strategy_branch_combo, "_create_accessible_combo_menu", None)
-        self.assertIsNotNone(create_menu)
-        menu = create_menu()
-
-        self.assertEqual(
-            menu.view.item(0).data(Qt.ItemDataRole.AccessibleTextRole),
-            "Ветка готовой стратегии: payload: tls — TLS fake, не выбрана",
-        )
-        self.assertEqual(
-            menu.view.item(1).data(Qt.ItemDataRole.AccessibleTextRole),
-            "Ветка готовой стратегии: payload: http — HTTP fake, выбрана",
-        )
 
     def test_range_mode_combo_options_are_named_for_screen_reader(self) -> None:
         page = self._make_page()
@@ -379,30 +337,17 @@ class ProfileSetupAccessibilityTests(unittest.TestCase):
         self.assertTrue(dialog.cancelButton.hidden)
         self.assertTrue(dialog.exec_called)
 
-    def test_preset_profile_info_dialog_has_profile_site_button(self) -> None:
+    def test_preset_profile_info_dialog_has_no_profile_site_button(self) -> None:
+        # Кнопка вела на PROFILE_INFO_URL, а он пуст с тех пор, как ушли
+        # ресурсы автора исходного проекта: нажатие не открывало ничего.
         page = PresetSetupPageBase.__new__(PresetSetupPageBase)
         _MessageBox.instances = []
-        opened_urls = []
 
-        with (
-            patch("profile.ui.preset_setup_page.MessageBox", _MessageBox),
-            patch("profile.ui.preset_setup_page.PushButton", _DialogButton, create=True),
-            patch(
-                "profile.ui.preset_setup_page.QDesktopServices.openUrl",
-                side_effect=lambda url: opened_urls.append(url),
-            ),
-        ):
+        with patch("profile.ui.preset_setup_page.MessageBox", _MessageBox):
             PresetSetupPageBase._show_profile_info(page)
-            _MessageBox.instances[0].buttonLayout.widgets[0].click()
 
         dialog = _MessageBox.instances[0]
-        self.assertEqual(len(dialog.buttonLayout.widgets), 1)
-        site_button = dialog.buttonLayout.widgets[0]
-        self.assertEqual(site_button.text(), "Открыть сайт с профилями")
-        self.assertEqual(site_button.accessibleName(), "Открыть сайт с профилями")
-        # PROFILE_INFO_URL очищен вместе с ресурсами автора.
-        self.assertEqual(opened_urls, [QUrl("")])
-
+        self.assertEqual(dialog.buttonLayout.widgets, [])
 
 if __name__ == "__main__":
     unittest.main()

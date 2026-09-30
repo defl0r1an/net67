@@ -147,7 +147,7 @@ class ControlStatusDotPulseTests(unittest.TestCase):
         apply_status_plan(
             SimpleNamespace(
                 phase="running",
-                title="Zapret работает",
+                title="net67 работает",
                 description="Обход блокировок активен",
                 dot_color="#6ccb5f",
                 pulsing=pulsing,
@@ -254,7 +254,7 @@ class ControlStatusDotPulseTests(unittest.TestCase):
 
         plan = SimpleNamespace(
             phase="running",
-            title="Zapret работает",
+            title="net67 работает",
             description="Обход блокировок активен",
             dot_color="#6ccb5f",
             pulsing=True,
@@ -315,7 +315,7 @@ class ControlStatusDotPulseTests(unittest.TestCase):
 
         first_plan = SimpleNamespace(
             phase="running",
-            title="Zapret работает",
+            title="net67 работает",
             description="Обход блокировок активен",
             dot_color="#6ccb5f",
             pulsing=True,
@@ -325,7 +325,7 @@ class ControlStatusDotPulseTests(unittest.TestCase):
         )
         second_plan = SimpleNamespace(
             phase="running",
-            title="Zapret работает",
+            title="net67 работает",
             description="Обход блокировок активен",
             dot_color="#7aa7ff",
             pulsing=True,
@@ -333,7 +333,7 @@ class ControlStatusDotPulseTests(unittest.TestCase):
             show_stop_only=True,
             show_stop_and_exit=True,
         )
-        status_title = _WidgetStateTarget(text="Zapret работает")
+        status_title = _WidgetStateTarget(text="net67 работает")
         status_desc = _WidgetStateTarget(text="Обход блокировок активен")
         status_dot = _StatusDot()
         start_btn = _WidgetStateTarget(visible=False)

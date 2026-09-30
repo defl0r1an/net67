@@ -139,7 +139,9 @@ Filename: "schtasks.exe"; \
 ; Задача планировщика.
 Filename: "schtasks.exe"; Parameters: "/Delete /F /TN ""net67 Autostart"""; Flags: runhidden; RunOnceId: "DelAutostartTask"
 
-; Служба Telegram-прокси, см. TG_SERVICE_NAME в src\telegram_proxy\service.py.
+; Служба Telegram-прокси от старых версий. Модуль, который её ставил
+; (telegram_proxy\service.py), удалён вместе с переходом на прокси из
+; zapret; снимаем на случай, если служба где-то осталась.
 Filename: "sc.exe"; Parameters: "stop net67TelegramProxy";   Flags: runhidden; RunOnceId: "StopTgProxy"
 Filename: "sc.exe"; Parameters: "delete net67TelegramProxy"; Flags: runhidden; RunOnceId: "DelTgProxy"
 

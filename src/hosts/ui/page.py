@@ -1,200 +1,176 @@
 # hosts/ui/page.py
-"""Страница управления Hosts файлом - разблокировка сервисов"""
+"""Страница Hosts: сервисы через системный файл hosts.
 
-import time
+Как это работает:
+- сервисы — плитки по группам; включённая плитка мягко залита акцентом;
+- щелчок по плитке сразу записывает hosts (в фоне); у сервисов с
+  DNS-профилем под плиткой открывается меню профиля;
+- пока идёт запись, щёлкать можно дальше: новый выбор запишется следом;
+- сверху кнопки «Файл hosts» (весь файл с раскраской), «DNS для всех» и
+  «Выключить все»; сводка сворачивается, когда список прокручивают;
+- поиск появляется по Ctrl+F и прячется по Esc.
+"""
+
+from __future__ import annotations
+
 from dataclasses import replace
-from string import Template
-from PyQt6.QtCore import Qt, QEvent, QTimer
-from PyQt6.QtWidgets import (
-    QWidget, QLabel,
-    QLayout
+
+from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, Qt
+from PyQt6.QtGui import QColor, QIcon
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut
+from PyQt6.QtWidgets import QGraphicsOpacityEffect, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from qfluentwidgets import (
+    Action,
+    BodyLabel,
+    CaptionLabel,
+    DropDownPushButton,
+    FluentIcon,
+    InfoBar,
+    PushButton,
+    RoundMenu,
+    SearchLineEdit,
+    StrongBodyLabel,
+    TransparentPushButton,
+    getFont,
+    isDarkTheme,
+    themeColor,
 )
 
-import hosts.page_plans as hosts_page_plans
-from hosts.ui.page_runtime import create_page_hosts_runtime, create_runtime_cache
-from ui.pages.base_page import BasePage
-from ui.latest_value_worker_state import LatestValueWorkerState
-from ui.one_shot_worker_runtime import OneShotWorkerRuntime
-from ui.performance_metrics import log_ui_timing_since
-from ui.accessibility import set_state_text
-from ui.message_box_accessibility import set_message_box_button_accessibility
-from hosts.ui.sections_build import (
-    build_hosts_adobe_section,
-    build_hosts_browser_warning,
-    build_hosts_info_note,
-    build_hosts_status_section,
-)
-from hosts.ui.services_build import (
-    build_hosts_service_row,
-    build_hosts_services_container,
-    build_hosts_services_group,
-    build_hosts_services_section_title,
-)
-from hosts.ui.services_matrix import build_hosts_services_matrix
-from hosts.ui.selection_workflow import (
-    apply_direct_toggle_ui,
-    apply_profile_selection_ui,
-)
-from hosts.catalog_workflow import (
-    apply_catalog_refresh_signature,
-    ensure_catalog_watcher,
-    reconcile_catalog_after_hidden_refresh,
-)
-from hosts.ui.access_workflow import (
-    apply_restore_hosts_permissions_result_flow,
-    check_hosts_access,
-    dismiss_hosts_error_bar,
-    show_hosts_access_error,
-)
-from hosts.operation_workflow import (
-    complete_hosts_operation,
-    reset_all_service_profiles_ui,
-    start_hosts_operation,
-)
-from hosts.ui.page_lifecycle_helpers import (
-    activate_hosts_page,
-    apply_hosts_page_language,
-    apply_hosts_page_theme,
-    cleanup_hosts_page,
-    close_service_combo_popups,
-    install_host_window_event_filter,
-    run_hosts_runtime_init_once,
-)
 from app.ui_texts import tr as tr_catalog
-
-from log.log import log
-
-from ui.theme import get_theme_tokens, get_themed_qta_icon
+from hosts.draft import MIXED, HostsDraft
+from hosts.hosts_blocks import BLOCK_ZAPRETGUI
+from hosts.page_snapshot import CATEGORY_AI, CATEGORY_DIRECT, CATEGORY_OTHER, HostsPageSnapshot
+from hosts.ui.profile_icons import profile_icon
+from hosts.ui.services_tiles import HostsChoice, HostsTile, HostsTilesGrid, split_service_title
+from ui.accessibility import set_control_accessibility, set_state_text
+from ui.animation_policy import are_live_animations_enabled
+from ui.fluent_widgets import SettingsCard
+from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from ui.pages.base_page import BasePage
+from ui.theme import get_cached_qta_pixmap, get_theme_tokens
 from ui.theme_semantic import get_semantic_palette
 
-from qfluentwidgets import (
-    BodyLabel, CaptionLabel, ComboBox, InfoBar, PushButton,
-    StrongBodyLabel, SwitchButton,
-)
-from ui.fluent_dialog import MessageBox
+
+ADOBE_TILE_KEY = "__adobe__"
+
+_GROUP_TITLES = {
+    CATEGORY_DIRECT: ("page.hosts.group.direct", "Напрямую"),
+    CATEGORY_AI: ("page.hosts.group.ai", "ИИ-сервисы"),
+    CATEGORY_OTHER: ("page.hosts.group.other", "Остальные сервисы"),
+}
+_GROUP_HINTS = {
+    CATEGORY_DIRECT: ("page.hosts.group.direct.hint", "адрес прописывается как есть"),
+    CATEGORY_AI: ("page.hosts.group.ai.hint", "сами закрыты для России, нужен DNS-профиль"),
+    CATEGORY_OTHER: ("page.hosts.group.other.hint", "через DNS-профиль"),
+}
 
 
-_FLUENT_CHIP_STYLE_TEMPLATE = Template(
+
+class _StatusPill(QWidget):
+    """Статус записи в сводке: значок и текст в одну строку на мягкой заливке.
+
+    Появляется плавно и остаётся, пока следующая запись его не сменит.
     """
-QPushButton {
-    background-color: transparent;
-    border: none;
-    color: $fg_muted;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-weight: 500;
-    font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif;
-    text-decoration: none;
-}
-QPushButton:hover {
-    color: $accent_hex;
-    text-decoration: underline;
-}
-QPushButton:pressed {
-    color: rgba($accent_rgb, 0.85);
-}
-QPushButton:disabled {
-    color: $fg_faint;
-}
-"""
-)
 
+    FADE_MS = 180
 
-def _get_fluent_chip_style(tokens=None) -> str:
-    tokens = tokens or get_theme_tokens()
-    return _FLUENT_CHIP_STYLE_TEMPLATE.substitute(
-        fg_muted=tokens.fg_muted,
-        fg_faint=tokens.fg_faint,
-        accent_hex=tokens.accent_hex,
-        accent_rgb=tokens.accent_rgb_str,
-    )
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("hostsStatusPill")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 12, 5)
+        layout.setSpacing(6)
+        self.icon = QLabel(self)
+        self.icon.setFixedSize(14, 14)
+        layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.label = CaptionLabel(self)
+        self.label.setWordWrap(False)
+        layout.addWidget(self.label, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._opacity = QGraphicsOpacityEffect(self)
+        self._opacity.setOpacity(1.0)
+        self.setGraphicsEffect(self._opacity)
+        self._fade: QPropertyAnimation | None = None
+        self.setVisible(False)
 
-def _is_fluent_combo(obj) -> bool:
-    """Проверяет, является ли объект qfluentwidgets ComboBox."""
-    if ComboBox is not None and isinstance(obj, ComboBox):
-        return True
-    return False
+    def text(self) -> str:
+        return self.label.text()
+
+    def set_status(self, text: str, color: str, icon_name: str) -> None:
+        text = str(text or "")
+        if not text:
+            if self._fade is not None:
+                self._fade.stop()
+            self.label.setText("")
+            self.setVisible(False)
+            return
+        self.label.setText(text)
+        self.label.setStyleSheet(f"color: {color}; background: transparent;")
+        if icon_name:
+            self.icon.setPixmap(get_cached_qta_pixmap(icon_name, color=color, size=14))
+        self.icon.setVisible(bool(icon_name))
+        back = QColor(color)
+        back.setAlpha(52 if isDarkTheme() else 38)
+        self.setStyleSheet(
+            "#hostsStatusPill {"
+            f" background-color: rgba({back.red()}, {back.green()}, {back.blue()}, {back.alpha()});"
+            " border-radius: 12px; }"
+        )
+        if self.isHidden():
+            self.setVisible(True)
+            self._fade_in()
+
+    def _fade_in(self) -> None:
+        if self._fade is not None:
+            self._fade.stop()
+        if not are_live_animations_enabled():
+            self._opacity.setOpacity(1.0)
+            return
+        fade = QPropertyAnimation(self._opacity, b"opacity", self)
+        fade.setStartValue(0.0)
+        fade.setEndValue(1.0)
+        fade.setDuration(self.FADE_MS)
+        fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._fade = fade
+        fade.start()
 
 
 class HostsPage(BasePage):
-    """Страница управления Hosts файлом"""
+    """Страница hosts: плитки сервисов, каждое изменение сразу пишется в файл."""
 
     def __init__(self, parent=None, *, deps):
         super().__init__(
             "Hosts",
-            "Управление разблокировкой сервисов через hosts файл",
+            "Щёлкните по плитке — адреса сервиса сразу запишутся в системный файл hosts.",
             parent,
             title_key="page.hosts.title",
             subtitle_key="page.hosts.subtitle",
         )
-
         self._hosts = deps.hosts_feature
-        self.hosts_runtime = None
-        self.service_combos = {}
-        self.service_icon_labels = {}
-        self.service_icon_names = {}
-        self.service_name_labels = {}
-        self.service_icon_base_colors = {}
-        self._services_section_title_labels = []
-        self._service_group_title_labels = []
-        self._service_group_chips_scrolls = []
-        self._service_group_chip_buttons = []
-        self._services_matrix_model = None
-        self._services_matrix_view = None
-        self._services_catalog_plan = None
-        self._services_ui_mounted = False
-        self._services_restore_scheduled = False
-        self._services_build_generation = 0
-        self._services_pending_row_batches = []
-        self.status_card = None
-        self._open_hosts_button = None
-        self._info_text_label = None
-        self._browser_warning_label = None
-        self._adobe_desc_label = None
-        self._adobe_title_label = None
-        self._hosts_error_bar = None  # Текущий InfoBar ошибки доступа к hosts
-
-        self._services_container = None
-        self._services_layout = None
-        self._catalog_sig = None
-        self._catalog_dirty = False
-        self._catalog_watch_timer = None
-        self._host_window = None
-        self._operation_runtime = OneShotWorkerRuntime()
-        self._services_catalog_runtime = OneShotWorkerRuntime()
-        self._catalog_refresh_runtime = OneShotWorkerRuntime()
-        self._catalog_refresh_state = LatestValueWorkerState(self._catalog_refresh_runtime, empty_value="")
-        self._selection_load_runtime = OneShotWorkerRuntime()
-        self._selection_load_show_access_errors = False
-        self._selection_load_state = LatestValueWorkerState(self._selection_load_runtime, empty_value=False)
-        self._selection_save_runtime = OneShotWorkerRuntime()
-        self._selection_save_state = LatestValueWorkerState(self._selection_save_runtime, empty_value=None)
-        self._state_load_runtime = OneShotWorkerRuntime()
-        self._state_load_state = LatestValueWorkerState(
-            self._state_load_runtime,
-            empty_value=None,
-        )
-        self._state_load_request_context = {"show_access_errors": False, "update_status": False}
-        self._open_file_runtime = OneShotWorkerRuntime()
-        self._open_file_state = LatestValueWorkerState(self._open_file_runtime, empty_value=False)
-        self._permission_restore_runtime = OneShotWorkerRuntime()
-        self._permission_restore_state = LatestValueWorkerState(
-            self._permission_restore_runtime,
-            empty_value=False,
-        )
-        self._applying = False
+        self._open_file_page = deps.open_file_page
+        self._snapshot: HostsPageSnapshot | None = None
+        self._draft: HostsDraft | None = None
+        self._search = ""
         self._cleanup_in_progress = False
-        self._runtime_cache = create_runtime_cache()
-        self._last_error = None  # Последняя ошибка
-        self._current_operation = None
-        self._startup_initialized = False
-        self._runtime_initialized = False
-        self._runtime_access_checked = False
-        self._service_dns_selection = {}
-        self._adobe_active = False
+        self._snapshot_runtime = OneShotWorkerRuntime()
+        self._snapshot_pending = False
+        # Номер записи в hosts: чтение, начатое до записи, старше её результата.
+        self._write_epoch = 0
+        self._snapshot_epoch = 0
+        self._apply_runtime = OneShotWorkerRuntime()
+        self._applying = False
+        # Пока шла запись, пользователь успел ещё что-то поменять.
+        self._apply_pending = False
+        self._apply_force_pending = False
+        self._just_written = False
+        self._restore_runtime = OneShotWorkerRuntime()
+        # Меню «DNS для всех» пересобирается, только когда меняется его содержимое.
+        self._dns_all_menu_key: tuple | None = None
 
         self._build_ui()
-        self._apply_page_theme(force=True)
+        self._retranslate()
+
+    # ── построение ───────────────────────────────────────────
 
     def _tr(self, key: str, default: str, **kwargs) -> str:
         text = tr_catalog(key, language=self._ui_language, default=default)
@@ -205,1663 +181,564 @@ class HostsPage(BasePage):
                 return text
         return text
 
-    def _apply_page_theme(self, tokens=None, force: bool = False) -> None:
-        """Applies theme tokens to widgets that still use raw setStyleSheet."""
-        _ = force
-        apply_hosts_page_theme(
-            services_section_title_labels=self._services_section_title_labels,
-            service_group_chips_scrolls=self._service_group_chips_scrolls,
-            service_group_chip_buttons=self._service_group_chip_buttons,
-            get_fluent_chip_style_fn=_get_fluent_chip_style,
-            update_ui_fn=self._update_ui,
-            get_theme_tokens_fn=lambda: tokens or get_theme_tokens(),
+    def _build_ui(self) -> None:
+        # Страница прокручивается целиком, как все страницы: сводка уезжает
+        # вверх вместе с плитками.
+        self._build_header()
+
+        # Описание и сводка.
+        self.top_panel = QWidget(self.content)
+        top_layout = QVBoxLayout(self.top_panel)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(12)
+        if self.subtitle_label is not None:
+            self.vBoxLayout.removeWidget(self.subtitle_label)
+            self.subtitle_label.setParent(self.top_panel)
+            top_layout.addWidget(self.subtitle_label)
+        # Сводка: крупная цифра включённых сервисов, строки и статус записи.
+        self.summary_card = SettingsCard(parent=self.top_panel)
+        summary_row = QHBoxLayout()
+        summary_row.setSpacing(14)
+        self.summary_count = QLabel(self.summary_card)
+        self.summary_count.setFont(getFont(28, QFont.Weight.DemiBold))
+        summary_row.addWidget(self.summary_count, 0, Qt.AlignmentFlag.AlignVCenter)
+        summary_text = QVBoxLayout()
+        summary_text.setSpacing(0)
+        self.summary_label = StrongBodyLabel(self.summary_card)
+        summary_text.addWidget(self.summary_label)
+        self.summary_detail = CaptionLabel(self.summary_card)
+        summary_text.addWidget(self.summary_detail)
+        summary_row.addLayout(summary_text, 1)
+        self.summary_status = _StatusPill(self.summary_card)
+        summary_row.addWidget(self.summary_status, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.summary_card.main_layout.addLayout(summary_row)
+        top_layout.addWidget(self.summary_card)
+        self.add_widget(self.top_panel)
+
+        # Предупреждение о защите файла или нет доступа (скрыто, пока всё хорошо).
+        self.access_card = SettingsCard(parent=self.content)
+        access_row = QHBoxLayout()
+        access_row.setSpacing(10)
+        self.access_icon = QLabel(self.access_card)
+        self.access_icon.setFixedSize(20, 20)
+        access_row.addWidget(self.access_icon, 0, Qt.AlignmentFlag.AlignTop)
+        self.access_label = BodyLabel(self.access_card)
+        self.access_label.setWordWrap(True)
+        access_row.addWidget(self.access_label, 1)
+        self.restore_button = PushButton(FluentIcon.SYNC, "", self.access_card)
+        self.restore_button.clicked.connect(self._restore_permissions)
+        access_row.addWidget(self.restore_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.access_card.main_layout.addLayout(access_row)
+        self.access_card.hide()
+        self.add_widget(self.access_card)
+
+        # Поиск: появляется по Ctrl+F, прячется по Esc.
+        self.search_edit = SearchLineEdit(self.content)
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.textChanged.connect(self._on_search_changed)
+        self.search_edit.installEventFilter(self)
+        self.search_edit.hide()
+        self.add_widget(self.search_edit)
+        self._find_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
+        self._find_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._find_shortcut.activated.connect(self.open_search)
+
+        self.tiles = HostsTilesGrid(self.content)
+        self.tiles.activated.connect(self._on_tile_activated)
+        self.tiles.profile_chosen.connect(self._set_service_profile)
+        self.add_widget(self.tiles)
+
+    def _build_header(self) -> None:
+        """Заголовок и обычные кнопки справа от него."""
+        header = QWidget(self.content)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(8)
+        self.vBoxLayout.removeWidget(self.title_label)
+        self.title_label.setParent(header)
+        header_layout.addWidget(self.title_label, 1)
+        self.file_button = PushButton(FluentIcon.DOCUMENT, "", header)
+        self.file_button.clicked.connect(lambda: self._open_file_page())
+        header_layout.addWidget(self.file_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.dns_all_button = DropDownPushButton(FluentIcon.GLOBE, "", header)
+        header_layout.addWidget(self.dns_all_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.all_off_button = TransparentPushButton(FluentIcon.CLOSE, "", header)
+        self.all_off_button.clicked.connect(self._turn_all_off)
+        header_layout.addWidget(self.all_off_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.vBoxLayout.insertWidget(0, header)
+
+    def _retranslate(self) -> None:
+        tr = self._tr
+        search_name = tr("page.hosts.search.placeholder", "Найти сервис")
+        self.search_edit.setPlaceholderText(search_name)
+        set_control_accessibility(self.search_edit, name=search_name)
+        self.file_button.setText(tr("page.hosts.button.file", "Файл hosts"))
+        set_control_accessibility(
+            self.file_button,
+            name=tr("page.hosts.button.file", "Файл hosts"),
+            description=tr("page.hosts.button.file.description", "Весь файл hosts с раскраской строк по владельцам."),
         )
-
-    def on_page_activated(self) -> None:
-        total_started_at = time.perf_counter()
-        stage_started_at = time.perf_counter()
-        self._run_runtime_init_once(show_access_errors=True)
-        self._log_ui_timing("hosts_ui.runtime_init_once", stage_started_at)
-        stage_started_at = time.perf_counter()
-        self._start_catalog_watcher()
-        self._log_ui_timing("hosts_ui.catalog_watcher.start", stage_started_at)
-        stage_started_at = time.perf_counter()
-        activate_hosts_page(
-            install_host_window_event_filter_fn=self._install_host_window_event_filter,
-            build_activation_plan_fn=hosts_page_plans.build_activation_plan,
-            catalog_dirty=self._catalog_dirty,
-            reconcile_hidden_refresh_fn=self._reconcile_catalog_after_hidden_refresh,
-            invalidate_cache_fn=self._invalidate_cache,
-            update_ui_fn=self._update_ui,
-        )
-        self._log_ui_timing("hosts_ui.activation_workflow", stage_started_at)
-        if self._runtime_initialized:
-            self._schedule_services_restore_after_show()
-        self._log_ui_timing("hosts_ui.activation.total", total_started_at)
-
-    def warmup_initial_load(self) -> bool:
-        """Тихо готовит содержимое страницы до первого открытия пользователем."""
-        if self._cleanup_in_progress:
-            return False
-        started_at = time.perf_counter()
-        self._run_runtime_init_once(show_access_errors=False)
-        self._log_ui_timing("hosts_ui.warmup.total", started_at)
-        return True
-
-    def _run_runtime_init_once(self, *, show_access_errors: bool = True) -> None:
-        started_at = time.perf_counter()
-        if self._runtime_initialized:
-            if show_access_errors and not self._runtime_access_checked:
-                self._check_hosts_access()
-                self._runtime_access_checked = True
-            return
-        if not self._runtime_initialized:
-            self._start_user_selection_load_worker(show_access_errors=show_access_errors)
-            return
-        self._finish_runtime_init_after_selection(show_access_errors=show_access_errors)
-
-    def _start_user_selection_load_worker(self, *, show_access_errors: bool) -> None:
-        self._selection_load_show_access_errors = (
-            bool(self._selection_load_show_access_errors) or bool(show_access_errors)
-        )
-        state = self._selection_load_state_obj()
-        if state.is_busy():
-            state.pending = True
-            return
-        started_at = time.perf_counter()
-        self._selection_load_runtime.start_qthread_worker(
-            worker_factory=lambda request_id: self._hosts.create_selection_load_worker(
-                request_id,
-                self,
+        self.dns_all_button.setText(tr("page.hosts.dns_all.button", "DNS для всех"))
+        set_control_accessibility(
+            self.dns_all_button,
+            name=tr("page.hosts.dns_all.button", "DNS для всех"),
+            description=tr(
+                "page.hosts.dns_all.hint",
+                "Ставит выбранный профиль всем сервисам с DNS-профилем. Потом любой можно поменять отдельно.",
             ),
-            on_loaded=self._on_user_selection_load_finished,
-            on_failed=self._on_user_selection_load_failed,
-            on_finished=self._on_user_selection_load_worker_finished,
         )
-        self._log_ui_timing("hosts_ui.user_selection.load.start_worker", started_at)
-
-    def _on_user_selection_load_finished(self, request_id: int, selection) -> None:
-        if not self._selection_load_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._selection_load_state_obj().has_pending():
-            return
-        self._service_dns_selection = dict(selection or {})
-        show_access_errors = bool(self._selection_load_show_access_errors)
-        self._selection_load_show_access_errors = False
-        self._finish_runtime_init_after_selection(show_access_errors=show_access_errors)
-
-    def _on_user_selection_load_failed(self, request_id: int, error: str) -> None:
-        if not self._selection_load_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._selection_load_state_obj().has_pending():
-            return
-        log(f"Hosts: ошибка загрузки выбора профилей: {error}", "ERROR")
-        show_access_errors = bool(self._selection_load_show_access_errors)
-        self._selection_load_show_access_errors = False
-        self._service_dns_selection = {}
-        self._finish_runtime_init_after_selection(show_access_errors=show_access_errors)
-
-    def _on_user_selection_load_worker_finished(self, _worker) -> None:
-        if not self._is_current_worker_finish(self.__dict__.get("_selection_load_runtime"), _worker):
-            return
-        if self._cleanup_in_progress:
-            return
-        if self._selection_load_state_obj().has_pending():
-            self._schedule_user_selection_load_start()
-
-    def _schedule_user_selection_load_start(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        state = self._selection_load_state_obj()
-        state.pending = True
-        state.schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_user_selection_load_start,
-            pending_when_already_scheduled=True,
-        )
-
-    def _run_scheduled_user_selection_load_start(self) -> None:
-        pending = self._selection_load_state_obj().take_pending_for_scheduled_start(
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-        )
-        if not pending:
-            return
-        show_access_errors = bool(self.__dict__.get("_selection_load_show_access_errors", False))
-        self._start_user_selection_load_worker(show_access_errors=show_access_errors)
-
-    def _selection_load_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_selection_load_state")
-        runtime = self.__dict__.get("_selection_load_runtime")
-        if state is None:
-            pending = bool(self.__dict__.pop("_selection_load_pending", False))
-            start_scheduled = bool(self.__dict__.pop("_selection_load_start_scheduled", False))
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=False,
-                pending=pending,
-                start_scheduled=start_scheduled,
-            )
-            self.__dict__["_selection_load_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
-
-    @property
-    def _selection_load_pending(self) -> bool:
-        return bool(self._selection_load_state_obj().pending)
-
-    @_selection_load_pending.setter
-    def _selection_load_pending(self, value: bool) -> None:
-        self._selection_load_state_obj().pending = bool(value)
-
-    @property
-    def _selection_load_start_scheduled(self) -> bool:
-        return bool(self._selection_load_state_obj().start_scheduled)
-
-    @_selection_load_start_scheduled.setter
-    def _selection_load_start_scheduled(self, value: bool) -> None:
-        self._selection_load_state_obj().start_scheduled = bool(value)
-
-    def _finish_runtime_init_after_selection(self, *, show_access_errors: bool) -> None:
-        started_at = time.perf_counter()
-        if self._runtime_initialized:
-            if show_access_errors and not self._runtime_access_checked:
-                self._check_hosts_access()
-                self._runtime_access_checked = True
-            return
-        if show_access_errors:
-            check_access_fn = self._check_hosts_access
-            self._runtime_access_checked = True
-        else:
-            check_access_fn = lambda: None
-        run_hosts_runtime_init_once(
-            runtime_initialized=self._runtime_initialized,
-            set_runtime_initialized_fn=lambda value: setattr(self, "_runtime_initialized", value),
-            install_host_window_event_filter_fn=self._install_host_window_event_filter,
-            build_page_init_plan_fn=hosts_page_plans.build_page_init_plan,
-            has_hosts_runtime=self.hosts_runtime is not None,
-            init_hosts_runtime_fn=self._init_hosts_runtime,
-            check_access_fn=check_access_fn,
-            rebuild_services_fn=self._rebuild_services_selectors,
-            mark_startup_initialized_fn=lambda: setattr(self, "_startup_initialized", True),
-            invalidate_cache_fn=self._invalidate_cache,
-            update_ui_fn=self._update_ui,
-        )
-        self._log_ui_timing("hosts_ui.runtime_init.total", started_at)
-
-    def on_page_hidden(self) -> None:
-        self._close_service_combo_popups()
-        self._pause_services_selectors_for_hidden_page()
-        self._stop_catalog_watcher()
-
-    def _install_host_window_event_filter(self) -> None:
-        install_host_window_event_filter(
-            page=self,
-            current_host_window=self._host_window,
-            set_host_window_fn=lambda value: setattr(self, "_host_window", value),
-        )
-
-    def _close_service_combo_popups(self) -> None:
-        """Close all service profile dropdown popups if they are open."""
-        close_service_combo_popups(self.service_combos)
-
-    def eventFilter(self, obj, event):  # noqa: N802 (Qt override)
-        try:
-            if obj is self._host_window and event is not None:
-                et = event.type()
-                if et in (
-                    QEvent.Type.Hide,
-                    QEvent.Type.Close,
-                    QEvent.Type.WindowDeactivate,
-                    QEvent.Type.WindowStateChange,
-                ):
-                    self._close_service_combo_popups()
-        except Exception:
-            pass
-        return super().eventFilter(obj, event)
+        self.all_off_button.setText(tr("page.hosts.button.all_off", "Выключить все"))
+        set_control_accessibility(self.all_off_button, name=tr("page.hosts.button.all_off", "Выключить все"))
+        self.restore_button.setText(tr("page.hosts.button.restore_access", "Снять защиту и восстановить права"))
+        set_control_accessibility(self.restore_button, name=self.restore_button.text())
+        self._render()
 
     def set_ui_language(self, language: str) -> None:
         super().set_ui_language(language)
-        apply_hosts_page_language(
-            tr_fn=self._tr,
-            clear_btn=getattr(self, "clear_btn", None),
-            open_hosts_button=self._open_hosts_button,
-            info_text_label=self._info_text_label,
-            browser_warning_label=self._browser_warning_label,
-            adobe_desc_label=self._adobe_desc_label,
-            adobe_title_label=self._adobe_title_label,
-            startup_initialized=self._startup_initialized,
-            applying=self._applying,
-            rebuild_services_selectors_fn=self._rebuild_services_selectors,
-            check_hosts_access_fn=self._check_hosts_access,
-            update_ui_fn=self._update_ui,
-        )
+        self._retranslate()
 
-    def _init_hosts_runtime(self):
-        if self.hosts_runtime is not None:
-            return
+    def _apply_page_theme(self, tokens=None, force: bool = False) -> None:
+        _ = (tokens, force)
+        self._render_summary()
+        self._render_access()
+        self.tiles.update()
 
-        self.hosts_runtime = create_page_hosts_runtime(self._hosts.create_hosts_runtime)
+    # ── поиск по Ctrl+F ──────────────────────────────────────
 
-    def _invalidate_cache(self):
-        """Сбрасывает кеш активных доменов"""
-        self._runtime_cache.invalidate()
+    def open_search(self) -> None:
+        self.search_edit.show()
+        self.search_edit.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.search_edit.selectAll()
 
-    def _get_hosts_path_str(self) -> str:
-        return self._hosts.get_hosts_path_str()
+    def close_search(self) -> None:
+        self.search_edit.clear()
+        self.search_edit.hide()
+        self.tiles.setFocus(Qt.FocusReason.OtherFocusReason)
 
-    def _build_ui(self):
-        # Информационная заметка
-        self._build_info_note()
-        self.add_spacing(4)
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        # Фильтр зовётся и во время построения базовой страницы, до поиска.
+        if watched is getattr(self, "search_edit", None) and event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape:
+                self.close_search()
+                return True
+        return super().eventFilter(watched, event)
 
-        # Предупреждение о браузере
-        self._build_browser_warning()
-        self.add_spacing(6)
+    # ── жизненный цикл ───────────────────────────────────────
 
-        # Статус
-        self._build_status_section()
-        self.add_spacing(6)
+    def on_page_activated(self) -> None:
+        if self._snapshot is None:
+            cached = self._hosts.peek_page_snapshot()
+            if cached is not None:
+                self._set_snapshot(cached)
+        self._request_snapshot()
 
-        # Сервисы (выбор DNS-профиля по каждому сервису)
-        self._build_services_container()
-        self.add_spacing(6)
+    def cleanup(self) -> None:
+        self._cleanup_in_progress = True
+        for runtime in (self._snapshot_runtime, self._apply_runtime, self._restore_runtime):
+            try:
+                runtime.stop(blocking=False, warning_prefix="Hosts worker")
+                runtime.cancel()
+            except Exception:
+                pass
+        super().cleanup()
 
-        # Adobe
-        self._build_adobe_section()
-        self.add_spacing(6)
+    # ── чтение файла ─────────────────────────────────────────
 
-
-    def _build_services_container(self) -> None:
-        widgets = build_hosts_services_container()
-        self._services_container = widgets.container
-        self._services_layout = widgets.layout
-        self.add_widget(self._services_container)
-
-    def _clear_layout(self, layout: QLayout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            if not item:
-                continue
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-                widget.deleteLater()
-            child_layout = item.layout()
-            if child_layout is not None:
-                self._clear_layout(child_layout)
-
-    def _start_catalog_watcher(self) -> None:
-        self._catalog_watch_timer = ensure_catalog_watcher(
-            page=self,
-            timer=self._catalog_watch_timer,
-            interval_ms=5000,
-            refresh_callback=self._refresh_catalog_if_needed,
-        )
-
-    def _stop_catalog_watcher(self) -> None:
-        timer = self._catalog_watch_timer
-        if timer is None:
-            return
-        try:
-            timer.stop()
-        except Exception:
-            pass
-
-    def _reconcile_catalog_after_hidden_refresh(self) -> None:
-        handled = reconcile_catalog_after_hidden_refresh(
-            catalog_dirty=self._catalog_dirty,
-            services_layout_exists=self._services_layout is not None,
-            rebuild_services_selectors=self._refresh_services_selectors,
-            invalidate_cache=self._invalidate_cache,
-        )
-        if handled:
-            self._catalog_dirty = False
-
-    def _refresh_catalog_if_needed(self, trigger: str) -> None:
-        state = self._catalog_refresh_state_obj()
-        if self._catalog_refresh_runtime.is_running() or state.start_scheduled:
-            state.pending = str(trigger or "watcher")
-            return
-        state.pending = ""
-        self._catalog_refresh_runtime.start_qthread_worker(
-            worker_factory=lambda request_id: self._hosts.create_catalog_refresh_worker(
-                request_id,
-                trigger=str(trigger or "watcher"),
-                parent=self,
-            ),
-            on_loaded=self._on_catalog_refresh_loaded,
-            on_failed=self._on_catalog_refresh_failed,
-            on_finished=self._on_catalog_refresh_worker_finished,
-        )
-
-    def _on_catalog_refresh_loaded(self, request_id: int, trigger: str, catalog_sig) -> None:
-        if not self._catalog_refresh_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._catalog_refresh_state_obj().has_pending():
-            return
-        result = apply_catalog_refresh_signature(
-            current_signature=self._catalog_sig,
-            new_signature=catalog_sig,
-            trigger=str(trigger or "watcher"),
-            services_layout_exists=self._services_layout is not None,
-            page_visible=self.isVisible(),
-            invalidate_catalog_cache=self._hosts.invalidate_catalog_cache,
-            rebuild_services_selectors=self._refresh_services_selectors,
-            log_info=lambda message: log(message, "INFO"),
-        )
-        if not result["changed"]:
-            return
-        self._catalog_dirty = bool(result["catalog_dirty"])
-        self._catalog_sig = result["catalog_sig"]
-
-    def _on_catalog_refresh_failed(self, request_id: int, trigger: str, error: str) -> None:
-        if not self._catalog_refresh_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._catalog_refresh_state_obj().has_pending():
-            return
-        log(f"Hosts: ошибка проверки каталога ({trigger}): {error}", "ERROR")
-
-    def _on_catalog_refresh_worker_finished(self, _worker) -> None:
-        if not self._is_current_worker_finish(self.__dict__.get("_catalog_refresh_runtime"), _worker):
-            return
+    def _request_snapshot(self) -> None:
         if self._cleanup_in_progress:
             return
-        trigger = str(self._catalog_refresh_state_obj().pending or "").strip()
-        if trigger:
-            self._schedule_catalog_refresh_start()
-
-    def _schedule_catalog_refresh_start(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
+        if self._snapshot_runtime.is_running():
+            self._snapshot_pending = True
             return
-        self._catalog_refresh_state_obj().schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_catalog_refresh_start,
-            pending_when_already_scheduled=self._catalog_refresh_state_obj().pending,
+        self._snapshot_pending = False
+        self._snapshot_epoch = self._write_epoch
+        self._snapshot_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._hosts.create_snapshot_worker(request_id, self),
+            on_loaded=self._on_snapshot_loaded,
+            on_failed=self._on_snapshot_failed,
+            on_finished=self._on_snapshot_worker_finished,
         )
 
-    def _run_scheduled_catalog_refresh_start(self) -> None:
-        trigger = str(
-            self._catalog_refresh_state_obj().take_pending_for_scheduled_start(
-                cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-            )
-            or ""
-        ).strip()
-        if not trigger:
+    def _on_snapshot_loaded(self, request_id: int, snapshot) -> None:
+        if not self._snapshot_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
-        self._refresh_catalog_if_needed(trigger)
-
-    def _catalog_refresh_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_catalog_refresh_state")
-        runtime = self.__dict__.get("_catalog_refresh_runtime")
-        if state is None:
-            pending = str(self.__dict__.pop("_catalog_refresh_pending_trigger", "") or "")
-            start_scheduled = bool(self.__dict__.pop("_catalog_refresh_start_scheduled", False))
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value="",
-                pending=pending,
-                start_scheduled=start_scheduled,
-            )
-            self.__dict__["_catalog_refresh_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
-
-    @property
-    def _catalog_refresh_pending_trigger(self) -> str:
-        return str(self._catalog_refresh_state_obj().pending or "")
-
-    @_catalog_refresh_pending_trigger.setter
-    def _catalog_refresh_pending_trigger(self, value: str) -> None:
-        self._catalog_refresh_state_obj().pending = str(value or "")
-
-    @property
-    def _catalog_refresh_start_scheduled(self) -> bool:
-        return bool(self._catalog_refresh_state_obj().start_scheduled)
-
-    @_catalog_refresh_start_scheduled.setter
-    def _catalog_refresh_start_scheduled(self, value: bool) -> None:
-        self._catalog_refresh_state_obj().start_scheduled = bool(value)
-
-    def _services_add_section_title(self, text: str) -> None:
-        if self._services_layout is None:
+        if self._applying or self._snapshot_epoch != self._write_epoch:
+            # Файл читали до записи: такой снимок старее результата записи.
+            self._snapshot_pending = True
             return
-        label = build_hosts_services_section_title(text=text)
-        self._services_section_title_labels.append(label)
-        self._services_layout.addWidget(label)
+        if snapshot is not self._snapshot:
+            self._set_snapshot(snapshot)
 
-    def _services_add_widget(self, widget: QWidget) -> None:
-        if self._services_layout is None:
+    def _on_snapshot_failed(self, request_id: int, error: str) -> None:
+        if not self._snapshot_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
-        self._services_layout.addWidget(widget)
+        self._show_error(self._tr("page.hosts.error.read.title", "Не удалось прочитать hosts"), error)
 
-    def _reset_services_runtime_bindings(self) -> None:
-        self.service_combos = {}
-        self.service_icon_labels = {}
-        self.service_icon_names = {}
-        self.service_name_labels = {}
-        self.service_icon_base_colors = {}
-        self._services_section_title_labels = []
-        self._service_group_title_labels = []
-        self._service_group_chips_scrolls = []
-        self._service_group_chip_buttons = []
-        self._services_matrix_model = None
-        self._services_matrix_view = None
+    def _on_snapshot_worker_finished(self, _worker) -> None:
+        # Во время записи не перечитываем: после неё снимок запросится сам.
+        if self._snapshot_pending and not self._cleanup_in_progress and not self._applying:
+            self._request_snapshot()
 
-    def _pause_services_selectors_for_hidden_page(self) -> None:
-        self._stop_services_catalog_worker(blocking=False)
+    def _set_snapshot(self, snapshot: HostsPageSnapshot) -> None:
+        self._snapshot = snapshot
+        if self._draft is None:
+            self._draft = HostsDraft(snapshot)
+        else:
+            self._draft.rebase(snapshot)
+        self._render()
 
-    def _schedule_services_restore_after_show(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        if self.__dict__.get("_services_ui_mounted", False):
-            return
-        if self.__dict__.get("_services_restore_scheduled", False):
-            return
-        self._services_restore_scheduled = True
-        QTimer.singleShot(0, self._run_deferred_services_restore)
+    # ── запись: каждое изменение сразу ───────────────────────
 
-    def _run_deferred_services_restore(self) -> None:
-        self._services_restore_scheduled = False
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        if not self.isVisible():
-            return
-        if self.__dict__.get("_services_ui_mounted", False):
-            return
-        if self._services_catalog_runtime.is_running():
-            return
-        catalog_plan = self.__dict__.get("_services_catalog_plan")
-        if catalog_plan is not None:
-            self._build_services_selectors(catalog_plan, sync_selection=False)
-            return
-        self._rebuild_services_selectors()
+    def _commit(self, *, force: bool = False) -> None:
+        """Записывает текущий выбор. Во время записи — ставит в очередь.
 
-    def _try_build_warmed_services_catalog(self) -> bool:
-        if not self.isVisible():
-            return False
-        consumer = getattr(self._hosts, "consume_warmed_services_catalog_plan", None)
-        if not callable(consumer):
-            return False
-        warmed = consumer(
-            current_selection=dict(self._service_dns_selection),
-            direct_title=self._tr("page.hosts.group.direct", "Напрямую из hosts"),
-            ai_title=self._tr("page.hosts.group.ai", "ИИ"),
-            other_title=self._tr("page.hosts.group.other", "Остальные"),
-        )
-        if warmed is None:
-            return False
-        self._catalog_sig = warmed.catalog_signature
-        self._build_services_selectors(warmed.plan, sync_selection=True)
-        self._update_ui()
-        return True
-
-    def _cancel_deferred_services_row_build(self) -> int:
-        generation = int(self.__dict__.get("_services_build_generation", 0)) + 1
-        self._services_build_generation = generation
-        self._services_pending_row_batches = []
-        return generation
-
-    def _refresh_services_selectors(self) -> None:
-        """Обновляет список сервисов без предварительной очистки layout.
-
-        Свежий план приходит из воркера; _build_services_selectors сама решает,
-        достаточно ли in-place обновления или структура каталога изменилась и
-        нужна полная пересборка. Открытые меню выбора профиля не разрушаются.
+        force — записать, даже если выбор не менялся («Выключить все» убирает
+        и лишние строки блока net67).
         """
-        if self._services_layout is None:
-            return
-        if not self.__dict__.get("_services_ui_mounted", False):
-            self._rebuild_services_selectors()
-            return
-        self._start_services_catalog_worker()
-
-    def _rebuild_services_selectors(self) -> None:
-        if self._services_layout is None:
-            return
-        started_at = time.perf_counter()
-        if self._try_build_warmed_services_catalog():
-            self._log_ui_timing("hosts_ui.services.rebuild", started_at)
-            return
-        self._cancel_deferred_services_row_build()
-        self._clear_layout(self._services_layout)
-        self._reset_services_runtime_bindings()
-        self._services_ui_mounted = False
-        self._start_services_catalog_worker()
-        self._log_ui_timing("hosts_ui.services.rebuild", started_at)
-
-    def _start_services_catalog_worker(self) -> None:
-        self._stop_services_catalog_worker(blocking=False)
-        try:
-            self._services_catalog_runtime.start_qobject_worker(
-                parent=self,
-                worker_factory=lambda _request_id: self._hosts.create_services_catalog_worker(
-                    hosts_runtime=self.hosts_runtime,
-                    current_selection=dict(self._service_dns_selection),
-                    direct_title=self._tr("page.hosts.group.direct", "Напрямую из hosts"),
-                    ai_title=self._tr("page.hosts.group.ai", "ИИ"),
-                    other_title=self._tr("page.hosts.group.other", "Остальные"),
-                ),
-                on_loaded=self._on_services_catalog_loaded,
-                on_failed=self._on_services_catalog_failed,
-                on_finished=self._on_services_catalog_finished,
-            )
-        except Exception as exc:
-            log(f"Hosts services catalog worker failed to start: {exc}", "ERROR")
-
-    def _on_services_catalog_loaded(self, request_id: int, catalog_plan, catalog_sig) -> None:
-        if not self._services_catalog_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
-            return
-        self._catalog_sig = catalog_sig
-        if not self.isVisible():
-            self._build_services_selectors(catalog_plan, sync_selection=True)
-            return
-        self._build_services_selectors(catalog_plan, sync_selection=True)
-        self._update_ui()
-
-    def _on_services_catalog_failed(self, request_id: int, error: str) -> None:
-        if not self._services_catalog_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
-            return
-        log(f"Hosts services catalog worker failed: {error}", "ERROR")
-
-    def _on_services_catalog_finished(self, request_id: int, thread) -> None:
-        _ = (request_id, thread)
-
-    def _stop_services_catalog_worker(self, *, blocking: bool) -> None:
-        self._services_catalog_runtime.stop(
-            blocking=blocking,
-            wait_timeout_ms=7000,
-            log_fn=log,
-            warning_prefix="Hosts services catalog worker",
-        )
-
-    def _show_error(self, message: str):
-        """Показывает InfoBar с ошибкой доступа и кнопкой восстановления прав."""
-        self._hosts_error_bar, self._last_error = show_hosts_access_error(
-            current_bar=self._hosts_error_bar,
-            last_error=self._last_error,
-            message=message,
-            tr_fn=self._tr,
-            info_bar_cls=InfoBar,
-            push_button_cls=PushButton,
-            window=self.window(),
-            on_restore=self._restore_hosts_permissions,
-            log_warning=lambda text: log(text, "WARNING"),
-            log_debug=lambda text: log(text, "DEBUG"),
-        )
-
-    def _dismiss_hosts_error_bar(self):
-        """Закрывает текущий InfoBar ошибки доступа к hosts."""
-        self._last_error = None
-        dismiss_hosts_error_bar(self._hosts_error_bar)
-        self._hosts_error_bar = None
-
-    def _hide_error(self):
-        """Скрывает ошибку доступа к hosts."""
-        self._dismiss_hosts_error_bar()
-
-    def _restore_hosts_permissions(self, bar=None, btn=None):
-        """Восстанавливает стандартные права доступа к файлу hosts."""
-        _ = btn
-        if bar is not None:
-            dismiss_hosts_error_bar(bar)
-        self._hosts_error_bar = None
-        self._last_error = None
-        self._request_restore_hosts_permissions()
-
-    def create_permission_restore_worker(self, request_id: int):
-        return self._hosts.create_permission_restore_worker(request_id, self)
-
-    def _request_restore_hosts_permissions(self) -> None:
-        state = self._permission_restore_state_obj()
-        if state.is_busy():
-            state.pending = True
-            return
-        state.pending = False
-        self._permission_restore_runtime.start_qthread_worker(
-            worker_factory=lambda request_id: self.create_permission_restore_worker(request_id),
-            on_loaded=self._on_restore_hosts_permissions_finished,
-            on_failed=self._on_restore_hosts_permissions_failed,
-            on_finished=self._on_restore_hosts_permissions_worker_finished,
-        )
-
-    def _on_restore_hosts_permissions_finished(self, request_id: int, result) -> None:
-        if not self._permission_restore_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._permission_restore_state_obj().has_pending():
-            return
-        apply_restore_hosts_permissions_result_flow(
-            result=result,
-            info_bar_cls=InfoBar,
-            window=self.window(),
-            dismiss_error_bar=self._dismiss_hosts_error_bar,
-            invalidate_cache=self._invalidate_cache,
-            update_ui=self._update_ui,
-            show_error=self._show_error,
-        )
-
-    def _on_restore_hosts_permissions_failed(self, request_id: int, error: str) -> None:
-        if not self._permission_restore_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._permission_restore_state_obj().has_pending():
-            return
-        self._dismiss_hosts_error_bar()
-        self._show_error(str(error or ""))
-
-    def _on_restore_hosts_permissions_worker_finished(self, _worker) -> None:
-        if not self._is_current_worker_finish(self.__dict__.get("_permission_restore_runtime"), _worker):
-            return
-        state = self._permission_restore_state_obj()
-        if state.has_pending() and not self.__dict__.get("_cleanup_in_progress", False):
-            state.pending = False
-            self._schedule_permission_restore_start()
-
-    def _schedule_permission_restore_start(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        state = self._permission_restore_state_obj()
-        state.pending = True
-        state.schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_permission_restore_start,
-            pending_when_already_scheduled=True,
-        )
-
-    def _run_scheduled_permission_restore_start(self) -> None:
-        pending = self._permission_restore_state_obj().take_pending_for_scheduled_start(
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-        )
-        if not pending:
-            return
-        self._request_restore_hosts_permissions()
-
-    def _permission_restore_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_permission_restore_state")
-        runtime = self.__dict__.get("_permission_restore_runtime")
-        if state is None:
-            pending = bool(self.__dict__.pop("_permission_restore_pending", False))
-            start_scheduled = bool(self.__dict__.pop("_permission_restore_start_scheduled", False))
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=False,
-                pending=pending,
-                start_scheduled=start_scheduled,
-            )
-            self.__dict__["_permission_restore_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
-
-    @property
-    def _permission_restore_pending(self) -> bool:
-        return bool(self._permission_restore_state_obj().pending)
-
-    @_permission_restore_pending.setter
-    def _permission_restore_pending(self, value: bool) -> None:
-        self._permission_restore_state_obj().pending = bool(value)
-
-    @property
-    def _permission_restore_start_scheduled(self) -> bool:
-        return bool(self._permission_restore_state_obj().start_scheduled)
-
-    @_permission_restore_start_scheduled.setter
-    def _permission_restore_start_scheduled(self, value: bool) -> None:
-        self._permission_restore_state_obj().start_scheduled = bool(value)
-
-    def _check_hosts_access(self):
-        """Проверяет доступ к hosts файлу при загрузке страницы"""
-        self._request_hosts_state_load(show_access_errors=True, update_status=False)
-
-    def _apply_hosts_access_state(self, runtime_state) -> None:
-        check_hosts_access(
-            runtime_state=runtime_state,
-            hosts_path=self._get_hosts_path_str(),
-            tr_fn=self._tr,
-            hide_error=self._hide_error,
-            show_error=self._show_error,
-        )
-
-    def _build_info_note(self):
-        """Информационная заметка о том, зачем нужен hosts"""
-        widgets = build_hosts_info_note(tr_fn=self._tr)
-        self._info_text_label = widgets.info_text_label
-        self.add_widget(widgets.card)
-
-    def _build_browser_warning(self):
-        """Предупреждение о необходимости перезапуска браузера"""
-        self._browser_warning_label = build_hosts_browser_warning(tr_fn=self._tr)
-        self.add_widget(self._browser_warning_label)
-
-    def _build_status_section(self):
-        widgets = build_hosts_status_section(
-            tr_fn=self._tr,
-            active_count=0,
-            on_clear_clicked=self._on_clear_clicked,
-            on_open_hosts_file=self._open_hosts_file,
-        )
-        self.status_card = widgets.card
-        self.status_dot = widgets.status_dot
-        self.status_label = widgets.status_label
-        self.clear_btn = widgets.clear_button
-        self._open_hosts_button = widgets.open_hosts_button
-        self.add_widget(widgets.card)
-
-    def _service_row_plan_with_current_selection(self, row_plan):
-        selected_profile = self._service_dns_selection.get(row_plan.service_name, row_plan.selected_profile)
-        if selected_profile in row_plan.available_profiles:
-            return replace(
-                row_plan,
-                selected_profile=selected_profile,
-                toggle_checked=bool(row_plan.direct_only),
-            )
-        return replace(
-            row_plan,
-            selected_profile=None,
-            toggle_checked=False if row_plan.direct_only else row_plan.toggle_checked,
-        )
-
-    def _get_building_services_ui(self) -> bool:
-        return bool(getattr(self, "_building_services_ui", False))
-
-    def _set_building_services_ui(self, value: bool) -> None:
-        self._building_services_ui = bool(value)
-
-    def _bulk_apply_dns_profile(self, service_names: list[str], profile_name: str | None) -> None:
-        if self._applying:
-            return
-
-        plan = hosts_page_plans.build_bulk_profile_selection_plan(
-            current_selection=self._service_dns_selection,
-            service_names=service_names,
-            profile_name=profile_name,
-        )
-
-        if not plan.changed:
-            if plan.skipped_services:
-                log(
-                    "Hosts: профиль недоступен для: "
-                    + ", ".join(plan.skipped_services[:8])
-                    + ("…" if len(plan.skipped_services) > 8 else ""),
-                    "DEBUG",
-                )
-            return
-
-        self._service_dns_selection = dict(plan.new_selection)
-        self._sync_services_matrix_selection()
-        self._request_user_selection_save(self._service_dns_selection)
-        if plan.apply_now:
-            self._apply_current_selection()
-
-    def _build_services_selectors(self, catalog_plan, *, sync_selection: bool = False):
-        if self._services_layout is None:
-            return
-        started_at = time.perf_counter()
-        OFF_LABEL = self._tr("page.hosts.services.off", "Откл.")
-        if self._try_update_existing_services_selectors(catalog_plan, sync_selection=sync_selection):
-            self._log_ui_timing("hosts_ui.services.update_existing", started_at)
-            return
-
-        self._services_catalog_plan = catalog_plan
-        if sync_selection:
-            self._service_dns_selection = dict(catalog_plan.new_selection)
-            if catalog_plan.selection_changed:
-                self._request_user_selection_save(self._service_dns_selection)
-
-        self._cancel_deferred_services_row_build()
-        self._clear_layout(self._services_layout)
-        self._reset_services_runtime_bindings()
-
-        self._services_add_section_title(
-            tr_catalog("page.hosts.section.services", language=self._ui_language, default="Сервисы")
-        )
-
-        self._building_services_ui = True
-        try:
-            groups_started_at = time.perf_counter()
-            dns_groups = []
-            for group_plan in catalog_plan.groups:
-                if not group_plan.direct_only:
-                    dns_groups.append(
-                        replace(
-                            group_plan,
-                            rows=[
-                                self._service_row_plan_with_current_selection(row_plan)
-                                for row_plan in group_plan.rows
-                            ],
-                        )
-                    )
-                    continue
-
-                group_widgets = build_hosts_services_group(
-                    group_plan,
-                    off_label=OFF_LABEL,
-                    strong_body_label_cls=StrongBodyLabel,
-                    make_chip=lambda label: None,
-                    on_bulk_apply=self._bulk_apply_dns_profile,
-                )
-                card = group_widgets.card
-                self._service_group_title_labels.append(group_widgets.title_label)
-                for row_plan in group_plan.rows:
-                    self._append_service_row_widgets(card=card, row_plan=row_plan, off_label=OFF_LABEL)
-                self._services_add_widget(card)
-
-            if dns_groups:
-                matrix_widgets = build_hosts_services_matrix(
-                    dns_groups,
-                    off_label=OFF_LABEL,
-                    on_profile_selected=self._on_matrix_profile_selected,
-                    on_bulk_profile_selected=self._bulk_apply_dns_profile,
-                    title=self._tr("page.hosts.services.matrix", "DNS-службы"),
-                )
-                self._services_matrix_model = matrix_widgets.model
-                self._services_matrix_view = matrix_widgets.view
-                self._services_add_widget(matrix_widgets.card)
-            self._services_pending_row_batches = []
-            self._log_ui_timing("hosts_ui.services.groups.build", groups_started_at)
-        finally:
-            self._building_services_ui = False
-            self._services_ui_mounted = True
-            self._log_ui_timing("hosts_ui.services.build", started_at)
-
-    def _on_matrix_profile_selected(self, service_name: str, selected_profile: object) -> None:
-        self._on_profile_changed(service_name, selected_profile)
-
-    def _append_service_row_widgets(self, *, card, row_plan, off_label: str) -> None:
-        row_plan = self._service_row_plan_with_current_selection(row_plan)
-        row_widgets = build_hosts_service_row(
-            row_plan,
-            body_label_cls=BodyLabel,
-            combo_cls=ComboBox,
-            toggle_cls=SwitchButton,
-            off_label=off_label,
-            on_direct_toggle=self._on_direct_toggle_changed,
-            on_profile_changed=self._on_profile_changed,
-        )
-        self.service_name_labels[row_plan.service_name] = row_widgets.name_label
-        card.add_layout(row_widgets.row_layout)
-        self.service_combos[row_plan.service_name] = row_widgets.control
-        self.service_icon_labels[row_plan.service_name] = row_widgets.icon_label
-        self.service_icon_names[row_plan.service_name] = row_plan.icon_name
-        self.service_icon_base_colors[row_plan.service_name] = row_plan.icon_color
-        self._update_profile_row_visual(row_plan.service_name)
-
-    def _on_direct_toggle_changed(self, service_name: str, checked: bool) -> None:
-        if getattr(self, "_building_services_ui", False):
-            self._update_profile_row_visual(service_name)
+        draft = self._draft
+        if draft is None or self._cleanup_in_progress:
             return
         if self._applying:
-            self._update_profile_row_visual(service_name)
+            self._apply_pending = True
+            self._apply_force_pending = self._apply_force_pending or force
             return
-
-        plan = hosts_page_plans.build_mode_toggle_plan(
-            current_selection=self._service_dns_selection,
-            service_name=service_name,
-            checked=checked,
-        )
-        self._service_dns_selection, should_apply = apply_direct_toggle_ui(
-            plan=plan,
-            service_name=service_name,
-            service_combos=self.service_combos,
-            toggle_cls=SwitchButton,
-            get_building_state=self._get_building_services_ui,
-            set_building_state=self._set_building_services_ui,
-            update_profile_visual=self._update_profile_row_visual,
-        )
-        self._request_user_selection_save(self._service_dns_selection)
-        if should_apply:
-            self._apply_current_selection()
-
-    def _build_adobe_section(self):
-        self.add_section_title(text_key="page.hosts.section.additional")
-        widgets = build_hosts_adobe_section(
-            tr_fn=self._tr,
-            adobe_active=bool(self.__dict__.get("_adobe_active", False)),
-            on_toggle_adobe=self._toggle_adobe,
-            switch_button_cls=SwitchButton,
-        )
-        self._adobe_desc_label = widgets.description_label
-        self._adobe_title_label = widgets.title_label
-        self.adobe_switch = widgets.switch
-        self.add_widget(widgets.card)
-
-    # ═══════════════════════════════════════════════════════════════
-    # ОБРАБОТЧИКИ
-    # ═══════════════════════════════════════════════════════════════
-
-    def _on_profile_changed(self, service_name: str, selected_profile: object):
-        if getattr(self, "_building_services_ui", False):
-            self._update_profile_row_visual(service_name)
+        if not force and not draft.has_user_changes():
             return
-        if self._applying:
-            self._update_profile_row_visual(service_name)
-            return
-
-        plan = hosts_page_plans.build_profile_selection_plan(
-            current_selection=self._service_dns_selection,
-            service_name=service_name,
-            selected_profile=selected_profile,
-        )
-        self._service_dns_selection, should_apply = apply_profile_selection_ui(
-            plan=plan,
-            service_name=service_name,
-            update_profile_visual=self._update_profile_row_visual,
-        )
-        self._sync_services_matrix_selection()
-        self._request_user_selection_save(self._service_dns_selection)
-        if should_apply:
-            self._apply_current_selection()
-
-    def _sync_services_matrix_selection(self) -> None:
-        model = self.__dict__.get("_services_matrix_model")
-        if model is not None:
-            model.update_selection(dict(self._service_dns_selection))
-
-    @staticmethod
-    def _services_catalog_shape_key(catalog_plan) -> tuple:
-        groups_key = []
-        for group_plan in getattr(catalog_plan, "groups", []) or []:
-            rows_key = []
-            for row_plan in getattr(group_plan, "rows", []) or []:
-                rows_key.append(
-                    (
-                        str(getattr(row_plan, "service_name", "") or ""),
-                        str(getattr(row_plan, "icon_name", "") or ""),
-                        str(getattr(row_plan, "icon_color", "") or ""),
-                        bool(getattr(row_plan, "direct_only", False)),
-                        tuple(getattr(row_plan, "available_profiles", []) or []),
-                        tuple(getattr(row_plan, "profile_items", []) or []),
-                    )
-                )
-            groups_key.append(
-                (
-                    str(getattr(group_plan, "title", "") or ""),
-                    bool(getattr(group_plan, "direct_only", False)),
-                    tuple(getattr(group_plan, "common_profiles", []) or []),
-                    tuple(rows_key),
-                )
-            )
-        return tuple(groups_key)
-
-    def _try_update_existing_services_selectors(self, catalog_plan, *, sync_selection: bool) -> bool:
-        previous_plan = self.__dict__.get("_services_catalog_plan")
-        if not self.__dict__.get("_services_ui_mounted", False):
-            return False
-        if previous_plan is None:
-            return False
-        if self._services_catalog_shape_key(previous_plan) != self._services_catalog_shape_key(catalog_plan):
-            return False
-
-        self._services_catalog_plan = catalog_plan
-        if sync_selection:
-            self._service_dns_selection = dict(catalog_plan.new_selection)
-            if catalog_plan.selection_changed:
-                self._request_user_selection_save(self._service_dns_selection)
-        self._update_existing_services_selector_state(catalog_plan)
-        return True
-
-    def _update_existing_services_selector_state(self, catalog_plan) -> None:
-        was_building = self._get_building_services_ui()
-        self._set_building_services_ui(True)
-        try:
-            for group_plan in getattr(catalog_plan, "groups", []) or []:
-                for row_plan in getattr(group_plan, "rows", []) or []:
-                    row_plan = self._service_row_plan_with_current_selection(row_plan)
-                    service_name = row_plan.service_name
-                    control = self.service_combos.get(service_name)
-                    if _is_fluent_combo(control):
-                        target_idx = control.findData(row_plan.selected_profile) if row_plan.selected_profile else 0
-                        if target_idx >= 0 and control.currentIndex() != target_idx:
-                            control.blockSignals(True)
-                            control.setCurrentIndex(target_idx)
-                            control.blockSignals(False)
-                    elif isinstance(control, SwitchButton):
-                        control.blockSignals(True)
-                        control.setEnabled(bool(row_plan.toggle_enabled))
-                        control.setChecked(bool(row_plan.toggle_checked))
-                        control.blockSignals(False)
-                    self._update_profile_row_visual(service_name)
-            self._sync_services_matrix_selection()
-        finally:
-            self._set_building_services_ui(was_building)
-
-    def _update_profile_row_visual(self, service_name: str):
-        combo = self.service_combos.get(service_name)
-        icon_label = self.service_icon_labels.get(service_name)
-        tokens = get_theme_tokens()
-        base_color = self.service_icon_base_colors.get(service_name)
-        if not base_color:
-            base_color = tokens.accent_hex
-        if not combo or not icon_label:
-            return
-
-        enabled = False
-        if _is_fluent_combo(combo):
-            enabled = combo.currentData() is not None
-        elif isinstance(combo, SwitchButton):
-            enabled = bool(combo.isChecked())
-        color = base_color if enabled else tokens.fg_faint
-        icon_name = self.service_icon_names.get(service_name)
-        try:
-            icon = get_themed_qta_icon(icon_name or "fa5s.globe", color=color)
-        except Exception:
-            icon = get_themed_qta_icon("fa5s.globe", color=color)
-        icon_label.setPixmap(icon.pixmap(18, 18))
-
-    def _apply_current_selection(self):
-        if self._applying:
-            return
-        self._request_user_selection_save(self._service_dns_selection)
-        self._run_operation('apply_selection', dict(self._service_dns_selection))
-
-    def _on_clear_clicked(self):
-        if self._applying:
-            return
-        if MessageBox is not None:
-            body = self._tr(
-                "page.hosts.dialog.clear.body",
-                "Будет удалён только блок записей net67. Ручные записи в файле hosts останутся на месте.",
-            )
-            box = MessageBox(
-                self._tr("page.hosts.dialog.clear.title", "Очистить записи net67?"),
-                body,
-                self.window(),
-            )
-            set_message_box_button_accessibility(
-                box,
-                yes_name="Очистить записи net67 из hosts",
-                yes_description=body,
-                cancel_name="Отменить очистку hosts",
-                cancel_description="Закрывает диалог без очистки hosts.",
-            )
-            if not box.exec():
-                return
-        self._clear_hosts()
-
-    def _clear_hosts(self):
-        """Очищает hosts"""
-        if self._applying:
-            return
-
-        self._run_operation('clear_all')
-
-    def _open_hosts_file(self):
-        self._request_open_hosts_file()
-
-    def create_open_hosts_file_worker(self, request_id: int):
-        return self._hosts.create_open_hosts_file_worker(request_id, self)
-
-    def _request_open_hosts_file(self) -> None:
-        state = self._open_file_state_obj()
-        if state.is_busy():
-            state.pending = True
-            return
-        state.pending = False
-        self._open_file_runtime.start_qthread_worker(
-            worker_factory=lambda request_id: self.create_open_hosts_file_worker(request_id),
-            on_loaded=self._on_open_hosts_file_finished,
-            on_failed=self._on_open_hosts_file_failed,
-            on_finished=self._on_open_hosts_file_worker_finished,
+        self._applying = True
+        self._just_written = False
+        self._write_epoch += 1
+        selection = draft.selection()
+        adobe = draft.adobe if draft.adobe_changed else None
+        self._render_changes()
+        self._apply_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._hosts.create_apply_worker(request_id, selection, adobe, self),
+            on_loaded=self._on_apply_finished,
+            on_failed=self._on_apply_failed,
         )
 
-    def _on_open_hosts_file_finished(self, request_id: int, result) -> None:
-        if not self._open_file_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
-            return
-        if self._open_file_state_obj().has_pending():
-            return
-        if result.success:
-            return
-        self._show_open_hosts_file_error(str(getattr(result, "message", "") or getattr(result, "error", "")))
+    def _take_pending(self) -> tuple[bool, bool]:
+        pending, force = self._apply_pending, self._apply_force_pending
+        self._apply_pending = False
+        self._apply_force_pending = False
+        return pending, force
 
-    def _on_open_hosts_file_failed(self, request_id: int, error: str) -> None:
-        if not self._open_file_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+    def _on_apply_finished(self, request_id: int, result) -> None:
+        if not self._apply_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
-        if self._open_file_state_obj().has_pending():
+        self._applying = False
+        pending, force = self._take_pending()
+        snapshot = getattr(result, "snapshot", None)
+        if not getattr(result, "success", False):
+            self._fail_write(str(getattr(result, "message", "") or ""), snapshot)
             return
-        self._show_open_hosts_file_error(str(error))
+        self._just_written = True
+        if snapshot is not None:
+            # Записанное уходит из черновика само; остаётся только то, что
+            # пользователь поменял во время записи.
+            self._set_snapshot(snapshot)
+        if pending and (force or (self._draft is not None and self._draft.has_user_changes())):
+            self._commit(force=force)
+        elif snapshot is None:
+            self._request_snapshot()
+        elif self._draft is not None and self._draft.has_user_changes():
+            # Снимок не совпал с записанным — правду показывает файл.
+            self._draft.reset()
+            self._render()
+        if self._snapshot_pending and not self._applying:
+            self._request_snapshot()
+        self._render_changes()
 
-    def _on_open_hosts_file_worker_finished(self, _worker) -> None:
-        if not self._is_current_worker_finish(self.__dict__.get("_open_file_runtime"), _worker):
+    def _on_apply_failed(self, request_id: int, error: str) -> None:
+        if not self._apply_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
-        state = self._open_file_state_obj()
-        if state.has_pending() and not self._cleanup_in_progress:
-            state.pending = False
-            self._schedule_open_hosts_file_start()
+        self._applying = False
+        self._take_pending()
+        self._fail_write(error, None)
 
-    def _schedule_open_hosts_file_start(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
+    def _fail_write(self, message: str, snapshot) -> None:
+        """Запись не удалась: плитки возвращаются к тому, что реально в файле."""
+        if self._draft is not None:
+            self._draft.reset()
+        if snapshot is not None:
+            self._set_snapshot(snapshot)
+        self._render()
+        self._show_error(self._tr("page.hosts.apply_failed.title", "Не удалось записать hosts"), message)
+        self._request_snapshot()
+
+    def _restore_permissions(self) -> None:
+        if self._restore_runtime.is_running():
             return
-        state = self._open_file_state_obj()
-        state.pending = True
-        state.schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_open_hosts_file_start,
-            pending_when_already_scheduled=True,
+        self.restore_button.setEnabled(False)
+        self._restore_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._hosts.create_permission_restore_worker(request_id, self),
+            on_loaded=self._on_restore_finished,
+            on_failed=lambda request_id, error: self._on_restore_finished(request_id, None, error),
         )
 
-    def _run_scheduled_open_hosts_file_start(self) -> None:
-        pending = self._open_file_state_obj().take_pending_for_scheduled_start(
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-        )
-        if not pending:
+    def _on_restore_finished(self, request_id: int, result, error: str = "") -> None:
+        if not self._restore_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
-        self._request_open_hosts_file()
-
-    def _open_file_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_open_file_state")
-        runtime = self.__dict__.get("_open_file_runtime")
-        if state is None:
-            pending = bool(self.__dict__.pop("_open_file_pending", False))
-            start_scheduled = bool(self.__dict__.pop("_open_file_start_scheduled", False))
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=False,
-                pending=pending,
-                start_scheduled=start_scheduled,
-            )
-            self.__dict__["_open_file_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
-
-    @property
-    def _open_file_pending(self) -> bool:
-        return bool(self._open_file_state_obj().pending)
-
-    @_open_file_pending.setter
-    def _open_file_pending(self, value: bool) -> None:
-        self._open_file_state_obj().pending = bool(value)
-
-    @property
-    def _open_file_start_scheduled(self) -> bool:
-        return bool(self._open_file_state_obj().start_scheduled)
-
-    @_open_file_start_scheduled.setter
-    def _open_file_start_scheduled(self, value: bool) -> None:
-        self._open_file_state_obj().start_scheduled = bool(value)
-
-    def _show_open_hosts_file_error(self, error: str) -> None:
-        if InfoBar:
-            InfoBar.warning(
-                title=self._tr("page.hosts.open.error.title", "Ошибка"),
-                content=self._tr("page.hosts.open.error.content", "Не удалось открыть: {error}", error=error),
+        self.restore_button.setEnabled(True)
+        if result is not None and getattr(result, "success", False):
+            InfoBar.success(
+                title=self._tr("page.hosts.permissions.restored.title", "Права восстановлены"),
+                content=self._tr("page.hosts.permissions.restored.content", "Теперь сервисы снова можно включать."),
+                duration=4000,
                 parent=self.window(),
             )
-
-    def _toggle_adobe(self, checked: bool):
-        if self._applying:
-            # Revert the switch without re-triggering the signal
-            self.adobe_switch.blockSignals(True)
-            self.adobe_switch.setChecked(not checked)
-            self.adobe_switch.blockSignals(False)
-            return
-        self._run_operation('adobe_add' if checked else 'adobe_remove')
-
-    def _run_operation(self, operation: str, payload=None):
-        self._cleanup_in_progress = False
-        runtime = start_hosts_operation(
-            operation_runtime=self._operation_runtime,
-            hosts_runtime=self.hosts_runtime,
-            applying=self._applying,
-            operation=operation,
-            payload=payload,
-            create_operation_worker_fn=self._hosts.create_operation_worker,
-            on_operation_complete=self._on_operation_complete,
-            on_thread_finished=self._on_hosts_thread_finished,
-            parent=self,
-        )
-        if runtime is None:
-            return
-        self._applying = runtime["applying"]
-        self._current_operation = runtime["current_operation"]
-
-    def _on_hosts_thread_finished(self) -> None:
-        pass
-
-    def _request_user_selection_save(self, selection: dict[str, str]) -> None:
-        payload = dict(selection or {})
-        state = self._selection_save_state_obj()
-        if state.is_busy():
-            state.pending = payload
-            return
-        self._selection_save_runtime.start_qthread_worker(
-            worker_factory=lambda request_id: self._hosts.create_selection_save_worker(
-                request_id,
-                payload,
-                self,
-            ),
-            on_loaded=self._on_user_selection_save_finished,
-            on_failed=self._on_user_selection_save_failed,
-            on_finished=self._on_user_selection_save_worker_finished,
-        )
-
-    def _on_user_selection_save_finished(self, request_id: int, saved: bool) -> None:
-        if not self._selection_save_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._selection_save_state_obj().has_pending():
-            return
-        if not saved:
-            log("Hosts: выбор профилей не был сохранён", "WARNING")
-
-    def _on_user_selection_save_failed(self, request_id: int, error: str) -> None:
-        if not self._selection_save_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        if self._selection_save_state_obj().has_pending():
-            return
-        log(f"Hosts: ошибка сохранения выбора профилей: {error}", "ERROR")
-
-    def _on_user_selection_save_worker_finished(self, _worker) -> None:
-        if not self._is_current_worker_finish(self.__dict__.get("_selection_save_runtime"), _worker):
-            return
-        if self._cleanup_in_progress:
-            return
-        if self._selection_save_state_obj().has_pending():
-            self._schedule_user_selection_save_start()
-
-    def _schedule_user_selection_save_start(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        self._selection_save_state_obj().schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_user_selection_save_start,
-        )
-
-    def _run_scheduled_user_selection_save_start(self) -> None:
-        selection = self._selection_save_state_obj().take_pending_for_scheduled_start(
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-        )
-        if selection is None:
-            return
-        self._request_user_selection_save(selection)
-
-    def _selection_save_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_selection_save_state")
-        runtime = self.__dict__.get("_selection_save_runtime")
-        if state is None:
-            pending = self.__dict__.pop("_selection_save_pending", None)
-            start_scheduled = bool(self.__dict__.pop("_selection_save_start_scheduled", False))
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=None,
-                pending=pending,
-                start_scheduled=start_scheduled,
-            )
-            self.__dict__["_selection_save_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
-
-    @property
-    def _selection_save_pending(self):
-        return self._selection_save_state_obj().pending
-
-    @_selection_save_pending.setter
-    def _selection_save_pending(self, value) -> None:
-        self._selection_save_state_obj().pending = value
-
-    @property
-    def _selection_save_start_scheduled(self) -> bool:
-        return bool(self._selection_save_state_obj().start_scheduled)
-
-    @_selection_save_start_scheduled.setter
-    def _selection_save_start_scheduled(self, value: bool) -> None:
-        self._selection_save_state_obj().start_scheduled = bool(value)
-
-    def _on_operation_complete(self, success: bool, message: str):
-        if self._cleanup_in_progress:
-            return
-        state = complete_hosts_operation(
-            current_operation=self._current_operation,
-            success=success,
-            message=message,
-            hosts_path=self._get_hosts_path_str(),
-            invalidate_cache=self._invalidate_cache,
-            update_ui=self._update_ui,
-            reset_profiles_ui=self._reset_all_service_profiles,
-            hide_error=self._hide_error,
-            show_error=self._show_error,
-        )
-        self._current_operation = state["current_operation"]
-        self._applying = state["applying"]
-
-    def _reset_all_service_profiles(self) -> None:
-        """Сбрасывает выбор профилей в UI и settings.json (после очистки hosts)."""
-        self._service_dns_selection = reset_all_service_profiles_ui(
-            service_combos=self.service_combos,
-            is_fluent_combo=_is_fluent_combo,
-            toggle_cls=SwitchButton,
-            get_building_state=self._get_building_services_ui,
-            set_building_state=self._set_building_services_ui,
-            update_profile_visual=self._update_profile_row_visual,
-            save_user_selection_fn=self._request_user_selection_save,
-        )
-        self._sync_services_matrix_selection()
-
-    def _update_ui(self):
-        """Обновляет весь UI"""
-        started_at = time.perf_counter()
-        self._request_hosts_state_load(show_access_errors=False, update_status=True, started_at=started_at)
-
-    def _request_hosts_state_load(
-        self,
-        *,
-        show_access_errors: bool,
-        update_status: bool,
-        started_at: float | None = None,
-    ) -> None:
-        if self._cleanup_in_progress:
-            return
-        context = {
-            "show_access_errors": bool(show_access_errors),
-            "update_status": bool(update_status),
-            "started_at": started_at,
-        }
-        state = self._state_load_state_obj()
-        if self._state_load_runtime.is_running() or state.start_scheduled:
-            pending = dict(state.pending or {})
-            state.pending = {
-                "show_access_errors": bool(pending.get("show_access_errors")) or bool(show_access_errors),
-                "update_status": bool(pending.get("update_status")) or bool(update_status),
-            }
-            return
-
-        self._state_load_request_context = context
-        self._state_load_runtime.start_qthread_worker(
-            worker_factory=lambda request_id: self._hosts.create_state_load_worker(
-                request_id,
-                self.hosts_runtime,
-                self,
-            ),
-            on_loaded=self._on_hosts_state_loaded,
-            on_failed=self._on_hosts_state_failed,
-            on_finished=self._on_hosts_state_worker_finished,
-        )
-
-    def _on_hosts_state_loaded(self, request_id: int, runtime_state) -> None:
-        if not self._state_load_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        pending = dict(self._state_load_state_obj().pending or {})
-        if bool(pending.get("show_access_errors")) or bool(pending.get("update_status")):
-            return
-        self._runtime_cache.runtime_state = runtime_state
-        self._runtime_cache.active_domains = set(getattr(runtime_state, "active_domains", frozenset()) or frozenset())
-        context = dict(self._state_load_request_context or {})
-        if bool(context.get("show_access_errors")):
-            self._apply_hosts_access_state(runtime_state)
-        if bool(context.get("update_status")):
-            self._apply_hosts_runtime_state_to_ui(runtime_state, started_at=context.get("started_at"))
-
-    def _on_hosts_state_failed(self, request_id: int, error: str) -> None:
-        if not self._state_load_runtime.is_current(
-            request_id,
-            cleanup_in_progress=self._cleanup_in_progress,
-        ):
-            return
-        pending = dict(self._state_load_state_obj().pending or {})
-        if bool(pending.get("show_access_errors")) or bool(pending.get("update_status")):
-            return
-        log(f"Hosts: ошибка загрузки состояния: {error}", "ERROR")
-        if bool((self._state_load_request_context or {}).get("show_access_errors")):
+        else:
             self._show_error(
-                self._tr("page.hosts.error.read_hosts", "Ошибка чтения hosts: {error}", error=str(error or ""))
+                self._tr("page.hosts.permissions.failed.title", "Не удалось восстановить права"),
+                error or str(getattr(result, "message", "") or ""),
+            )
+        self._request_snapshot()
+
+    def _show_error(self, title: str, content: str) -> None:
+        InfoBar.error(title=title, content=str(content or ""), duration=8000, parent=self.window())
+
+    # ── действия пользователя ────────────────────────────────
+
+    def _on_search_changed(self, text: str) -> None:
+        self._search = str(text or "").strip().casefold()
+        self._render_tiles()
+
+    def _on_tile_activated(self, key: str) -> None:
+        """Тумблер: сервис «напрямую» или блокировка Adobe."""
+        draft = self._draft
+        if draft is None:
+            return
+        if key == ADOBE_TILE_KEY:
+            draft.set_adobe(not draft.adobe)
+            self._after_change(key)
+            return
+        entry = draft.snapshot.service(key)
+        if entry is None or entry.unavailable_reason or not entry.is_direct:
+            return
+        draft.set(key, None if draft.value(key) else (entry.profiles[0] if entry.profiles else None))
+        self._after_change(key)
+
+    def _after_change(self, key: str = "") -> None:
+        self.tiles.flash(key)
+        self._render_changes()
+        self._commit()
+
+    def _render_changes(self) -> None:
+        """После щелчка меняются только плитки, сводка и «DNS для всех»."""
+        self._render_summary()
+        self._render_dns_all()
+        self._render_tiles()
+
+    def _set_service_profile(self, service_name: str, profile_id) -> None:
+        if self._draft is not None and self._draft.set(service_name, profile_id):
+            self._after_change(service_name)
+
+    def _set_all_dns(self, profile_id) -> None:
+        draft = self._draft
+        if draft is None:
+            return
+        _changed, skipped = draft.set_all_dns(profile_id)
+        if skipped:
+            InfoBar.info(
+                title=self._tr("page.hosts.dns_all.skipped.title", "Не у всех сервисов есть этот профиль"),
+                content=self._tr("page.hosts.dns_all.skipped.content", "Оставлены как были: {names}").format(
+                    names=", ".join(skipped)
+                ),
+                duration=6000,
+                parent=self.window(),
+            )
+        self._after_change()
+
+    def _turn_all_off(self) -> None:
+        draft = self._draft
+        if draft is None:
+            return
+        for entry in draft.snapshot.services:
+            draft.set(entry.name, None)
+        block = draft.snapshot.block(BLOCK_ZAPRETGUI)
+        self._render_changes()
+        # Запись и тогда, когда всё уже выключено: уберутся лишние строки блока.
+        self._commit(force=block is not None)
+
+    # ── отрисовка ────────────────────────────────────────────
+
+    def _render(self) -> None:
+        self._render_access()
+        self._render_summary()
+        self._render_dns_all()
+        self._render_tiles()
+
+    def _render_access(self) -> None:
+        snapshot = self._snapshot
+        text = ""
+        if snapshot is not None and not snapshot.readable:
+            text = self._tr(
+                "page.hosts.notice.no_access",
+                "Нет доступа к файлу hosts. Часто его блокирует антивирус. Кнопка справа вернёт стандартные права Windows.",
+            )
+        elif snapshot is not None and snapshot.read_only:
+            text = self._tr(
+                "page.hosts.notice.read_only",
+                "Файл hosts защищён от записи (стоит «только чтение»). Программа сама защиту не снимает — нажмите кнопку справа, если хотите менять файл.",
+            )
+        self.access_card.setVisible(bool(text))
+        if text:
+            self.access_label.setText(text)
+            set_state_text(self.access_label, text)
+            self.access_icon.setPixmap(
+                get_cached_qta_pixmap("fa5s.lock", color=get_semantic_palette().warning, size=18)
             )
 
-    def _on_hosts_state_worker_finished(self, _worker) -> None:
-        if not self._is_current_worker_finish(self.__dict__.get("_state_load_runtime"), _worker):
-            return
-        pending = dict(self._state_load_state_obj().pending or {})
-        if self._cleanup_in_progress:
-            return
-        if bool(pending.get("show_access_errors")) or bool(pending.get("update_status")):
-            self._schedule_hosts_state_load_start()
-
-    def _schedule_hosts_state_load_start(self) -> None:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return
-        self._state_load_state_obj().schedule_start(
-            QTimer.singleShot,
-            self._run_scheduled_hosts_state_load_start,
-            pending_when_already_scheduled=self._state_load_state_obj().pending,
-        )
-
-    def _run_scheduled_hosts_state_load_start(self) -> None:
-        pending = dict(
-            self._state_load_state_obj().take_pending_for_scheduled_start(
-                cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-            )
-            or {}
-        )
-        show_access_errors = bool(pending.get("show_access_errors"))
-        update_status = bool(pending.get("update_status"))
-        if not show_access_errors and not update_status:
-            return
-        self._request_hosts_state_load(
-            show_access_errors=show_access_errors,
-            update_status=update_status,
-        )
-
-    def _state_load_state_obj(self) -> LatestValueWorkerState:
-        state = self.__dict__.get("_state_load_state")
-        runtime = self.__dict__.get("_state_load_runtime")
-        if state is None:
-            pending = dict(
-                self.__dict__.pop(
-                    "_state_load_pending",
-                    {"show_access_errors": False, "update_status": False},
-                )
-                or {}
-            )
-            start_scheduled = bool(self.__dict__.pop("_state_load_start_scheduled", False))
-            if not bool(pending.get("show_access_errors")) and not bool(pending.get("update_status")):
-                pending_value = None
-            else:
-                pending_value = {
-                    "show_access_errors": bool(pending.get("show_access_errors")),
-                    "update_status": bool(pending.get("update_status")),
-                }
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=None,
-                pending=pending_value,
-                start_scheduled=start_scheduled,
-            )
-            self.__dict__["_state_load_state"] = state
-        elif getattr(state, "runtime", None) is None and runtime is not None:
-            state.runtime = runtime
-        return state
-
-    @property
-    def _state_load_pending(self) -> dict[str, bool]:
-        pending = dict(self._state_load_state_obj().pending or {})
-        return {
-            "show_access_errors": bool(pending.get("show_access_errors")),
-            "update_status": bool(pending.get("update_status")),
-        }
-
-    @_state_load_pending.setter
-    def _state_load_pending(self, value: dict[str, bool]) -> None:
-        pending = dict(value or {})
-        if not bool(pending.get("show_access_errors")) and not bool(pending.get("update_status")):
-            self._state_load_state_obj().pending = None
-            return
-        self._state_load_state_obj().pending = {
-            "show_access_errors": bool(pending.get("show_access_errors")),
-            "update_status": bool(pending.get("update_status")),
-        }
-
-    @property
-    def _state_load_start_scheduled(self) -> bool:
-        return bool(self._state_load_state_obj().start_scheduled)
-
-    @_state_load_start_scheduled.setter
-    def _state_load_start_scheduled(self, value: bool) -> None:
-        self._state_load_state_obj().start_scheduled = bool(value)
-
-    def _apply_hosts_runtime_state_to_ui(self, runtime_state, *, started_at: float | None = None) -> None:
-        started_at = float(started_at or time.perf_counter())
-        status_display = hosts_page_plans.build_status_display_plan(
-            runtime_state,
-            active_text=self._tr("page.hosts.status.active_domains", "Активно {count} доменов", count=len(runtime_state.active_domains)),
-            none_text=self._tr("page.hosts.status.none_active", "Нет активных"),
-        )
+    def _render_summary(self) -> None:
+        snapshot = self._snapshot
         tokens = get_theme_tokens()
         semantic = get_semantic_palette()
-
-        # Статус
-        if status_display.dot_active:
-            self.status_dot.setStyleSheet(f"color: {semantic.success}; font-size: 12px;")
+        if snapshot is None:
+            services, lines = 0, 0
+            title = self._tr("page.hosts.loading", "Загрузка…")
         else:
-            self.status_dot.setStyleSheet(f"color: {tokens.fg_faint}; font-size: 12px;")
-        self.status_label.setText(status_display.label_text)
-        status_accessible_text = self._tr(
-            "page.hosts.status.accessible_name",
-            "Статус hosts: {status}",
-            status=status_display.label_text,
+            block = snapshot.block(BLOCK_ZAPRETGUI)
+            lines = block.count if block is not None else 0
+            services = sum(1 for entry in snapshot.services if entry.current)
+            title = (
+                self._tr("page.hosts.summary.services", "Сервисов включено в hosts")
+                if services
+                else self._tr("page.hosts.summary.off", "Сейчас net67 ничего не прописывает в hosts")
+            )
+        self.summary_count.setText(str(services))
+        self.summary_count.setVisible(snapshot is not None and services > 0)
+        accent = QColor(themeColor())
+        self.summary_count.setStyleSheet(f"color: {accent.name()}; background: transparent;")
+        self.summary_label.setText(title)
+        detail = self._tr("page.hosts.summary.lines", "Строк от net67 в файле: {lines}", lines=lines) if lines else ""
+        self.summary_detail.setText(detail)
+        self.summary_detail.setVisible(bool(detail))
+        if self._applying:
+            status, color, icon = self._tr("page.hosts.summary.writing", "Записываю…"), accent.name(), "fa5s.sync-alt"
+        elif self._just_written:
+            status = self._tr(
+                "page.hosts.summary.written",
+                "Записано — перезапустите браузер, чтобы изменения заработали",
+            )
+            color, icon = semantic.success, "fa5s.check-circle"
+        else:
+            status, color, icon = "", tokens.fg_muted, ""
+        self.summary_status.set_status(status, color, icon)
+        spoken = " ".join(part for part in (str(services) if services else "", title, detail, status) if part)
+        set_state_text(self.summary_label, spoken)
+        self.all_off_button.setEnabled(snapshot is not None)
+
+    def _render_dns_all(self) -> None:
+        draft = self._draft
+        self.dns_all_button.setEnabled(draft is not None and bool(draft.snapshot.dns_profiles))
+        if draft is None:
+            return
+        common = draft.dns_common_value()
+        items = [(None, self._tr("page.hosts.profile.off", "Выкл."))] + list(draft.snapshot.dns_profiles)
+        menu_key = (tuple(items), common)
+        if menu_key == self._dns_all_menu_key:
+            return
+        self._dns_all_menu_key = menu_key
+        menu = RoundMenu(parent=self.dns_all_button)
+        for position, (profile_id, label) in enumerate(items):
+            selected = common != MIXED and common == profile_id
+            if selected:
+                action = Action(FluentIcon.ACCEPT, label, parent=menu)
+            elif profile_id is None:
+                action = Action(label, parent=menu)
+            else:
+                icon_name, color = profile_icon(profile_id, position - 1)
+                action = Action(QIcon(get_cached_qta_pixmap(icon_name, color=color, size=16)), label, parent=menu)
+            action.triggered.connect(lambda _checked=False, value=profile_id: self._set_all_dns(value))
+            menu.addAction(action)
+        old_menu = self.dns_all_button.menu()
+        self.dns_all_button.setMenu(menu)
+        if old_menu is not None:
+            old_menu.deleteLater()
+
+    def _render_tiles(self) -> None:
+        draft = self._draft
+        if draft is None:
+            self.tiles.set_tiles([HostsTile(kind="empty", title=self._tr("page.hosts.loading", "Загрузка…"))])
+            return
+        labels = dict(draft.snapshot.dns_profiles)
+        off_label = self._tr("page.hosts.profile.off", "Выкл.")
+        on_state = self._tr("page.hosts.state.on", "включён")
+        off_state = self._tr("page.hosts.state.off", "выключен")
+        ipv6_hint = self._tr("page.hosts.hint.ipv6", "Нужен IPv6 — сейчас его нет")
+        writing_text = self._tr("page.hosts.state.changed", "записывается")
+        all_choices = tuple(
+            HostsChoice(profile_id, label, *profile_icon(profile_id, position))
+            for position, (profile_id, label) in enumerate(draft.snapshot.dns_profiles)
         )
-        set_state_text(self.status_label, status_accessible_text)
-        set_state_text(getattr(self, "status_card", None), status_accessible_text)
-        set_state_text(
-            self.status_dot,
-            self._tr(
-                "page.hosts.status.dot.active.accessible_name",
-                "Индикатор hosts: есть активные домены",
+        grouped: dict[str, list[HostsTile]] = {CATEGORY_DIRECT: [], CATEGORY_AI: [], CATEGORY_OTHER: []}
+        for entry in draft.snapshot.services:
+            if self._search and self._search not in entry.name.casefold():
+                continue
+            value = draft.value(entry.name)
+            pending = draft.is_changed(entry.name) and self._applying
+            title, note = split_service_title(entry.name)
+            if entry.unavailable_reason:
+                note = ipv6_hint
+            if entry.is_direct:
+                state = on_state if value else off_state
+            else:
+                state = labels.get(value, value) if value else off_label
+            accessible = f"{entry.name}: {state}" + (f", {writing_text}" if pending else "")
+            grouped.setdefault(entry.category, []).append(
+                HostsTile(
+                    kind="tile",
+                    title=title,
+                    key=entry.name,
+                    note=note,
+                    icon_name=entry.icon_name,
+                    icon_color=entry.icon_color,
+                    is_on=bool(value),
+                    has_switch=entry.is_direct and not entry.unavailable_reason,
+                    choices=() if entry.is_direct or entry.unavailable_reason else tuple(
+                        replace(choice, available=choice.profile_id in entry.profiles) for choice in all_choices
+                    ),
+                    selected=None if entry.is_direct else value,
+                    state_text="" if entry.is_direct else state,
+                    pending=pending,
+                    enabled=not entry.unavailable_reason,
+                    accessible_text=accessible,
+                )
             )
-            if status_display.dot_active
-            else self._tr(
-                "page.hosts.status.dot.inactive.accessible_name",
-                "Индикатор hosts: нет активных доменов",
-            ),
-        )
+        tiles: list[HostsTile] = []
+        for category in (CATEGORY_DIRECT, CATEGORY_AI, CATEGORY_OTHER):
+            items = grouped.get(category) or []
+            if not items:
+                continue
+            key, default = _GROUP_TITLES[category]
+            on_count = sum(1 for item in items if item.is_on)
+            counter = self._tr("page.hosts.group.counter", "{on} из {total}", on=on_count, total=len(items))
+            hint_key, hint_default = _GROUP_HINTS[category]
+            counter = f"{counter}  ·  {self._tr(hint_key, hint_default)}"
+            # У групп с DNS-профилями справа легенда: какая иконка — какой провайдер.
+            legend = all_choices if any(item.has_choices for item in items) else ()
+            tiles.append(HostsTile(kind="group", title=self._tr(key, default), counter=counter, legend=legend))
+            tiles.extend(items)
 
-        # Обновляем иконки под текущие выборы
-        for name in list(self.service_combos.keys()):
-            self._update_profile_row_visual(name)
+        adobe_title = self._tr("page.hosts.adobe.title", "Блокировать активацию Adobe")
+        if not self._search or self._search in adobe_title.casefold():
+            tiles.append(HostsTile(kind="group", title=self._tr("page.hosts.group.blocks", "Блокировки")))
+            tiles.append(
+                HostsTile(
+                    kind="tile",
+                    title=adobe_title,
+                    key=ADOBE_TILE_KEY,
+                    note=self._tr("page.hosts.adobe.note", "Закрывает серверы проверки лицензии Adobe"),
+                    icon_name="fa5s.ban",
+                    icon_color="#ff6b61",
+                    is_on=draft.adobe,
+                    has_switch=True,
+                    pending=draft.adobe_changed and self._applying,
+                    accessible_text=f"{adobe_title}: {on_state if draft.adobe else off_state}",
+                )
+            )
+        if not tiles:
+            tiles.append(HostsTile(kind="empty", title=self._tr("page.hosts.empty", "Ничего не найдено")))
+        self.tiles.set_tiles(tiles)
 
-        # Adobe
-        is_adobe = status_display.adobe_active
-        self._adobe_active = bool(is_adobe)
-        self.adobe_switch.blockSignals(True)
-        self.adobe_switch.setChecked(is_adobe)
-        self.adobe_switch.blockSignals(False)
-        self._log_ui_timing("hosts_ui.update_ui.total", started_at)
 
-    @staticmethod
-    def _log_ui_timing(label: str, started_at: float) -> None:
-        log_ui_timing_since("ui", "hosts", label, started_at)
-
-    def _is_current_worker_finish(self, runtime, worker) -> bool:
-        if self.__dict__.get("_cleanup_in_progress", False):
-            return False
-        request_id = getattr(worker, "_request_id", None)
-        if request_id is None:
-            current_worker = getattr(runtime, "worker", None)
-            if current_worker is not None:
-                return worker is current_worker
-            return True
-        try:
-            return int(request_id) == int(getattr(runtime, "request_id", -1))
-        except (TypeError, ValueError):
-            return False
-
-    def refresh(self):
-        """Обновляет страницу (сбрасывает кеш и перечитывает hosts)"""
-        self._invalidate_cache()
-        self._update_ui()
-
-    def showEvent(self, event):  # noqa: N802 (Qt override)
-        super().showEvent(event)
-        # Файл hosts меняют и другие части приложения — кнопка «Включить»
-        # пишет туда записи выбранных сервисов. Страница строится один раз
-        # и без перечитывания показывала бы состояние на момент первого
-        # открытия, то есть все переключатели выключенными.
-        if getattr(self, "_hosts_shown_once", False):
-            try:
-                self.refresh()
-            except Exception as exc:
-                log(f"Обновление страницы hosts при показе: {exc}", "DEBUG")
-        self._hosts_shown_once = True
-
-    def cleanup(self):
-        """Очистка потоков при закрытии"""
-        try:
-            cleanup_hosts_page(
-                set_cleanup_in_progress_fn=lambda value: setattr(self, "_cleanup_in_progress", value),
-                current_host_window=self._host_window,
-                set_host_window_fn=lambda value: setattr(self, "_host_window", value),
-                page=self,
-                catalog_watch_timer=self._catalog_watch_timer,
-                set_catalog_watch_timer_fn=lambda value: setattr(self, "_catalog_watch_timer", value),
-                log_fn=log,
-            )
-            self._operation_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts operation worker",
-            )
-            self._operation_runtime.cancel()
-            self._stop_services_catalog_worker(blocking=False)
-            self._catalog_refresh_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts catalog refresh worker",
-            )
-            self._catalog_refresh_state_obj().reset()
-            self._selection_load_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts selection load worker",
-            )
-            self._selection_load_pending = False
-            self._selection_load_start_scheduled = False
-            self._selection_save_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts selection save worker",
-            )
-            self._state_load_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts state load worker",
-            )
-            self._state_load_state_obj().reset()
-            self._open_file_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts open file worker",
-            )
-            self._permission_restore_runtime.stop(
-                blocking=False,
-                log_fn=log,
-                warning_prefix="Hosts permission restore worker",
-            )
-            self._permission_restore_pending = False
-            self._permission_restore_start_scheduled = False
-        except Exception as e:
-            log(f"Ошибка при очистке hosts_page: {e}", "DEBUG")
+__all__ = ["ADOBE_TILE_KEY", "HostsPage"]

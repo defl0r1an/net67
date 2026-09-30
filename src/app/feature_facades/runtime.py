@@ -89,6 +89,14 @@ class RuntimeFeature:
     def configure_notifications(self, *, notify) -> None:
         self.ui_port.configure_notifications(notify=notify)
 
+    def configure_installation_repair(self, *, updater_feature) -> None:
+        from app.feature_facades.installation_repair import build_installation_repair_port
+
+        self.events.repair_port = build_installation_repair_port(
+            updater_feature=updater_feature,
+            ui_port=self.ui_port,
+        )
+
     def init_launch_runtime(self) -> None:
         self.commands.init_launch_runtime()
 
@@ -157,6 +165,22 @@ class RuntimeFeature:
             update_runtime_state=update_runtime_state,
         )
 
+    def shutdown_sync_from_worker(
+        self,
+        *,
+        reason: str = "",
+        include_cleanup: bool = True,
+        cleanup_services: bool = True,
+        update_runtime_state: bool = True,
+    ):
+        """Остановка из фонового потока: runtime-state применяется в GUI-потоке."""
+        return self.commands.shutdown_sync_from_worker(
+            reason=reason,
+            include_cleanup=include_cleanup,
+            cleanup_services=cleanup_services,
+            update_runtime_state=update_runtime_state,
+        )
+
     def start_autostart(self, launch_method: str | None = None) -> bool:
         return self.commands.start_autostart(launch_method)
 
@@ -165,32 +189,6 @@ class RuntimeFeature:
             method,
             autostart_enabled=autostart_enabled,
             set_status=set_status,
-        )
-
-    def apply_selected_source_preset(
-        self,
-        *,
-        launch_method: str,
-        reason: str,
-        preset_file_name: str = "",
-    ) -> bool:
-        return self.commands.apply_selected_source_preset(
-            launch_method=launch_method,
-            reason=reason,
-            preset_file_name=preset_file_name,
-        )
-
-    def apply_preset_content(
-        self,
-        *,
-        launch_method: str,
-        reason: str,
-        profile_key: str | None = None,
-    ) -> bool:
-        return self.commands.apply_preset_content(
-            launch_method=launch_method,
-            reason=reason,
-            profile_key=profile_key,
         )
 
     def create_preset_runtime_coordinator(self, **kwargs):
@@ -238,12 +236,28 @@ def build_runtime_feature(
     from winws_runtime.health.post_mortem import resolve_unexpected_exit_message
     from winws_runtime.state import LaunchRuntimeService
 
+    from winws_runtime.runtime.scan_guard import add_scan_listener
+
+    runtime_service = LaunchRuntimeService(
+        state.ui,
+        unexpected_exit_diagnoser=resolve_unexpected_exit_message,
+    )
+
+    def _on_scan_active(active: bool) -> None:
+        # Сканер сам останавливает обход перед перебором — это видно по
+        # статусу. Кнопку на всё время перебора держим занятой: запуск
+        # посреди него сканер снял бы через секунды (start_flow его и так
+        # отклоняет, но уже после нажатия).
+        if active:
+            runtime_service.set_busy(True, "Идёт подбор стратегии — запуск недоступен")
+        else:
+            runtime_service.set_busy(False)
+
+    add_scan_listener(_on_scan_active)
+
     return RuntimeFeature(
         qt_parent=qt_parent,
-        runtime_service=LaunchRuntimeService(
-            state.ui,
-            unexpected_exit_diagnoser=resolve_unexpected_exit_message,
-        ),
+        runtime_service=runtime_service,
         presets_feature=presets_feature,
         profile_feature=profile_feature,
         ui_state=state.ui,

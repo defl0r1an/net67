@@ -59,10 +59,12 @@ PAGE_PERFORMANCE_PROFILE_OVERRIDES: dict[PageName, PagePerformanceProfile] = {
     **_profiles_for(
         (
             PageName.HOSTS,
+            PageName.HOSTS_FILE,
             PageName.BLOCKCHECK,
             PageName.LOGS,
             PageName.SERVERS,
             PageName.TELEGRAM_PROXY,
+            PageName.TELEGRAM_PROXY_ADVANCED,
             # Крупные страницы настроек: первое построение ~120-140ms без единой
             # горячей секции — бюджет как у остальных тяжёлых страниц.
             PageName.ABOUT,

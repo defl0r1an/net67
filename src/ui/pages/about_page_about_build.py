@@ -19,9 +19,9 @@ from qfluentwidgets import (
     PushButton,
     SettingCardGroup,
     StrongBodyLabel,
-    SubtitleLabel,
 )
 from ui.theme import get_cached_qta_pixmap
+from ui.widgets.shimmer_label import ShimmerLabel
 
 
 @dataclass(slots=True)
@@ -92,7 +92,13 @@ def build_about_page_about_content(
     text_layout = QVBoxLayout()
     text_layout.setSpacing(2)
     app_name_text = tr_fn("page.about.app_name", "net67 v2 GUI")
-    about_app_name_label = SubtitleLabel(app_name_text)
+    # Название живёт лёгким бликом; выплывает вместе со всей карточкой.
+    about_app_name_label = ShimmerLabel(app_name_text, enter=False, first_delay_ms=1400)
+    about_app_name_label.set_glow_color(tokens.accent_hex if tokens.is_light else "#ffffff")
+    about_app_name_label.setStyleSheet(
+        f"QLabel {{ color: {tokens.fg}; font-size: 20px; font-weight: 600; "
+        f"font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }}"
+    )
     about_version_value_label = CaptionLabel(
         tr_fn("page.about.version.value_template", "Версия {version}").format(version=app_version)
     )

@@ -1,5 +1,9 @@
 {
   "name": "Supercell",
+  "category": "direct",
+  "icon": "fa5s.gamepad",
+  "icon_color": "#f4b400",
+  "sort_order": 30,
   "hosts": [
     {
       "ip": "144.31.14.104",

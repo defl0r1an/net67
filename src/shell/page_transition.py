@@ -18,11 +18,11 @@
 настроек тяжёлые, и переход шёл рывками. Снимок — одна картинка, её
 перерисовка стоит примерно ничего.
 
-## Почему приходящая только проявляется
+## Почему приходящая не проявляется целиком
 
-Ей движение не нужно: снимок над ней уже едет и уносит взгляд. Две
-одновременно движущиеся плоскости в разные стороны читаются как
-неисправность, а не как переход.
+Ей общее движение не нужно: снимок над ней уже едет и уносит взгляд, а
+её карточки выплывают волной сами. Две одновременно движущиеся плоскости
+в разные стороны читаются как неисправность, а не как переход.
 """
 
 from __future__ import annotations
@@ -135,28 +135,10 @@ def animate_page_change(container, outgoing, incoming, *, forward: bool = True):
         if move.duration() <= 0:
             ghost.deleteLater()
 
-    incoming_effect = QGraphicsOpacityEffect(incoming)
-    incoming_effect.setOpacity(0.0)
-    incoming.setGraphicsEffect(incoming_effect)
-
-    fade_in = QVariantAnimation(incoming)
-    fade_in.setStartValue(0.0)
-    fade_in.setEndValue(1.0)
-    fade_in.setDuration(TRANSITION_MS)
-    fade_in.setEasingCurve(QEasingCurve.Type.OutCubic)
-    fade_in.valueChanged.connect(
-        lambda value, target=incoming_effect: target.setOpacity(float(value))
-    )
-    # Эффект снимаем после перехода: он рисует страницу в отдельный слой,
-    # и оставленный навсегда он удорожает каждую последующую перерисовку.
-    fade_in.finished.connect(lambda target=incoming: target.setGraphicsEffect(None))
-
-    incoming._net67_page_fade = fade_in
-    start_managed_animation(fade_in)
-    animations.append(fade_in)
-
-    if fade_in.duration() <= 0:
-        incoming.setGraphicsEffect(None)
+    # Приходящая страница целиком больше не проявляется: её карточки
+    # выплывают сами (BasePage → ui/widgets/stagger_float_in.py). Общий
+    # эффект прозрачности поверх ещё и карточных эффектов рисовал бы
+    # страницу дважды за кадр и гасил волну — вход читался как мигание.
 
     return animations
 

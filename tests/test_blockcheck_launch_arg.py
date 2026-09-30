@@ -14,6 +14,10 @@ winws2 — cygwin-бинарник, и аргумент `@путь с пробе
 
 Основной обход при этом работал, поэтому выглядело как поломка именно
 диагностики.
+
+Исходный проект потом переписал подбор с нуля (blockcheck.strategy_search) и
+вернул в новый запуск ту же склейку f"@{path}". Проверка теперь смотрит
+туда, где winws2 запускается сейчас, — в RealEnvironment.start_session.
 """
 
 from __future__ import annotations
@@ -24,15 +28,15 @@ from pathlib import Path
 
 
 SRC = Path(__file__).resolve().parents[1] / "src"
-SCANNER = SRC / "blockcheck" / "strategy_scanner.py"
+SCANNER = SRC / "blockcheck" / "strategy_search" / "environment.py"
 
 
 def _launch_function() -> ast.FunctionDef:
     tree = ast.parse(SCANNER.read_text(encoding="utf-8"), filename=str(SCANNER))
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "_launch_winws2":
+        if isinstance(node, ast.FunctionDef) and node.name == "start_session":
             return node
-    raise AssertionError("_launch_winws2 не найдена в сканере стратегий")
+    raise AssertionError("start_session не найдена в окружении подбора")
 
 
 class BlockcheckLaunchArgTests(unittest.TestCase):

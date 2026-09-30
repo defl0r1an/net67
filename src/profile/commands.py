@@ -84,14 +84,8 @@ def apply_strategy_to_profile(
     launch_method: str,
     profile_key: str,
     strategy_id: str,
-    *,
-    strategy_branch_id: str = "",
 ) -> StrategyApplyResult:
-    return _profile_preset_service(profile_services, launch_method).apply_strategy(
-        profile_key,
-        strategy_id,
-        strategy_branch_id=strategy_branch_id,
-    )
+    return _profile_preset_service(profile_services, launch_method).apply_strategy(profile_key, strategy_id)
 
 
 def set_profile_enabled(
@@ -128,6 +122,10 @@ def update_winws2_profile_settings(
         in_range=in_range,
         out_range=out_range,
     )
+
+
+def edit_selected_preset(profile_services, launch_method: str, edit):
+    return _profile_preset_service(profile_services, launch_method).edit_selected_preset(edit)
 
 
 def update_profile_raw_text(

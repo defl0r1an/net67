@@ -153,6 +153,39 @@ class ControlPageActionMixin:
 
         QApplication.quit()
 
+    def _start_onboarding_tour(self) -> None:
+        handler = getattr(self, "_start_onboarding_tour_callback", None)
+        if callable(handler):
+            handler()
+
+    def _start_bypass_tour(self) -> None:
+        handler = getattr(self, "_start_onboarding_tour_callback", None)
+        if callable(handler):
+            handler(kind="bypass")
+
+    def onboarding_target(self, name: str):
+        """Цели обучающего тура на главной странице режима."""
+        if name == "oneclick":
+            return getattr(self, "oneclick_button", None)
+        if name == "start":
+            for attr in ("start_btn", "stop_winws_btn"):
+                button = getattr(self, attr, None)
+                if button is not None and button.isVisible():
+                    return button
+            return getattr(self, "start_btn", None)
+        if name == "status":
+            return getattr(self, "status_card", None)
+        if name == "preset":
+            return getattr(getattr(self, "top_summary", None), "preset_item", None)
+        if name == "program_settings":
+            return getattr(self, "program_settings_card", None)
+        if name == "fakes":
+            # Карточки фейков на главной net67 нет — шаг пропустится.
+            return getattr(self, "fakes_card", None)
+        if name == "tour_card":
+            return getattr(self, "onboarding_tour_card", None)
+        return None
+
     def _open_connection_test(self) -> None:
         handler = getattr(self, "_open_connection_test_callback", None)
         if callable(handler):

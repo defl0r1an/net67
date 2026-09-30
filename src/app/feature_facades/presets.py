@@ -500,8 +500,8 @@ class PresetsFeature:
                 new_name=new_name,
             )
 
-        def _export_preset(*, file_name: str, target_path: str) -> None:
-            export_raw_preset(
+        def _export_preset(*, file_name: str, target_path: str):
+            return export_raw_preset(
                 presets_feature=self,
                 launch_method=clean_launch_method,
                 file_name=file_name,
@@ -631,6 +631,8 @@ class PresetsFeature:
         launch_method: str,
         action: str,
         file_path: str = "",
+        source_url: str = "",
+        auto_update: bool = False,
         parent=None,
     ):
         from pathlib import Path
@@ -638,7 +640,24 @@ class PresetsFeature:
         from presets.user_presets_action_results import UserPresetImportResult, UserPresetResetAllResult
         from presets.user_presets_action_workers import UserPresetBulkActionWorker
 
+        source_url = str(source_url or "").strip()
+        auto_update = bool(auto_update)
+
         def _import_preset_from_file(*, file_path: str) -> UserPresetImportResult:
+            try:
+                return _import_preset_from_file_inner(file_path=file_path)
+            finally:
+                from presets.preset_url_import import cleanup_download
+
+                cleanup_download(file_path)
+
+        def _import_preset_from_file_inner(*, file_path: str) -> UserPresetImportResult:
+            if source_url and file_path.lower().endswith(".txt"):
+                updated = self._update_url_bound_preset_from_file(
+                    launch_method, source_url, file_path, auto=auto_update
+                )
+                if updated is not None:
+                    return updated
             requested_name = str(Path(file_path).stem or "").strip() or "Imported"
             imported = self.import_preset_from_file(launch_method, file_path, requested_name)
             actual_name = imported.name
@@ -652,6 +671,20 @@ class PresetsFeature:
                 f"Отображаемое имя: {actual_name}\n"
                 f"Имя файла: {actual_file_name}"
             )
+            imported_lists = tuple(getattr(imported, "imported_list_files", ()) or ())
+            renamed_lists = tuple(getattr(imported, "renamed_list_files", ()) or ())
+            if imported_lists:
+                content += f"\nФайлов списков установлено: {len(imported_lists)}"
+            if renamed_lists:
+                content += f"\nИз-за совпадения имён переименовано: {len(renamed_lists)}"
+            if source_url and str(actual_file_name or "").lower().endswith(".txt"):
+                if (
+                    self.bind_preset_remote_source(
+                        launch_method, actual_file_name, source_url, auto=auto_update
+                    )
+                    and auto_update
+                ):
+                    content += "\nАвтообновление по ссылке включено"
             return UserPresetImportResult(
                 ok=True,
                 actual_name=actual_name,
@@ -660,7 +693,13 @@ class PresetsFeature:
                 log_level="INFO",
                 log_message=f"Импортирован пресет '{actual_name}'",
                 infobar_level="warning" if file_name_changed else "success",
-                infobar_title="Импортирован с новым именем файла" if file_name_changed else "Пресет импортирован",
+                infobar_title=(
+                    "Импортирован с новым именем файла"
+                    if file_name_changed
+                    else "Пресет и списки импортированы"
+                    if imported_lists
+                    else "Пресет импортирован"
+                ),
                 infobar_content=content,
                 structure_changed=True,
             )
@@ -845,14 +884,26 @@ class PresetsFeature:
             )
 
         def _export_preset(*, file_name: str, file_path: str, display_name: str) -> UserPresetActionResult:
-            self.export_preset_plain_text(launch_method, file_name, file_path)
+            exported = self.export_preset_plain_text(launch_method, file_name, file_path)
+            actual_path = str(getattr(exported, "path", exported) or file_path)
+            archived_lists = tuple(getattr(exported, "archived_list_files", ()) or ())
+            if archived_lists:
+                title = "Пресет и списки экспортированы"
+                content = (
+                    "В пресете есть пользовательские файлы списков, поэтому создан ZIP-архив.\n"
+                    f"Файлов списков: {len(archived_lists)}\n"
+                    f"Путь: {actual_path}"
+                )
+            else:
+                title = "Успех"
+                content = f"Пресет экспортирован: {actual_path}"
             return UserPresetActionResult(
                 ok=True,
                 log_level="INFO",
-                log_message=f"Экспортирован пресет '{display_name}' в {file_path}",
+                log_message=f"Экспортирован пресет '{display_name}' в {actual_path}",
                 infobar_level="success",
-                infobar_title="Успех",
-                infobar_content=f"Пресет экспортирован: {file_path}",
+                infobar_title=title,
+                infobar_content=content,
                 structure_changed=False,
             )
 
@@ -1170,6 +1221,13 @@ class PresetsFeature:
             content_change_kind=content_change_kind,
         )
 
+    def migrate_user_presets_to_save_contract(self, launch_method: str):
+        """Разовый перевод пресетов пользователя в формат сохранения (preset_contract, пункт 6)."""
+        return self._commands().migrate_user_presets_to_save_contract(
+            launch_method,
+            preset_services=self._preset_services(),
+        )
+
     def publish_preset_content_changed(self, launch_method: str, file_name: str, *, content_change_kind: str = ""):
         return self._commands().publish_preset_content_changed(
             launch_method,
@@ -1225,6 +1283,187 @@ class PresetsFeature:
             src_path,
             name,
             preset_services=self._preset_services(),
+        )
+
+    @staticmethod
+    def _remote_scope_for_launch_method(launch_method: str) -> str:
+        from settings.mode import ENGINE_BY_LAUNCH_METHOD, ENGINE_WINWS2, normalize_launch_method
+
+        method = normalize_launch_method(launch_method)
+        return ENGINE_BY_LAUNCH_METHOD.get(method, ENGINE_WINWS2)
+
+    def get_preset_remote_binding(self, launch_method: str, file_name: str):
+        from presets.remote_bindings import get_remote_preset_binding
+
+        return get_remote_preset_binding(self._remote_scope_for_launch_method(launch_method), file_name)
+
+    def get_preset_remote_bindings(self, launch_method: str) -> dict:
+        from presets.remote_bindings import load_remote_preset_bindings
+
+        return load_remote_preset_bindings(self._remote_scope_for_launch_method(launch_method))
+
+    def bind_preset_remote_source(self, launch_method: str, file_name: str, url: str, *, auto: bool = True) -> bool:
+        """Привязывает пресет к https-источнику; хэш — от текущего текста файла.
+
+        auto=False записывает источник без автообновления: URL всё равно
+        помнится, чтобы повторный импорт ссылки не создавал дубликат.
+        """
+        from presets.preset_url_import import is_https_preset_import_url
+        from presets.remote_bindings import make_remote_preset_binding, set_remote_preset_binding
+        from presets.remote_sync import comparison_hash, upstream_matches_local, utc_now_iso
+
+        if not is_https_preset_import_url(url):
+            return False
+        try:
+            current_text = self.read_preset_source_by_file_name(launch_method, file_name)
+        except Exception:
+            return False
+        binding = make_remote_preset_binding(
+            url,
+            synced_hash=comparison_hash(current_text),
+            now_iso=utc_now_iso(),
+        )
+        binding["auto"] = bool(auto)
+        return set_remote_preset_binding(
+            self._remote_scope_for_launch_method(launch_method), file_name, binding
+        ) is not None
+
+    def unbind_preset_remote_source(self, launch_method: str, file_name: str) -> bool:
+        """«Отвязать» = пауза автообновления; URL остаётся в settings store.
+
+        Так повторный импорт той же ссылки возобновляет привязку к этому же
+        пресету, а не создаёт дубликат. Запись удаляется только вместе с
+        самим пресетом.
+        """
+        from presets.remote_bindings import update_remote_preset_binding
+
+        return update_remote_preset_binding(
+            self._remote_scope_for_launch_method(launch_method),
+            file_name,
+            auto=False,
+            detached=False,
+        ) is not None
+
+    def create_preset_remote_sync_worker(
+        self,
+        request_id: int,
+        *,
+        launch_method: str,
+        action: str,
+        file_name: str,
+        display_name: str = "",
+        force: bool = False,
+        parent=None,
+    ):
+        from presets.remote_sync_workers import RemotePresetSyncWorker
+
+        def _run_remote_action(*, action: str, file_name: str, force: bool):
+            from presets.remote_sync import RemoteSyncOutcome
+            from presets.remote_sync_workers import sync_remote_preset_by_file_name
+
+            if action == "unlink":
+                removed = self.unbind_preset_remote_source(launch_method, file_name)
+                return RemoteSyncOutcome(
+                    status="unlinked" if removed else "error",
+                    detail="" if removed else "Пресет не привязан к источнику",
+                )
+            return sync_remote_preset_by_file_name(self, launch_method, file_name, force=force)
+
+        return RemotePresetSyncWorker(
+            request_id,
+            _run_remote_action,
+            action=action,
+            file_name=file_name,
+            display_name=display_name,
+            force=force,
+            parent=parent,
+        )
+
+    def _update_url_bound_preset_from_file(self, launch_method: str, source_url: str, file_path: str, *, auto: bool = True):
+        """Дедупликация импорта по URL: обновляет уже привязанный пресет.
+
+        Возвращает UserPresetImportResult, если ссылка уже привязана к
+        существующему пресету этого движка, иначе None (обычный импорт).
+        """
+        from pathlib import Path
+
+        from presets.preset_text_ops import _rewrite_preset_headers, validate_preset_source_text
+        from presets.remote_bindings import load_remote_preset_bindings, set_remote_preset_binding
+        from presets.remote_sync import comparison_hash, upstream_matches_local, utc_now_iso
+        from presets.user_presets_action_results import UserPresetImportResult
+
+        scope = self._remote_scope_for_launch_method(launch_method)
+        needle = str(source_url or "").strip()
+        bound_file_name = ""
+        bound_binding = None
+        for file_name, binding in load_remote_preset_bindings(scope).items():
+            if str(binding.get("url") or "").strip() == needle:
+                bound_file_name = file_name
+                bound_binding = dict(binding)
+                break
+        if not bound_file_name or bound_binding is None:
+            return None
+        try:
+            current_text = self.read_preset_source_by_file_name(launch_method, bound_file_name)
+        except Exception:
+            # Привязка осталась от удалённого файла — обычный импорт пересоздаст пресет.
+            return None
+
+        from utils.atomic_text import read_preset_file_text
+
+        new_text = read_preset_file_text(file_path)
+        validation_error = validate_preset_source_text(new_text, engine=scope)
+        if validation_error:
+            raise ValueError(f"Файл не похож на пресет: {validation_error}")
+
+        manifest = self.get_preset_manifest_by_file_name(launch_method, bound_file_name)
+        display_name = str(getattr(manifest, "name", "") or Path(bound_file_name).stem)
+        now_iso = utc_now_iso()
+        if upstream_matches_local(new_text, current_text, engine=scope):
+            # Повторный импорт ссылки возобновляет привязку, даже если
+            # содержимое не изменилось (например, после «Отвязать»).
+            bound_binding.update({"checked_at": now_iso, "error": "", "auto": bool(auto), "detached": False})
+            set_remote_preset_binding(scope, bound_file_name, bound_binding)
+            content = f"Пресет «{display_name}» уже актуален — ссылка привязана к нему."
+            log_message = f"Импорт по ссылке: пресет '{display_name}' уже актуален"
+        else:
+            # Шапка источника не должна переименовывать локальный пресет.
+            new_text = _rewrite_preset_headers(new_text, display_name, preset_kind="imported")
+            self.save_preset_source_by_file_name(
+                launch_method,
+                bound_file_name,
+                new_text,
+                publish_content_changed=True,
+                content_change_kind="remote_sync",
+            )
+            saved_text = self.read_preset_source_by_file_name(launch_method, bound_file_name)
+            bound_binding.update(
+                {
+                    "synced_hash": comparison_hash(saved_text),
+                    "checked_at": now_iso,
+                    "updated_at": now_iso,
+                    "error": "",
+                    "auto": bool(auto),
+                    "detached": False,
+                    "etag": "",
+                    "last_modified": "",
+                }
+            )
+            set_remote_preset_binding(scope, bound_file_name, bound_binding)
+            content = f"Ссылка уже привязана к пресету «{display_name}» — он обновлён, дубликат не создавался."
+            log_message = f"Импорт по ссылке: обновлён привязанный пресет '{display_name}'"
+        return UserPresetImportResult(
+            ok=True,
+            actual_name=display_name,
+            actual_file_name=bound_file_name,
+            requested_name=display_name,
+            log_level="INFO",
+            log_message=log_message,
+            infobar_level="success",
+            infobar_title="Пресет обновлён из источника",
+            infobar_content=content,
+            structure_changed=False,
+            updated_existing=True,
         )
 
     def export_preset_plain_text(self, launch_method: str, file_name: str, dest_path):

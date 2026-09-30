@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .strategy_catalog import StrategyEntry
 from .strategy_state import ProfileStrategyState
@@ -20,18 +20,6 @@ class ProfileListFileEditorState:
     error_text: str = ""
     base_entries_count: int = 0
     user_entries_count: int = 0
-
-
-@dataclass(frozen=True)
-class ProfileStrategyBranch:
-    branch_id: str
-    payload: str
-    in_range: str
-    out_range: str
-    strategy_id: str
-    strategy_name: str
-    raw_strategy_text: str
-    match_tab_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -57,7 +45,8 @@ class ProfileListItem:
     group_collapsed: bool = False
     user_profile_id: str = ""
     profile_name: str = ""
-    strategy_branches: tuple[ProfileStrategyBranch, ...] = ()
+    # Типы пакетов веток составной стратегии (значок «TLS · HTTP»), пусто — обычная.
+    strategy_payload_scopes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -65,8 +54,6 @@ class ProfileListPayload:
     items: tuple[ProfileListItem, ...]
     selected_preset_file_name: str
     selected_preset_name: str
-    normalized_split_profiles: int = 0
-    normalized_created_profiles: int = 0
 
 
 @dataclass(frozen=True)
@@ -78,8 +65,6 @@ class ProfileSetupPayload:
     raw_strategy_text: str
     match_summary: str
     match_tab_text: str = ""
-    strategy_branches: tuple[ProfileStrategyBranch, ...] = ()
-    current_strategy_branch_id: str = ""
     editable_filter_kind: str = ""
     editable_filter_value: str = ""
     editable_filter_enabled: bool = True
@@ -88,6 +73,9 @@ class ProfileSetupPayload:
     in_range: str = "x"
     out_range: str = "a"
     current_strategy_state: ProfileStrategyState = ProfileStrategyState()
+    # Общие строки пресета (до первого профиля): редактор текста профиля берёт
+    # из них объявленные фейки и подключённые lua-файлы для проверки.
+    preset_preamble_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -103,3 +91,6 @@ class StrategyApplyResult:
     profile_list_item_changed: bool = False
     summary_changed: bool = False
     runtime_apply_needed: bool = False
+    # Предупреждения про фейки (--blob=) выбранной стратегии: реестр
+    # недоступен или стратегия ссылается на фейк, которого нет нигде.
+    blob_warnings: tuple[str, ...] = field(default=(), compare=False)

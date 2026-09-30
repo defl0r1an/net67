@@ -1,5 +1,9 @@
 {
   "name": "Render",
+  "category": "direct",
+  "icon": "fa5s.globe",
+  "icon_color": null,
+  "sort_order": 103,
   "hosts": [
     {
       "ip": "216.24.57.8",

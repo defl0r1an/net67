@@ -53,6 +53,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_ROOT = PROJECT_ROOT / "json" / "hosts_catalog"
 RESOLVERS_FILE = Path(__file__).resolve().parent / "hosts_catalog_resolvers.json"
 
+#: Профили, которые добавил net67, — отдельным файлом поверх каталога.
+#: Имя то же, что NET67_OVERLAY_FILE_NAME в src/hosts/proxy_domains.py.
+OVERLAY_FILE = CATALOG_ROOT / "net67_dns_sources.json"
+
 #: Типы записей. Больше нам не нужно: в каталоге лежат только адреса.
 TYPE_A = 1
 TYPE_AAAA = 28
@@ -272,6 +276,8 @@ class Report:
     changed: list[Change] = field(default_factory=list)
     unresolved: list[str] = field(default_factory=list)
     skipped_sources: list[str] = field(default_factory=list)
+    #: Сервисы, для которых профиль net67 не подменил ни одного адреса.
+    not_substituted: list[str] = field(default_factory=list)
     checked_hosts: int = 0
 
     def summary(self) -> str:
@@ -281,6 +287,8 @@ class Report:
         ]
         if self.unresolved:
             lines.append(f"Не разрешилось: {len(self.unresolved)}")
+        if self.not_substituted:
+            lines.append(f"Профиль net67 не подменяет сервис: {len(self.not_substituted)}")
         if self.skipped_sources:
             lines.append("Пропущены источники без резолвера: " + ", ".join(self.skipped_sources))
         return "\n".join(lines)
@@ -289,6 +297,11 @@ class Report:
 def _has_transport(source: dict) -> bool:
     """Есть ли чем спросить этот источник — хоть по UDP, хоть по HTTPS."""
     return bool(source.get("servers") or str(source.get("doh") or "").strip())
+
+
+def _is_overlay(source: dict) -> bool:
+    """Профиль net67: пишется в OVERLAY_FILE, а не в файлы каталога zapret."""
+    return bool(source.get("overlay"))
 
 
 def load_resolvers() -> dict:
@@ -308,7 +321,7 @@ def refresh_dns_file(path: Path, sources: dict, report: Report, *, only: str = "
     active = {
         key: value
         for key, value in sources.items()
-        if _has_transport(value) and (not only or key == only)
+        if _has_transport(value) and not _is_overlay(value) and (not only or key == only)
     }
     if not active:
         return data
@@ -342,6 +355,182 @@ def refresh_dns_file(path: Path, sources: dict, report: Report, *, only: str = "
                 ips[key] = address
 
     return data
+
+
+def _first_address(host: str, source) -> str | None:
+    """Первый A-адрес или None, если спросить не вышло."""
+    try:
+        addresses = resolve(host, TYPE_A, source)
+    except DnsError:
+        return None
+    return addresses[0] if addresses else ""
+
+
+#: Ответы-заглушки: так резолвер блокирует домен, а не подменяет его.
+#: Comss отвечает ими для части доменов Spotify, Deezer, Intel — в hosts
+#: такая строка просто отрезала бы сайт.
+SINKHOLE_ADDRESSES = frozenset({"0.0.0.0", "127.0.0.1"})
+
+#: Со скольких разных сервисов один адрес считается прокси резолвера.
+#:
+#: «Не совпало с 1.1.1.1» подменой не является: CDN вроде Akamai отдаёт
+#: разным резолверам разные узлы, и amd.com через AstraCat выглядел бы
+#: «подменённым» настоящим адресом Akamai. Прокси же у разблокирующего
+#: резолвера несколько на весь список: у AstraCat один адрес на 38
+#: сервисов, у GeoHide — четыре (замер 2026-09-30).
+PROXY_MIN_SERVICES = 3
+
+
+def _proxy_addresses(answers_by_service: dict[str, dict[str, str | None]], real_seen: set[str]) -> set[str]:
+    """Адреса прокси резолвера: повторяются у многих сервисов и не настоящие."""
+    services_by_address: dict[str, set[str]] = {}
+    for service, answers in answers_by_service.items():
+        for answer in answers.values():
+            if answer:
+                services_by_address.setdefault(answer, set()).add(service)
+    return {
+        address
+        for address, services in services_by_address.items()
+        if len(services) >= PROXY_MIN_SERVICES
+        and address not in real_seen
+        and address not in SINKHOLE_ADDRESSES
+    }
+
+
+def refresh_overlay(
+    sources: dict,
+    public_servers,
+    report: Report,
+    *,
+    only: str = "",
+    service: str = "",
+) -> dict | None:
+    """Пересчитывает профили net67 — OVERLAY_FILE.
+
+    Профиль пишется для сервиса, только если резолвер подменяет хотя бы
+    один его домен. GeoHide, например, подменяет лишь сайты из своего
+    списка, а на остальные отдаёт настоящие адреса. Запиши их — и в
+    редакторе hosts у сервиса появится кружок профиля, который ничего не
+    разблокирует. Настоящий адрес узнаём у публичного резолвера.
+
+    Резолвер не ответил вовсе — прежние значения остаются: стереть их
+    из-за таймаута хуже, чем оставить устаревшими. Ответил настоящими
+    адресами — значит, сервис он больше не подменяет, и записи уходят.
+    """
+    overlay = {
+        key: value
+        for key, value in sources.items()
+        if _is_overlay(value) and _has_transport(value) and (not only or key == only)
+    }
+    if not overlay:
+        return None
+
+    previous = json.loads(OVERLAY_FILE.read_text(encoding="utf-8")) if OVERLAY_FILE.is_file() else {}
+    ips: dict[str, dict[str, str]] = {
+        str(host): dict(values)
+        for host, values in (previous.get("ips") or {}).items()
+        if isinstance(values, dict)
+    }
+
+    real_cache: dict[str, set[str]] = {}
+
+    def real_addresses(host: str) -> set[str]:
+        if host not in real_cache:
+            try:
+                real_cache[host] = set(resolve(host, TYPE_A, public_servers))
+            except DnsError:
+                real_cache[host] = set()
+        return real_cache[host]
+
+    # Прокси резолвера видно только по всему каталогу разом, поэтому сначала
+    # собираем ответы по всем файлам, а решаем потом. Фильтр --service
+    # сужает запись, но не сбор: по одному сервису прокси не распознать.
+    hosts_by_file: dict[str, list[str]] = {}
+    for path in catalog_files("dns"):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        hosts = [
+            str(entry.get("host") or "").strip()
+            for entry in data.get("domains") or []
+            if str(entry.get("host") or "").strip()
+        ]
+        if hosts:
+            hosts_by_file[path.name] = hosts
+    all_hosts = sorted({host for hosts in hosts_by_file.values() for host in hosts})
+    report.checked_hosts += len(all_hosts)
+    with ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        real = dict(zip(all_hosts, pool.map(real_addresses, all_hosts)))
+    real_seen = {address for addresses in real.values() for address in addresses}
+
+    for key, source in overlay.items():
+        with ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+            answered = dict(zip(all_hosts, pool.map(lambda h, s=source: _first_address(h, s), all_hosts)))
+        if all(answer is None for answer in answered.values()):
+            report.unresolved.append(f"{key} не ответил ни на один домен — прежние адреса оставлены")
+            continue
+        by_file = {name: {host: answered[host] for host in hosts} for name, hosts in hosts_by_file.items()}
+        proxies = _proxy_addresses(by_file, real_seen)
+
+        for name, answers in by_file.items():
+            if service and service.lower() not in name.lower():
+                continue
+            if all(answer is None for answer in answers.values()):
+                report.unresolved.append(f"{name}: {key} не ответил")
+                continue
+            if not any(answer in proxies for answer in answers.values()):
+                report.not_substituted.append(f"{name} [{key}]")
+                for host in answers:
+                    was = ips.get(host, {}).pop(key, None)
+                    if was:
+                        report.changed.append(Change(OVERLAY_FILE.name, host, key, str(was), "—"))
+                continue
+            used = [answer for answer in answers.values() if answer in proxies]
+            service_proxy = max(set(used), key=used.count)
+            for host, answer in answers.items():
+                if answer is None:
+                    report.unresolved.append(f"{name}: {host} через {key}")
+                    continue
+                if answer == "" and not real.get(host):
+                    # Мёртвый домен: его нет ни у резолвера, ни у публичного
+                    # DNS (labs.openai.com, api.claude.ai…). Профиль в
+                    # редакторе предлагается, только если адрес есть у
+                    # каждого домена сервиса, и из-за таких хвостов каталога
+                    # AstraCat пропадал у ChatGPT, Claude и Grok — ровно там,
+                    # где он нужен. XBOX и Comss на них отвечают своим прокси
+                    # по маске; делаем так же. Строка для несуществующего
+                    # имени ничего не ломает.
+                    answer = service_proxy
+                if not answer or answer in SINKHOLE_ADDRESSES:
+                    # Пустой ответ или заглушка: строки не будет, и профиль у
+                    # этого сервиса станет неполным — то есть недоступным.
+                    was = ips.get(host, {}).pop(key, None)
+                    if was:
+                        report.changed.append(Change(OVERLAY_FILE.name, host, key, str(was), "—"))
+                    continue
+                was = str(ips.get(host, {}).get(key) or "")
+                if was != answer:
+                    report.changed.append(Change(OVERLAY_FILE.name, host, key, was or "—", answer))
+                    ips.setdefault(host, {})[key] = answer
+
+    known = {str(p.get("id")): str(p.get("name")) for p in previous.get("dns_sources") or [] if isinstance(p, dict)}
+    for key, value in sources.items():
+        if _is_overlay(value):
+            known[key] = str(value.get("name") or key)
+    return {
+        "_": [
+            "Профили DNS, которые добавил net67, поверх каталога из zapret.",
+            "Файл пишет tools/refresh_hosts_catalog.py — руками не править.",
+            "Каталог главнее: профиль, который уже есть в dns_sources.json,",
+            "отсюда не берётся (src/hosts/proxy_domains.py, _apply_net67_overlay).",
+        ],
+        "dns_sources": [{"id": key, "name": name} for key, name in known.items()],
+        "ips": {host: dict(sorted(values.items())) for host, values in sorted(ips.items()) if values},
+    }
+
+
+def _write_json(path: Path, data: dict) -> None:
+    # newline="\n": на Windows write_text по умолчанию пишет CRLF, а
+    # каталог в репозитории в LF — diff показал бы изменённой каждую строку.
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def refresh_hosts_file(path: Path, servers, report: Report) -> dict:
@@ -462,14 +651,26 @@ def main(argv=None) -> int:
             continue
         updated.append((path, refresh_dns_file(path, sources, report, only=args.only)))
 
+    public_servers = (config.get("hosts_profiles_resolver") or {}).get("servers") or []
     if not args.only:
-        servers = (config.get("hosts_profiles_resolver") or {}).get("servers") or []
         for path in catalog_files("hosts"):
             if args.service and args.service.lower() not in path.name.lower():
                 continue
-            updated.append((path, refresh_hosts_file(path, servers, report)))
+            updated.append((path, refresh_hosts_file(path, public_servers, report)))
+
+    overlay_data = refresh_overlay(
+        sources, public_servers, report, only=args.only, service=args.service
+    )
+    if overlay_data is not None:
+        updated.append((OVERLAY_FILE, overlay_data))
 
     print(report.summary())
+    if report.not_substituted:
+        print("\nПрофиль net67 не подменяет (для этих сервисов его не будет):")
+        for line in report.not_substituted[:40]:
+            print(f"  {line}")
+        if len(report.not_substituted) > 40:
+            print(f"  ... и ещё {len(report.not_substituted) - 40}")
 
     if report.changed:
         print("\nИзменения:")
@@ -494,9 +695,7 @@ def main(argv=None) -> int:
         return 0
 
     for path, data in updated:
-        path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        _write_json(path, data)
     print(f"\nЗаписано файлов: {len(updated)}")
     return 0
 

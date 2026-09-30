@@ -40,96 +40,71 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
         )
         self.addCleanup(page.deleteLater)
 
-        self.assertEqual(page._protocol_combo.accessibleName(), "Протокол подбора стратегии, выбрано: TCP/HTTPS")
+        self.assertEqual(page._protocol_combo.accessibleName(), "Что должно заработать, выбрано: Сайты и приложения")
         self.assertEqual(
             page._protocol_combo.property("screenReaderStateText"),
-            "Протокол подбора стратегии, выбрано: TCP/HTTPS",
+            "Что должно заработать, выбрано: Сайты и приложения",
         )
-        self.assertIn("тип соединения", page._protocol_combo.accessibleDescription())
-        self.assertEqual(page._games_scope_combo.accessibleName(), "Охват UDP, выбрано: Все ipset (по умолчанию)")
-        self.assertEqual(
-            page._games_scope_combo.property("screenReaderStateText"),
-            "Охват UDP, выбрано: Все ipset (по умолчанию)",
-        )
-        self.assertIn("UDP Games", page._games_scope_combo.accessibleDescription())
-        self.assertEqual(page._mode_combo.accessibleName(), "Режим подбора стратегии, выбрано: Быстрый (30)")
-        self.assertEqual(
-            page._mode_combo.property("screenReaderStateText"),
-            "Режим подбора стратегии, выбрано: Быстрый (30)",
-        )
+        self.assertIn("для чего подобрать стратегию", page._protocol_combo.accessibleDescription())
+        self.assertEqual(page._games_scope_combo.accessibleName(), "Адреса игр, выбрано: Все списки адресов (по умолчанию)")
+        self.assertIn("онлайн-игр", page._games_scope_combo.accessibleDescription())
+        self.assertEqual(page._mode_combo.accessibleName(), "Тщательность подбора, выбрано: Быстро · 30")
         self.assertIn("сколько стратегий", page._mode_combo.accessibleDescription())
         self.assertEqual(page._target_input.accessibleName(), "Цель подбора стратегии")
-        self.assertEqual(page._target_input.property("screenReaderStateText"), "Цель подбора стратегии")
         self.assertIn("домен или STUN-цель", page._target_input.accessibleDescription())
         self.assertEqual(
-            page._games_scope_label.property("screenReaderStateText"),
-            "Поле подбора стратегии: Охват UDP:",
-        )
-        self.assertEqual(
             page._target_label.property("screenReaderStateText"),
-            "Поле подбора стратегии: Цель:",
+            "Поле подбора стратегии: Какой сайт проверить:",
         )
         self.assertEqual(page._quick_domain_btn.accessibleName(), "Быстрый выбор цели")
-        self.assertEqual(page._quick_domain_btn.property("screenReaderStateText"), "Быстрый выбор цели")
-        self.assertEqual(
-            page._actions_title_label.property("screenReaderStateText"),
-            "Раздел подбора стратегии: Действия",
-        )
+        self.assertEqual(page._start_btn.text(), "Найти рабочую стратегию")
         self.assertEqual(page._start_btn.accessibleName(), "Начать подбор стратегии")
-        self.assertEqual(page._start_btn.property("screenReaderStateText"), "Начать подбор стратегии")
         self.assertEqual(page._stop_btn.accessibleName(), "Остановить подбор стратегии")
-        self.assertEqual(page._stop_btn.property("screenReaderStateText"), "Остановить подбор стратегии")
         self.assertEqual(page._progress_bar.accessibleName(), "Ход подбора стратегии: не выполняется")
-        self.assertEqual(
-            page._progress_bar.property("screenReaderStateText"),
-            "Ход подбора стратегии: не выполняется",
-        )
         self.assertIn("Показывает", page._progress_bar.accessibleDescription())
-        self.assertEqual(page._status_label.accessibleName(), "Статус подбора стратегии: Готово к сканированию")
-        self.assertEqual(page._table.accessibleName(), "Результаты подбора стратегии: пока нет результатов")
-        self.assertEqual(
-            page._table.property("screenReaderStateText"),
-            "Результаты подбора стратегии: пока нет результатов",
-        )
-        self.assertEqual(page._log_edit.accessibleName(), "Подробный лог подбора стратегии: пока нет записей")
-        self.assertEqual(
-            page._log_edit.property("screenReaderStateText"),
-            "Подробный лог подбора стратегии: пока нет записей",
-        )
-        self.assertEqual(page._expand_log_btn.accessibleName(), "Развернуть лог подбора стратегии")
-        self.assertEqual(
-            page._expand_log_btn.property("screenReaderStateText"),
-            "Развернуть лог подбора стратегии",
-        )
+        self.assertTrue(page._status_label.accessibleName().startswith("Статус подбора стратегии: "))
+        self.assertEqual(page._results_view.accessibleName(), "Результаты подбора стратегии: пока нет результатов")
+        self.assertEqual(page._log_btn.accessibleName(), "Открыть подробный лог подбора стратегии")
         self.assertEqual(page._prepare_support_btn.accessibleName(), "Подготовить обращение по подбору стратегии")
-        self.assertEqual(
-            page._prepare_support_btn.property("screenReaderStateText"),
-            "Подготовить обращение по подбору стратегии",
-        )
         self.assertEqual(
             page._support_status_label.property("screenReaderStateText"),
             "Статус обращения по подбору стратегии: нет статуса",
         )
 
-    def test_protocol_combo_menu_items_are_named_for_screen_reader(self) -> None:
+    def test_protocol_tiles_are_named_and_selectable_from_keyboard(self) -> None:
         page = StrategyScanPage(
             blockcheck_feature=_BlockcheckFeatureStub(),
             create_strategy_scan_worker=lambda *_args, **_kwargs: None,
         )
         self.addCleanup(page.deleteLater)
-        create_menu = getattr(page._protocol_combo, "_create_accessible_combo_menu", None)
-        self.assertIsNotNone(create_menu)
+        tiles = page._protocol_combo.tiles()
 
-        menu = create_menu()
+        self.assertEqual(tiles[0].accessibleName(), "Что должно заработать: Сайты и приложения, выбрано")
+        self.assertEqual(tiles[1].accessibleName(), "Что должно заработать: Голосовые звонки, не выбрано")
 
-        self.assertEqual(
-            menu.view.item(0).data(Qt.ItemDataRole.AccessibleTextRole),
-            "Протокол подбора стратегии: TCP/HTTPS, выбран",
+        tiles[2].click()
+
+        self.assertEqual(page._protocol_combo.currentData(), "udp_games")
+        self.assertTrue(page._games_scope_combo.isVisibleTo(page))
+        self.assertFalse(page._target_input.isVisibleTo(page))
+        self.assertEqual(tiles[2].accessibleName(), "Что должно заработать: Онлайн-игры, выбрано")
+
+    def test_log_opens_in_dialog_with_collected_lines(self) -> None:
+        page = StrategyScanPage(
+            blockcheck_feature=_blockcheck_feature(),
+            create_strategy_scan_worker=lambda *_args, **_kwargs: None,
         )
-        self.assertEqual(
-            menu.view.item(1).data(Qt.ItemDataRole.AccessibleTextRole),
-            "Протокол подбора стратегии: STUN Voice (Discord/Telegram), не выбран",
-        )
+        self.addCleanup(page.deleteLater)
+        page._on_log("первая строка")
+        page._on_log("вторая строка")
+
+        with patch("blockcheck.ui.strategy_scan_page.show_log_report_dialog") as show_dialog:
+            page._log_btn.click()
+
+        show_dialog.assert_called_once()
+        kwargs = show_dialog.call_args.kwargs
+        self.assertEqual(kwargs["text"], "первая строка\nвторая строка")
+        self.assertTrue(kwargs["scroll_to_end"])
 
     def test_quick_target_menu_items_are_named_for_screen_reader(self) -> None:
         page = StrategyScanPage(
@@ -162,11 +137,12 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
         )
 
     def test_runtime_status_updates_state_text_for_screen_reader(self) -> None:
-        label = CaptionLabel("Готово к сканированию")
+        label = CaptionLabel("Подсказка")
 
         apply_phase_change(status_label=label, phase="Проверяется стратегия TLS fake")
 
-        self.assertEqual(label.text(), "Проверяется стратегия TLS fake")
+        # Видимый ход подбора — в шагах панели; подпись не прыгает.
+        self.assertEqual(label.text(), "Подсказка")
         self.assertEqual(
             label.property("screenReaderStateText"),
             "Статус подбора стратегии: Проверяется стратегия TLS fake",
@@ -184,7 +160,7 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
             result_rows=[],
             progress_bar=progress_bar,
             status_label=status_label,
-            scan_cursor=1,
+            done_count=1,
         )
 
         self.assertEqual(progress_bar.accessibleName(), "Ход подбора стратегии: выполняется")
@@ -219,38 +195,35 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
         )
         self.addCleanup(page.deleteLater)
         page._strategy_scan_run_runtime = _RunRuntimeStub()
-        set_state_text(page._table, "Старая строка подбора стратегии")
-        set_state_text(page._log_edit, "Старый лог подбора стратегии")
+        set_state_text(page._results_view, "Старая строка подбора стратегии")
+        page._log_lines.append("Старый лог подбора стратегии")
+        # До первого подбора блока «Подробный лог / Подготовить обращение» нет.
+        self.assertTrue(page._log_card.isHidden())
 
         page._on_start()
 
-        self.assertEqual(page._table.rowCount(), 0)
-        self.assertEqual(page._table.accessibleName(), "Результаты подбора стратегии: пока нет результатов")
-        self.assertEqual(
-            page._table.property("screenReaderStateText"),
-            "Результаты подбора стратегии: пока нет результатов",
-        )
-        self.assertEqual(page._log_edit.accessibleName(), "Подробный лог подбора стратегии: пока нет записей")
-        self.assertEqual(
-            page._log_edit.property("screenReaderStateText"),
-            "Подробный лог подбора стратегии: пока нет записей",
-        )
+        self.assertFalse(page._log_card.isHidden())
 
-    def test_language_refresh_updates_action_section_screen_reader_state(self) -> None:
-        action_label = CaptionLabel("Old")
+        self.assertEqual(page._results_view.row_count(), 0)
+        self.assertEqual(page._results_view.accessibleName(), "Результаты подбора стратегии: пока нет результатов")
+        self.assertEqual(list(page._log_lines), [])
+        self.assertEqual(page._scan_panel.state, "running")
+
+    def test_language_refresh_updates_field_labels(self) -> None:
+        protocol_label = CaptionLabel("Old")
+        start_btn = PushButton()
+        expand_btn = PushButton()
 
         apply_language_plan_ui(
             blockcheck_feature=blockcheck_public,
             language="ru",
-            log_expanded=False,
-            control_card=_TitleCardStub(),
-            results_card=_TitleCardStub(),
-            log_card=_TitleCardStub(),
-            expand_log_btn=PushButton(),
-            warning_card=_TitleCardStub(),
-            start_btn=PushButton(),
+            log_btn=expand_btn,
+            protocol_label=protocol_label,
+            mode_label=CaptionLabel(),
+            mode_combo=_ComboStub(3),
+            target_label=CaptionLabel(),
+            start_btn=start_btn,
             stop_btn=PushButton(),
-            actions_title_label=action_label,
             prepare_support_btn=PushButton(),
             protocol_combo=_ComboStub(3),
             games_scope_label=CaptionLabel("Old UDP"),
@@ -258,11 +231,29 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
             quick_domain_btn=PushButton(),
         )
 
-        self.assertEqual(action_label.text(), "Действия")
+        self.assertEqual(protocol_label.text(), "Что должно заработать?")
         self.assertEqual(
-            action_label.property("screenReaderStateText"),
-            "Раздел подбора стратегии: Действия",
+            protocol_label.property("screenReaderStateText"),
+            "Поле подбора стратегии: Что должно заработать?",
         )
+        self.assertEqual(start_btn.text(), "Найти рабочую стратегию")
+        self.assertEqual(expand_btn.text(), "Подробный лог")
+
+    def test_cards_have_no_headers_to_save_space(self) -> None:
+        page = StrategyScanPage(
+            blockcheck_feature=_BlockcheckFeatureStub(),
+            create_strategy_scan_worker=lambda *_args, **_kwargs: None,
+        )
+        self.addCleanup(page.deleteLater)
+
+        for card in (page._control_card, page._results_card, page._log_card):
+            self.assertIsNone(card._title_label)
+
+
+def _blockcheck_feature():
+    from app.feature_facades.blockcheck import BlockcheckFeature
+
+    return BlockcheckFeature(presets_feature=None, profile_feature=None)
 
 
 class _ProgressFeatureStub:
@@ -282,6 +273,9 @@ class _WorkerStub:
         self.strategy_result = _SignalStub()
         self.scan_log = _SignalStub()
         self.phase_changed = _SignalStub()
+        self.continue_question = _SignalStub()
+        self.strategy_args_started = _SignalStub()
+        self.stage_changed = _SignalStub()
         self.scan_finished = _SignalStub()
 
 

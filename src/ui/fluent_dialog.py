@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent
 
 from qfluentwidgets import (
+    ColorDialog as _QFluentColorDialog,
     MessageBox as _QFluentMessageBox,
     MessageBoxBase as _QFluentMessageBoxBase,
 )
@@ -165,4 +166,8 @@ class MessageBox(_ManagedMaskDialogLifecycle, _QFluentMessageBox):
     """Стандартный fluent-диалог с корректным завершением."""
 
 
-__all__ = ["MessageBox", "MessageBoxBase"]
+class ColorDialog(_ManagedMaskDialogLifecycle, _QFluentColorDialog):
+    """Диалог выбора цвета с тем же корректным завершением."""
+
+
+__all__ = ["ColorDialog", "MessageBox", "MessageBoxBase"]

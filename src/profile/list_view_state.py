@@ -207,6 +207,39 @@ def _display_item_with(item: Any, **changes: Any) -> Any:
         return SimpleNamespace(**data)
 
 
+_PROTOCOL_TOOLTIP_NOTES = {
+    "TCP": "TCP — обычные соединения с сайтами и сервисами (TLS/HTTP).",
+    "TCP/HTTP": "TCP/HTTP — незашифрованный HTTP-трафик (порт 80).",
+    "UDP": "UDP — трафик без установления соединения: QUIC, голос, игры.",
+    "L7": "L7 — фильтр по протоколу приложения: QUIC, STUN, WireGuard и похожие.",
+    "TCP/UDP": "TCP и UDP — профиль покрывает оба вида трафика.",
+    "Voice": "Voice — голосовой трафик: Discord Voice, STUN (звонки).",
+}
+
+_LIST_TYPE_TOOLTIP_NOTES = {
+    "hostlist": "Hostlist — обход действует только для доменов из списка этого профиля.",
+    "ipset": (
+        "IPset — обход действует по IP-адресам из списка "
+        "(когда домен определить нельзя, например для QUIC или голоса)."
+    ),
+}
+
+
+def profile_row_tooltip(item: ProfileDisplayItem) -> str:
+    match_lines = tuple(item.match_lines or ())
+    lines = [match_summary(item)]
+    protocol_note = _PROTOCOL_TOOLTIP_NOTES.get(protocol_label_from_match_lines(match_lines))
+    if protocol_note:
+        lines.append(protocol_note)
+    list_note = _LIST_TYPE_TOOLTIP_NOTES.get(str(item.list_type or "").strip().lower())
+    if list_note:
+        lines.append(list_note)
+    strategy_name = str(item.strategy_name or "").strip()
+    if strategy_name and strategy_name != "Стратегия не выбрана":
+        lines.append(f"Стратегия обхода: {strategy_name}.")
+    return "\n".join(lines)
+
+
 def row_for_profile(item: ProfileDisplayItem) -> dict[str, Any]:
     match_lines = tuple(item.match_lines or ())
     ports = ports_label_from_match_lines(match_lines)
@@ -218,7 +251,7 @@ def row_for_profile(item: ProfileDisplayItem) -> dict[str, Any]:
         )
         if part
     ]
-    tooltip = match_summary(item)
+    tooltip = profile_row_tooltip(item)
     if not item.in_preset:
         tooltip = f"{tooltip}\nПрофиля ещё нет в пресете. Включите его или выберите готовую стратегию."
     elif not item.enabled:
@@ -232,6 +265,7 @@ def row_for_profile(item: ProfileDisplayItem) -> dict[str, Any]:
         "description": " | ".join(description_parts),
         "strategy_id": item.strategy_id,
         "strategy_name": item.strategy_name,
+        "strategy_payload_badge": getattr(item, "strategy_payload_badge", ""),
         "match_lines": match_lines,
         "list_type": item.list_type,
         "rating": item.rating,
@@ -281,7 +315,7 @@ def build_profile_rows_from(
             "collapsed": not expanded,
             "count": len(group_items),
         })
-        if not expanded:
+        if not expanded and not str(search_query or "").strip():
             continue
         rows.extend(row_for_profile(item) for item in group_items)
     return rows

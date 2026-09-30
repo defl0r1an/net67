@@ -53,8 +53,14 @@ def install_startup_audit(*args, **kwargs):
     return install(*args, **kwargs)
 
 
-def install_dns_startup(*args, **kwargs):
-    from main.post_startup_dns import install_dns_startup as install
+def install_dns_address_migration(*args, **kwargs):
+    from main.post_startup_dns_migration import install_dns_address_migration as install
+
+    return install(*args, **kwargs)
+
+
+def install_hosts_applied_selection_refresh(*args, **kwargs):
+    from main.post_startup_hosts_refresh import install_hosts_applied_selection_refresh as install
 
     return install(*args, **kwargs)
 
@@ -95,6 +101,24 @@ def install_user_presets_warmup(*args, **kwargs):
     return install(*args, **kwargs)
 
 
+def install_user_preset_contract_migration(*args, **kwargs):
+    from main.post_startup_preset_contract_migration import install_user_preset_contract_migration as install
+
+    return install(*args, **kwargs)
+
+
+def install_remote_presets_sync(*args, **kwargs):
+    from main.post_startup_remote_presets import install_remote_presets_sync as install
+
+    return install(*args, **kwargs)
+
+
+def install_onboarding_tour(*args, **kwargs):
+    from main.post_startup_onboarding import install_onboarding_tour as install
+
+    return install(*args, **kwargs)
+
+
 def install_telegram_proxy_startup(*args, **kwargs):
     from main.post_startup_proxy import install_telegram_proxy_startup as install
 
@@ -107,10 +131,23 @@ def install_telegram_proxy_page_warmup(*args, **kwargs):
     return install(*args, **kwargs)
 
 
+def install_after_interactive_import_warmup(*args, **kwargs):
+    from main.post_startup_import_warmup import install_after_interactive_import_warmup as install
+
+    return install(*args, **kwargs)
+
+
+def install_secondary_page_warmup(*args, **kwargs):
+    from main.post_startup_secondary_page_warmup import install_secondary_page_warmup as install
+
+    return install(*args, **kwargs)
+
+
 def install_update_check(*args, **kwargs):
     from main.post_startup_update import install_update_check as install
 
     return install(*args, **kwargs)
+
 
 @dataclass(frozen=True, slots=True)
 class PostStartupDeps:
@@ -123,7 +160,6 @@ class PostStartupDeps:
     log_startup_metric: Any
     start_proxy_if_enabled_async: Any
     startup_lists_check: Any
-    apply_dns_on_startup_async: Any
     install_tray_post_startup: Any
     updater_feature: Any
     hosts_feature: Any = None
@@ -175,7 +211,15 @@ def install_post_startup_tasks(deps: PostStartupDeps) -> None:
         start_proxy_if_enabled_async=deps.start_proxy_if_enabled_async,
         log_startup_metric=deps.log_startup_metric,
     )
+    install_after_interactive_import_warmup(
+        startup_host,
+        log_startup_metric=deps.log_startup_metric,
+    )
     install_telegram_proxy_page_warmup(
+        startup_host,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    install_secondary_page_warmup(
         startup_host,
         log_startup_metric=deps.log_startup_metric,
     )
@@ -184,15 +228,23 @@ def install_post_startup_tasks(deps: PostStartupDeps) -> None:
         startup_lists_check=deps.startup_lists_check,
         log_startup_metric=deps.log_startup_metric,
     )
-    install_dns_startup(
+    # Раньше прогрева страницы Network в той же очереди «dns»: страница
+    # сразу покажет уже исправленные адреса.
+    install_dns_address_migration(
         startup_host,
-        apply_dns_on_startup_async=deps.apply_dns_on_startup_async,
-        set_status=deps.set_status,
+        dns_feature=deps.dns_feature,
         log_startup_metric=deps.log_startup_metric,
     )
     install_dns_page_data_warmup(
         startup_host,
         dns_feature=deps.dns_feature,
+        log_startup_metric=deps.log_startup_metric,
+    )
+    # Раньше прогрева страницы «Сервисы» в той же очереди «hosts»: новые
+    # адреса каталога ложатся в уже записанный блок без нажатия «Включить».
+    install_hosts_applied_selection_refresh(
+        startup_host,
+        hosts_feature=deps.hosts_feature,
         log_startup_metric=deps.log_startup_metric,
     )
     install_hosts_page_warmup(
@@ -214,11 +266,22 @@ def install_post_startup_tasks(deps: PostStartupDeps) -> None:
         on_profile_warmup_ready=on_profile_warmup_ready,
     )
     if deps.presets_feature is not None:
+        install_user_preset_contract_migration(
+            startup_host,
+            presets_feature=deps.presets_feature,
+            log_startup_metric=deps.log_startup_metric,
+        )
         install_user_presets_warmup(
             startup_host,
             presets_feature=deps.presets_feature,
             log_startup_metric=deps.log_startup_metric,
             current_launch_method=str(getattr(deps, "launch_method", "") or ""),
+        )
+        install_remote_presets_sync(
+            startup_host,
+            presets_feature=deps.presets_feature,
+            log_startup_metric=deps.log_startup_metric,
+            notify=deps.notify,
         )
     deps.install_tray_post_startup()
     install_update_check(
@@ -226,6 +289,14 @@ def install_post_startup_tasks(deps: PostStartupDeps) -> None:
         updater_feature=deps.updater_feature,
         notify=deps.notify,
         set_status=deps.set_status,
+    )
+    # Проверка целостности установки из исходного проекта здесь не
+    # ставится: она опирается на его updater, которого в net67 нет.
+    # Обучающий тур ставится, но сам ждёт, пока пройден мастер первого
+    # запуска, — см. main/post_startup_onboarding.py.
+    install_onboarding_tour(
+        startup_host,
+        log_startup_metric=deps.log_startup_metric,
     )
     install_cpu_diagnostic()
     install_qt_event_diagnostic_probe()

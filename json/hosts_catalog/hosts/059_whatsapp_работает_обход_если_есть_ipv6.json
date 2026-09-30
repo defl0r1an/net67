@@ -1,5 +1,9 @@
 {
   "name": "WhatsApp (работает обход если есть IPv6)",
+  "category": "direct",
+  "icon": "fa5b.whatsapp",
+  "icon_color": "#25d366",
+  "sort_order": 25,
   "hosts": [
     {
       "ip": "2a03:2880:f37a:120:face:b00c:0:167",
@@ -19,10 +23,6 @@
     },
     {
       "ip": "2a03:2880:f36f:120:face:b00c:0:167",
-      "host": "web.whatsapp.com"
-    },
-    {
-      "ip": "2a03:2880:f213:c3:face:b00c:0:167",
       "host": "web.whatsapp.com"
     },
     {

@@ -16,9 +16,14 @@ from winws_runtime.health.antivirus_detection import (  # noqa: F401 (реэкс
     _find_known_antivirus_name,
     _is_windows_defender_active,
 )
+from winws_runtime.health.winws_output import (
+    has_diagnostic_output,
+    relevant_error_line,
+)
 from winws_runtime.health.windivert_diagnostics import (
     WINDIVERT_ERROR_TABLE,
     _ERROR_ACCESS_DENIED,
+    _FWP_E_IN_USE,
     _ERROR_BAD_PATHNAME,
     _ERROR_DRIVER_BLOCKED,
     _ERROR_DRIVER_FAILED_PRIOR_UNLOAD,
@@ -31,6 +36,8 @@ from winws_runtime.health.windivert_diagnostics import (
     _ERROR_SERVICE_DISABLED,
     _ERROR_SERVICE_DOES_NOT_EXIST,
     _WINDIVERT_DRIVER_SERVICE_NAMES,
+    describe_windivert_conflict_hint,
+    format_windows_error_code,
 )
 
 
@@ -43,6 +50,13 @@ class WinDivertDiagnosis:
     severity: str = "critical"        # "critical" | "warning"
     exit_code: int = 0                # Original exit code
     win32_error: Optional[int] = None # Mapped Win32 error (may differ from exit_code)
+    # True, когда win32_error не измерен, а восстановлен эвристикой из
+    # усечённого кода завершения (34 → 1058). Такой код и построенная на нём
+    # причина обязаны показываться пользователю как предположение.
+    win32_error_inferred: bool = False
+    # False, когда известен сам тип сбоя, но исходный Win32-код уже потерян
+    # внутри winws2. В таком случае нельзя писать пользователю «Найдена причина».
+    cause_is_exact: bool = True
 
 
 def format_winws_exit_diagnosis(
@@ -56,10 +70,17 @@ def format_winws_exit_diagnosis(
     WinDivert возвращает 1058, а ``winws2.exe`` завершается с кодом 34. Поэтому
     пользователю важно показать оба значения и не подменять причину первой
     служебной строкой вывода ``winws``.
+
+    Измеренное и предположенное разделены: если Win32-код не получен от
+    процесса, а восстановлен эвристикой (``win32_error_inferred``), он
+    показывается как предположение и стоит после фактического кода завершения,
+    а причина подаётся как вероятная, а не как установленная.
     """
     executable = str(exe_name or "winws").strip() or "winws"
     cause = str(getattr(diagnosis, "cause", "") or "").strip().rstrip(".")
     solution = str(getattr(diagnosis, "solution", "") or "").strip().rstrip(".")
+    inferred = bool(getattr(diagnosis, "win32_error_inferred", False))
+    cause_is_exact = bool(getattr(diagnosis, "cause_is_exact", True))
 
     try:
         exit_code = int(getattr(diagnosis, "exit_code", 0))
@@ -73,17 +94,28 @@ def format_winws_exit_diagnosis(
 
     code_parts: list[str] = []
     if win32_error is not None:
+        win32_text = format_windows_error_code(win32_error)
         if exit_code and exit_code != win32_error:
-            code_parts.append(f"код ошибки Windows {win32_error}")
-            code_parts.append(f"код завершения процесса {exit_code}")
+            exit_text = format_windows_error_code(exit_code)
+            if inferred:
+                # Измеренный факт первым, восстановленный код — как догадка.
+                code_parts.append(f"код завершения процесса {exit_text}")
+                code_parts.append(f"предположительно код ошибки Windows {win32_text}")
+            else:
+                code_parts.append(f"код ошибки Windows {win32_text}")
+                code_parts.append(f"код завершения процесса {exit_text}")
         else:
-            code_parts.append(f"код ошибки {win32_error}")
+            code_parts.append(f"код ошибки {win32_text}")
     elif exit_code:
-        code_parts.append(f"код завершения процесса {exit_code}")
+        code_parts.append(f"код завершения процесса {format_windows_error_code(exit_code)}")
 
     message = f"{executable} не запустился"
     if cause:
-        message = f"{message}. Найдена причина: {cause}"
+        if not cause_is_exact:
+            cause_label = "Что известно"
+        else:
+            cause_label = "Вероятная причина" if inferred else "Найдена причина"
+        message = f"{message}. {cause_label}: {cause}"
     if code_parts:
         message = f"{message} ({'; '.join(code_parts)})"
     if solution:
@@ -119,6 +151,9 @@ _STDERR_TO_WIN32: List[Tuple[str, int]] = [
     ("driver blocked", _ERROR_DRIVER_BLOCKED),
     ("blocked from loading", _ERROR_DRIVER_BLOCKED),
     ("driver failed prior unload", _ERROR_DRIVER_FAILED_PRIOR_UNLOAD),
+    # FWP_E_IN_USE: winws2 печатает текст ошибки, а кодом завершения отдаёт
+    # усечённое значение, по которому этот случай не опознать.
+    ("referenced by other objects", _FWP_E_IN_USE),
     ("bad pathname", _ERROR_BAD_PATHNAME),
     ("service does not exist", _ERROR_SERVICE_DOES_NOT_EXIST),
     ("dependency service", _ERROR_SERVICE_DEPENDENCY_FAIL),
@@ -145,8 +180,37 @@ def diagnose_winws_exit(exit_code: int, stderr: str = "") -> Optional[WinDivertD
 
     stderr_lower = (stderr or "").lower()
 
+    # В zapret2 v1.0.3 и в текущем upstream после неудачного
+    # GetOverlappedResult() не сохраняется новый GetLastError(). В результате
+    # остаётся предыдущее штатное ERROR_IO_PENDING (997), а Cygwin-процесс
+    # завершает работу усечённым кодом 229. Это не ERROR_PIPE_LOCAL и не
+    # самостоятельная причина WinDivert — исходный Win32-код уже утрачен.
+    if (
+        int(exit_code) == 229
+        and "windivert: recv failed" in stderr_lower
+        and "errno 5" in stderr_lower
+    ):
+        return WinDivertDiagnosis(
+            cause=(
+                "winws2 сообщил «windivert: recv failed. errno 5»: "
+                "асинхронное чтение пакетов из WinDivert завершилось ошибкой, "
+                "но winws2 потерял исходный код Windows. Код 229 — усечённый "
+                "остаток штатного ERROR_IO_PENDING (997), а не причина сбоя WinDivert"
+            ),
+            solution=(
+                "Закройте другие программы, использующие WinDivert, и повторите запуск. "
+                "Если активен только один winws2, перезагрузите Windows. "
+                "Полный вывод winws2 сохранён в журнале программы"
+            ),
+            severity="critical",
+            exit_code=int(exit_code),
+            win32_error=None,
+            cause_is_exact=False,
+        )
+
     # 1. Resolve the real Win32 error from stderr text (more reliable)
     win32_error = exit_code
+    win32_error_inferred = False
     for pattern, code in _STDERR_TO_WIN32:
         if pattern in stderr_lower:
             win32_error = code
@@ -155,8 +219,13 @@ def diagnose_winws_exit(exit_code: int, stderr: str = "") -> Optional[WinDivertD
     # Winws2 can return the raw Win32 error truncated to one byte.
     # ERROR_SERVICE_DISABLED 1058 becomes process exit code 34, often without
     # stderr in GUI launch mode. Treat that as the same driver-service failure.
-    if win32_error == 34 and not stderr_lower.strip():
+    # "Без stderr" здесь означает "без диагностики": служебный баннер версии
+    # winws2 печатает всегда, и раньше он один ломал эту ветку.
+    # Это единственная ветка, где Win32-код не измерен, а угадан, поэтому она
+    # помечает диагноз как предположительный.
+    if win32_error == 34 and not has_diagnostic_output(stderr):
         win32_error = _ERROR_SERVICE_DISABLED
+        win32_error_inferred = True
 
     # 2. Dispatch to specific handlers
     handler = _EXIT_CODE_HANDLERS.get(win32_error)
@@ -164,33 +233,27 @@ def diagnose_winws_exit(exit_code: int, stderr: str = "") -> Optional[WinDivertD
         diag = handler(exit_code, stderr)
         diag.exit_code = exit_code
         diag.win32_error = win32_error
+        diag.win32_error_inferred = win32_error_inferred
         return diag
 
     # 3. Fallback: generic WinDivert error
     if "windivert" in stderr_lower or "error opening filter" in stderr_lower:
         first_line = _extract_relevant_error_line(stderr)[:200]
         return WinDivertDiagnosis(
-            cause=f"Ошибка WinDivert (код {exit_code})",
+            cause=f"Ошибка WinDivert (код {format_windows_error_code(exit_code)})",
             solution=first_line or "Перезагрузите компьютер и попробуйте снова",
             severity="critical",
             exit_code=exit_code,
             win32_error=win32_error,
+            win32_error_inferred=win32_error_inferred,
         )
 
     return None
 
 
 def _extract_relevant_error_line(stderr: str) -> str:
-    lines = [line.strip() for line in str(stderr or "").splitlines() if line.strip()]
-    for line in reversed(lines):
-        lower = line.lower()
-        if "windivert:" in lower or "error opening filter" in lower:
-            return line
-    for line in reversed(lines):
-        lower = line.lower()
-        if "error" in lower or "ошибка" in lower:
-            return line
-    return lines[0] if lines else ""
+    """Самая содержательная строка вывода (см. winws_output — единый разбор)."""
+    return relevant_error_line(stderr, fallback="first")
 
 
 # ---------------------------------------------------------------------------
@@ -312,16 +375,9 @@ def _handle_invalid_parameter(exit_code: int, stderr: str) -> WinDivertDiagnosis
             severity="critical",
         )
 
-    # Lua desync function not found — lua-init auto-fix didn't help,
-    # meaning the .lua file itself is missing from disk.
     m = re.search(r"desync function '([^']+)' does not exist", stderr or "")
     if m:
-        func_name = m.group(1)
-        return WinDivertDiagnosis(
-            cause=f"Lua-функция '{func_name}' не найдена — файл .lua отсутствует на диске",
-            solution="Переустановите программу — файлы в папке lua/ повреждены или удалены",
-            severity="critical",
-        )
+        return _diagnose_missing_lua_function(m.group(1))
 
     # Lua script syntax/runtime error
     if "lua" in stderr_lower and ("error" in stderr_lower or "syntax" in stderr_lower):
@@ -334,6 +390,51 @@ def _handle_invalid_parameter(exit_code: int, stderr: str) -> WinDivertDiagnosis
     return _diagnosis_from_table(_ERROR_INVALID_PARAMETER, severity="warning")
 
 
+def _diagnose_missing_lua_function(func_name: str) -> WinDivertDiagnosis:
+    """winws2: «desync function 'X' does not exist» — функции X нет в загруженных lua.
+
+    Отсутствующий на диске lua-файл winws2 сообщает раньше и другим текстом
+    (LUA file ... not accessible), поэтому здесь две причины: функция из
+    известного файла, который пресет не подключил, или опечатка в имени.
+    Справочник функций — profile.winws2_language.lua_catalog, тот же, по
+    которому редактор пресета подчёркивает такую строку.
+    """
+    from profile.winws2_language.lua_catalog import LUA_FUNCTIONS_BY_NAME, closest_lua_function_names
+
+    spec = LUA_FUNCTIONS_BY_NAME.get(func_name)
+    if spec is not None:
+        lua_init = f"--lua-init=@lua/{spec.files[0]}"
+        return WinDivertDiagnosis(
+            cause=f"Lua-функция «{func_name}» есть в файле lua/{spec.files[0]}, но пресет этот файл не подключает",
+            solution=(
+                f"Добавьте в начало пресета строку {lua_init} — в редакторе пресета это сделает Ctrl+. "
+                "на подчёркнутой строке. Если такая строка уже есть, файл повреждён: переустановите программу"
+            ),
+            severity="critical",
+        )
+    suggestions = closest_lua_function_names(func_name)
+    if suggestions:
+        return WinDivertDiagnosis(
+            cause=(
+                f"В пресете опечатка: Lua-функции «{func_name}» не существует. "
+                f"Возможно, имелось в виду «{suggestions[0]}»"
+            ),
+            solution=(
+                f"Исправьте в строке --lua-desync имя «{func_name}» на «{suggestions[0]}» — "
+                "в редакторе пресета строка подчёркнута, Ctrl+. исправит её"
+            ),
+            severity="critical",
+        )
+    return WinDivertDiagnosis(
+        cause=f"Lua-функции «{func_name}» нет ни в одном lua-файле программы",
+        solution=(
+            "Проверьте имя функции в строке --lua-desync или подключите свой lua-файл "
+            "с этой функцией через --lua-init"
+        ),
+        severity="critical",
+    )
+
+
 def _handle_bad_pathname(exit_code: int, stderr: str) -> WinDivertDiagnosis:
     missing = _check_windivert_files()
     diagnosis = _diagnosis_from_table(_ERROR_BAD_PATHNAME)
@@ -344,6 +445,19 @@ def _handle_bad_pathname(exit_code: int, stderr: str) -> WinDivertDiagnosis:
 
 def _handle_process_aborted(exit_code: int, stderr: str) -> WinDivertDiagnosis:
     return _diagnosis_from_table(_ERROR_PROCESS_ABORTED)
+
+
+def _handle_fwp_in_use(exit_code: int, stderr: str) -> WinDivertDiagnosis:
+    """FWP_E_IN_USE — WinDivert держат остатки прошлого запуска или чужая программа.
+
+    Базовый текст говорит «закройте другие программы», а подсказка о конфликте
+    называет виновника по имени, если его удалось найти.
+    """
+    diagnosis = _diagnosis_from_table(_FWP_E_IN_USE)
+    hint = describe_windivert_conflict_hint()
+    if hint:
+        diagnosis.solution = f"{hint}. {diagnosis.solution}"
+    return diagnosis
 
 
 # Handler dispatch table
@@ -360,6 +474,7 @@ _EXIT_CODE_HANDLERS = {
     _ERROR_INVALID_PARAMETER: _handle_invalid_parameter,
     _ERROR_BAD_PATHNAME: _handle_bad_pathname,
     _ERROR_PROCESS_ABORTED: _handle_process_aborted,
+    _FWP_E_IN_USE: _handle_fwp_in_use,
 }
 
 
@@ -398,30 +513,7 @@ def _probe_service_disabled_cause() -> Tuple[str, str, Optional[str]]:
             "cleanup_driver",
         )
 
-    # Check 4: Driver installed but not yet ready after cleanup/restart.
-    try:
-        from winws_runtime.runtime.system_ops import probe_windivert_state_runtime
-
-        probe = probe_windivert_state_runtime()
-        probe_code_suffix = (
-            f" (код {int(probe.error_code)})" if probe.error_code is not None else ""
-        )
-        if probe.installed and not probe.ready:
-            return (
-                f"WinDivert ещё не готов после предыдущего запуска или очистки{probe_code_suffix}",
-                "Подождите пару секунд и попробуйте снова. Если повторяется — перезапустите программу или ПК",
-                None,
-            )
-        if not probe.installed and not probe.ready:
-            return (
-                f"WinDivert ещё не установился или не готов к открытию фильтра{probe_code_suffix}",
-                "Подождите пару секунд и попробуйте снова. Если повторяется — перезапустите программу или проверьте файлы WinDivert",
-                None,
-            )
-    except Exception:
-        pass
-
-    # Check 5: Kaspersky after a real WinDivert start failure.
+    # Check 4: Kaspersky after a real WinDivert start failure.
     try:
         from winws_runtime.health.launch_conflicts import build_launch_conflict_advice
 
@@ -432,7 +524,7 @@ def _probe_service_disabled_cause() -> Tuple[str, str, Optional[str]]:
     except Exception:
         pass
 
-    # Check 6: Antivirus
+    # Check 5: Antivirus
     av = _detect_active_antivirus()
     if av:
         return (
@@ -441,7 +533,7 @@ def _probe_service_disabled_cause() -> Tuple[str, str, Optional[str]]:
             None,
         )
 
-    # Check 7: Network adapters. This check must be late because Win32 1058
+    # Check 6: Network adapters. This check must be late because Win32 1058
     # is a generic service-disabled error and otherwise easily turns into a
     # ложный диагноз про адаптеры.
     if not _check_network_adapters():
@@ -451,6 +543,32 @@ def _probe_service_disabled_cause() -> Tuple[str, str, Optional[str]]:
             "enable_adapters",
         )
 
+    # Check 7: драйвер зарегистрирован, но фильтр открыть нельзя.
+    #
+    # Проверка стоит последней намеренно. Probe выполняется уже после смерти
+    # winws2 и с флагом NO_INSTALL, а WinDivert по умолчанию снимает свою
+    # службу при закрытии последнего дескриптора. Поэтому "службы нет"
+    # (ERROR_SERVICE_DOES_NOT_EXIST) — это обычное состояние покоя, а не
+    # причина отказа: раньше эта ветка стояла четвёртой, срабатывала почти на
+    # каждом падении 34/1058 и глушила проверки Kaspersky/антивируса/адаптеров.
+    # Диагностическую ценность имеет только обратный случай: служба есть, а
+    # NETWORK layer всё равно не открывается.
+    try:
+        from winws_runtime.runtime.system_ops import probe_windivert_state_runtime
+
+        probe = probe_windivert_state_runtime()
+        if probe.installed and not probe.ready:
+            probe_code_suffix = (
+                f" (код {int(probe.error_code)})" if probe.error_code is not None else ""
+            )
+            return (
+                f"WinDivert ещё не готов после предыдущего запуска или очистки{probe_code_suffix}",
+                "Подождите пару секунд и попробуйте снова. Если повторяется — перезапустите программу или ПК",
+                None,
+            )
+    except Exception:
+        pass
+
     # Fallback: базовый текст 1058 из единой таблицы.
     record = WINDIVERT_ERROR_TABLE[_ERROR_SERVICE_DISABLED]
     return (record.cause, record.solution, record.auto_fix_action)
@@ -459,16 +577,9 @@ def _probe_service_disabled_cause() -> Tuple[str, str, Optional[str]]:
 def _check_network_adapters() -> bool:
     """Return True if at least one network adapter is enabled/up."""
     try:
-        from dns.public import get_adapters_info_native
+        from dns.winapi import list_interfaces
 
-        adapters = get_adapters_info_native()
-        for adapter in adapters:
-            adapter_type = int(adapter.get("type") or 0)
-            if adapter_type == 24:  # MIB_IF_TYPE_LOOPBACK
-                continue
-            if adapter.get("index") or adapter.get("adapter_name") or adapter.get("name"):
-                return True
-        return False
+        return any(interface.connected for interface in list_interfaces())
     except Exception:
         return True  # assume OK on failure
 

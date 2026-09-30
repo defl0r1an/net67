@@ -15,10 +15,14 @@
 * `appearance.rkn_background` и вариант `background_preset: rkn_chan` —
   фон из исходного проекта;
 * `program.selected_source_preset_file_name_winws1` — движок winws1
-  вырезан.
+  вырезан;
+* `program.remove_github_api` и `hosts.bootstrap_signature` — разовая
+  чистка api.github.com из hosts. Её единственным читателем был
+  bootstrap в HostsManager, а он переписывал строки человека в hosts;
+  в zapret его убрали вместе с новым редактором hosts.
 
 Оставлено намеренно: `discord_auto_restart` (им управляет меню в трее),
-`remove_github_api` (читает редактор hosts), `defender_disabled`.
+`defender_disabled`.
 """
 
 from __future__ import annotations
@@ -41,11 +45,12 @@ DEAD_SECTIONS = ("premium", "orchestra")
 
 DEAD_FIELDS = {
     "appearance": ("garland_enabled", "snowflakes_enabled", "selected_theme", "rkn_background"),
-    "program": ("selected_source_preset_file_name_winws1",),
+    "program": ("selected_source_preset_file_name_winws1", "remove_github_api"),
+    "hosts": ("bootstrap_signature",),
 }
 
 ALIVE_FIELDS = {
-    "program": ("discord_auto_restart", "remove_github_api", "defender_disabled"),
+    "program": ("discord_auto_restart", "defender_disabled"),
 }
 
 

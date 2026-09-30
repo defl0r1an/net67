@@ -149,17 +149,18 @@ def _resolve_server_ips(profile) -> list[str]:
     if is_ip_address(host):
         return [host]
 
+    # Через utils.net_resolve, а не socket.getaddrinfo напрямую: у того
+    # нет срока, и при сломанном DNS поток туннеля висел, пока Windows сама
+    # не сдастся, — десятки секунд без единой строки в журнале.
     try:
         import socket
 
-        found: list[str] = []
-        for item in socket.getaddrinfo(host, None, socket.AF_INET):
-            address = str(item[4][0])
-            if address and address not in found:
-                found.append(address)
+        from utils.net_resolve import resolve_ips
+
+        found, _ipv6 = resolve_ips(host, family=socket.AF_INET)
         if not found:
             log(f"Имя сервера {host} не дало ни одного адреса", "⚠ VPN")
-        return found
+        return list(found)
     except Exception as exc:
         log(f"Не удалось разрешить адрес сервера {host}: {exc}", "⚠ VPN")
         return []

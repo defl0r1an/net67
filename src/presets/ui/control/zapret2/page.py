@@ -42,6 +42,7 @@ from ui.widgets.hero_control import make_round_button_class
 from presets.ui.control.refresh_runtime_state import create_refresh_runtime
 from app.ui_texts import tr as tr_catalog
 
+from ui.widgets.soft_visibility import set_visible_softly
 from qfluentwidgets import (
     CaptionLabel, StrongBodyLabel,
     IndeterminateProgressBar,
@@ -109,6 +110,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         open_preset_setup,
         create_external_open_url_worker,
         ui_state_store,
+        start_onboarding_tour,
     ):
         _t_init = _time.perf_counter()
         _t_base = _time.perf_counter()
@@ -139,6 +141,8 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self._open_presets_callback = open_presets
         self._open_preset_setup_callback = open_preset_setup
         self._create_external_open_url_worker = create_external_open_url_worker
+        self._start_onboarding_tour_callback = start_onboarding_tour
+        self.onboarding_tour_card = None
         self._ui_state_store = None
         self._ui_state_unsubscribe = None
         self._program_settings_runtime_unsubscribe = None
@@ -522,6 +526,8 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             on_open_connection_test=self._open_connection_test,
             on_open_internet_cleanup=self._on_internet_cleanup_clicked,
             on_open_folder=self._open_folder,
+            on_open_onboarding_tour=self._start_onboarding_tour,
+            on_open_bypass_tour=self._start_bypass_tour,
         )
         _log_startup_winws2_control_metric(
             "_build_ui.settings_sections_build", (_time.perf_counter() - _t_sections_build) * 1000
@@ -534,6 +540,8 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.tray_close_mode_combo = section_widgets.tray_close_mode_combo
         self.defender_toggle = section_widgets.defender_toggle
         self.max_block_toggle = section_widgets.max_block_toggle
+        self.onboarding_tour_card = section_widgets.tour_card
+        self.bypass_tour_card = section_widgets.bypass_tour_card
         self.add_spacing(8)
         self.add_spacing(16)
         self.add_widget(self.program_settings_card)
@@ -567,6 +575,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.test_card = section_widgets.test_card
         self.internet_cleanup_card = section_widgets.internet_cleanup_card
         self.folder_card = section_widgets.folder_card
+
         self.state_media_block_toggle = section_widgets.state_media_block_toggle
         self.test_btn = self.test_card.button
         self.internet_cleanup_btn = self.internet_cleanup_card.button
@@ -885,8 +894,8 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
 
     def set_loading(self, loading: bool, text: str = ""):
         set_progress_active_if_changed(self.progress_bar, loading)
-        set_visible_if_changed(self.progress_bar, loading)
-        set_visible_if_changed(self.loading_label, loading and bool(text))
+        set_visible_softly(self.progress_bar, loading)
+        set_visible_softly(self.loading_label, loading and bool(text))
         set_text_if_changed(self.loading_label, text)
         set_loading_status_accessibility(self.loading_label, active=loading, text=text)
 
@@ -910,6 +919,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
                 "active_preset_revision",
                 "preset_content_revision",
                 "mode_revision",
+                "subscription_known",
                 "subscription_is_premium",
                 "subscription_days_remaining",
             },
@@ -930,9 +940,8 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             or "current_strategy_summary" in changed
             or "preset_content_revision" in changed
         )
-        top_summary_premium_changed = (
-            "subscription_is_premium" in changed
-            or "subscription_days_remaining" in changed
+        top_summary_premium_changed = bool(
+            changed & {"subscription_known", "subscription_is_premium", "subscription_days_remaining"}
         )
         runtime_status_changed = (
             not changed
@@ -1047,6 +1056,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             internet_cleanup_card=self.internet_cleanup_card,
             folder_card=self.folder_card,
             additional_settings_notice=self.additional_settings_notice,
+            fakes_card=None,
             program_settings_card=self.program_settings_card,
             auto_dpi_toggle=self.auto_dpi_toggle,
             gui_autostart_toggle=self.gui_autostart_toggle,
@@ -1060,6 +1070,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             debug_log_toggle=self.debug_log_toggle,
             update_stop_button_text=self._update_stop_winws_button_text,
         )
+
 
     def cleanup(self) -> None:
         self._cleanup_in_progress = True

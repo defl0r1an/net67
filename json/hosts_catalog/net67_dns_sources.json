@@ -1,0 +1,2929 @@
+{
+  "_": [
+    "Профили DNS, которые добавил net67, поверх каталога из zapret.",
+    "Файл пишет tools/refresh_hosts_catalog.py — руками не править.",
+    "Каталог главнее: профиль, который уже есть в dns_sources.json,",
+    "отсюда не берётся (src/hosts/proxy_domains.py, _apply_net67_overlay)."
+  ],
+  "dns_sources": [
+    {
+      "id": "astracat",
+      "name": "AstraCat"
+    },
+    {
+      "id": "geohide",
+      "name": "GeoHide"
+    }
+  ],
+  "ips": {
+    "a-api.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "193.233.112.67"
+    },
+    "a-cdn.anthropic.com": {
+      "astracat": "34.36.57.103",
+      "geohide": "193.233.112.88"
+    },
+    "a-lemmy.fmhy.net": {
+      "geohide": "193.233.112.88"
+    },
+    "aaa.deezer.com": {
+      "astracat": "145.239.32.210",
+      "geohide": "193.233.112.88"
+    },
+    "ab.chatgpt.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "academy.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "access.broadcom.com": {
+      "astracat": "172.66.0.165",
+      "geohide": "193.233.112.67"
+    },
+    "account.deezer.com": {
+      "astracat": "95.100.107.157",
+      "geohide": "193.233.112.68"
+    },
+    "account.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "accounts.autodesk.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "accounts.scdn.co": {
+      "geohide": "159.194.200.33"
+    },
+    "accounts.spotify.com": {
+      "geohide": "193.233.112.67"
+    },
+    "accounts.x.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "activation.deezer.com": {
+      "astracat": "95.100.107.171",
+      "geohide": "193.233.112.88"
+    },
+    "adobe.fls.jetbrains.com": {
+      "astracat": "52.213.162.214",
+      "geohide": "193.233.112.68"
+    },
+    "aeronube.csm.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "aet.spotify.com": {
+      "geohide": "193.233.112.68"
+    },
+    "afcs.dellcdn.com": {
+      "astracat": "23.12.158.96",
+      "geohide": "193.233.112.68"
+    },
+    "affiliate.deezer.com": {
+      "astracat": "185.159.107.201",
+      "geohide": "159.194.200.33"
+    },
+    "ai.google.dev": {
+      "astracat": "173.194.73.102",
+      "geohide": "193.233.112.67"
+    },
+    "aisandbox-pa.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "aistudio.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "aitestkitchen.withgoogle.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "alienwarearena.com": {
+      "astracat": "151.101.2.133",
+      "geohide": "151.101.130.133"
+    },
+    "alkalicore-pa.clients6.google.com": {
+      "astracat": "108.177.14.95",
+      "geohide": "193.233.112.68"
+    },
+    "alkalimakersuite-pa.clients6.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "amazon.fls.jetbrains.com": {
+      "astracat": "52.213.162.214",
+      "geohide": "193.233.112.88"
+    },
+    "amd.com": {
+      "geohide": "193.233.112.67"
+    },
+    "android.chat.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "ansync.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "193.233.112.88"
+    },
+    "anthropic.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "193.233.112.67"
+    },
+    "ap-help.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.68"
+    },
+    "api-free.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "api-global.squareup.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "api-partner.spotify.com": {
+      "geohide": "193.233.112.67"
+    },
+    "api-sg-central.trae.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "api-test.sandbox-resellers.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "api-websub.deezer.com": {
+      "astracat": "95.100.107.157",
+      "geohide": "193.233.112.67"
+    },
+    "api.anthropic.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "api.cdnlibs.org": {
+      "geohide": "159.194.200.33"
+    },
+    "api.claude.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "api.console.anthropic.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "api.deepl.com": {
+      "astracat": "194.124.204.71",
+      "geohide": "159.194.200.33"
+    },
+    "api.deezer.com": {
+      "astracat": "95.100.107.146",
+      "geohide": "193.233.112.88"
+    },
+    "api.elevenlabs.io": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "api.fitbit.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "api.fmhy.net": {
+      "geohide": "193.233.112.88"
+    },
+    "api.imgur.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "api.individual.githubcopilot.com": {
+      "astracat": "217.60.179.6"
+    },
+    "api.jetbrains.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "api.manus.im": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "api.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "api.spotify.com": {
+      "geohide": "193.233.112.67"
+    },
+    "api.squareup.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "api.trae.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "api.us.elevenlabs.io": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "api.workos.com": {
+      "geohide": "193.233.112.67"
+    },
+    "api.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "159.194.200.33"
+    },
+    "api16-normal-alisg.mchost.guru": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "apis.google.com": {
+      "astracat": "64.233.163.196",
+      "geohide": "193.233.112.88"
+    },
+    "apis.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "app.reve.com": {
+      "geohide": "193.233.112.68"
+    },
+    "app.test.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "app.tuta.com": {
+      "geohide": "159.194.200.33"
+    },
+    "appcatalyst.pa.googleapis.com": {
+      "astracat": "64.233.165.95",
+      "geohide": "193.233.112.67"
+    },
+    "apply.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "applyintegration.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "arabicstatic.naukimg.com": {
+      "geohide": "193.233.112.67"
+    },
+    "arena.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "asia-south1-livekit.grok.com": {
+      "astracat": "34.13.75.26",
+      "geohide": "193.233.112.88"
+    },
+    "assessment.nc.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "assessments.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "assessments.nc.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "assets-configurator.chess.com": {
+      "geohide": "193.233.112.88"
+    },
+    "assets-proxy.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "193.233.112.68"
+    },
+    "assets.grok.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "assets.staging.assessment.nc.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "assets.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "159.194.200.33"
+    },
+    "assistant-s3-pa.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "audio-fa-tls13.spotifycdn.com": {
+      "geohide": "199.232.210.250"
+    },
+    "audio-fa.scdn.co": {
+      "geohide": "193.233.112.68"
+    },
+    "auth.anthropic.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "auth.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "auth.deezer.com": {
+      "astracat": "95.100.107.142",
+      "geohide": "193.233.112.67"
+    },
+    "auth.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "auth0.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "autoconfig.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.68"
+    },
+    "autodiscover.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "159.194.200.33"
+    },
+    "autodiscover.csm.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "autodiscover.login.recruit.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "autodiscover.naukimg.com": {
+      "geohide": "193.233.112.67"
+    },
+    "autodiscover.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "autodiscover.rms.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "avasin.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "awsproxy.pkg-cdn.jetbrains.space": {
+      "astracat": "65.9.46.37",
+      "geohide": "193.233.112.68"
+    },
+    "backend.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "backstage.deezer.com": {
+      "astracat": "95.100.107.157",
+      "geohide": "159.194.200.33"
+    },
+    "badoo.app": {
+      "geohide": "193.233.112.68"
+    },
+    "badoo.com": {
+      "geohide": "159.194.200.33"
+    },
+    "badoocdn.com": {
+      "geohide": "193.233.112.88"
+    },
+    "bard.google.com": {
+      "astracat": "142.251.156.2",
+      "geohide": "193.233.112.68"
+    },
+    "beta.api.openai.com": {
+      "astracat": "104.18.33.45",
+      "geohide": "193.233.112.68"
+    },
+    "beta.openai.com": {
+      "astracat": "172.64.154.211",
+      "geohide": "193.233.112.68"
+    },
+    "blog.jetbrains.com": {
+      "astracat": "3.174.230.50",
+      "geohide": "193.233.112.88"
+    },
+    "blog.openai.com": {
+      "astracat": "172.64.154.211",
+      "geohide": "193.233.112.68"
+    },
+    "blog.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "blogs.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "blogs.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "bms.naukimg.com": {
+      "geohide": "193.233.112.68"
+    },
+    "bo-partners.deezer.com": {
+      "astracat": "185.159.107.201",
+      "geohide": "193.233.112.88"
+    },
+    "bo-playlist.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "193.233.112.68"
+    },
+    "builds.parsec.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "business.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "byid.eu-1.jetbrains.space": {
+      "astracat": "52.50.163.132",
+      "geohide": "193.233.112.68"
+    },
+    "byid.jetbrains.space": {
+      "astracat": "40.180.22.93",
+      "geohide": "193.233.112.67"
+    },
+    "c.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "c10.patreonusercontent.com": {
+      "astracat": "104.18.70.106"
+    },
+    "c13.patreon.com": {
+      "astracat": "104.16.25.14"
+    },
+    "c5.patreon.com": {
+      "astracat": "104.16.24.14"
+    },
+    "ca.jetbrains.com": {
+      "astracat": "18.66.233.112",
+      "geohide": "193.233.112.68"
+    },
+    "cai.jetbrains.com": {
+      "astracat": "52.50.221.0",
+      "geohide": "193.233.112.67"
+    },
+    "calendar.notion.com": {
+      "astracat": "208.103.161.1",
+      "geohide": "193.233.112.67"
+    },
+    "calendar.notion.so": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "canva.com": {
+      "astracat": "3.164.68.123",
+      "geohide": "193.233.112.88"
+    },
+    "canvaz.scdn.co": {
+      "geohide": "193.233.112.67"
+    },
+    "careernavigator.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "careers.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "careersite.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "careersite.secure.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "careersitescdn.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "cat.fmhy.net": {
+      "geohide": "159.194.200.33"
+    },
+    "ccs-service.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "cdn-1.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "cdn.auth0.com": {
+      "astracat": "3.164.212.39",
+      "geohide": "65.9.68.34"
+    },
+    "cdn.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "cdn.oaistatic.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "cdn.openai.com": {
+      "astracat": "150.171.109.107",
+      "geohide": "193.233.112.68"
+    },
+    "cdn.platform.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "charts-images.scdn.co": {
+      "geohide": "193.233.112.88"
+    },
+    "chat.openai.com": {
+      "astracat": "104.18.37.228",
+      "geohide": "159.194.200.33"
+    },
+    "chatbot.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "chatclient-mobile.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "chatclient.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "chatgpt.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "checkout.www.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "chess.com": {
+      "geohide": "193.233.112.88"
+    },
+    "claude.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "claude.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "159.194.200.33"
+    },
+    "clearance.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "client-api.linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "cloudconfig.jetbrains.com": {
+      "astracat": "13.33.235.102",
+      "geohide": "193.233.112.88"
+    },
+    "cloudfront.pkg-cdn.jetbrains.space": {
+      "astracat": "3.174.113.59",
+      "geohide": "193.233.112.67"
+    },
+    "cm.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "code-with-me.jetbrains.com": {
+      "astracat": "34.110.246.3",
+      "geohide": "193.233.112.88"
+    },
+    "code2art.jetbrains.com": {
+      "astracat": "65.9.46.80",
+      "geohide": "193.233.112.67"
+    },
+    "codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "codeiumdata.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "codewithme-lobby-production.api.jetbrains.com": {
+      "astracat": "34.110.246.3",
+      "geohide": "193.233.112.68"
+    },
+    "codewithme-lobby-staging.api.jetbrains.com": {
+      "astracat": "35.227.241.207",
+      "geohide": "159.194.200.33"
+    },
+    "codewithme-lobby.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.67"
+    },
+    "codewithme-relay-europe-north1-1.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.67"
+    },
+    "codewithme-relay-europe-north1-2.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.67"
+    },
+    "comments.blog.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "communication.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "community-auth.deepl.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.67"
+    },
+    "community.openai.com": {
+      "astracat": "184.105.99.79",
+      "geohide": "193.233.112.88"
+    },
+    "communityhub.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "companies.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "company.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "concerts.spotifycdn.com": {
+      "geohide": "23.215.2.169"
+    },
+    "configr.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "159.194.200.33"
+    },
+    "confluence.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.68"
+    },
+    "connect.deezer.com": {
+      "astracat": "95.100.107.97",
+      "geohide": "193.233.112.68"
+    },
+    "consent.badoo.com": {
+      "geohide": "193.233.112.68"
+    },
+    "console.anthropic.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "console.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "159.194.200.33"
+    },
+    "constellation.linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "content-a.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "content-management-files.canva.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "contentcdn.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "contest.nc.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "contest.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "controlplane.tailscale.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "copilot.microsoft.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "corona.jetbrains.space": {
+      "astracat": "18.239.105.112",
+      "geohide": "193.233.112.67"
+    },
+    "corp.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "cps.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "creators.deezer.com": {
+      "astracat": "5.42.197.81",
+      "geohide": "159.194.200.33"
+    },
+    "creatorsupport.deezer.com": {
+      "astracat": "216.198.53.11",
+      "geohide": "193.233.112.88"
+    },
+    "csm.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "csmmail.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "css.naukimg.com": {
+      "geohide": "193.233.112.67"
+    },
+    "css.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "curl-prod.deezer.com": {
+      "geohide": "159.194.200.33"
+    },
+    "d.docs.live.net": {
+      "astracat": "150.171.23.11",
+      "geohide": "150.171.23.11"
+    },
+    "daily-cloudcode-pa.googleapis.com": {
+      "astracat": "172.217.114.4",
+      "geohide": "159.194.200.33"
+    },
+    "dalida.deezer.com": {
+      "astracat": "95.100.107.144",
+      "geohide": "159.194.200.33"
+    },
+    "dam.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "dashboard.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "data.services.jetbrains.com": {
+      "astracat": "108.133.53.122",
+      "geohide": "193.233.112.88"
+    },
+    "data.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.68"
+    },
+    "dataconnect.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "193.233.112.68"
+    },
+    "datalore-forum.jetbrains.com": {
+      "astracat": "52.16.11.100",
+      "geohide": "193.233.112.88"
+    },
+    "datalore.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "dc.jetbrains.space": {
+      "astracat": "108.156.22.111",
+      "geohide": "193.233.112.68"
+    },
+    "dds.dell.com": {
+      "astracat": "95.100.176.23",
+      "geohide": "193.233.112.67"
+    },
+    "debate-game.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "deepmind.com": {
+      "astracat": "216.239.34.21",
+      "geohide": "193.233.112.68"
+    },
+    "deepmind.google": {
+      "astracat": "216.239.34.21",
+      "geohide": "193.233.112.68"
+    },
+    "deezer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "deferred-chat.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.67"
+    },
+    "delivery.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "dell.com": {
+      "astracat": "143.166.30.172",
+      "geohide": "193.233.112.88"
+    },
+    "demologin.resdex.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "demoresdex.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "deploymentsafety.openai.com": {
+      "astracat": "64.239.109.65",
+      "geohide": "193.233.112.67"
+    },
+    "designer.microsoft.com": {
+      "astracat": "23.210.168.176",
+      "geohide": "193.233.112.88"
+    },
+    "designerapp.officeapps.live.com": {
+      "astracat": "52.111.236.57",
+      "geohide": "52.111.243.65"
+    },
+    "dev-gcast.deezer.com": {
+      "astracat": "34.111.22.69",
+      "geohide": "159.194.200.33"
+    },
+    "dev.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "developer.nvidia.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "developerprofiles-pa.googleapis.com": {
+      "astracat": "172.217.117.4",
+      "geohide": "193.233.112.88"
+    },
+    "developers.deepl.com": {
+      "astracat": "66.33.60.129",
+      "geohide": "193.233.112.67"
+    },
+    "developers.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "dict-audio.deepl.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "159.194.200.33"
+    },
+    "dict.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "discovery.deezer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "discuss.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "dl.teamviewer.com": {
+      "geohide": "193.233.112.88"
+    },
+    "docs.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.67"
+    },
+    "dotcover-support.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "159.194.200.33"
+    },
+    "dotmemory-support.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "dotnet-ea.services.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.67"
+    },
+    "dotpeek-support.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "159.194.200.33"
+    },
+    "dottrace-support.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "download-cdn.jetbrains.com": {
+      "astracat": "3.164.240.103",
+      "geohide": "193.233.112.88"
+    },
+    "download.teamviewer.com": {
+      "geohide": "159.194.200.33"
+    },
+    "downloads.claude.ai": {
+      "astracat": "35.190.46.17",
+      "geohide": "159.194.200.33"
+    },
+    "downloads.marketplace.jetbrains.com": {
+      "astracat": "108.157.214.118",
+      "geohide": "193.233.112.67"
+    },
+    "drp-auth.deezer.com": {
+      "astracat": "34.22.249.154",
+      "geohide": "193.233.112.68"
+    },
+    "dunnhumby.fls.jetbrains.com": {
+      "astracat": "34.253.238.102",
+      "geohide": "193.233.112.88"
+    },
+    "dynmap.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "e-learning.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "ea.jetbrains.com": {
+      "astracat": "34.240.120.87",
+      "geohide": "159.194.200.33"
+    },
+    "eap.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.68"
+    },
+    "eapps.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "echo.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "ecs.office.com": {
+      "astracat": "52.123.243.79",
+      "geohide": "159.194.200.33"
+    },
+    "edgeservices.bing.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "element.jetbrains.space": {
+      "astracat": "108.156.22.111",
+      "geohide": "193.233.112.68"
+    },
+    "eleven-public-cdn.elevenlabs.io": {
+      "astracat": "34.98.93.216",
+      "geohide": "193.233.112.67"
+    },
+    "elevenlabs.io": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "elevenreader.io": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "email.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "email1.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "employee-guides.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "encore.scdn.co": {
+      "geohide": "193.233.112.68"
+    },
+    "engineering.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "enterprise.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "errortracking.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "eu-1.jetbrains.space": {
+      "astracat": "40.180.22.93",
+      "geohide": "193.233.112.88"
+    },
+    "eu-west-1.api.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.68"
+    },
+    "eu.posthog.com": {
+      "geohide": "193.233.112.67"
+    },
+    "eu1.ecdn2.badoocdn.com": {
+      "geohide": "193.233.112.68"
+    },
+    "experimentation-grpc.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "experimentation.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "feeds.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "fflms.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "files.manuscdn.com": {
+      "astracat": "18.173.205.94",
+      "geohide": "193.233.112.88"
+    },
+    "files.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "files.oaiusercontent.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "filestg.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "filevalidation.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "fitbit-pa.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "fitbit.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "fitbitvestibuleshim-pa.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "fleet-relay.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.88"
+    },
+    "fmhy.lol": {
+      "geohide": "172.241.213.99"
+    },
+    "fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "fn-hackathon-ui.nc.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "framer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "freesearch.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "frontend-api-v3.pump.fun": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "games-servers.deezer.com": {
+      "astracat": "35.205.156.155",
+      "geohide": "193.233.112.68"
+    },
+    "games.deezer.com": {
+      "astracat": "95.100.107.180",
+      "geohide": "159.194.200.33"
+    },
+    "gcast.deezer.com": {
+      "astracat": "95.100.107.180",
+      "geohide": "193.233.112.88"
+    },
+    "geller-pa.googleapis.com": {
+      "astracat": "172.217.119.4",
+      "geohide": "193.233.112.68"
+    },
+    "gemini.google": {
+      "astracat": "216.239.32.61",
+      "geohide": "193.233.112.67"
+    },
+    "gemini.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "generativeai.google": {
+      "astracat": "216.239.32.29",
+      "geohide": "193.233.112.67"
+    },
+    "generativelanguage.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "geo2.datalore.jetbrains.com": {
+      "astracat": "34.249.234.158",
+      "geohide": "193.233.112.67"
+    },
+    "geolocation.onetrust.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "gew1-dealer.spotify.com": {
+      "geohide": "193.233.112.68"
+    },
+    "gew1-spclient.spotify.com": {
+      "geohide": "193.233.112.68"
+    },
+    "gpt3-openai.com": {
+      "astracat": "5.101.152.54",
+      "geohide": "5.101.152.54"
+    },
+    "gql.twitch.tv": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "graphql.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "grok.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "grok.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.68"
+    },
+    "gtm.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "guide.master-zdchint.mau.jetbrains.com": {
+      "astracat": "143.204.238.100",
+      "geohide": "193.233.112.68"
+    },
+    "guide.staging-zdchint.mau.jetbrains.com": {
+      "astracat": "65.9.62.12",
+      "geohide": "193.233.112.68"
+    },
+    "guidedhacking.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "guides.fmhy.lol": {
+      "geohide": "192.157.56.141"
+    },
+    "guilded.gg": {
+      "geohide": "193.233.112.68"
+    },
+    "gym.openai.com": {
+      "astracat": "150.171.109.106",
+      "geohide": "193.233.112.88"
+    },
+    "hacktoberfest2020.mau.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.67"
+    },
+    "handle.prod.csat.mau.jetbrains.com": {
+      "astracat": "3.174.230.107",
+      "geohide": "159.194.200.33"
+    },
+    "handle.staging.csat.mau.jetbrains.com": {
+      "astracat": "143.204.238.80",
+      "geohide": "159.194.200.33"
+    },
+    "handshake.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "193.233.112.68"
+    },
+    "heads-fa-tls13.spotifycdn.com": {
+      "geohide": "151.101.130.250"
+    },
+    "hello.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.68"
+    },
+    "help.elevenlabs.io": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "help.openai.com": {
+      "astracat": "104.18.33.45",
+      "geohide": "159.194.200.33"
+    },
+    "hhe.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "193.233.112.88"
+    },
+    "hiring.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "home.deepl.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.68"
+    },
+    "homepod.deezer.com": {
+      "astracat": "34.117.141.162",
+      "geohide": "193.233.112.88"
+    },
+    "hs.deepl.com": {
+      "astracat": "199.60.103.31",
+      "geohide": "193.233.112.68"
+    },
+    "hub.jetbrains.com": {
+      "astracat": "108.128.242.132",
+      "geohide": "193.233.112.88"
+    },
+    "i-lo.scdn.co": {
+      "geohide": "193.233.112.88"
+    },
+    "i.dell.com": {
+      "astracat": "184.24.152.98",
+      "geohide": "193.233.112.67"
+    },
+    "i.fmhy.net": {
+      "geohide": "193.233.112.88"
+    },
+    "i.scdn.co": {
+      "geohide": "193.233.112.67"
+    },
+    "id.trimble.com": {
+      "geohide": "193.233.112.88"
+    },
+    "ij-perf.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "image-cdn-fa.spotifycdn.com": {
+      "geohide": "199.232.210.250"
+    },
+    "images.deezer.com": {
+      "astracat": "34.117.71.21",
+      "geohide": "193.233.112.88"
+    },
+    "images.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "images.pump.fun": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "img.naukimg.com": {
+      "geohide": "193.233.112.88"
+    },
+    "img.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "imgen.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.88"
+    },
+    "in.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "index-cdn.jetbrains.com": {
+      "astracat": "18.65.39.34",
+      "geohide": "193.233.112.88"
+    },
+    "inference.codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "insights.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "insightsapi.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "int.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.68"
+    },
+    "intel.com": {
+      "astracat": "13.91.95.74",
+      "geohide": "193.233.112.88"
+    },
+    "internal.deepl.com": {
+      "astracat": "52.18.206.7",
+      "geohide": "193.233.112.68"
+    },
+    "internship.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "159.194.200.33"
+    },
+    "interview.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "inward.deezer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "ios.chat.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "ita-free.app.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "ita-free.www.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "jatracking.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "jb-team.fls.jetbrains.com": {
+      "astracat": "52.213.162.214",
+      "geohide": "193.233.112.88"
+    },
+    "jbstats.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "159.194.200.33"
+    },
+    "jetarchive.jetbrains.com": {
+      "astracat": "18.239.105.20",
+      "geohide": "193.233.112.68"
+    },
+    "jetbrains.com": {
+      "astracat": "13.249.8.77",
+      "geohide": "193.233.112.68"
+    },
+    "jetbrains.space": {
+      "astracat": "108.156.22.71",
+      "geohide": "193.233.112.68"
+    },
+    "jetpeople.jetbrains.com": {
+      "astracat": "54.247.121.209",
+      "geohide": "193.233.112.67"
+    },
+    "jf.x.ai": {
+      "astracat": "52.8.12.204",
+      "geohide": "159.194.200.33"
+    },
+    "jobfeeds.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "jobs.deepl.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.67"
+    },
+    "jobs.deezer.com": {
+      "astracat": "104.199.78.246",
+      "geohide": "159.194.200.33"
+    },
+    "jobs.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "jobsearch.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "jpreports.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "js.naukimg.com": {
+      "geohide": "193.233.112.67"
+    },
+    "js.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "jukebox.openai.com": {
+      "astracat": "150.171.109.100",
+      "geohide": "193.233.112.88"
+    },
+    "jules.google": {
+      "astracat": "216.239.32.27",
+      "geohide": "193.233.112.68"
+    },
+    "jules.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "justtoplay.jetbrains.space": {
+      "astracat": "108.156.22.87",
+      "geohide": "159.194.200.33"
+    },
+    "knowledge.broadcom.com": {
+      "astracat": "172.66.0.165",
+      "geohide": "193.233.112.67"
+    },
+    "labs.google": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "labs.google.com": {
+      "astracat": "108.177.14.138",
+      "geohide": "193.233.112.88"
+    },
+    "labs.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "learning.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "lemmy.fmhy.net": {
+      "geohide": "193.233.112.88"
+    },
+    "lg.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "links.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "livekit.grok.com": {
+      "astracat": "35.227.192.44",
+      "geohide": "193.233.112.67"
+    },
+    "lms.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "local.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "159.194.200.33"
+    },
+    "login-wall.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "login.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "login.recruit.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "login.x.ai": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "login5.spotify.com": {
+      "geohide": "193.233.112.67"
+    },
+    "logs.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "lookerstudio.google.com": {
+      "astracat": "108.177.14.113",
+      "geohide": "193.233.112.68"
+    },
+    "lp.jetbrains.com": {
+      "astracat": "13.249.8.89",
+      "geohide": "159.194.200.33"
+    },
+    "lservice.jetbrains.com": {
+      "astracat": "54.228.184.132",
+      "geohide": "193.233.112.67"
+    },
+    "lyncdiscover.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "m-lemmy.fmhy.net": {
+      "geohide": "159.194.200.33"
+    },
+    "m.deezer.com": {
+      "astracat": "95.100.107.97",
+      "geohide": "193.233.112.68"
+    },
+    "m.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "m102.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "m75.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "m83.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "m9.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "m91.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "maestrorecruiter.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "mail.jetbrains.com": {
+      "astracat": "46.137.178.215",
+      "geohide": "193.233.112.88"
+    },
+    "mail.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "mailersystem.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "mailtracking.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "make.com": {
+      "geohide": "193.233.112.67"
+    },
+    "makersuite.google.com": {
+      "astracat": "142.251.1.101",
+      "geohide": "193.233.112.68"
+    },
+    "manus.im": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "marketplace.jetbrains.com": {
+      "astracat": "13.227.146.93",
+      "geohide": "193.233.112.68"
+    },
+    "marketplace.windsurf.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "maven.jetbrains.space": {
+      "astracat": "108.133.222.184",
+      "geohide": "193.233.112.88"
+    },
+    "maven.pkg.jetbrains.space": {
+      "astracat": "52.208.113.195",
+      "geohide": "193.233.112.88"
+    },
+    "media.deezer.com": {
+      "astracat": "34.110.218.108",
+      "geohide": "159.194.200.33"
+    },
+    "media.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "mediacdn.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "merchandise.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "messenger.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "meta.ai": {
+      "geohide": "159.194.200.33"
+    },
+    "metro.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "mi.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "microscope.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "mkto-mailer.jetbrains.com": {
+      "astracat": "185.28.196.44",
+      "geohide": "193.233.112.68"
+    },
+    "mobile.events.data.microsoft.com": {
+      "astracat": "20.184.175.4",
+      "geohide": "20.42.73.30"
+    },
+    "mobile.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "mrkt.spotifycdn.com": {
+      "geohide": "23.215.2.169"
+    },
+    "mscanus.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "mta-sts.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.68"
+    },
+    "mta-sts.test.tuta.com": {
+      "geohide": "193.233.112.67"
+    },
+    "mta-sts.tuta.com": {
+      "geohide": "193.233.112.67"
+    },
+    "my.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "mydeezerstory.deezer.com": {
+      "astracat": "95.100.107.142",
+      "geohide": "159.194.200.33"
+    },
+    "myjetbrains.com": {
+      "astracat": "13.33.235.101",
+      "geohide": "193.233.112.88"
+    },
+    "naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "naukriconfidential.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "naukrihiringsuite.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "naukrirecruiter.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "nexus.dell.com": {
+      "astracat": "23.12.158.96",
+      "geohide": "193.233.112.67"
+    },
+    "ngenix.assets.service.jetbrains.space": {
+      "astracat": "65.9.46.4",
+      "geohide": "193.233.112.68"
+    },
+    "nimg.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "nmail-103-214-115-103.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "nmail-103-214-115-125.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "nmail-one03-two14-one15-one22.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail-one03-two14-one15-one24.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "nmail-one03-two14-one15-one32.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "nmail-one03-two14-one15-one33.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "nmail-one03-two14-one15-one34.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "nmail-one03-two14-one15-one38.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail-one03-two14-one15-one39.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail-one03-two14-one15-one93.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "nmail-one03-two14-one15-one94.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "nmail-one03-two14-one15-one95.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "nmail-one03-two14-one15-one96.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "nmail-one03-two14-one15-one97.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail-one03-two14-one15-two13.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail-one03-two14-one15-two14.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail-one03-two14-one15-two15.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail193.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "nmail214.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "noidacas01.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "noinsight.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "notebooklm-pa.googleapis.com": {
+      "astracat": "172.217.115.4",
+      "geohide": "193.233.112.67"
+    },
+    "notebooklm.google": {
+      "astracat": "216.239.32.27",
+      "geohide": "193.233.112.67"
+    },
+    "notebooklm.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "notifications.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "notion.com": {
+      "astracat": "208.103.161.17",
+      "geohide": "193.233.112.67"
+    },
+    "notion.so": {
+      "astracat": "208.103.161.17",
+      "geohide": "193.233.112.68"
+    },
+    "np.naukimg.com": {
+      "geohide": "159.194.200.33"
+    },
+    "o.pki.goog": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "oaistatic.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.67"
+    },
+    "oaiusercontent.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "oauth.account.jetbrains.com": {
+      "astracat": "52.49.216.222",
+      "geohide": "193.233.112.67"
+    },
+    "oauth.deezer.com": {
+      "astracat": "95.100.107.172",
+      "geohide": "193.233.112.88"
+    },
+    "oauth.fls.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "oauth2-proxy-api.api.jetbrains.com": {
+      "astracat": "35.228.34.253",
+      "geohide": "193.233.112.88"
+    },
+    "old-lemmy.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "old.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "old.lemmy.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "onboard.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "oneshot-free.www.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "onlinetest.nc.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "op.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "opal.google": {
+      "astracat": "34.8.221.189",
+      "geohide": "193.233.112.68"
+    },
+    "opal.google.com": {
+      "astracat": "74.125.205.102",
+      "geohide": "193.233.112.68"
+    },
+    "opal.withgoogle.com": {
+      "astracat": "34.49.76.124",
+      "geohide": "193.233.112.68"
+    },
+    "open-exp.spotifycdn.com": {
+      "geohide": "193.233.112.67"
+    },
+    "open.spotify.com": {
+      "geohide": "193.233.112.67"
+    },
+    "openai.com": {
+      "astracat": "172.64.154.211",
+      "geohide": "193.233.112.88"
+    },
+    "openrouter.ai": {
+      "geohide": "193.233.112.68"
+    },
+    "operator.chatgpt.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "oracle.com": {
+      "geohide": "193.233.112.67"
+    },
+    "ott.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "p-lemmy.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "p.naukimg.com": {
+      "geohide": "193.233.112.67"
+    },
+    "p.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "package-search.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.68"
+    },
+    "package-search.services.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "papi.deezer.com": {
+      "astracat": "95.100.107.183",
+      "geohide": "193.233.112.88"
+    },
+    "partners.deezer.com": {
+      "astracat": "95.100.107.139",
+      "geohide": "193.233.112.88"
+    },
+    "paste.fmhy.net": {
+      "geohide": "193.233.112.88"
+    },
+    "pastes.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "patreon.com": {
+      "astracat": "217.60.179.6"
+    },
+    "pay.deezer.com": {
+      "astracat": "95.100.107.142",
+      "geohide": "193.233.112.67"
+    },
+    "pay.test.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "pay.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "payload.elevenlabs.io": {
+      "astracat": "34.54.252.193",
+      "geohide": "193.233.112.67"
+    },
+    "payment.deezer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "people-pa.clients6.google.com": {
+      "astracat": "173.194.221.95",
+      "geohide": "193.233.112.88"
+    },
+    "pg.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "pickasso.spotifycdn.com": {
+      "geohide": "199.232.214.250"
+    },
+    "pipe.deezer.com": {
+      "astracat": "95.100.107.180",
+      "geohide": "193.233.112.88"
+    },
+    "pkg-cdn.jetbrains.space": {
+      "astracat": "3.164.230.38",
+      "geohide": "193.233.112.68"
+    },
+    "pkg.eu-1.jetbrains.space": {
+      "astracat": "108.133.222.184",
+      "geohide": "193.233.112.68"
+    },
+    "platform.api.openai.com": {
+      "astracat": "104.18.33.45",
+      "geohide": "193.233.112.88"
+    },
+    "platform.claude.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "platform.deezer.com": {
+      "astracat": "95.100.107.144",
+      "geohide": "159.194.200.33"
+    },
+    "platform.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "plugins.jetbrains.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "plumbers.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "159.194.200.33"
+    },
+    "podcasters.deezer.com": {
+      "astracat": "185.159.107.201",
+      "geohide": "159.194.200.33"
+    },
+    "podz-content.spotifycdn.com": {
+      "geohide": "23.215.2.169"
+    },
+    "pop.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "posting.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "preprod-preview.deezer.com": {
+      "astracat": "8.233.202.200",
+      "geohide": "193.233.112.88"
+    },
+    "preprod-stream.deezer.com": {
+      "astracat": "8.233.198.237",
+      "geohide": "193.233.112.88"
+    },
+    "preview.deezer.com": {
+      "astracat": "34.54.24.201",
+      "geohide": "193.233.112.88"
+    },
+    "preview.reve.art": {
+      "geohide": "193.233.112.67"
+    },
+    "proactivebackend-pa.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "productupdates.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "profile.broadcom.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "promo.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "pt.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "public.linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "pulse.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "pump.fun": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "queue.deezer.com": {
+      "astracat": "95.100.107.138",
+      "geohide": "193.233.112.67"
+    },
+    "qwant.com": {
+      "astracat": "51.91.151.171",
+      "geohide": "159.194.200.33"
+    },
+    "rdxfootmark.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "realtime.chatgpt.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.88"
+    },
+    "recruit.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "recruiter.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "recruiterfaq.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "recruiters.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "recruitersurvey.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "recruiterzone.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "redlib.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "referral.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "registry.eu-1.jetbrains.space": {
+      "astracat": "108.133.222.184",
+      "geohide": "193.233.112.68"
+    },
+    "registry.jetbrains.space": {
+      "astracat": "108.133.222.184",
+      "geohide": "193.233.112.68"
+    },
+    "renew-your-ssl-certificate.jetbrains.com": {
+      "astracat": "52.213.162.214",
+      "geohide": "193.233.112.88"
+    },
+    "resbilling.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "resdex.base.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "resdex.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "research.deezer.com": {
+      "astracat": "185.199.108.153",
+      "geohide": "193.233.112.88"
+    },
+    "resharper-plugins.jetbrains.com": {
+      "astracat": "108.157.229.7",
+      "geohide": "193.233.112.88"
+    },
+    "resht.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "resman.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "resources.jetbrains.com": {
+      "astracat": "3.164.206.17",
+      "geohide": "159.194.200.33"
+    },
+    "response.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "restservices.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "resume.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "resumepedia.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "resumeservices.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "rewards.bing.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "rms.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "rmsbulkupload.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "rmsmail.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "robinfrontend-pa.googleapis.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "ruhlaender.jetbrains.space": {
+      "astracat": "108.156.22.111",
+      "geohide": "193.233.112.67"
+    },
+    "s-cdn.anthropic.com": {
+      "astracat": "34.54.194.141",
+      "geohide": "193.233.112.88"
+    },
+    "s.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "s.linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "sales.jetbrains.com": {
+      "astracat": "216.198.53.11",
+      "geohide": "193.233.112.88"
+    },
+    "scim.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "sdmntpritalynorth.oaiusercontent.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.68"
+    },
+    "sdmntprnortheu.oaiusercontent.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.88"
+    },
+    "sdmntprpolandcentral.oaiusercontent.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.88"
+    },
+    "sdmntprukwest.oaiusercontent.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.67"
+    },
+    "searx.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "seed-mix-image.spotifycdn.com": {
+      "geohide": "199.232.210.250"
+    },
+    "seektables.scdn.co": {
+      "geohide": "193.233.112.67"
+    },
+    "sentinel.openai.com": {
+      "astracat": "104.18.39.38",
+      "geohide": "193.233.112.68"
+    },
+    "server.codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "shaker.deezer.com": {
+      "astracat": "95.100.107.172",
+      "geohide": "193.233.112.88"
+    },
+    "shield.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "shop.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "signaler-pa.clients6.google.com": {
+      "astracat": "64.233.162.95",
+      "geohide": "193.233.112.68"
+    },
+    "sip.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "sketchup.com": {
+      "geohide": "193.233.112.68"
+    },
+    "sketchup.trimble.com": {
+      "geohide": "193.233.112.67"
+    },
+    "skyscanner.fls.jetbrains.com": {
+      "astracat": "34.253.238.102",
+      "geohide": "193.233.112.88"
+    },
+    "sl.deepl.com": {
+      "astracat": "34.48.58.236",
+      "geohide": "193.233.112.68"
+    },
+    "slack-bdt.mau.jetbrains.com": {
+      "astracat": "18.66.147.62",
+      "geohide": "193.233.112.68"
+    },
+    "slack-mps.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.67"
+    },
+    "slack.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.88"
+    },
+    "smtp.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "sonos-queue-bridge.deezer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "sora.chatgpt.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "sora.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "104.18.39.16"
+    },
+    "space-cdn.jetbrains.space": {
+      "astracat": "18.239.105.112",
+      "geohide": "193.233.112.68"
+    },
+    "spclient.wg.spotify.com": {
+      "geohide": "159.194.200.33"
+    },
+    "spinningup.openai.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.68"
+    },
+    "spleeterpro.deezer.com": {
+      "astracat": "34.8.236.198",
+      "geohide": "193.233.112.67"
+    },
+    "spotify.fls.jetbrains.com": {
+      "astracat": "52.50.221.0",
+      "geohide": "193.233.112.68"
+    },
+    "spotifycdn.com": {
+      "geohide": "193.233.112.67"
+    },
+    "spotifycdn.net": {
+      "geohide": "193.233.112.67"
+    },
+    "ssff.grok.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.67"
+    },
+    "stackexchange.master-zdchint.mau.jetbrains.com": {
+      "astracat": "65.9.46.54",
+      "geohide": "193.233.112.88"
+    },
+    "stackexchange.staging-zdchint.mau.jetbrains.com": {
+      "astracat": "143.204.238.105",
+      "geohide": "193.233.112.67"
+    },
+    "staging.assessment.nc.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "staging.contest.nc.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "staging.fn-hackathon-ui.nc.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "staging.onlinetest.nc.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "staging.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "staging.zdviewcount.mau.jetbrains.com": {
+      "astracat": "3.174.230.83",
+      "geohide": "159.194.200.33"
+    },
+    "static-assets-1.truthsocial.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "static.canva.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "static.deepl.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "159.194.200.33"
+    },
+    "static.linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "static.naukimg.com": {
+      "geohide": "193.233.112.88"
+    },
+    "static.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "static.staging.assessment.nc.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "stats.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "statsig.anthropic.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "status.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "193.233.112.88"
+    },
+    "status.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "status.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "status.tuta.com": {
+      "geohide": "159.194.200.33"
+    },
+    "status.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "159.194.200.33"
+    },
+    "stgmtstap.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "stgmtstjs.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "stgmtstmnj.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "stgmtstwb.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "stitch.withgoogle.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "store.strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "stories.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "strava.com": {
+      "geohide": "159.194.200.33"
+    },
+    "stream.deezer.com": {
+      "astracat": "130.211.34.129",
+      "geohide": "193.233.112.88"
+    },
+    "stream.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "streamgenai.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "sub.whoogle.fmhy.net": {
+      "geohide": "159.194.200.33"
+    },
+    "suggest-staging.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "suggest.naukimg.com": {
+      "geohide": "159.194.200.33"
+    },
+    "suggest.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "suggestlg.naukimg.com": {
+      "geohide": "193.233.112.68"
+    },
+    "suggestlg.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "suggestor.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "suggestqueries.google.com": {
+      "astracat": "74.125.131.100",
+      "geohide": "172.217.19.238"
+    },
+    "support.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "193.233.112.88"
+    },
+    "support.broadcom.com": {
+      "astracat": "162.159.140.167",
+      "geohide": "193.233.112.88"
+    },
+    "support.deepl.com": {
+      "astracat": "216.198.54.11",
+      "geohide": "159.194.200.33"
+    },
+    "support.deezer.com": {
+      "astracat": "216.198.54.11",
+      "geohide": "193.233.112.88"
+    },
+    "support.jetbrains.com": {
+      "astracat": "216.198.53.11",
+      "geohide": "193.233.112.68"
+    },
+    "support.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "sv.fls.jetbrains.com": {
+      "astracat": "52.50.221.0",
+      "geohide": "193.233.112.67"
+    },
+    "swap-api.pump.fun": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "swu-acm.jetbrains.space": {
+      "astracat": "3.167.227.127",
+      "geohide": "159.194.200.33"
+    },
+    "sydney.bing.com": {
+      "astracat": "150.171.30.10",
+      "geohide": "193.233.112.67"
+    },
+    "t.scdn.co": {
+      "geohide": "193.233.112.68"
+    },
+    "tableau.com": {
+      "geohide": "159.194.200.33"
+    },
+    "tableau.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "target.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "taxonomy-suggest.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "tcr9i.chat.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "teamcity-support.jetbrains.com": {
+      "astracat": "216.198.54.11",
+      "geohide": "193.233.112.88"
+    },
+    "teamcity.jetbrains.com": {
+      "astracat": "18.239.50.26",
+      "geohide": "193.233.112.88"
+    },
+    "test.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "thisis-images.spotifycdn.com": {
+      "geohide": "23.215.2.169"
+    },
+    "tiktok.com": {
+      "astracat": "95.100.107.72"
+    },
+    "tiles.datalore.jetbrains.com": {
+      "astracat": "34.249.234.158",
+      "geohide": "159.194.200.33"
+    },
+    "tiles.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "tiles2.datalore.jetbrains.com": {
+      "astracat": "34.249.234.158",
+      "geohide": "193.233.112.68"
+    },
+    "trae-api-sg.mchost.guru": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "transcription.grok-v2.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.67"
+    },
+    "tria.ge": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "trust.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "trust.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.67"
+    },
+    "truthsocial.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "try.elevenlabs.io": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.68"
+    },
+    "tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "tutanota.com": {
+      "geohide": "185.205.69.12"
+    },
+    "tv2.deezer.com": {
+      "astracat": "95.100.107.172",
+      "geohide": "193.233.112.88"
+    },
+    "typeahead.grok.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "ui.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "universe.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "unleash.codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "uploads.jetbrains.com": {
+      "astracat": "13.227.146.58",
+      "geohide": "193.233.112.68"
+    },
+    "uploads.linear.app": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "uploads.services.jetbrains.com": {
+      "astracat": "13.227.146.58",
+      "geohide": "193.233.112.88"
+    },
+    "upsource.jetbrains.com": {
+      "astracat": "34.78.67.165",
+      "geohide": "193.233.112.68"
+    },
+    "upsx.weather.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "us-east-1.api.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "159.194.200.33"
+    },
+    "us-east-4-raw.api.x.ai": {
+      "astracat": "34.48.4.24",
+      "geohide": "193.233.112.88"
+    },
+    "us-south-1-pltr.api.x.ai": {
+      "astracat": "199.16.156.221",
+      "geohide": "193.233.112.68"
+    },
+    "us-west-1-raw.api.x.ai": {
+      "astracat": "199.16.156.218",
+      "geohide": "159.194.200.33"
+    },
+    "us-west-1.api.x.ai": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.67"
+    },
+    "usher.ttvnw.net": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "vdp.deezer.com": {
+      "astracat": "87.98.173.232",
+      "geohide": "193.233.112.88"
+    },
+    "verify.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "videos.openai.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "view.datalore.jetbrains.com": {
+      "astracat": "52.211.63.228",
+      "geohide": "193.233.112.67"
+    },
+    "vmscanus.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "w-x.co": {
+      "geohide": "193.233.112.68"
+    },
+    "w.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "w.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "w1.api.test.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w10.api.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "w10.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "w11.api.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "w12.api.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w13.api.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w14.api.tuta.com": {
+      "geohide": "193.233.112.67"
+    },
+    "w15.api.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w16.api.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w16.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w2.api.test.tuta.com": {
+      "geohide": "193.233.112.67"
+    },
+    "w28.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w3.api.test.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "w37.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "w4.api.test.tuta.com": {
+      "geohide": "159.194.200.33"
+    },
+    "w4.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w5.api.test.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "w5.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "w6.api.test.tuta.com": {
+      "geohide": "193.233.112.67"
+    },
+    "w7.api.test.tuta.com": {
+      "geohide": "193.233.112.67"
+    },
+    "w8.api.test.tuta.com": {
+      "geohide": "159.194.200.33"
+    },
+    "w9.api.tuta.com": {
+      "geohide": "193.233.112.88"
+    },
+    "waa-pa.clients6.google.com": {
+      "astracat": "64.233.162.95",
+      "geohide": "159.194.200.33"
+    },
+    "walx.jetbrains.space": {
+      "astracat": "65.9.46.4",
+      "geohide": "193.233.112.88"
+    },
+    "wap.spotifycdn.com": {
+      "geohide": "199.232.210.250"
+    },
+    "watch.samsung.strava.com": {
+      "geohide": "193.233.112.88"
+    },
+    "weather.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "web-backend.codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "web-sdk-assets.spotifycdn.com": {
+      "geohide": "23.215.2.166"
+    },
+    "web.archive.org": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "webchannel-alkalimakersuite-pa.clients6.google.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "webhooks.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "webrtc.chatgpt.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "webtracker.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "webviews.deezer.com": {
+      "astracat": "95.100.107.183",
+      "geohide": "159.194.200.33"
+    },
+    "weight-images.deezer.com": {
+      "astracat": "23.73.2.89",
+      "geohide": "193.233.112.67"
+    },
+    "wellbeing.deezer.com": {
+      "astracat": "35.190.2.236",
+      "geohide": "193.233.112.67"
+    },
+    "whitehat.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "whoogle.fmhy.net": {
+      "geohide": "193.233.112.67"
+    },
+    "widget.deezer.com": {
+      "astracat": "95.100.107.157",
+      "geohide": "193.233.112.67"
+    },
+    "windsurf-stable.codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "windsurf-telemetry.codeium.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "windsurf.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "write-free.www.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "ws.chatgpt.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.67"
+    },
+    "ws.deezer.com": {
+      "astracat": "185.159.107.201",
+      "geohide": "193.233.112.88"
+    },
+    "wtg.csm.naukri.com": {
+      "geohide": "193.233.112.88"
+    },
+    "wund.com": {
+      "geohide": "159.194.200.33"
+    },
+    "wunderground.com": {
+      "geohide": "193.233.112.88"
+    },
+    "www-growth.scdn.co": {
+      "geohide": "193.233.112.67"
+    },
+    "www.amd.com": {
+      "geohide": "193.233.112.88"
+    },
+    "www.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "193.233.112.88"
+    },
+    "www.autodesk.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "www.badoo.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.blog.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.business.strava.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.canva.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "www.chatgpt.com": {
+      "astracat": "8.6.112.0",
+      "geohide": "193.233.112.68"
+    },
+    "www.chess.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.claude.ai": {
+      "astracat": "160.79.104.10",
+      "geohide": "159.194.200.33"
+    },
+    "www.claude.com": {
+      "astracat": "160.79.104.10",
+      "geohide": "159.194.200.33"
+    },
+    "www.deepl.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "www.deezer.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "www.dell.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "www.dyson.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.dyson.de": {
+      "geohide": "193.233.112.68"
+    },
+    "www.dyson.se": {
+      "geohide": "193.233.112.67"
+    },
+    "www.e-learning.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.echo.naukri.com": {
+      "geohide": "159.194.200.33"
+    },
+    "www.elevenlabs.io": {
+      "astracat": "34.54.252.193",
+      "geohide": "193.233.112.88"
+    },
+    "www.elgato.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.67"
+    },
+    "www.fmhy.lol": {
+      "geohide": "212.92.104.5"
+    },
+    "www.fmhy.net": {
+      "geohide": "193.233.112.68"
+    },
+    "www.framer.com": {
+      "astracat": "31.43.160.19",
+      "geohide": "193.233.112.88"
+    },
+    "www.grok.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.67"
+    },
+    "www.guidedhacking.com": {
+      "astracat": "8.47.69.0",
+      "geohide": "193.233.112.68"
+    },
+    "www.guilded.gg": {
+      "geohide": "193.233.112.67"
+    },
+    "www.intel.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "www.jetbrains.com": {
+      "astracat": "108.138.51.7",
+      "geohide": "193.233.112.68"
+    },
+    "www.jetbrains.space": {
+      "astracat": "3.167.227.12",
+      "geohide": "159.194.200.33"
+    },
+    "www.learning.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.make.com": {
+      "geohide": "159.194.200.33"
+    },
+    "www.meta.ai": {
+      "geohide": "193.233.112.68"
+    },
+    "www.metro.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.naukimg.com": {
+      "geohide": "193.233.112.88"
+    },
+    "www.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.notion.com": {
+      "astracat": "208.103.161.2",
+      "geohide": "193.233.112.68"
+    },
+    "www.notion.so": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "www.openai.com": {
+      "astracat": "172.64.154.211",
+      "geohide": "193.233.112.67"
+    },
+    "www.oracle.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.patreon.com": {
+      "astracat": "217.60.179.6"
+    },
+    "www.promo.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.qwant.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.68"
+    },
+    "www.resume.naukri.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.sketchup.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.spotify.com": {
+      "geohide": "193.233.112.67"
+    },
+    "www.strava.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.tableau.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.tiktok.com": {
+      "astracat": "217.60.179.6"
+    },
+    "www.tria.ge": {
+      "astracat": "8.47.69.0",
+      "geohide": "159.194.200.33"
+    },
+    "www.tuta.com": {
+      "geohide": "193.233.112.68"
+    },
+    "www.x.ai": {
+      "astracat": "8.47.69.0",
+      "geohide": "159.194.200.33"
+    },
+    "www.xerox.com": {
+      "geohide": "193.233.112.67"
+    },
+    "wxug.com": {
+      "geohide": "193.233.112.88"
+    },
+    "xboxdesignlab.xbox.com": {
+      "astracat": "151.101.1.124",
+      "geohide": "193.233.112.68"
+    },
+    "xerox.com": {
+      "geohide": "159.194.200.33"
+    },
+    "xgpuweb.gssv-play-prod.xboxlive.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "xgpuwebf2p.gssv-play-prod.xboxlive.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "193.233.112.88"
+    },
+    "xsts.auth.xboxlive.com": {
+      "astracat": "217.60.179.6",
+      "geohide": "159.194.200.33"
+    },
+    "yahoo.naukri.com": {
+      "geohide": "193.233.112.68"
+    },
+    "youtrack.jetbrains.com": {
+      "astracat": "63.33.88.220",
+      "geohide": "193.233.112.67"
+    },
+    "youtube.master-zdchint.mau.jetbrains.com": {
+      "astracat": "13.33.235.41",
+      "geohide": "193.233.112.67"
+    },
+    "youtube.staging-zdchint.mau.jetbrains.com": {
+      "astracat": "3.164.240.103",
+      "geohide": "193.233.112.68"
+    },
+    "zen.deezer.com": {
+      "astracat": "35.227.205.143",
+      "geohide": "193.233.112.68"
+    },
+    "zillow.fls.jetbrains.com": {
+      "astracat": "34.253.238.102",
+      "geohide": "193.233.112.68"
+    }
+  }
+}

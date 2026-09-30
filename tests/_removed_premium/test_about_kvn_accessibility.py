@@ -30,22 +30,22 @@ class AboutKvnAccessibilityTests(unittest.TestCase):
             on_open_kvn_github=lambda: None,
         )
 
-        self.assertEqual(widgets.features_group.accessibleName(), "Раздел Zapret KVN: Возможности")
+        self.assertEqual(widgets.features_group.accessibleName(), "Раздел net67 KVN: Возможности")
         self.assertEqual(
             widgets.features_group.property("screenReaderStateText"),
-            "Раздел Zapret KVN: Возможности",
+            "Раздел net67 KVN: Возможности",
         )
-        self.assertEqual(widgets.links_group.accessibleName(), "Раздел Zapret KVN: Ссылки")
+        self.assertEqual(widgets.links_group.accessibleName(), "Раздел net67 KVN: Ссылки")
         self.assertEqual(
             widgets.links_group.property("screenReaderStateText"),
-            "Раздел Zapret KVN: Ссылки",
+            "Раздел net67 KVN: Ссылки",
         )
 
         expected = {
-            widgets.tg_card: ("Открыть канал Zapret KVN", "Новости и обновления"),
-            widgets.bot_card: ("Купить подписку Zapret KVN", "Оформление через Telegram-бота"),
+            widgets.tg_card: ("Открыть канал net67 KVN", "Новости и обновления"),
+            widgets.bot_card: ("Купить подписку net67 KVN", "Оформление через Telegram-бота"),
             widgets.bypass_card: ("Открыть канал BypassBlock", "Второй канал с новостями"),
-            widgets.gh_card: ("Открыть исходный код Zapret KVN", "GitHub репозиторий Zapret KVN"),
+            widgets.gh_card: ("Открыть исходный код net67 KVN", "GitHub репозиторий net67 KVN"),
         }
         for card, (name, description) in expected.items():
             with self.subTest(name=name):

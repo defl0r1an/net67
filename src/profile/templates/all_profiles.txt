@@ -43,6 +43,12 @@
 
 --new
 
+--name=Бэкенд Google
+--filter-tcp=80,443
+--hostlist=lists/google-backend.txt
+
+--new
+
 --name=updates.discord.com
 --filter-tcp=443
 --hostlist=lists/discord-updates.txt
@@ -227,15 +233,33 @@
 
 --new
 
+--name=LordFilm (зеркала)
+--filter-tcp=80,443
+--hostlist=lists/lordfilm.txt
+
+--new
+
 --name=GitHub
 --filter-tcp=443
 --hostlist=lists/github.txt
 
 --new
 
+--name=git.zapret.moe
+--filter-tcp=443
+--hostlist=lists/git-zapret-moe.txt
+
+--new
+
 --name=githubusercontent.com
 --filter-tcp=443
 --hostlist=lists/githubusercontent.txt
+
+--new
+
+--name=Apple
+--filter-tcp=80,443-65535
+--hostlist=lists/apple.txt
 
 --new
 
@@ -299,6 +323,12 @@
 
 --new
 
+--name=LinkedIn
+--filter-tcp=80,443
+--hostlist=lists/linkedin.txt
+
+--new
+
 --name=Speedtest
 --filter-tcp=443,8080
 --hostlist=lists/speedtest.txt
@@ -317,9 +347,27 @@
 
 --new
 
---name=chatgpt
+--name=ChatGPT
 --filter-tcp=80-65535
 --hostlist=lists/chatgpt.txt
+
+--new
+
+--name=Gemini
+--filter-tcp=80,443
+--hostlist=lists/gemini.txt
+
+--new
+
+--name=Notion
+--filter-tcp=80,443
+--hostlist=lists/notion.txt
+
+--new
+
+--name=Claude
+--filter-tcp=80,443
+--hostlist=lists/claude.txt
 
 --new
 
@@ -738,7 +786,13 @@
 
 --new
 
---name=Исключения (RU сайты)
+--name=Исключения домены (RU сайты)
+--filter-tcp=80,443-65535
+--hostlist=lists/netrogat.txt
+
+--new
+
+--name=Исключения айпи (RU сайты)
 --filter-tcp=80,443-65535
 --ipset=lists/ipset-ru.txt
 --ipset=lists/ipset-dns.txt

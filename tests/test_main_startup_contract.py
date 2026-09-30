@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import inspect
 import sys
 import tempfile
@@ -720,7 +719,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=Mock(),
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=object(),
             premium_feature=None,
@@ -730,11 +728,17 @@ class StartupRuntimeSetupTests(unittest.TestCase):
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_profile_warmup"),
@@ -840,12 +844,12 @@ class StartupRuntimeSetupTests(unittest.TestCase):
 
         self.assertLessEqual(startup_coordinator.STARTUP_STEP_GAP_MS, 8)
 
-    def test_dns_feature_exposes_startup_dns_entrypoint(self) -> None:
+    def test_dns_feature_has_warmup_but_no_startup_dns_apply(self) -> None:
         from app.feature_facades.dns import build_dns_feature
 
         dns_feature = build_dns_feature()
 
-        self.assertTrue(callable(dns_feature.apply_dns_on_startup_async))
+        self.assertFalse(hasattr(dns_feature, "apply_dns_on_startup_async"))
         self.assertTrue(callable(dns_feature.warm_page_data_cache))
         self.assertTrue(callable(dns_feature.consume_warmed_page_data))
 
@@ -1373,7 +1377,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
 
     def test_feature_builders_do_not_import_page_command_modules_before_ui(self) -> None:
         import builtins
-        from app.feature_facades.diagnostics import build_diagnostics_feature
         from app.feature_facades.dns import build_dns_feature
         from app.feature_facades.dpi_settings import build_dpi_settings_feature
         from app.feature_facades.external import build_external_actions_feature
@@ -1417,7 +1420,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             mark_startup_ready=Mock(),
         )
         with patch.object(builtins, "__import__", side_effect=tracking_import):
-            build_diagnostics_feature()
             build_dns_feature()
             build_dpi_settings_feature()
             build_external_actions_feature()
@@ -1934,7 +1936,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
     def test_zapret2_control_loads_top_summary_through_worker_without_startup_delay(self) -> None:
         from app.state_store import AppUiState
         from presets.ui.control.additional_settings_runtime import create_refresh_runtime
-        from presets.ui.control.zapret2 import page as zapret2_page
         from presets.ui.control.zapret2.page import Zapret2ModeControlPage
 
         class WorkerSignal:
@@ -2327,18 +2328,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=log_startup_metric,
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup") as install_hosts_page_warmup,
             patch.object(post_startup, "install_profile_warmup"),
@@ -2372,18 +2378,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=log_startup_metric,
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup") as install_telegram_proxy_page_warmup,
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_profile_warmup"),
@@ -2417,18 +2428,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=log_startup_metric,
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_profile_warmup") as install_profile_warmup,
@@ -2467,18 +2483,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=Mock(),
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_profile_warmup") as install_profile_warmup,
@@ -2519,18 +2540,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=log_startup_metric,
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_profile_warmup"),
@@ -2598,18 +2624,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=log_startup_metric,
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup") as install_dns_page_data_warmup,
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_profile_warmup"),
@@ -2646,18 +2677,23 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             log_startup_metric=log_startup_metric,
             start_proxy_if_enabled_async=Mock(),
             startup_lists_check=Mock(),
-            apply_dns_on_startup_async=Mock(),
             install_tray_post_startup=Mock(),
             updater_feature=Mock(),
         )
 
         with (
             patch.object(post_startup, "install_startup_checks"),
+            patch.object(post_startup, "install_after_interactive_import_warmup"),
+            patch.object(post_startup, "install_secondary_page_warmup"),
+            patch.object(post_startup, "install_user_preset_contract_migration"),
+            patch.object(post_startup, "install_remote_presets_sync"),
             patch.object(post_startup, "install_deferred_maintenance"),
             patch.object(post_startup, "install_telegram_proxy_startup"),
             patch.object(post_startup, "install_telegram_proxy_page_warmup"),
             patch.object(post_startup, "install_lists_check"),
-            patch.object(post_startup, "install_dns_startup"),
+            patch.object(post_startup, "install_dns_address_migration"),
+            patch.object(post_startup, "install_hosts_applied_selection_refresh"),
+            patch.object(post_startup, "install_onboarding_tour"),
             patch.object(post_startup, "install_dns_page_data_warmup"),
             patch.object(post_startup, "install_hosts_page_warmup"),
             patch.object(post_startup, "install_backend_page_data_warmup") as install_backend_page_data_warmup,

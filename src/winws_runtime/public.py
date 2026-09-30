@@ -23,6 +23,13 @@ from winws_runtime.runtime.commands import (
     switch_presets_async,
 )
 from winws_runtime.runners.constants import CREATE_NO_WINDOW, STARTF_USESHOWWINDOW, SW_HIDE
+
+
+def at_config_launch_arg(config_path: str, work_dir: str) -> str:
+    """Аргумент @config для winws2 без пробелов в пути; см. preset_runner_support."""
+    from winws_runtime.runners.preset_runner_support import at_config_launch_arg as _at_config_launch_arg
+
+    return _at_config_launch_arg(config_path, work_dir)
 from winws_runtime.state import (
     LaunchRuntimeOwnershipMap,
     LaunchRuntimeService,
@@ -36,6 +43,7 @@ __all__ = [
     "CREATE_NO_WINDOW",
     "STARTF_USESHOWWINDOW",
     "SW_HIDE",
+    "at_config_launch_arg",
     "cancel_start_after_conflict_prompt",
     "cleanup_launch_threads",
     "create_preset_runtime_coordinator",

@@ -10,24 +10,38 @@ from blockcheck.config import (
     ISP_REDIRECT_MARKERS,
 )
 from blockcheck.models import SingleTestResult, TestStatus, TestType
+from utils.net_resolve import resolve_ipv4
 
 
 def check_http_injection(
     domain: str,
     timeout: int = ISP_PAGE_TIMEOUT,
+    resolved_ip: str | None = None,
 ) -> SingleTestResult:
     """Check for HTTP injection on port 80.
 
     Sends a plain HTTP GET and checks if the response is from the real server
     or an injected block page (common DPI technique).
+
+    Подключаемся по IP: ``sock.connect((domain, 80))`` сначала уходит в
+    неограниченный по времени резолв, на который ``settimeout`` не влияет.
     """
     start = time.time()
     sock = None
 
     try:
+        host_ip = resolved_ip or resolve_ipv4(domain, timeout=timeout)
+        if not host_ip:
+            return SingleTestResult(
+                target_name=domain, test_type=TestType.ISP_PAGE,
+                status=TestStatus.ERROR, error_code="CONNECT_ERR",
+                time_ms=round((time.time() - start) * 1000, 2),
+                detail="нет IPv4-адреса для проверки порта 80",
+            )
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
-        sock.connect((domain, 80))
+        sock.connect((host_ip, 80))
 
         request = (
             f"GET / HTTP/1.1\r\n"
@@ -116,27 +130,28 @@ def detect_isp_page(
 ) -> SingleTestResult:
     """Detect ISP block page via HTTPS with body inspection.
 
-    Uses httpx to follow redirects and inspect the final page content.
+    Uses requests to follow redirects and inspect the final page content.
     """
     start = time.time()
 
     try:
-        import httpx
+        import requests
     except ImportError:
         return SingleTestResult(
             target_name=domain, test_type=TestType.ISP_PAGE,
-            status=TestStatus.ERROR, error_code="NO_HTTPX",
-            detail="httpx not installed",
+            status=TestStatus.ERROR, error_code="NO_REQUESTS",
+            detail="requests not installed",
         )
 
     try:
-        with httpx.Client(
-            timeout=timeout,
-            verify=False,  # We want to see the page even with bad certs
-            follow_redirects=True,
-            max_redirects=5,
-        ) as client:
-            resp = client.get(f"https://{domain}/")
+        with requests.Session() as client:
+            client.max_redirects = 5
+            resp = client.get(
+                f"https://{domain}/",
+                timeout=timeout,
+                verify=False,  # We want to see the page even with bad certs
+                allow_redirects=True,
+            )
             elapsed = (time.time() - start) * 1000
             body = resp.text[:8192]
 

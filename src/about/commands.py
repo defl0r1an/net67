@@ -13,12 +13,12 @@ class AboutActionResult:
 
 
 def open_support_discussions() -> AboutActionResult:
-    from config.urls import SUPPORT_DISCUSSIONS_URL
+    from config.urls import SUPPORT_ISSUES_URL
 
     try:
-        webbrowser.open(SUPPORT_DISCUSSIONS_URL)
-        log(f"Открыт GitHub Discussions: {SUPPORT_DISCUSSIONS_URL}", "INFO")
-        return AboutActionResult(True, SUPPORT_DISCUSSIONS_URL)
+        webbrowser.open(SUPPORT_ISSUES_URL)
+        log(f"Открыт Forgejo Issues: {SUPPORT_ISSUES_URL}", "INFO")
+        return AboutActionResult(True, SUPPORT_ISSUES_URL)
     except Exception as e:
         return AboutActionResult(False, str(e))
 
@@ -45,6 +45,27 @@ def open_telegram(domain: str, *, post: int | None = None) -> AboutActionResult:
         return AboutActionResult(False, str(e))
 
 
+def open_telegram_folder(slug: str) -> AboutActionResult:
+    """Папка Telegram (t.me/addlist/...): добавляет сразу все чаты из неё."""
+    try:
+        from config.telegram_links import open_telegram_link
+
+        open_telegram_link("", slug=slug)
+        log(f"Открыта папка Telegram: {slug}", "INFO")
+        return AboutActionResult(True, slug)
+    except Exception as e:
+        return AboutActionResult(False, str(e))
+
+
+def open_link(url: str) -> AboutActionResult:
+    try:
+        webbrowser.open(url)
+        log(f"Открыта ссылка: {url}", "INFO")
+        return AboutActionResult(True, url)
+    except Exception as e:
+        return AboutActionResult(False, str(e))
+
+
 def open_discord(url: str) -> AboutActionResult:
     try:
         webbrowser.open(url)
@@ -57,7 +78,7 @@ def open_discord(url: str) -> AboutActionResult:
 def open_github(url: str) -> AboutActionResult:
     try:
         webbrowser.open(url)
-        log(f"Открыт GitHub: {url}", "INFO")
+        log(f"Открыт Forgejo: {url}", "INFO")
         return AboutActionResult(True, url)
     except Exception as e:
         return AboutActionResult(False, str(e))
@@ -68,6 +89,8 @@ __all__ = [
     "open_discord",
     "open_docs_home",
     "open_github",
+    "open_link",
     "open_support_discussions",
     "open_telegram",
+    "open_telegram_folder",
 ]

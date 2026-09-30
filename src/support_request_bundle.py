@@ -17,7 +17,7 @@ from branding import APP_NAME
 from config.build_info import APP_VERSION
 from config.runtime_layout import APPLICATION_PATHS
 
-from config.urls import SUPPORT_DISCUSSIONS_URL
+from config.urls import SUPPORT_ISSUES_URL
 
 # Флаг скрытия консольного окна. На Windows любой subprocess без него
 # на мгновение показывает чёрный прямоугольник — человек описал это как
@@ -403,7 +403,7 @@ def prepare_support_request(
     )
 
     copied = _copy_to_clipboard(template_text)
-    target_discussions_url = str(discussions_url or SUPPORT_DISCUSSIONS_URL).strip() or SUPPORT_DISCUSSIONS_URL
+    target_discussions_url = str(discussions_url or SUPPORT_ISSUES_URL).strip() or SUPPORT_ISSUES_URL
     discussions_opened = webbrowser.open(target_discussions_url) if open_discussions else False
     folder_opened = False
     if zip_path and open_bundle_folder:

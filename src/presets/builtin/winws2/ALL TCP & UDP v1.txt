@@ -1,5 +1,5 @@
 # Preset: ALL TCP & UDP v1
-# BuiltinVersion: 2.25
+# BuiltinVersion: 2.42
 # Description: 
 
 --lua-init=@lua/zapret-lib.lua
@@ -18,11 +18,29 @@
 --wf-tcp-out=80,443-65535
 --wf-udp-out=444-65535
 
+--blob=tls_google:@bin/tls_clienthello_www_google_com.bin
 --blob=quic_google:@bin/quic_initial_www_google_com.bin
 --blob=tls7:@bin/tls_clienthello_7.bin
 --blob=fake_default_udp:0x00000000000000000000000000000000
 
---name=Исключения (RU сайты)
+--name=git.zapret.moe
+--filter-tcp=443
+--hostlist=lists/git-zapret-moe.txt
+--out-range=-d8
+--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
+
+--new
+
+--name=Исключения домены (RU сайты)
+--filter-tcp=80,443-65535
+--hostlist=lists/netrogat.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=pass
+
+--new
+
+--name=Исключения айпи (RU сайты)
 --filter-tcp=80,443-65535
 --ipset=lists/ipset-ru.txt
 --ipset=lists/ipset-dns.txt

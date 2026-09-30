@@ -43,6 +43,12 @@ class ServiceChoice:
     needs_hosts: bool = False
     #: Имена сервисов в json/hosts_catalog, ровно как в каталоге.
     hosts_services: tuple[str, ...] = ()
+    #: Прописать сайты Telegram — блоком страницы Telegram Proxy.
+    #:
+    #: Раньше здесь стояло имя плитки Telegram из каталога. Плитку из
+    #: редактора hosts убрали: у доменов Telegram должен быть один
+    #: писатель, и это страница прокси.
+    telegram_hosts: bool = False
 
 
 #: Категории, а не отдельные сервисы: список приложений у людей разный,
@@ -69,7 +75,7 @@ SERVICE_CHOICES: tuple[ServiceChoice, ...] = (
         probe_url="https://discord.com",
         needs_telegram_proxy=True,
         needs_hosts=True,
-        hosts_services=("Telegram (работает только веб-версия)",),
+        telegram_hosts=True,
     ),
     ServiceChoice(
         key="social",
@@ -165,6 +171,9 @@ class HostsGroup:
     takes_the_rest: bool = False
     #: Домены зашиты в исходниках, каталог для группы не нужен.
     source_domains: bool = False
+    #: Сайты Telegram — блоком страницы Telegram Proxy, а не плиткой
+    #: каталога. См. ``ServiceChoice.telegram_hosts``.
+    telegram_hosts: bool = False
 
 
 #: Общая приписка под всеми галочками.
@@ -197,9 +206,9 @@ HOSTS_GROUPS: tuple[HostsGroup, ...] = (
         title="Соцсети и мессенджеры",
         examples="Instagram, Telegram, Discord, WhatsApp, X, TikTok",
         default_enabled=True,
+        telegram_hosts=True,
         services=(
             "Instagram",
-            "Telegram (работает только веб-версия)",
             "WhatsApp (работает обход если есть IPv6)",
             "Discord",
             "Решение от Flowseal для стабильной работы голосовых серверов в Discord",
@@ -343,6 +352,22 @@ def default_hosts_groups() -> frozenset[str]:
 def normalize_hosts_groups(keys) -> frozenset[str]:
     """Отбрасывает незнакомые ключи групп."""
     return frozenset(str(k) for k in keys or () if str(k) in _HOSTS_GROUP_BY_KEY)
+
+
+def wants_telegram_hosts(selection, hosts_groups=None) -> bool:
+    """Прописывать ли сайты Telegram по ответам мастера.
+
+    Смысл ``hosts_groups`` тот же, что в ``build_oneclick_request``:
+    передали ответ экрана hosts — решает он, не передали — общий выбор.
+    """
+    if hosts_groups is not None:
+        return any(
+            _HOSTS_GROUP_BY_KEY[key].telegram_hosts
+            for key in normalize_hosts_groups(hosts_groups)
+        )
+    return any(
+        _CHOICE_BY_KEY[key].telegram_hosts for key in normalize_selection(selection)
+    )
 
 
 def hosts_service_profiles(group_keys) -> dict[str, str]:

@@ -2,7 +2,45 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt6.QtCore import QThread
+from PyQt6.QtCore import QThread, Qt
+
+from ui.background_worker_gate import BackgroundWorkerTicket, background_worker_gate
+from ui.ui_thread_guard import build_background_worker_launcher
+
+
+def _verify_worker_affinity(worker, thread: QThread) -> None:
+    """Логирует случай, когда worker не переехал в свой поток."""
+    try:
+        if worker.thread() is thread:
+            return
+    except (AttributeError, RuntimeError):
+        return
+    try:
+        from log.log import log
+
+        log(
+            f"Worker {type(worker).__name__} остался в потоке "
+            f"{worker.thread()} вместо {thread} — его сигналы пойдут не из рабочего потока",
+            "⚠ WARNING",
+        )
+    except Exception:
+        pass
+
+
+def _worker_running_probe(target) -> Callable[[], bool]:
+    """Отвечает гейту, считает ли ещё этот воркер.
+
+    Гейт не должен зависеть только от finished-сигнала: тесты и cleanup-пути
+    удаляют воркеров, не доводя их до завершения.
+    """
+
+    def _probe() -> bool:
+        is_running = getattr(target, "isRunning", None)
+        if not callable(is_running):
+            return True
+        return bool(is_running())
+
+    return _probe
 
 
 class OneShotWorkerRuntime:
@@ -10,12 +48,17 @@ class OneShotWorkerRuntime:
 
     Worker здесь — фоновый загрузчик. Он делает тяжёлую работу вне UI-потока,
     а страница принимает только свежий результат по request_id.
+
+    Старт проходит через общий гейт: параллельно работает ограниченное число
+    фоновых воркеров, остальные ждут очереди, чтобы не отнимать GIL у
+    GUI-потока (см. ui/background_worker_gate.py).
     """
 
     def __init__(self) -> None:
         self.request_id = 0
         self.worker = None
         self.thread = None
+        self._ticket: BackgroundWorkerTicket | None = None
 
     def next_request_id(self) -> int:
         self.request_id += 1
@@ -24,7 +67,19 @@ class OneShotWorkerRuntime:
     def is_current(self, request_id: int, *, cleanup_in_progress: bool = False) -> bool:
         return (not cleanup_in_progress) and int(request_id) == int(self.request_id)
 
+    def _current_ticket(self) -> BackgroundWorkerTicket | None:
+        # Тесты создают runtime через __new__ и обходят __init__: атрибута
+        # может не быть.
+        return self.__dict__.get("_ticket")
+
+    def is_queued(self) -> bool:
+        """True, пока воркер ждёт очереди гейта и ещё не стартовал."""
+        ticket = self._current_ticket()
+        return bool(ticket is not None and ticket.is_pending())
+
     def is_running(self) -> bool:
+        if self.is_queued():
+            return True
         target = self.thread or self.worker
         if target is None:
             return False
@@ -54,9 +109,18 @@ class OneShotWorkerRuntime:
         thread = QThread(parent)
         worker = worker_factory(request_id)
         worker.moveToThread(thread)
+        _verify_worker_affinity(worker, thread)
 
         run_method = getattr(worker, run_method_name)
-        thread.started.connect(run_method)
+        # DirectConnection обязателен: `started` эмитится уже внутри нового
+        # потока, поэтому прямой вызов гарантированно исполняет работу там.
+        # Без него доставка зависит от того, распознал ли PyQt получателя как
+        # QObject; в собранном приложении этот путь уводил работу обратно в
+        # GUI-поток, и окно висело до конца проверки.
+        thread.started.connect(
+            build_background_worker_launcher(worker, run_method, run_method_name),
+            Qt.ConnectionType.DirectConnection,
+        )
         if on_loaded is not None and hasattr(worker, "loaded"):
             worker.loaded.connect(lambda *args, req=request_id: on_loaded(req, *args))
         failed_signal = getattr(worker, failed_signal_name, None)
@@ -72,9 +136,13 @@ class OneShotWorkerRuntime:
         if bind_worker is not None:
             bind_worker(worker)
 
+        self._discard_queued_start()
         self.worker = worker
         self.thread = thread
-        thread.start()
+        ticket = BackgroundWorkerTicket(_worker_running_probe(thread))
+        self._ticket = ticket
+        thread.finished.connect(lambda *_args, t=ticket: self._release_ticket(t))
+        background_worker_gate().submit(ticket, lambda th=thread, t=ticket: self._start_thread(th, t))
         return request_id, worker, thread
 
     def start_qthread_worker(
@@ -109,10 +177,54 @@ class OneShotWorkerRuntime:
         if bind_worker is not None:
             bind_worker(worker)
 
+        self._discard_queued_start()
         self.worker = worker
         self.thread = None
-        worker.start()
+        ticket = BackgroundWorkerTicket(_worker_running_probe(worker))
+        self._ticket = ticket
+        worker.finished.connect(lambda *_args, t=ticket: self._release_ticket(t))
+        background_worker_gate().submit(ticket, lambda w=worker, t=ticket: self._start_thread(w, t))
         return request_id, worker
+
+    def _start_thread(self, target, ticket: BackgroundWorkerTicket) -> None:
+        try:
+            target.start()
+        except RuntimeError:
+            # Пока воркер ждал очереди, его C++-объект успели удалить вместе
+            # со страницей: слот держать не за что.
+            self._release_ticket(ticket)
+
+    def _release_ticket(self, ticket: BackgroundWorkerTicket) -> None:
+        background_worker_gate().release(ticket)
+        if self._current_ticket() is ticket:
+            self._ticket = None
+
+    def _discard_queued_start(self) -> None:
+        """Снимает предыдущий воркер, который так и не дождался очереди.
+
+        Его результат всё равно был бы отброшен по request_id, а сам QThread
+        без старта не эмитит finished и не удалился бы сам.
+        """
+        ticket = self._current_ticket()
+        if ticket is None:
+            return
+        if not ticket.is_pending():
+            # Воркер уже работает: слот отпустит его собственный finished.
+            self._ticket = None
+            return
+        background_worker_gate().cancel(ticket)
+        self._ticket = None
+        for target in (self.worker, self.thread):
+            if target is None:
+                continue
+            delete_later = getattr(target, "deleteLater", None)
+            if callable(delete_later):
+                try:
+                    delete_later()
+                except RuntimeError:
+                    pass
+        self.worker = None
+        self.thread = None
 
     def stop(
         self,
@@ -122,7 +234,15 @@ class OneShotWorkerRuntime:
         terminate_wait_ms: int = 500,
         log_fn: Callable[[str, str], None] | None = None,
         warning_prefix: str = "Worker",
-    ) -> None:
+    ) -> bool:
+        """Останавливает worker. True — поток пришлось прервать terminate():
+        он мог оставить занятыми замки, писать после этого синхронно опасно."""
+        if self.is_queued():
+            # Воркер ещё не стартовал: снимаем его из очереди, иначе гейт
+            # запустит уже никому не нужную работу.
+            self._discard_queued_start()
+            return False
+
         worker = self.worker
         thread = self.thread
 
@@ -140,7 +260,7 @@ class OneShotWorkerRuntime:
 
         target = thread or worker
         if target is None:
-            return
+            return False
         try:
             if hasattr(target, "is_running"):
                 running_state = getattr(target, "is_running")
@@ -150,13 +270,13 @@ class OneShotWorkerRuntime:
         except (AttributeError, RuntimeError):
             self.worker = None
             self.thread = None
-            return
+            return False
         if not running:
             if self.worker is worker:
                 self.worker = None
             if self.thread is thread:
                 self.thread = None
-            return
+            return False
 
         quit_fn = getattr(target, "quit", None)
         if callable(quit_fn):
@@ -171,9 +291,12 @@ class OneShotWorkerRuntime:
                     target.wait(terminate_wait_ms)
                 except Exception:
                     pass
+                return True
+        return False
 
     def cancel(self) -> None:
         self.request_id += 1
+        self._discard_queued_start()
         self.worker = None
         self.thread = None
 

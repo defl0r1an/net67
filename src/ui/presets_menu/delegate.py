@@ -9,7 +9,9 @@ from PyQt6.QtWidgets import QListView, QStyledItemDelegate, QStyle, QStyleOption
 from ui.theme import get_theme_tokens
 from ui.widgets.fluent_item_tooltip import FluentItemToolTipController
 from ui.widgets.folder_header import FOLDER_HEADER_HEIGHT, is_folder_toggle_click, paint_folder_header_row
+from ui.widgets.active_row_motion import active_row_motion
 from ui.widgets.hover_row import paint_profile_hover_row, profile_hover_row_rect
+from ui.widgets.row_hover_motion import attach_row_hover_motion, paint_icon_motion, row_hover_motion
 
 from .common import (
     PRESET_DROP_MARKER_PROPERTY,
@@ -66,6 +68,7 @@ class PresetListDelegate(QStyledItemDelegate):
         self._pending_shake_timer = QTimer(self)
         self._pending_shake_timer.timeout.connect(self._advance_pending_shake)
         self._tooltip = FluentItemToolTipController(view.viewport())
+        attach_row_hover_motion(view, row_filter=_is_preset_row)
         self.set_ui_language("ru")
 
     def _tr(self, key: str, default: str, **kwargs) -> str:
@@ -428,6 +431,9 @@ class PresetListDelegate(QStyledItemDelegate):
         focused = bool(option.state & QStyle.StateFlag.State_HasFocus)
         pressed = self._pressed_row == index.row()
 
+        motion = active_row_motion(self._view)
+        hover_motion = row_hover_motion(self._view)
+        live_hover = hover_motion is not None and not focused
         row_paint = paint_profile_hover_row(
             painter,
             rect,
@@ -435,17 +441,30 @@ class PresetListDelegate(QStyledItemDelegate):
             hovered=bool(hovered) or focused,
             pressed=pressed,
             show_active_marker=False,
+            active_reveal=motion.row_reveal(index) if motion is not None else None,
+            residual_active=motion.row_residual(index) if motion is not None else 0.0,
+            hover_level=hover_motion.hover_level(index) if live_hover else None,
+            sheen=hover_motion.sheen_progress(index) if live_hover else None,
         )
         bg = row_paint.background
 
         icon_rect = self._icon_rect_for_row(rect, depth)
+        if motion is not None:
+            # После переезда бегунка значок нового активного пресета подпрыгивает.
+            icon_rect = icon_rect.translated(0, round(motion.icon_offset(index)))
         icon_color = pick_contrast_color(
             normalize_preset_icon_color(str(index.data(PresetListModel.IconColorRole) or "")),
             bg,
             [tokens.accent_hex, tokens.fg],
             minimum_ratio=2.6,
         )
-        cached_icon("fa5s.file-alt", icon_color).paint(painter, icon_rect)
+        paint_icon_motion(
+            painter,
+            icon_rect,
+            hover_motion,
+            index,
+            lambda: cached_icon("fa5s.file-alt", icon_color).paint(painter, icon_rect),
+        )
 
         text_left = icon_rect.right() + 10
         actions = self._action_rects(rect, "preset", is_active, is_builtin)
@@ -506,6 +525,21 @@ class PresetListDelegate(QStyledItemDelegate):
         name_metrics = QFontMetrics(name_font)
         elided_name = name_metrics.elidedText(name, Qt.TextElideMode.ElideRight, name_rect.width())
         painter.drawText(name_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), elided_name)
+
+        if bool(index.data(PresetListModel.RemoteRole)):
+            remote_state = str(index.data(PresetListModel.RemoteStateRole) or "")
+            cloud_left = name_rect.left() + name_metrics.horizontalAdvance(elided_name) + 6
+            if cloud_left + 14 <= name_rect.right():
+                cloud_color = tokens.fg_faint
+                if remote_state in ("detached", "error"):
+                    try:
+                        from ui.theme_semantic import get_semantic_palette
+
+                        cloud_color = get_semantic_palette(tokens.theme_name).warning_soft
+                    except Exception:
+                        cloud_color = "#ff9800"
+                cloud_rect = QRect(cloud_left, name_rect.center().y() - 6, 13, 13)
+                cached_icon("fa5s.cloud", cloud_color).paint(painter, cloud_rect)
 
         painter.setFont(meta_font)
         if date_rect.width() > 0:
@@ -570,6 +604,10 @@ class PresetListDelegate(QStyledItemDelegate):
             )
 
         painter.restore()
+
+
+def _is_preset_row(index) -> bool:
+    return str(index.data(PresetListModel.KindRole) or "") == "preset"
 
 
 __all__ = ["PresetListDelegate"]

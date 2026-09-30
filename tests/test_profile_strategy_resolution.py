@@ -10,11 +10,12 @@ from profile.derived_cache import (
     basic_strategy_entries,
     normalize_lines,
     profile_list_type,
+    profile_strategy_shape,
     resolve_strategy,
-    strategy_branches_for_profile,
     strategy_identity_lines,
 )
 from profile.strategy_catalog import load_strategy_catalogs
+from profile.strategy_shape import composite_identity, is_lua_desync_line, is_range_line, strategy_shape
 
 
 class ProfileStrategyResolutionTests(unittest.TestCase):
@@ -117,7 +118,7 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                 for catalog_name, entries in catalogs.items():
                     seen: dict[tuple[str, ...], str] = {}
                     for strategy_id, entry in entries.items():
-                        identity = _ready_strategy_identity(engine, entry.args.splitlines())
+                        identity = _ready_strategy_identity(engine, entry.args.splitlines(), entry.is_composite)
                         previous_id = seen.get(identity)
                         if previous_id is not None:
                             duplicate_groups.append(f"{catalog_name}: {previous_id} = {strategy_id}")
@@ -126,13 +127,29 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                 self.assertEqual(duplicate_groups, [])
 
     def test_winws2_catalogs_contain_only_lua_desync_args(self) -> None:
+        # Обычная готовая стратегия — только --lua-desync. --payload и
+        # диапазоны допустимы лишь в составной стратегии как разделители
+        # веток, причём диапазон — только после первой --lua-desync
+        # (диапазон до неё — настройка profile-а).
         invalid_lines: list[str] = []
         for path in sorted(Path("src/profile/strategy_catalogs/winws2").glob("*.txt")):
-            invalid_lines.extend(
-                f"{path.name}:{line_number}: {line.strip()}"
-                for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
-                if line.strip().startswith("--") and not line.strip().startswith("--lua-desync=")
-            )
+            for strategy_id, lines in _raw_catalog_entries(path):
+                other = [line for line in lines if not is_lua_desync_line(line)]
+                if not other:
+                    continue
+                first_lua = next((index for index, line in enumerate(lines) if is_lua_desync_line(line)), len(lines))
+                shape = strategy_shape(lines)
+                bad = [
+                    line
+                    for index, line in enumerate(lines)
+                    if not is_lua_desync_line(line)
+                    and (
+                        not shape.composite
+                        or not (line.lower().startswith("--payload=") or is_range_line(line))
+                        or (is_range_line(line) and index < first_lua)
+                    )
+                ]
+                invalid_lines.extend(f"{path.name}:[{strategy_id}]: {line}" for line in bad)
 
         self.assertEqual(invalid_lines, [])
 
@@ -152,42 +169,155 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                 strategy_id, _strategy_name = resolve_strategy(profile, entries)
                 if strategy_id != "custom":
                     continue
-                branches = strategy_branches_for_profile(profile, entries)
-                custom_branches = [branch for branch in branches if branch.strategy_id == "custom"]
-                if custom_branches:
-                    catalog = strategy_catalog_from_match_lines(tuple(profile.match.all_lines()))
-                    unresolved.append(
-                        f"{path.name}:{index}: {profile.display_name} "
-                        f"({catalog}/{profile_list_type(profile)}; custom branches={len(custom_branches)})"
-                    )
+                catalog = strategy_catalog_from_match_lines(tuple(profile.match.all_lines()))
+                composite = profile_strategy_shape(profile).composite
+                unresolved.append(
+                    f"{path.name}:{index}: {profile.display_name} "
+                    f"({catalog}/{profile_list_type(profile)}; composite={composite})"
+                )
 
         self.assertEqual(unresolved, [])
 
-    def test_flowseal_exp_1100_keeps_payload_scopes_and_ready_branches(self) -> None:
+    def test_every_builtin_preset_has_domain_and_ip_ru_exclusions_with_pass(self) -> None:
+        expected_profiles = {
+            "Исключения домены (RU сайты)": (
+                "--filter-tcp=80,443-65535",
+                "--hostlist=lists/netrogat.txt",
+            ),
+            "Исключения айпи (RU сайты)": (
+                "--filter-tcp=80,443-65535",
+                "--ipset=lists/ipset-ru.txt",
+                "--ipset=lists/ipset-dns.txt",
+                "--ipset=lists/ipset-exclude.txt",
+            ),
+        }
+        expected_strategy = (
+            "--out-range=-d8",
+            "--payload=tls_client_hello",
+            "--lua-desync=pass",
+        )
+        preset_paths = sorted(Path("src/presets/builtin/winws2").glob("*.txt"))
+
+        self.assertGreater(len(preset_paths), 0)
+        for path in preset_paths:
+            with self.subTest(preset=path.name):
+                text = path.read_text(encoding="utf-8")
+                preset = parse_preset_text(text, engine="winws2", source_name=path.name)
+                exclusion_profiles = [
+                    profile
+                    for profile in preset.profiles
+                    if profile.display_name in expected_profiles
+                ]
+
+                self.assertEqual(
+                    [profile.display_name for profile in exclusion_profiles],
+                    list(expected_profiles),
+                )
+                self.assertNotIn("--name=Исключения (RU сайты)", text)
+                self.assertIn("# BuiltinVersion: 2.42", text.splitlines()[:5])
+
+                for profile in exclusion_profiles:
+                    self.assertEqual(
+                        tuple(profile.match.all_lines()),
+                        expected_profiles[profile.display_name],
+                    )
+                    self.assertEqual(
+                        normalize_lines(profile.strategy.strategy_lines),
+                        expected_strategy,
+                    )
+                    self.assertEqual(self._resolved_strategy_id(profile), "pass")
+
+    def test_git_zapret_moe_is_first_and_uses_alt9_in_every_builtin_preset(self) -> None:
+        expected_strategy = (
+            "--out-range=-d8",
+            "--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4",
+        )
+        preset_paths = sorted(Path("src/presets/builtin/winws2").glob("*.txt"))
+
+        self.assertGreater(len(preset_paths), 0)
+        for path in preset_paths:
+            with self.subTest(preset=path.name):
+                preset = parse_preset_text(
+                    path.read_text(encoding="utf-8"),
+                    engine="winws2",
+                    source_name=path.name,
+                )
+                matches = [profile for profile in preset.profiles if profile.display_name == "git.zapret.moe"]
+                self.assertEqual(len(matches), 1)
+                profile = matches[0]
+                self.assertIs(profile, preset.profiles[0])
+                self.assertEqual(profile.match.filter_lines, ["--filter-tcp=443"])
+                self.assertEqual(profile.match.hostlist_lines, ["--hostlist=lists/git-zapret-moe.txt"])
+                self.assertEqual(normalize_lines(profile.strategy.strategy_lines), expected_strategy)
+                self.assertEqual(self._resolved_strategy_id(profile), "alt9")
+
+    def test_youtube_profiles_precede_ru_pass_in_every_builtin_preset(self) -> None:
+        # AS12389 остаётся в ipset-ru: внутри него могут находиться российские
+        # кэш-серверы Google/YouTube. Поэтому специальные YouTube-профили должны
+        # проверяться раньше широкого RU-профиля с действием pass.
+        offenders: list[str] = []
+        checked_presets = 0
+
+        for path in sorted(Path("src/presets/builtin/winws2").glob("*.txt")):
+            preset = parse_preset_text(
+                path.read_text(encoding="utf-8"),
+                engine="winws2",
+                source_name=path.name,
+            )
+            youtube_indexes = [
+                index
+                for index, profile in enumerate(preset.profiles)
+                if _is_youtube_profile(profile)
+            ]
+            ru_pass_indexes = [
+                index
+                for index, profile in enumerate(preset.profiles)
+                if "--ipset=lists/ipset-ru.txt" in profile.match.all_lines()
+            ]
+            if not youtube_indexes or not ru_pass_indexes:
+                continue
+
+            checked_presets += 1
+            if max(youtube_indexes) >= min(ru_pass_indexes):
+                offenders.append(
+                    f"{path.name}: YouTube {youtube_indexes}, RU pass {ru_pass_indexes}"
+                )
+
+            version_line = next(
+                (
+                    line
+                    for line in path.read_text(encoding="utf-8").splitlines()[:5]
+                    if line.startswith("# BuiltinVersion: ")
+                ),
+                "",
+            )
+            if version_line != "# BuiltinVersion: 2.42":
+                offenders.append(f"{path.name}: версия набора не 2.42")
+
+        self.assertGreater(checked_presets, 0)
+        self.assertEqual(offenders, [])
+
+    def test_flowseal_exp_1100_payload_branches_are_one_composite_strategy(self) -> None:
         path = Path("src/presets/builtin/winws2/general EXP 1.10.0 (game filter).txt")
         preset = parse_preset_text(path.read_text(encoding="utf-8"), engine="winws2", source_name=path.name)
 
         media = next(profile for profile in preset.profiles if profile.display_name == "discord.media (voice RTC)")
-        media_branches = strategy_branches_for_profile(media, basic_strategy_entries(media, self.catalogs))
+        self.assertEqual(self._resolved_strategy_id(media), "flowseal_exp_1100_discord_media")
         self.assertEqual(
-            [(branch.payload, branch.strategy_id) for branch in media_branches],
-            [
-                ("tls_client_hello", "flowseal_exp_1100_discord_tls"),
-                ("http_req", "flowseal_exp_1100_discord_http"),
-                ("tls_client_hello,http_req", "general_alt6_184"),
-            ],
+            profile_strategy_shape(media).payload_scopes,
+            ("tls_client_hello", "http_req", "tls_client_hello,http_req"),
         )
 
         steam = next(profile for profile in preset.profiles if profile.display_name == "Steam")
-        steam_branches = strategy_branches_for_profile(steam, basic_strategy_entries(steam, self.catalogs))
-        self.assertEqual(
-            [(branch.out_range, branch.payload, branch.strategy_id) for branch in steam_branches],
-            [
-                ("<n4", "tls_client_hello", "flowseal_exp_1100_game_tls"),
-                ("<n4", "http_req", "flowseal_exp_1100_game_http"),
-                ("<n4", "all", "flowseal_exp_1100_game_other"),
-            ],
-        )
+        steam_shape = profile_strategy_shape(steam)
+        self.assertEqual(self._resolved_strategy_id(steam), "flowseal_exp_1100_game_tcp")
+        # --out-range=<n4 перед первой --lua-desync — настройка profile-а,
+        # а не часть готовой стратегии.
+        self.assertEqual(steam_shape.profile_range_lines, ("--out-range=<n4",))
+        self.assertEqual(steam_shape.payload_scopes, ("tls_client_hello", "http_req", "all"))
+        entry = self.catalogs["tcp"]["flowseal_exp_1100_game_tcp"]
+        self.assertTrue(entry.is_composite)
+        self.assertNotIn("--out-range=<n4", entry.args)
 
     def test_new_199_builtin_presets_do_not_mix_payload_scoped_strategies(self) -> None:
         violations: list[str] = []
@@ -282,11 +412,40 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
         return next(profile for profile in self.preset.profiles if profile.display_name == display_name)
 
 
-def _ready_strategy_identity(engine: str, lines) -> tuple[str, ...]:
+def _ready_strategy_identity(engine: str, lines, composite: bool = False) -> tuple:
     normalized = normalize_lines(lines)
     if engine == "winws2":
+        # Составные стратегии сравниваются целиком и только между собой,
+        # обычные — по строкам --lua-desync.
+        if composite:
+            return ("composite", composite_identity(strategy_shape(normalized).body_lines))
         return tuple(line for line in normalized if line.lower().startswith("--lua-desync="))
     return normalized
+
+
+def _raw_catalog_entries(path: Path) -> list[tuple[str, list[str]]]:
+    entries: list[tuple[str, list[str]]] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("[") and line.endswith("]"):
+            entries.append((line[1:-1].strip(), []))
+            continue
+        if entries and line.startswith("--"):
+            entries[-1][1].append(line)
+    return entries
+
+
+def _is_youtube_profile(profile) -> bool:
+    identity = "\n".join(
+        (
+            str(profile.display_name or ""),
+            *profile.match.all_lines(),
+        )
+    ).lower()
+    return any(
+        token in identity
+        for token in ("youtube", "googlevideo", "i.ytimg", "i-ytimg")
+    )
 
 
 def _payload_groups_with_lua(lines) -> int:

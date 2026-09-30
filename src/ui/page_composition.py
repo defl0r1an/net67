@@ -14,12 +14,14 @@ from ui.page_deps.system import (
     build_about_page_kwargs,
     build_blockcheck_page_kwargs,
     build_configs_page_kwargs,
+    build_hosts_file_page_kwargs,
     build_hosts_page_kwargs,
     build_logs_page_kwargs,
     build_network_page_kwargs,
     build_servers_page_kwargs,
     build_support_page_kwargs,
     build_telegram_proxy_page_kwargs,
+    build_telegram_proxy_advanced_page_kwargs,
     build_vpn_page_kwargs,
     build_winws_log_analyzer_page_kwargs,
 )
@@ -30,7 +32,17 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     PageName.ZAPRET2_MODE_CONTROL: PageDepsSpec(
         build_control_page_kwargs,
         features=("presets", "profile", "runtime", "program_settings", "external_actions"),
-        actions=("set_status", "request_exit", "open_connection_test", "open_folder", "show_page"),
+        actions=(
+            "set_status",
+            "request_exit",
+            "open_connection_test",
+            "open_folder",
+            "show_page",
+            # Кнопка «Показать» обучающего тура. Без этого действия сборщик
+            # главной падал на обязательном аргументе, и окно оставалось
+            # чёрным: слияние с zapret потеряло строку, тесты не заметили.
+            "start_onboarding_tour",
+        ),
         include_ui_state_store=True,
     ),
     PageName.ZAPRET2_PRESET_SETUP: PageDepsSpec(
@@ -43,6 +55,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         build_profile_setup_page_kwargs,
         features=("profile",),
         actions=("show_page", "on_profile_setup_changed"),
+        include_ui_state_store=True,
     ),
     PageName.ZAPRET2_PROFILE_ORDER: PageDepsSpec(
         build_profile_order_page_kwargs,
@@ -63,7 +76,8 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         include_ui_state_store=True,
     ),
     PageName.NETWORK: PageDepsSpec(build_network_page_kwargs, features=("dns",)),
-    PageName.HOSTS: PageDepsSpec(build_hosts_page_kwargs, features=("hosts",)),
+    PageName.HOSTS: PageDepsSpec(build_hosts_page_kwargs, features=("hosts",), actions=("show_page",)),
+    PageName.HOSTS_FILE: PageDepsSpec(build_hosts_file_page_kwargs, features=("hosts",), actions=("show_page",)),
     PageName.SUPPORT: PageDepsSpec(build_support_page_kwargs, features=("external_actions",)),
     PageName.ABOUT: PageDepsSpec(
         build_about_page_kwargs,
@@ -78,7 +92,8 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     ),
     PageName.BLOCKCHECK: PageDepsSpec(
         build_blockcheck_page_kwargs,
-        features=("blockcheck", "diagnostics", "dns", "runtime"),
+        features=("blockcheck", "dns", "runtime"),
+        actions=("show_page",),
     ),
     PageName.WINWS_LOG_ANALYZER: PageDepsSpec(build_winws_log_analyzer_page_kwargs),
     PageName.LOGS: PageDepsSpec(
@@ -88,6 +103,12 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     PageName.TELEGRAM_PROXY: PageDepsSpec(
         build_telegram_proxy_page_kwargs,
         features=("runtime", "telegram_proxy"),
+        actions=("show_page",),
+    ),
+    PageName.TELEGRAM_PROXY_ADVANCED: PageDepsSpec(
+        build_telegram_proxy_advanced_page_kwargs,
+        features=("telegram_proxy",),
+        actions=("show_page",),
     ),
     # Обе страницы самодостаточны: ресурсы находят через APPLICATION_PATHS
     # и settings.store, внешних зависимостей им не требуется.

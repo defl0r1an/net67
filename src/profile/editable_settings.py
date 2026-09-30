@@ -34,15 +34,38 @@ class EditableProfileSettings:
     out_range: str = "a"
 
 
+_DEFAULT_RANGE_BY_OPTION = {"--in-range": "x", "--out-range": "a"}
+
+
 def read_editable_profile_settings(profile: Profile) -> EditableProfileSettings:
+    in_range, out_range = read_profile_ranges(profile)
     return EditableProfileSettings(
         filter_kind=_editable_filter_kind(profile),
         filter_value=_editable_filter_value(profile),
         filter_editable=_editable_filter_is_file_based(profile),
         filter_role=_editable_filter_role(profile),
         filter_protocol=_editable_filter_protocol(profile),
-        in_range=_range_value(profile, "--in-range", default="x"),
-        out_range=_range_value(profile, "--out-range", default="a"),
+        in_range=in_range,
+        out_range=out_range,
+    )
+
+
+def read_profile_ranges(profile: Profile) -> tuple[str, str]:
+    """Диапазоны ``--in-range``/``--out-range`` profile-а (по умолчанию x/a).
+
+    Это настройки profile-а: значения, которые действуют на первую
+    ``--lua-desync`` (в zapret2 внутрипрофильный фильтр действует с места
+    указания до переопределения). Диапазоны после первой ``--lua-desync``
+    принадлежат составной стратегии и здесь не читаются. Без стратегии —
+    значение после всех фильтров profile: так оно подействует на стратегию,
+    добавленную в конец.
+    """
+    if profile.engine != ENGINE_WINWS2:
+        return _DEFAULT_RANGE_BY_OPTION["--in-range"], _DEFAULT_RANGE_BY_OPTION["--out-range"]
+    start = _first_strategy_line_index(profile.segments)
+    return (
+        _effective_range(profile.segments, start, "--in-range"),
+        _effective_range(profile.segments, start, "--out-range"),
     )
 
 
@@ -51,33 +74,47 @@ def with_editable_profile_settings(
     profile_index: int,
     settings: EditableProfileSettings,
 ) -> Preset:
+    """Меняет только то, что отличается от текущих настроек profile.
+
+    Фильтр-список правится, только если изменились тип/значение, и при этом
+    заменяется лишь редактируемая группа строк (остальные hostlist/ipset
+    profile не трогаются). Диапазоны — настройки profile-а: правится строка
+    до первой ``--lua-desync`` (или добавляется прямо перед ней), а строки
+    внутри составной стратегии не трогаются.
+    """
     if preset.engine not in {ENGINE_WINWS1, ENGINE_WINWS2}:
         raise ValueError(f"Unsupported profile preset engine: {preset.engine}")
 
     updated = deepcopy(preset)
     profile = updated.profiles[int(profile_index)]
+    current = read_editable_profile_settings(profile)
     filter_kind = str(settings.filter_kind or "").strip().lower()
     if filter_kind not in {"hostlist", "ipset"}:
         raise ValueError("filter_kind must be hostlist or ipset")
     filter_role = str(settings.filter_role or "primary").strip().lower()
     if filter_role not in {"primary", "exclude"}:
-        filter_role = _editable_filter_role(profile)
+        filter_role = current.filter_role
 
-    if _editable_filter_is_file_based(profile):
+    if current.filter_editable:
         filter_value = normalize_filter_value(settings.filter_value, filter_kind, filter_role=filter_role)
         if not filter_value:
             raise ValueError("filter_value must not be empty")
         if not filter_value_is_file_reference(filter_value):
             raise ValueError("filter_value must point to a list file")
-        filter_lines = [f"--{_filter_option_name(filter_kind, filter_role)}={value}" for value in _split_filter_values(filter_value)]
-        if filter_role == "exclude":
-            profile.segments = _replace_exclude_match_filters(profile.segments, filter_lines)
-        else:
-            profile.segments = _replace_primary_match_filter(profile.segments, filter_lines[0])
+        if (filter_kind, filter_value, filter_role) != (current.filter_kind, current.filter_value, current.filter_role):
+            filter_lines = [
+                f"--{_filter_option_name(filter_kind, filter_role)}={value}"
+                for value in _split_filter_values(filter_value)
+            ]
+            profile.segments = _replace_match_group(
+                profile.segments,
+                _match_group_names(current.filter_kind, current.filter_role),
+                filter_lines,
+            )
 
     if preset.engine == ENGINE_WINWS2:
-        range_lines = _canonical_range_lines(settings.in_range, settings.out_range)
-        profile.segments = _replace_range_filters(profile.segments, range_lines)
+        for option_name, value in (("--in-range", settings.in_range), ("--out-range", settings.out_range)):
+            profile.segments = _with_profile_range(profile.segments, option_name, value)
 
     return _reparse(updated)
 
@@ -109,6 +146,21 @@ def _editable_filter_kind(profile: Profile) -> str:
 
 
 def _editable_filter_value(profile: Profile) -> str:
+    # Значение берётся из той же группы строк, что и тип фильтра: правка
+    # заменяет именно эту группу, и проверка после записи читает её же.
+    kind = _editable_filter_kind(profile)
+    role = _editable_filter_role(profile)
+    group_lines = {
+        ("hostlist", "primary"): profile.match.hostlist_lines,
+        ("ipset", "primary"): profile.match.ipset_lines,
+        ("hostlist", "exclude"): profile.match.hostlist_exclude_lines,
+        ("ipset", "exclude"): profile.match.ipset_exclude_lines,
+        ("hostlist-domains", "primary"): profile.match.hostlist_domains_lines,
+        ("ipset-ip", "primary"): profile.match.inline_ipset_lines,
+    }.get((kind, role), ())
+    group_values = [line.split("=", 1)[1].strip() for line in group_lines if "=" in line]
+    if group_values:
+        return ",".join(group_values)
     for lines in (
         profile.match.hostlist_lines,
         profile.match.hostlist_domains_lines,
@@ -162,6 +214,45 @@ def _editable_filter_protocol(profile: Profile) -> str:
     return ""
 
 
+def new_profile_insert_index(preset: Preset) -> int:
+    """Куда добавить новый profile: перед первым profile-исключением RU или
+    profile-ом «на всё», иначе в конец.
+
+    Profile-ы zapret2 проверяются по порядку и срабатывает первый подошедший.
+    Исключения RU (hostlist/ipset из служебных списков) и profile без
+    собственного hostlist/ipset перехватывают трафик всех profile-ов ниже,
+    поэтому новый profile встаёт перед ними. Начало пресета (git.zapret.moe и
+    соседние profile-ы) не трогается.
+    """
+    for index, profile in enumerate(tuple(preset.profiles or ())):
+        if _is_ru_exclusion_profile(profile) or _is_catch_all_profile(profile):
+            return index
+    return len(preset.profiles)
+
+
+def _is_ru_exclusion_profile(profile: Profile) -> bool:
+    for line in (*profile.match.hostlist_lines, *profile.match.ipset_lines):
+        _option, _separator, value = str(line or "").partition("=")
+        for part in value.split(","):
+            if _list_file_name(part) in _SERVICE_EXCLUDE_LIST_NAMES:
+                return True
+    return False
+
+
+def _is_catch_all_profile(profile: Profile) -> bool:
+    match = profile.match
+    return not (
+        match.hostlist_lines
+        or match.hostlist_domains_lines
+        or match.ipset_lines
+        or match.inline_ipset_lines
+    )
+
+
+def _list_file_name(value: str) -> str:
+    return PureWindowsPath(str(value or "").strip().strip('"').strip("'").lstrip("@")).name.lower()
+
+
 def _is_service_exclusion_profile(profile: Profile) -> bool:
     if not (profile.match.hostlist_exclude_lines or profile.match.ipset_exclude_lines):
         return False
@@ -178,121 +269,123 @@ def _is_service_exclusion_profile(profile: Profile) -> bool:
     for line in (*profile.match.hostlist_exclude_lines, *profile.match.ipset_exclude_lines):
         _option, _separator, value = str(line or "").partition("=")
         for part in value.split(","):
-            file_name = PureWindowsPath(part.strip().strip('"').strip("'").lstrip("@")).name.lower()
-            if file_name in _SERVICE_EXCLUDE_LIST_NAMES:
+            if _list_file_name(part) in _SERVICE_EXCLUDE_LIST_NAMES:
                 return True
     return False
 
 
-def _range_value(profile: Profile, option_name: str, *, default: str) -> str:
-    if profile.engine != ENGINE_WINWS2:
-        return default
-    wanted = str(option_name or "").strip().lower()
-    for segment in profile.segments:
-        name = str(segment.name or "").strip().lower()
-        if segment.kind == "strategy_filter" and name == wanted:
-            return str(segment.value or "").strip() or default
-    return default
+def _first_strategy_line_index(segments) -> int:
+    """Индекс первой ``--lua-desync`` (len(segments) — у profile нет стратегии)."""
+    items = tuple(segments or ())
+    return next((index for index, segment in enumerate(items) if segment.kind == "strategy"), len(items))
 
 
-def _replace_primary_match_filter(segments: list[ProfileSegment], filter_line: str) -> list[ProfileSegment]:
-    filter_name, filter_value = _split_option(filter_line)
-    primary_names = {"--hostlist", "--hostlist-domains", "--ipset", "--ipset-ip"}
-    inserted = False
-    result: list[ProfileSegment] = []
-    strategy_insert_at: int | None = None
+def _effective_range(segments, before_index: int, option_name: str) -> str:
+    value = _DEFAULT_RANGE_BY_OPTION[option_name]
+    for segment in tuple(segments or ())[:before_index]:
+        if segment.kind == "strategy_filter" and str(segment.name or "").strip().lower() == option_name:
+            value = str(segment.value or "").strip() or _DEFAULT_RANGE_BY_OPTION[option_name]
+    return value
 
-    for segment in segments:
-        name = str(segment.name or "").strip().lower()
-        if segment.kind == "match" and name in primary_names:
-            if not inserted:
-                result.append(ProfileSegment(kind="match", text=filter_line, name=filter_name, value=filter_value))
-                inserted = True
-            continue
-        if strategy_insert_at is None and segment.kind in {"strategy_filter", "strategy"}:
-            strategy_insert_at = len(result)
-        result.append(segment)
 
-    if not inserted:
-        insert_at = strategy_insert_at if strategy_insert_at is not None else len(result)
-        result.insert(insert_at, ProfileSegment(kind="match", text=filter_line, name=filter_name, value=filter_value))
+def _last_range_segment_index(segments, first: int, stop: int, option_name: str) -> int | None:
+    found: int | None = None
+    for index in range(max(0, first), min(stop, len(segments))):
+        segment = segments[index]
+        if segment.kind == "strategy_filter" and str(segment.name or "").strip().lower() == option_name:
+            found = index
+    return found
+
+
+def _range_segment(option_name: str, expression: str) -> ProfileSegment:
+    return ProfileSegment(
+        kind="strategy_filter",
+        text=f"{option_name}={expression}",
+        name=option_name,
+        value=expression,
+    )
+
+
+def _with_profile_range(
+    segments: list[ProfileSegment],
+    option_name: str,
+    value: str,
+) -> list[ProfileSegment]:
+    requested = _canonical_range_expression(option_name, value)
+    start = _first_strategy_line_index(segments)
+    previous = _effective_range(segments, start, option_name)
+    if _same_range(option_name, previous, requested):
+        return segments
+
+    result = list(segments)
+    own_index = _last_range_segment_index(result, 0, start, option_name)
+    if own_index is not None:
+        result[own_index] = _range_segment(option_name, requested)
+    else:
+        result.insert(_range_insert_index(result, start), _range_segment(option_name, requested))
     return result
 
 
-def _replace_exclude_match_filters(segments: list[ProfileSegment], filter_lines: list[str]) -> list[ProfileSegment]:
-    exclude_names = {"--hostlist-exclude", "--hostlist-exclude-domains", "--ipset-exclude", "--ipset-exclude-ip"}
-    inserted = False
-    result: list[ProfileSegment] = []
-    strategy_insert_at: int | None = None
-
-    replacement_segments = []
-    for line in filter_lines:
-        name, value = _split_option(line)
-        replacement_segments.append(ProfileSegment(kind="match", text=line, name=name, value=value))
-
-    for segment in segments:
-        name = str(segment.name or "").strip().lower()
-        if segment.kind == "match" and name in exclude_names:
-            if not inserted:
-                result.extend(replacement_segments)
-                inserted = True
-            continue
-        if strategy_insert_at is None and segment.kind in {"strategy_filter", "strategy"}:
-            strategy_insert_at = len(result)
-        result.append(segment)
-
-    if not inserted:
-        insert_at = strategy_insert_at if strategy_insert_at is not None else len(result)
-        result[insert_at:insert_at] = replacement_segments
-    return result
+def _range_insert_index(segments: list[ProfileSegment], first_strategy_index: int) -> int:
+    if first_strategy_index < len(segments):
+        return first_strategy_index
+    insert_at = len(segments)
+    while insert_at > 0 and segments[insert_at - 1].kind == "blank":
+        insert_at -= 1
+    return insert_at
 
 
-def _replace_range_filters(segments: list[ProfileSegment], range_lines: list[str]) -> list[ProfileSegment]:
-    range_names = {"--in-range", "--out-range"}
-    range_segments = []
-    for line in range_lines:
-        name, value = _split_option(line)
-        range_segments.append(ProfileSegment(kind="strategy_filter", text=line, name=name, value=value))
+def _same_range(option_name: str, left: str, right: str) -> bool:
+    try:
+        return _canonical_range_expression(option_name, left) == _canonical_range_expression(option_name, right)
+    except ValueError:
+        return False
 
+
+def _match_group_names(filter_kind: str, filter_role: str) -> frozenset[str]:
+    kind = str(filter_kind or "").strip().lower()
+    if str(filter_role or "").strip().lower() == "exclude":
+        if kind == "ipset":
+            return frozenset({"--ipset-exclude", "--ipset-exclude-ip"})
+        return frozenset({"--hostlist-exclude", "--hostlist-exclude-domains"})
+    return frozenset({f"--{kind}"})
+
+
+def _replace_match_group(
+    segments: list[ProfileSegment],
+    group_names: frozenset[str],
+    filter_lines: list[str],
+) -> list[ProfileSegment]:
+    """Заменяет строки одной группы match-фильтра, остальные строки profile не трогает."""
+    replacement = [
+        ProfileSegment(kind="match", text=line, name=name, value=value)
+        for line in filter_lines
+        for name, value in (_split_option(line),)
+    ]
     result: list[ProfileSegment] = []
     insert_at: int | None = None
+    strategy_insert_at: int | None = None
     for segment in segments:
         name = str(segment.name or "").strip().lower()
-        if segment.kind == "strategy_filter" and name in range_names:
+        if segment.kind == "match" and name in group_names:
             if insert_at is None:
                 insert_at = len(result)
             continue
-        if insert_at is None and segment.kind == "strategy":
-            insert_at = len(result)
+        if strategy_insert_at is None and segment.kind in {"strategy_filter", "strategy"}:
+            strategy_insert_at = len(result)
         result.append(segment)
 
     if insert_at is None:
-        insert_at = len(result)
-    return [*result[:insert_at], *range_segments, *result[insert_at:]]
+        insert_at = strategy_insert_at if strategy_insert_at is not None else len(result)
+    result[insert_at:insert_at] = replacement
+    return result
 
 
-def _canonical_range_line(option_name: str, value: str) -> str:
+def _canonical_range_expression(option_name: str, value: str) -> str:
     parsed = parse_out_range_expression(value, raw_line=f"{option_name}={value}")
     if parsed is None:
         raise ValueError(f"Invalid {ENGINE_WINWS2} packet range value: {value}")
-    return f"{option_name}={parsed.expression}"
-
-
-def _canonical_range_lines(in_range: str, out_range: str) -> list[str]:
-    in_line = _canonical_range_line("--in-range", in_range)
-    out_line = _canonical_range_line("--out-range", out_range)
-
-    lines: list[str] = []
-    if _range_expression(in_line) != "x":
-        lines.append(in_line)
-    if _range_expression(out_line) != "a":
-        lines.append(out_line)
-    return lines
-
-
-def _range_expression(line: str) -> str:
-    _name, _sep, value = str(line or "").partition("=")
-    return value.strip().lower()
+    return parsed.expression
 
 
 def normalize_filter_value(value: str, filter_kind: str, *, filter_role: str = "primary") -> str:

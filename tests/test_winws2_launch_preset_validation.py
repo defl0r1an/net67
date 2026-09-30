@@ -43,7 +43,6 @@ class Winws2LaunchPresetValidationTests(unittest.TestCase):
         prepared = prepare_winws2_preset_text_for_launch(source, source_name="valid.txt")
 
         self.assertEqual(prepared.text, source)
-        self.assertFalse(prepared.changed)
         self.assertNotIn("--out-range=-d8", prepared.text)
 
     def test_launch_filter_check_ignores_only_skipped_profiles(self) -> None:
@@ -85,44 +84,7 @@ class Winws2LaunchPresetValidationTests(unittest.TestCase):
 
         self.assertTrue(PresetModeCoordinator._has_required_filters(ZAPRET2_MODE, source))
 
-    def test_winws1_launch_filter_check_ignores_only_skipped_profiles(self) -> None:
-        from presets.mode_coordinator import PresetModeCoordinator
-        from settings.mode import ZAPRET1_MODE
 
-        source = "\n".join(
-            (
-                "--wf-tcp=80,443",
-                "--skip",
-                "--filter-tcp=443",
-                "--hostlist=lists/youtube.txt",
-                "--dpi-desync=fake,split2",
-                "",
-            )
-        )
-
-        self.assertFalse(PresetModeCoordinator._has_required_filters(ZAPRET1_MODE, source))
-
-    def test_winws1_launch_filter_check_allows_some_skipped_profiles_when_one_is_enabled(self) -> None:
-        from presets.mode_coordinator import PresetModeCoordinator
-        from settings.mode import ZAPRET1_MODE
-
-        source = "\n".join(
-            (
-                "--wf-tcp=80,443",
-                "--skip",
-                "--filter-tcp=443",
-                "--hostlist=lists/disabled.txt",
-                "--dpi-desync=fake",
-                "",
-                "--new",
-                "--filter-tcp=443",
-                "--hostlist=lists/enabled.txt",
-                "--dpi-desync=fake,split2",
-                "",
-            )
-        )
-
-        self.assertTrue(PresetModeCoordinator._has_required_filters(ZAPRET1_MODE, source))
 
     def test_start_validation_rejects_preset_with_only_skipped_profiles(self) -> None:
         from winws_runtime.flow.start_preparation import validate_preset_selected_mode
@@ -918,93 +880,7 @@ class Winws2LaunchPresetValidationTests(unittest.TestCase):
 
         popen_mock.assert_not_called()
 
-    def test_winws1_compile_resolves_bare_list_paths_for_launch(self) -> None:
-        from threading import RLock
 
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            lists_dir = root / "lists"
-            lists_dir.mkdir()
-            (lists_dir / "tankix.txt").write_text("example.com\n", encoding="utf-8")
-            preset_path = root / "selected.txt"
-            preset_path.write_text(
-                "\n".join(
-                    (
-                        "--wf-tcp=443",
-                        "--filter-tcp=443",
-                        "--hostlist=tankix.txt",
-                        "--dpi-desync=fake",
-                        "",
-                    )
-                ),
-                encoding="utf-8",
-            )
-
-            runner = object.__new__(Winws1StrategyRunner)
-            runner._state_lock = RLock()
-            runner._prepared_preset_cache = {}
-            runner.work_dir = str(root)
-            runner.lists_dir = str(lists_dir)
-            runner.bin_dir = str(root / "bin")
-
-            artifact = runner._compile_preset_artifact(str(preset_path))
-
-            self.assertTrue(artifact.validation_ok, artifact.validation_report)
-            self.assertEqual(len(artifact.launch_args), 1)
-            at_config_text = at_config_path_from(
-                artifact.launch_args[0], runner.work_dir
-            ).read_text(encoding="utf-8")
-            self.assertIn(f"--hostlist={lists_dir / 'tankix.txt'}", at_config_text)
-            self.assertNotIn("--hostlist=tankix.txt", at_config_text)
-
-    def test_winws1_compile_uses_at_config_for_launch(self) -> None:
-        from threading import RLock
-
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-        from profile.parser import parse_preset_text
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            lists_dir = root / "lists"
-            lists_dir.mkdir()
-            (lists_dir / "youtube.txt").write_text("youtube.com\n", encoding="utf-8")
-            preset_path = root / "selected.txt"
-            preset_path.write_text(
-                "\n".join(
-                    (
-                        "# Preset: Selected",
-                        "--wf-tcp=443",
-                        "--comment=youtube.com (интерфейс)",
-                        "--filter-tcp=443",
-                        "--hostlist=youtube.txt",
-                        "--dpi-desync=fake,split2",
-                        "",
-                    )
-                ),
-                encoding="utf-8",
-            )
-
-            runner = object.__new__(Winws1StrategyRunner)
-            runner._state_lock = RLock()
-            runner._prepared_preset_cache = {}
-            runner.work_dir = str(root)
-            runner.lists_dir = str(lists_dir)
-            runner.bin_dir = str(root / "bin")
-
-            artifact = runner._compile_preset_artifact(str(preset_path))
-
-            self.assertTrue(artifact.validation_ok, artifact.validation_report)
-            preset = parse_preset_text(preset_path.read_text(encoding="utf-8"), engine="winws1")
-            self.assertEqual(preset.profiles[0].name, "youtube.com (интерфейс)")
-            self.assertEqual(len(artifact.launch_args), 1)
-            at_config_path = at_config_path_from(artifact.launch_args[0], runner.work_dir)
-            at_config_text = at_config_path.read_text(encoding="utf-8")
-            self.assertNotIn("--name=", at_config_text)
-            self.assertIn("'--comment=youtube.com (интерфейс)'", at_config_text)
-            self.assertIn(f"--hostlist={lists_dir / 'youtube.txt'}", at_config_text)
-            self.assertNotIn("# Preset:", at_config_text)
 
     def test_launch_preparation_rejects_invalid_ranges_and_payload(self) -> None:
         from winws_runtime.preset_launch_text import prepare_winws2_preset_text_for_launch

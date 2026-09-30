@@ -689,7 +689,6 @@ class ProfileStrategyApplyWorker(QThread):
         load_profile,
         profile_key: str,
         strategy_id: str,
-        strategy_branch_id: str = "",
         parent=None,
     ):
         super().__init__(parent)
@@ -698,17 +697,10 @@ class ProfileStrategyApplyWorker(QThread):
         self._load_profile = load_profile
         self._profile_key = str(profile_key or "").strip()
         self._strategy_id = str(strategy_id or "").strip()
-        self._strategy_branch_id = str(strategy_branch_id or "").strip()
 
     def run(self) -> None:
         try:
-            kwargs = {
-                "profile_key": self._profile_key,
-                "strategy_id": self._strategy_id,
-            }
-            if self._strategy_branch_id:
-                kwargs["strategy_branch_id"] = self._strategy_branch_id
-            result = self._apply_strategy(**kwargs)
+            result = self._apply_strategy(profile_key=self._profile_key, strategy_id=self._strategy_id)
         except Exception as exc:
             log(f"ProfileStrategyApplyWorker: не удалось применить готовую стратегию: {exc}", "ERROR")
             self.failed.emit(self._request_id, str(exc))

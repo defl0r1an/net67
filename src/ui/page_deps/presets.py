@@ -27,6 +27,7 @@ def build_control_page_kwargs(
     open_connection_test,
     open_folder,
     show_page,
+    start_onboarding_tour,
     ui_state_store,
 ) -> dict:
     from presets.ui.control.additional_settings_runtime import (
@@ -65,7 +66,7 @@ def build_control_page_kwargs(
             parent=parent,
         )
 
-    return {
+    kwargs = {
         "create_top_summary_worker": _create_top_summary_worker,
         "create_additional_settings_load_worker": profile_feature.create_additional_settings_load_worker,
         "create_additional_settings_save_worker": _create_additional_settings_save_worker,
@@ -90,7 +91,9 @@ def build_control_page_kwargs(
         "open_preset_setup": lambda page=preset_setup_page: show_page(page, allow_internal=True),
         "create_external_open_url_worker": external_actions_feature.create_open_url_worker,
         "ui_state_store": ui_state_store,
+        "start_onboarding_tour": start_onboarding_tour,
     }
+    return kwargs
 
 
 def build_preset_setup_page_kwargs(
@@ -125,6 +128,7 @@ def build_profile_setup_page_kwargs(
     profile_feature,
     show_page,
     on_profile_setup_changed,
+    ui_state_store=None,
 ) -> dict:
     method = ZAPRET2_MODE
     profiles_page = PageName.ZAPRET2_PRESET_SETUP
@@ -149,6 +153,7 @@ def build_profile_setup_page_kwargs(
             profile_item,
             old_profile_key,
         ),
+        "ui_state_store": ui_state_store,
     }
 
 
@@ -212,6 +217,7 @@ def build_user_presets_page_kwargs(
         "create_preset_link_action_worker": _create_preset_link_action_worker,
         "create_preset_folder_action_worker": presets_feature.create_preset_folder_action_worker,
         "create_preset_storage_action_worker": presets_feature.create_preset_storage_action_worker,
+        "create_preset_remote_sync_worker": presets_feature.create_preset_remote_sync_worker,
         "load_preset_folder_state": presets_feature.load_preset_folder_state,
         "open_preset_raw_editor": lambda preset_name, m=method: open_preset_raw_editor(
             m,
@@ -239,6 +245,13 @@ def build_preset_raw_editor_page_kwargs(
         "create_raw_preset_save_worker": presets_feature.create_raw_preset_save_worker,
         "create_raw_preset_activate_worker": presets_feature.create_raw_preset_activate_worker,
         "create_raw_preset_action_worker": presets_feature.create_raw_preset_action_worker,
+        "save_raw_preset_on_close": lambda file_name, text, m=method: presets_feature.save_preset_source_by_file_name(
+            m,
+            file_name,
+            text,
+            publish_content_changed=False,
+            content_change_kind="editor_save",
+        ),
         "launch_method": method,
         "title": "Пресет net67 v2" if method == ZAPRET2_MODE else "Пресет net67 v1",
         "runtime_actions": RawPresetRuntimeActions(

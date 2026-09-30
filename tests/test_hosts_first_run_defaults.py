@@ -194,8 +194,10 @@ class RealCatalogTests(unittest.TestCase):
 
         for expected in ("Discord", "GitHub", "Instagram", "Rutor", "Supercell", "Render"):
             self.assertIn(expected, direct)
-        self.assertTrue(any(name.startswith("Telegram") for name in direct))
         self.assertTrue(any(name.startswith("WhatsApp") for name in direct))
+        # Сайты Telegram пишет страница Telegram Proxy, а не редактор hosts:
+        # второй писатель тех же доменов переписывал её блок.
+        self.assertFalse(any(name.startswith("Telegram") for name in selection))
 
 
 class OneShotTests(unittest.TestCase):

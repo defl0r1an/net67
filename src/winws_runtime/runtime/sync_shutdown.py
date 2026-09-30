@@ -37,6 +37,33 @@ def _resolve_runtime_api(runtime_feature, launch_method: str):
     raise RuntimeError("Runtime API is not initialized")
 
 
+def resolve_launch_method(runtime_feature) -> str:
+    """Текущий launch method: нужен вызывающим, которые обновляют state отдельно."""
+    return _resolve_launch_method(runtime_feature)
+
+
+def apply_runtime_state_after_shutdown(
+    *,
+    runtime_service,
+    still_running: bool,
+    launch_method: str,
+) -> None:
+    """Приводит runtime-state к результату остановки.
+
+    Вынесено отдельно, потому что вызывающие из фоновых потоков (BlockCheck)
+    обязаны применять это в GUI-потоке, а не там, где выполнялась остановка.
+    """
+    try:
+        if runtime_service is None:
+            return
+        if still_running:
+            runtime_service.bootstrap_probe(True, launch_method=launch_method)
+        else:
+            runtime_service.mark_stopped(clear_error=True)
+    except Exception as e:
+        log(f"Ошибка обновления runtime state в sync shutdown: {e}", "DEBUG")
+
+
 def shutdown_runtime_sync(
     *,
     runtime_feature,
@@ -44,7 +71,13 @@ def shutdown_runtime_sync(
     include_cleanup: bool = True,
     cleanup_services: bool = True,
     update_runtime_state: bool = True,
+    keep_runner: bool = False,
 ) -> RuntimeShutdownResult:
+    """Синхронно останавливает DPI.
+
+    `keep_runner=True` — для остановки прямо перед новым запуском: runner
+    остаётся тем же, и следующий запуск берёт уже собранный им @config.
+    """
     launch_method = _resolve_launch_method(runtime_feature)
     runtime_api = _resolve_runtime_api(runtime_feature, launch_method)
     runtime_service = runtime_feature.objects.runtime_service
@@ -67,10 +100,11 @@ def shutdown_runtime_sync(
                 stop_ok = False
                 log(f"Ошибка остановки текущего runner в sync shutdown: {e}", "DEBUG")
             finally:
-                try:
-                    invalidate_strategy_runner()
-                except Exception:
-                    pass
+                if not keep_runner:
+                    try:
+                        invalidate_strategy_runner()
+                    except Exception:
+                        pass
     except Exception as e:
         stop_ok = False
         log(f"Ошибка доступа к runner в sync shutdown: {e}", "DEBUG")
@@ -87,7 +121,10 @@ def shutdown_runtime_sync(
         pass
 
     try:
-        stop_ok = bool(runtime_api.stop_all_processes()) and stop_ok
+        # Runner обычно уже добил все winws; второй круг с паузами нужен,
+        # только если что-то осталось (или runner-а не было вовсе).
+        if runtime_api.has_residual_processes(silent=True):
+            stop_ok = bool(runtime_api.stop_all_processes()) and stop_ok
     except Exception as e:
         stop_ok = False
         log(f"Ошибка stop_all_processes в sync shutdown: {e}", "DEBUG")
@@ -102,14 +139,11 @@ def shutdown_runtime_sync(
     still_running = bool(runtime_api.has_residual_processes(silent=True))
 
     if update_runtime_state:
-        try:
-            if runtime_service is not None:
-                if still_running:
-                    runtime_service.bootstrap_probe(True, launch_method=launch_method)
-                else:
-                    runtime_service.mark_stopped(clear_error=True)
-        except Exception as e:
-            log(f"Ошибка обновления runtime state в sync shutdown: {e}", "DEBUG")
+        apply_runtime_state_after_shutdown(
+            runtime_service=runtime_service,
+            still_running=still_running,
+            launch_method=launch_method,
+        )
 
     return RuntimeShutdownResult(
         had_running_processes=had_running_processes,

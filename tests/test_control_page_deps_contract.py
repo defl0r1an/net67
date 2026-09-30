@@ -1,11 +1,11 @@
 """Сверка набора зависимостей страниц управления с их сигнатурами.
 
-Один и тот же build_control_page_kwargs обслуживает и Zapret 2, и
-Zapret 1. Стоит добавить ключ и забыть про вторую страницу — она упадёт
+Один и тот же build_control_page_kwargs обслуживает и net67 v2, и
+net67 v1. Стоит добавить ключ и забыть про вторую страницу — она упадёт
 с TypeError при первом открытии, причём только в рантайме и только в том
 режиме, который разработчик не проверял.
 
-Именно так чуть не сломался Zapret 1 при добавлении runtime_feature.
+Именно так чуть не сломался net67 v1 при добавлении runtime_feature.
 """
 
 from __future__ import annotations
@@ -31,13 +31,30 @@ def _control_deps_keys() -> set[str]:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == "build_control_page_kwargs":
+            keys: set[str] = set()
             for statement in ast.walk(node):
+                # Словарь может возвращаться сразу или собираться в
+                # переменную и дополняться по ходу (kwargs["..."] = ...).
+                value = None
                 if isinstance(statement, ast.Return) and isinstance(statement.value, ast.Dict):
-                    return {
+                    value = statement.value
+                elif isinstance(statement, ast.Assign) and isinstance(statement.value, ast.Dict):
+                    value = statement.value
+                if value is not None:
+                    keys.update(
                         key.value
-                        for key in statement.value.keys
+                        for key in value.keys
                         if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                    }
+                    )
+                if isinstance(statement, ast.Assign):
+                    for target in statement.targets:
+                        if (
+                            isinstance(target, ast.Subscript)
+                            and isinstance(target.slice, ast.Constant)
+                            and isinstance(target.slice.value, str)
+                        ):
+                            keys.add(target.slice.value)
+            return keys
     return set()
 
 
@@ -80,7 +97,7 @@ class ControlPageDepsContractTests(unittest.TestCase):
         self.assertEqual(
             self.keys - accepted,
             set(),
-            "Zapret 1 использует тот же набор зависимостей и обязан принимать все ключи",
+            "net67 v1 использует тот же набор зависимостей и обязан принимать все ключи",
         )
 
     def test_pages_do_not_receive_broad_features(self) -> None:

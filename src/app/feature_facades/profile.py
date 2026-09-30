@@ -14,6 +14,17 @@ class ProfileFeature:
     _presets_feature: Any
     _app_paths: Any
     _preset_service_cache: dict[str, Any] = field(default_factory=dict, init=False, repr=False, compare=False)
+    # Загрузка реестра фейков для явного выбора стратегии (дописать --blob=
+    # в пресет). None — реестр не подключён: стратегия применяется без фейков,
+    # а в результате приходит предупреждение.
+    _fakes_catalog_loader: Any = None
+
+    def load_fakes_catalog(self):
+        """Реестр фейков winws2; исключение — реестр не подключён или не прочитан."""
+        loader = self._fakes_catalog_loader
+        if loader is None:
+            raise RuntimeError("реестр не подключён")
+        return loader()
 
     @staticmethod
     def _commands():
@@ -386,20 +397,14 @@ class ProfileFeature:
         *,
         profile_key: str,
         strategy_id: str,
-        strategy_branch_id: str = "",
         parent=None,
     ):
         from profile.profile_setup_loader import ProfileStrategyApplyWorker
 
         clean_launch_method = str(launch_method or "")
 
-        def _apply_strategy(*, profile_key: str, strategy_id: str, strategy_branch_id: str = ""):
-            return self.apply_strategy_to_profile(
-                clean_launch_method,
-                profile_key,
-                strategy_id,
-                strategy_branch_id=strategy_branch_id,
-            )
+        def _apply_strategy(*, profile_key: str, strategy_id: str):
+            return self.apply_strategy_to_profile(clean_launch_method, profile_key, strategy_id)
 
         def _load_profile_setup(profile_key: str):
             return self.get_profile_setup(clean_launch_method, profile_key)
@@ -410,7 +415,6 @@ class ProfileFeature:
             _load_profile_setup,
             profile_key,
             strategy_id,
-            strategy_branch_id,
             parent,
         )
 
@@ -473,16 +477,8 @@ class ProfileFeature:
         launch_method: str,
         profile_key: str,
         strategy_id: str,
-        *,
-        strategy_branch_id: str = "",
     ) -> StrategyApplyResult:
-        return self._commands().apply_strategy_to_profile(
-            self,
-            launch_method,
-            profile_key,
-            strategy_id,
-            strategy_branch_id=strategy_branch_id,
-        )
+        return self._commands().apply_strategy_to_profile(self, launch_method, profile_key, strategy_id)
 
     def set_profile_enabled(
         self,
@@ -521,6 +517,9 @@ class ProfileFeature:
             in_range=in_range,
             out_range=out_range,
         )
+
+    def edit_selected_preset(self, launch_method: str, edit):
+        return self._commands().edit_selected_preset(self, launch_method, edit)
 
     def update_profile_raw_text(
         self,

@@ -42,7 +42,7 @@ _VERDICT_TITLES = {
 
 # Только логи с выводом winws2: <preset>_debug.log (стабильное имя по пресету,
 # см. _build_stable_debug_log_file), устаревшие zapret_winws2_debug_*.log и
-# raw-вывод оркестратора orchestra_*.log. Остальное (zapret_log_*.txt — логи GUI,
+# raw-вывод оркестратора orchestra_*.log. Остальное (net67_log_*.txt — логи GUI,
 # tg_proxy.log, crashes.log) — другой формат, парсеру не подходит.
 _RECENT_LOG_PATTERNS = ("*_debug.log", "zapret_winws2_debug_*.log", "orchestra_*.log")
 _RECENT_LOG_LIMIT = 20

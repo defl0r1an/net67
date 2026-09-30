@@ -7,7 +7,6 @@ def build_window_page_deps_sources(*, features, state, page_actions) -> PageDeps
     return PageDepsSources(
         feature_deps={
             "blockcheck": features.blockcheck,
-            "diagnostics": features.diagnostics,
             "dns": features.dns,
             "external_actions": features.external_actions,
             "hosts": features.hosts,
@@ -23,6 +22,7 @@ def build_window_page_deps_sources(*, features, state, page_actions) -> PageDeps
         actions={
             "after_launch_method_changed": page_actions.after_launch_method_changed,
             "notify": page_actions.notify,
+
             "on_profile_setup_changed": page_actions.on_profile_setup_changed,
             "open_connection_test": page_actions.open_connection_test,
             "open_folder": page_actions.open_folder,
@@ -32,6 +32,7 @@ def build_window_page_deps_sources(*, features, state, page_actions) -> PageDeps
             "set_status": page_actions.set_status,
             "show_active_mode_control_page": page_actions.show_active_mode_control_page,
             "show_page": page_actions.show_page,
+            "start_onboarding_tour": page_actions.start_onboarding_tour,
         },
     )
 

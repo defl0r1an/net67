@@ -1,5 +1,5 @@
 # Preset: general ALT8
-# BuiltinVersion: 2.39
+# BuiltinVersion: 2.42
 # IconColor: #e6c300ff
 
 --lua-init=@lua/zapret-lib.lua
@@ -82,6 +82,14 @@
 --wf-raw-part=@windivert.filter/windivert_part.stun.txt
 --wf-raw-part=@windivert.filter/windivert_part.wireguard.txt
 
+--name=git.zapret.moe
+--filter-tcp=443
+--hostlist=lists/git-zapret-moe.txt
+--out-range=-d8
+--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
+
+--new
+
 --name=youtube.com (интерфейс)
 --filter-tcp=80,443
 --hostlist=lists/youtube.txt
@@ -90,7 +98,24 @@
 
 --new
 
---name=Исключения (RU сайты)
+--name=Бэкенд Google
+--filter-tcp=80,443
+--hostlist=lists/google-backend.txt
+--out-range=-d8
+--lua-desync=fake:blob=tls_google:repeats=6:tcp_seq=2
+
+--new
+
+--name=Исключения домены (RU сайты)
+--filter-tcp=80,443-65535
+--hostlist=lists/netrogat.txt
+--out-range=-d8
+--payload=tls_client_hello
+--lua-desync=pass
+
+--new
+
+--name=Исключения айпи (RU сайты)
 --filter-tcp=80,443-65535
 --ipset=lists/ipset-ru.txt
 --ipset=lists/ipset-dns.txt

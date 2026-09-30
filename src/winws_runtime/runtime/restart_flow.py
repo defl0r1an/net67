@@ -4,7 +4,7 @@ from PyQt6.QtCore import QTimer
 
 from log.log import log
 
-from settings.mode import is_preset_launch_method
+from settings.mode import is_preset_launch_method, normalize_launch_method
 
 from .discord_restart_flow import maybe_restart_discord_after_runtime_apply
 from .lifecycle_feedback import show_launch_error_top
@@ -13,14 +13,85 @@ from .thread_runtime import start_worker_thread
 from .control_workers import PresetSwitchWorker
 
 
+def _active_runtime_owner(runtime_owner) -> tuple[bool, str]:
+    snapshot = runtime_owner._runtime_service().snapshot()
+    phase = str(getattr(snapshot, "phase", "") or "").strip().lower()
+    running = bool(getattr(snapshot, "running", False)) and phase == "running"
+    return (
+        running,
+        normalize_launch_method(
+            getattr(snapshot, "launch_method", ""),
+            default="",
+        ),
+    )
+
+
+def _redirect_preset_switch_if_owner_differs(
+    runtime_owner,
+    target_launch_method: str,
+    *,
+    completed_generation: int = 0,
+) -> bool:
+    """Единое правило владения: fast switch допустим только внутри режима."""
+    active_running, active_launch_method = _active_runtime_owner(runtime_owner)
+    if not active_running:
+        return False
+    if active_launch_method == target_launch_method:
+        return False
+
+    _cancel_debounced_presets_switch(runtime_owner)
+    if completed_generation > 0:
+        runtime_owner._presets_switch_completed_generation = max(
+            int(runtime_owner._presets_switch_completed_generation or 0),
+            int(completed_generation),
+        )
+    runtime_owner._runtime_service().set_busy(False)
+    log(
+        "Быстрое переключение preset запрещено для другого владельца процесса: "
+        f"активный режим '{active_launch_method or 'unknown'}', "
+        f"целевой режим '{target_launch_method}'. Выполняем полный stop+start",
+        "WARNING",
+    )
+    runtime_owner.restart_dpi_async(
+        force_full_stop=True,
+        target_launch_method=target_launch_method,
+    )
+    return True
+
+
+# Фаза «starting» без живого потока запуска — короткое окно; 200 повторов по
+# 150 мс (~30 с) страхуют от вечного ожидания, если фаза так и не сменится.
+_PRESETS_SWITCH_MAX_STARTING_WAITS = 200
+
+
+def _schedule_pending_presets_switch_retry(runtime_owner) -> None:
+    """Повтор для отложенного pending switch.
+
+    QThread ещё числится isRunning() короткое время после finished-сигнала,
+    а singleShot(0) из finish-хендлера успевает выстрелить раньше. Без
+    повтора pending-поколение теряется навсегда и busy («Применяем
+    пресет...») не снимается.
+    """
+    if getattr(runtime_owner, "_presets_switch_wait_queued", False):
+        return
+    runtime_owner._presets_switch_wait_queued = True
+
+    def _retry() -> None:
+        runtime_owner._presets_switch_wait_queued = False
+        process_pending_presets_switch(runtime_owner)
+
+    QTimer.singleShot(150, _retry)
+
+
 def process_pending_presets_switch(runtime_owner) -> None:
     target_generation = int(runtime_owner._presets_switch_requested_generation or 0)
     if target_generation <= int(runtime_owner._presets_switch_completed_generation or 0):
         return
 
+    runtime_snapshot = runtime_owner._runtime_service().snapshot()
     launch_method = str(
         runtime_owner._presets_switch_method
-        or getattr(runtime_owner._runtime_service().snapshot(), "launch_method", "")
+        or getattr(runtime_snapshot, "launch_method", "")
         or ""
     ).strip().lower()
     if not is_preset_launch_method(launch_method):
@@ -29,6 +100,7 @@ def process_pending_presets_switch(runtime_owner) -> None:
 
     try:
         if runtime_owner._presets_switch_thread and runtime_owner._presets_switch_thread.isRunning():
+            _schedule_pending_presets_switch_retry(runtime_owner)
             return
     except RuntimeError:
         runtime_owner._presets_switch_thread = None
@@ -39,6 +111,7 @@ def process_pending_presets_switch(runtime_owner) -> None:
                 f"Preset mode switch отложен: основной start pipeline ещё идёт, поколение {target_generation}",
                 "DEBUG",
             )
+            _schedule_pending_presets_switch_retry(runtime_owner)
             return
     except RuntimeError:
         runtime_owner._dpi_start_thread = None
@@ -49,14 +122,36 @@ def process_pending_presets_switch(runtime_owner) -> None:
                 f"Preset mode switch отложен: stop pipeline ещё идёт, поколение {target_generation}",
                 "DEBUG",
             )
+            _schedule_pending_presets_switch_retry(runtime_owner)
             return
     except RuntimeError:
         runtime_owner._dpi_stop_thread = None
 
     if not runtime_owner.is_running():
+        starting = str(getattr(runtime_snapshot, "phase", "") or "").strip().lower() == "starting"
+        starting_waits = int(getattr(runtime_owner, "_presets_switch_starting_waits", 0) or 0)
+        if starting and starting_waits < _PRESETS_SWITCH_MAX_STARTING_WAITS:
+            # Запуск объявлен, но его поток ещё не виден (или уже закончился,
+            # а фаза не опубликована): ждём, а не теряем переключение.
+            runtime_owner._presets_switch_starting_waits = starting_waits + 1
+            log(
+                f"Preset mode switch отложен: DPI ещё запускается, поколение {target_generation}",
+                "DEBUG",
+            )
+            _schedule_pending_presets_switch_retry(runtime_owner)
+            return
+        runtime_owner._presets_switch_starting_waits = 0
         log("Preset mode switch пропущен: DPI уже не запущен", "DEBUG")
         runtime_owner._presets_switch_completed_generation = target_generation
         runtime_owner._runtime_service().set_busy(False)
+        return
+
+    runtime_owner._presets_switch_starting_waits = 0
+    if _redirect_preset_switch_if_owner_differs(
+        runtime_owner,
+        launch_method,
+        completed_generation=target_generation,
+    ):
         return
 
     start_worker_thread(
@@ -111,14 +206,21 @@ def _schedule_debounced_presets_switch(runtime_owner, method: str, delay_ms: int
 
 
 def switch_presets_async(runtime_owner, launch_method: str | None = None, *, delay_ms: int = 0) -> None:
-    current_method = getattr(runtime_owner._runtime_service().snapshot(), "launch_method", "")
+    runtime_snapshot = runtime_owner._runtime_service().snapshot()
+    current_method = getattr(runtime_snapshot, "launch_method", "")
     method = str(launch_method or current_method or "").strip().lower()
     if not is_preset_launch_method(method):
         runtime_owner.restart_dpi_async()
         return
 
+    # Сначала debounce, потом смена владельца: иначе при чужом владельце
+    # (запущен zapret1, выбран пресет zapret2) каждый щелчок сразу начинал
+    # полный stop+start, минуя склейку быстрых щелчков.
     if int(delay_ms or 0) > 0:
         _schedule_debounced_presets_switch(runtime_owner, method, int(delay_ms))
+        return
+
+    if _redirect_preset_switch_if_owner_differs(runtime_owner, method):
         return
 
     _cancel_debounced_presets_switch(runtime_owner)
@@ -145,6 +247,7 @@ def process_pending_restart_request(runtime_owner) -> None:
                 f"Перезапуск DPI отложен: запуск ещё идёт, актуальное поколение {target_generation}",
                 "DEBUG",
             )
+            runtime_owner._schedule_pending_restart_retry()
             return
     except RuntimeError:
         runtime_owner._dpi_start_thread = None
@@ -156,6 +259,7 @@ def process_pending_restart_request(runtime_owner) -> None:
                 f"Перезапуск DPI отложен: остановка ещё идёт, актуальное поколение {target_generation}",
                 "DEBUG",
             )
+            runtime_owner._schedule_pending_restart_retry()
             return
     except RuntimeError:
         runtime_owner._dpi_stop_thread = None
@@ -191,11 +295,16 @@ def process_pending_restart_request(runtime_owner) -> None:
         return
 
     runtime_owner._restart_active_start_generation = target_generation
+    target_launch_method = normalize_launch_method(
+        getattr(runtime_owner, "_restart_target_launch_method", ""),
+        default="",
+    )
     log(
-        f"Перезапуск DPI: запускаем актуальный выбранный пресет, поколение {target_generation}",
+        "Перезапуск DPI: запускаем актуальный выбранный preset, "
+        f"поколение {target_generation}, режим {target_launch_method or 'current'}",
         "INFO",
     )
-    runtime_owner.start_dpi_async()
+    runtime_owner.start_dpi_async(launch_method=target_launch_method or None)
 
 
 def handle_presets_switch_finished(runtime_owner, success, error_message, generation, launch_method, skipped_as_stale) -> None:
@@ -209,6 +318,13 @@ def handle_presets_switch_finished(runtime_owner, success, error_message, genera
 
         stale_finish = bool(skipped_as_stale) or finished_generation < requested_generation
         if stale_finish:
+            worker = getattr(runtime_owner, "_presets_switch_worker", None)
+            pid = getattr(worker, "started_pid", None)
+            if success and isinstance(pid, int):
+                # Устаревшее поколение уже успело переключить процесс: без
+                # фиксации snapshot держит PID убитого процесса, пока следующее
+                # поколение не завершится. busy не снимаем — pending ещё в полёте.
+                runtime_owner._mark_runtime_running(pid=pid)
             log(
                 f"Preset mode switch поколения {generation} пропущен как устаревший ({launch_method})",
                 "DEBUG",
@@ -240,12 +356,24 @@ def handle_presets_switch_finished(runtime_owner, success, error_message, genera
             QTimer.singleShot(0, runtime_owner._process_pending_presets_switch)
 
 
-def restart_dpi_async(runtime_owner, *, force_full_stop: bool = False) -> None:
+def restart_dpi_async(
+    runtime_owner,
+    *,
+    force_full_stop: bool = False,
+    target_launch_method: str | None = None,
+) -> None:
+    normalized_target_method = normalize_launch_method(
+        target_launch_method,
+        default="",
+    )
     runtime_owner._restart_request_generation += 1
+    runtime_owner._restart_target_launch_method = normalized_target_method
     if force_full_stop:
         runtime_owner._restart_force_stop_generation = int(runtime_owner._restart_request_generation)
     log(
-        f"Перезапуск DPI запросили, актуальное поколение {runtime_owner._restart_request_generation}",
+        "Перезапуск DPI запросили, "
+        f"актуальное поколение {runtime_owner._restart_request_generation}, "
+        f"целевой режим {normalized_target_method or 'current'}",
         "INFO",
     )
     process_pending_restart_request(runtime_owner)

@@ -6,8 +6,6 @@ def profile_payload_apply_signature_base(payload, *, view_state=None) -> tuple[o
         tuple(_profile_item_signature(item) for item in tuple(getattr(payload, "items", ()) or ())),
         str(getattr(payload, "selected_preset_file_name", "") or ""),
         str(getattr(payload, "selected_preset_name", "") or ""),
-        int(getattr(payload, "normalized_split_profiles", 0) or 0),
-        int(getattr(payload, "normalized_created_profiles", 0) or 0),
         _freeze_signature_value(view_state),
     )
 
@@ -51,20 +49,7 @@ def _profile_item_signature(item) -> object:
         bool(getattr(item, "group_collapsed", False)),
         str(getattr(item, "user_profile_id", "") or ""),
         str(getattr(item, "profile_name", "") or ""),
-        tuple(_profile_strategy_branch_signature(branch) for branch in tuple(getattr(item, "strategy_branches", ()) or ())),
-    )
-
-
-def _profile_strategy_branch_signature(branch) -> tuple[object, ...]:
-    return (
-        str(getattr(branch, "branch_id", "") or ""),
-        str(getattr(branch, "payload", "") or ""),
-        str(getattr(branch, "in_range", "") or ""),
-        str(getattr(branch, "out_range", "") or ""),
-        str(getattr(branch, "strategy_id", "") or ""),
-        str(getattr(branch, "strategy_name", "") or ""),
-        str(getattr(branch, "raw_strategy_text", "") or ""),
-        str(getattr(branch, "match_tab_text", "") or ""),
+        tuple(str(scope or "") for scope in tuple(getattr(item, "strategy_payload_scopes", ()) or ())),
     )
 
 

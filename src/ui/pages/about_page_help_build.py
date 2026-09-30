@@ -11,6 +11,9 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QFrame, QSizePolic
 from branding import APP_NAME, APP_ORG, APP_TAGLINE
 from ui.pages.about_page_help_accessibility import set_help_card_accessibility
 from ui.accessibility import set_state_text
+from ui.widgets.shimmer_label import ShimmerLabel
+from ui.widgets.stagger_float_in import skip_float_in
+
 
 
 @dataclass(slots=True)
@@ -52,7 +55,12 @@ def build_about_page_motto_block(*, tr_fn: Callable[[str, str], str], tokens):
 
     # Раньше здесь стоял авторский слоган проекта. Заменён на название
     # продукта из branding.py — правится в одном месте.
-    motto_title = QLabel(APP_NAME)
+    #
+    # Строки по очереди выплывают при открытии вкладки, потом по ним ходит
+    # лёгкий зацикленный блик — так же, как в исходном проекте.
+    glow = tokens.accent_hex if tokens.is_light else "#ffffff"
+    motto_title = ShimmerLabel(APP_NAME)
+    motto_title.set_glow_color(glow)
     motto_title.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
     motto_title.setWordWrap(True)
     motto_title.setStyleSheet(
@@ -61,7 +69,8 @@ def build_about_page_motto_block(*, tr_fn: Callable[[str, str], str], tokens):
         f"font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }}"
     )
 
-    motto_translate = QLabel(APP_TAGLINE)
+    motto_translate = ShimmerLabel(APP_TAGLINE, enter_delay_ms=180, first_delay_ms=1500)
+    motto_translate.set_glow_color(glow)
     motto_translate.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
     motto_translate.setWordWrap(True)
     motto_translate.setStyleSheet(
@@ -71,7 +80,7 @@ def build_about_page_motto_block(*, tr_fn: Callable[[str, str], str], tokens):
         f"padding-top: 2px; }}"
     )
 
-    motto_cta = QLabel(APP_ORG)
+    motto_cta = ShimmerLabel(APP_ORG, enter_delay_ms=360, shimmer=False)
     motto_cta.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
     motto_cta.setWordWrap(True)
     motto_cta.setStyleSheet(
@@ -80,13 +89,18 @@ def build_about_page_motto_block(*, tr_fn: Callable[[str, str], str], tokens):
         f"padding-top: 6px; }}"
     )
 
-    # Пустые строки брендинга не должны оставлять дыры в вёрстке.
-    motto_translate.setVisible(bool(APP_TAGLINE))
-    motto_cta.setVisible(bool(APP_ORG))
-
+    # Пустые строки брендинга не должны оставлять дыры в вёрстке. Их не
+    # прячем, а не добавляем вовсе: спрятанная строка всё равно ждала бы
+    # своей очереди на выход, и соседняя выплывала бы с лишней паузой.
     motto_text_layout.addWidget(motto_title)
-    motto_text_layout.addWidget(motto_translate)
-    motto_text_layout.addWidget(motto_cta)
+    if APP_TAGLINE:
+        motto_text_layout.addWidget(motto_translate)
+    else:
+        motto_translate.deleteLater()
+    if APP_ORG:
+        motto_text_layout.addWidget(motto_cta)
+    else:
+        motto_cta.deleteLater()
     motto_row.addWidget(motto_text_wrap, 1)
     return motto_wrap
 
@@ -115,6 +129,8 @@ def build_about_page_help_content(
     from branding import DOCS_URL, SUPPORT_URL
 
     motto_wrap = build_about_page_motto_block(tr_fn=tr_fn, tokens=tokens)
+    # У девиза свой вход (строки выплывают сами), общий эффект вкладки не нужен.
+    skip_float_in(motto_wrap)
     layout.addWidget(motto_wrap)
 
     docs_group = None

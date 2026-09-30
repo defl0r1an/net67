@@ -61,12 +61,16 @@ class PresetLaunchRuntime(QObject):
         self._presets_switch_method = ""
         self._presets_switch_debounce_timer = None
         self._presets_switch_debounce_method = ""
+        self._presets_switch_wait_queued = False
         self._pending_launch_warnings: list[str] = []
         self._restart_request_generation = 0
         self._restart_completed_generation = 0
         self._restart_pending_stop_generation = 0
         self._restart_active_start_generation = 0
         self._restart_force_stop_generation = 0
+        # Цель запроса хранится отдельно от snapshot: snapshot описывает
+        # владельца ещё работающего процесса и нужен для правильной остановки.
+        self._restart_target_launch_method = ""
         self._restart_runner_wait_queued = False
         self._pending_conflict_request_id = 0
         self._pending_conflict_selected_mode = None
@@ -219,7 +223,12 @@ class PresetLaunchRuntime(QObject):
         """
         return is_running_impl(self)
 
-    def restart_dpi_async(self, *, force_full_stop: bool = False):
+    def restart_dpi_async(
+        self,
+        *,
+        force_full_stop: bool = False,
+        target_launch_method: str | None = None,
+    ):
         """
         Перезапускает DPI по модели "последний запрос побеждает".
 
@@ -227,4 +236,8 @@ class PresetLaunchRuntime(QObject):
         переключает пресеты, мы запоминаем только последнее поколение
         запроса и продолжаем pipeline от него.
         """
-        restart_dpi_async_impl(self, force_full_stop=force_full_stop)
+        restart_dpi_async_impl(
+            self,
+            force_full_stop=force_full_stop,
+            target_launch_method=target_launch_method,
+        )

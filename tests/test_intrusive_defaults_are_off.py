@@ -84,14 +84,14 @@ class ReadersTests(unittest.TestCase):
 
 
 class WizardSwitchTests(unittest.TestCase):
-    """Переключатели мастера первого запуска подписаны по-русски.
+    """Переключатели первичной настройки подписаны по-русски.
 
-    Мастер — единственное место, где переключатель создавался напрямую,
-    а не через Win11ToggleRow, и оттуда брались английские «On» и «Off»
-    посреди русского окна.
+    Вопросы бывшего мастера теперь на карточках тура, и переключатели там
+    создаются напрямую, а не через Win11ToggleRow — оттуда брались
+    английские «On» и «Off» посреди русского окна.
     """
 
-    SOURCE = REPO_ROOT / "src" / "wizard" / "ui" / "dialog.py"
+    SOURCE = REPO_ROOT / "src" / "ui" / "onboarding" / "setup_choices.py"
 
     def test_the_dialog_exists(self) -> None:
         self.assertTrue(self.SOURCE.is_file(), f"не найден {self.SOURCE}")
@@ -109,7 +109,7 @@ class WizardSwitchTests(unittest.TestCase):
             # Единственный законный вызов — внутри самой фабрики.
             bare.append(node.lineno)
 
-        factory_line = source[: source.index("def _russian_switch()")].count("\n") + 1
+        factory_line = source[: source.index("def _switch()")].count("\n") + 1
         outside = [line for line in bare if not factory_line <= line <= factory_line + 30]
         self.assertEqual(outside, [], f"SwitchButton без русских подписей в строках {outside}")
 
@@ -119,7 +119,7 @@ class WizardSwitchTests(unittest.TestCase):
         self.assertIn("setOffText(SWITCH_OFF_TEXT)", source)
 
     def test_captions_are_russian(self) -> None:
-        # Файл читаем текстом: импорт диалога потянул бы Qt с
+        # Файл читаем текстом: импорт модуля потянул бы Qt с
         # графическими библиотеками, а проверка — про две строки.
         source = self.SOURCE.read_text(encoding="utf-8")
         self.assertIn('SWITCH_ON_TEXT = "Вкл."', source)

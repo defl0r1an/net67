@@ -1,30 +1,48 @@
 {
   "name": "Truth Social",
+  "category": "other",
+  "icon": "fa5s.globe",
+  "icon_color": null,
+  "sort_order": 79,
   "domains": [
     {
       "host": "static-assets-1.truthsocial.com",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "8.6.112.0",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ],
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ],
+        "malw_dns": [
+          "104.18.39.93",
+          "172.64.148.163"
+        ],
+        "malw_dns_v2": "45.95.233.23"
       }
     },
     {
       "host": "truthsocial.com",
       "ips": {
-        "zapret_dns": "72.56.93.144",
-        "xbox_dns": "8.6.112.0",
-        "comss_dns": "95.182.120.241",
-        "malw_dns": "185.246.223.127",
-        "malw_dns_v2": "45.95.233.23",
-        "play2go_cloud_dns": "144.31.14.104",
+        "xbox_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ],
         "xbox_dns_old": "45.155.204.190",
-        "fin_dns": "31.77.140.129"
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0",
+          "104.18.39.93",
+          "172.64.148.163"
+        ],
+        "malw_dns": [
+          "104.18.39.93",
+          "172.64.148.163"
+        ],
+        "malw_dns_v2": "45.95.233.23"
       }
     }
   ]

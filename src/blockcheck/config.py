@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from settings.mode import RELATIVE_EXE_PATH_WINWS2
 
 # ---------------------------------------------------------------------------
 # Timeouts (seconds)
@@ -15,20 +14,39 @@ DNS_TIMEOUT = 5
 DOH_TIMEOUT = 8
 ISP_PAGE_TIMEOUT = 8
 TCP_16_20_TIMEOUT = 15
+BASELINE_TIMEOUT = 4
+
+# Проба сертификата в DNS-проверке: нужен только вердикт хендшейка, данные не
+# читаются, поэтому таймаут короткий.
+CERT_PROBE_TIMEOUT = 3
+
+# Отдельный таймаут на установку TCP-соединения внутри HTTPS-пробы. Общий
+# бюджет пробы (``HTTPS_TIMEOUT``) делится между несколькими адресами хоста,
+# поэтому ждать на каждом полный таймаут нельзя.
+HTTPS_CONNECT_TIMEOUT = 4
+
+# Сколько адресов хоста пробуем, прежде чем признать пробу неудачной. Раньше
+# перебирались все записи подряд, каждая с полным таймаутом: хост с четырьмя
+# адресами стоил 40 секунд на одну пробу.
+HTTPS_MAX_ADDRESSES = 2
+
+# Верхняя граница на весь прогон. Превышение помечает недопроверенные цели как
+# недостоверные, а не подвешивает GUI.
+RUN_DEADLINE_SECONDS = 180
 
 # ---------------------------------------------------------------------------
 # Retries
 # ---------------------------------------------------------------------------
-TCP_16_20_RETRIES = 3
+# Повтор нужен только чтобы отличить настоящий DPI-обрыв на 16-20 КБ от разовой
+# сетевой помехи, поэтому вторая попытка делается лишь при подозрении.
+TCP_16_20_RETRIES = 2
 DNS_RETRIES = 2
 
 # ---------------------------------------------------------------------------
-# TCP target selection / health probing
+# TCP target selection
 # ---------------------------------------------------------------------------
-TCP_TARGET_MAX_COUNT = 18
+TCP_TARGET_MAX_COUNT = 6
 TCP_TARGETS_PER_PROVIDER = 2
-TCP_HEALTH_TIMEOUT = 4
-TCP_HEALTH_MAX_CANDIDATES = 36
 
 # ---------------------------------------------------------------------------
 # TCP 16-20 KB block detection
@@ -112,18 +130,10 @@ WINDOWS_ERRNO_NET_UNREACH = 10051   # WSAENETUNREACH
 # ---------------------------------------------------------------------------
 # Thread pool
 # ---------------------------------------------------------------------------
-DEFAULT_PARALLEL = 4
-
-# ---------------------------------------------------------------------------
-# Strategy scanner
-# ---------------------------------------------------------------------------
-STRATEGY_PROBE_TIMEOUT = 5        # seconds per HTTPS connect + TLS handshake
-STRATEGY_RESPONSE_TIMEOUT = 3     # seconds to read HTTP response after TLS ok
-STRATEGY_STARTUP_WAIT = 1.0       # seconds to wait for winws2 startup
-STRATEGY_KILL_TIMEOUT = 4         # seconds to wait for winws2 shutdown
-WINWS2_EXE_RELATIVE = RELATIVE_EXE_PATH_WINWS2
-PROBE_TEMP_PRESET = "blockcheck_probe.txt"
-PROBE_TEMP_HOSTLIST = "blockcheck_probe_hosts.txt"
+# Нагрузка чисто сетевая, потоки почти всё время спят в ожидании сокета —
+# прежние 4 воркера растягивали ~300 проб на минуты.
+DEFAULT_PARALLEL = 16
+MAX_PARALLEL = 32
 
 # ---------------------------------------------------------------------------
 # Preflight
@@ -134,7 +144,7 @@ PREFLIGHT_HTTP_TIMEOUT = 2
 PREFLIGHT_PING_COUNT = 1
 PREFLIGHT_PING_TIMEOUT = 2
 
-# Known ISP block IPs (shared — also used by dns_checker.py)
+# Known ISP block IPs (shared — also used by diagnostics.verdict)
 KNOWN_BLOCK_IPS: set[str] = {
     "127.0.0.1",
     "0.0.0.0",

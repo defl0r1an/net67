@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from log.log import log
+from profile.strategy_shape import payload_badge_accessible_text, payload_badge_text
 from profile.strategy_visuals import describe_strategy_visual
 
 
@@ -20,6 +21,8 @@ class ProfileStrategyListRow:
     visual_label: str
     visual_description: str
     tooltip_text: str
+    # Типы пакетов веток составной стратегии («TLS · HTTP»), пусто — обычная.
+    payload_badge: str = ""
 
 
 @dataclass(frozen=True)
@@ -60,11 +63,14 @@ def build_profile_strategy_list_plan(
         if query and query not in name.lower() and query not in args.lower() and query not in visual_search:
             continue
 
+        payload_badge = payload_badge_text(getattr(entry, "payload_scopes", ()) or ())
         state = states.get(strategy_id)
         is_current = strategy_id == current_id
         status_parts = _strategy_status_parts(state, is_current=is_current, include_unselected=False)
         accessible_status_parts = _strategy_status_parts(state, is_current=is_current, include_unselected=True)
-        tooltip_parts = [visual_description.strip(), args]
+        # В подсказке описание открывает текст, а в каталоге техник оно со
+        # строчной — рассчитано на «Fake: подмена пакета».
+        tooltip_parts = [_upper_first(visual_description), args]
         rows.append(
             ProfileStrategyListRow(
                 strategy_id=strategy_id,
@@ -75,6 +81,7 @@ def build_profile_strategy_list_plan(
                     status_parts=accessible_status_parts,
                     visual_label=visual_label,
                     visual_description=visual_description,
+                    payload_badge=payload_badge,
                 ),
                 is_current=is_current,
                 visual_icon_name=str(getattr(visual, "icon_name", "") or ""),
@@ -82,6 +89,7 @@ def build_profile_strategy_list_plan(
                 visual_label=visual_label,
                 visual_description=visual_description,
                 tooltip_text="\n\n".join(part for part in tooltip_parts if part),
+                payload_badge=payload_badge,
             )
         )
 
@@ -151,8 +159,9 @@ def _strategy_screen_reader_text(
     status_parts: list[str],
     visual_label: str,
     visual_description: str,
+    payload_badge: str = "",
 ) -> str:
-    parts = [str(name or "").strip()]
+    parts = [str(name or "").strip(), payload_badge_accessible_text(payload_badge)]
     parts.extend(_lower_first(part) for part in status_parts if str(part or "").strip())
     parts.extend(
         str(part or "").strip()
@@ -161,6 +170,11 @@ def _strategy_screen_reader_text(
     )
     text = ", ".join(part for part in parts if part)
     return f"{text}. Нажмите Enter или Пробел, чтобы выбрать стратегию." if text else ""
+
+
+def _upper_first(text: str) -> str:
+    value = str(text or "").strip()
+    return value[:1].upper() + value[1:]
 
 
 def _lower_first(text: str) -> str:

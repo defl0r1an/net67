@@ -205,6 +205,38 @@ def build_selfcheck_message(*, total: int, failed_domains: tuple[str, ...]) -> s
     return f"Работает частично, не открываются: {shown}"
 
 
+@dataclass(frozen=True, slots=True)
+class DnsIntegrity:
+    """Итог проверки DNS по одному домену — то, что читает should_change_dns."""
+
+    domain: str
+    is_comparable: bool
+    is_consistent: bool
+    is_stub: bool = False
+
+
+def integrity_from_dns_check(results: dict | None) -> list[DnsIntegrity]:
+    """Переводит отчёт diagnostics.engine.run_dns_check в итоги по доменам.
+
+    Сравнимы только «ok» и «spoofed». «local» — адрес пришёл из своего
+    hosts или локальной сети, «unknown» — сравнить с эталоном не удалось.
+    Считать их подменой нельзя: так «одна кнопка» меняла бы DNS человеку,
+    у которого он в порядке.
+    """
+    out: list[DnsIntegrity] = []
+    for domain, info in dict((results or {}).get("domains") or {}).items():
+        state = str((info or {}).get("state") or "")
+        comparable = state in ("ok", "spoofed")
+        out.append(
+            DnsIntegrity(
+                domain=str(domain),
+                is_comparable=comparable,
+                is_consistent=state != "spoofed",
+            )
+        )
+    return out
+
+
 def should_change_dns(integrity_results: list) -> tuple[bool, str]:
     """Решает, менять ли DNS, по результатам проверки целостности.
 
@@ -233,11 +265,13 @@ def should_change_dns(integrity_results: list) -> tuple[bool, str]:
 
 
 __all__ = [
+    "DnsIntegrity",
     "OneClickRequest",
     "build_disable_plan",
     "build_enable_plan",
     "build_rollback_plan",
     "build_selfcheck_message",
+    "integrity_from_dns_check",
     "should_change_dns",
     "summarize",
 ]
