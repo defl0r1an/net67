@@ -135,6 +135,8 @@ class Win11ToggleRow(FluentSettingCard):
             except Exception:
                 pass
         self._update_toggle_accessibility()
+        # Строка кликабельна целиком — курсор это обещает.
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._theme_refresh = ThemeRefreshBinding(
             self,
             self._apply_theme_refresh,
@@ -410,6 +412,28 @@ class Win11ToggleRow(FluentSettingCard):
                 event.accept()
                 return
         super().keyPressEvent(event)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802
+        """Щелчок по всей строке переключает, как в Windows 11.
+
+        Переключался только маленький тумблер справа, а щелчок по названию
+        и подписи не делал ничего — даже в журнале не оставалось следа.
+        Человек тянется к названию («Отключить Windows Defender») и
+        решает, что функция сломана. Сам тумблер обрабатывает свой щелчок
+        сам и сюда не доходит, поэтому двойного переключения нет.
+        """
+        toggle = getattr(self, "_switch_button", None)
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and toggle is not None
+            and self.isEnabled()
+            and toggle.isEnabled()
+            and self.rect().contains(event.position().toPoint())
+        ):
+            toggle.setChecked(not self.isChecked())
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def _update_toggle_accessibility(self) -> None:
         state = "включено" if self.isChecked() else "выключено"

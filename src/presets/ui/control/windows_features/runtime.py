@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QTimer
 
+from log.log import log
+
 from presets.ui.control.control_page_runtime_shared import (
     run_confirmation_dialog,
     show_action_result_plan,
@@ -41,6 +43,10 @@ class ControlPageWindowsFeatureMixin:
         )
 
     def _on_defender_toggled(self, disable: bool) -> None:
+        # Каждый шаг — в журнал: переключатель однажды «не работал», а в
+        # журнале не было ни строки, и понять, где встала цепочка, было
+        # не по чему.
+        log(f"Defender: переключатель — {'отключить' if disable else 'включить'}", "INFO")
         self._request_defender_admin_check(bool(disable))
 
     def create_program_settings_admin_check_worker(self, request_id: int):
@@ -143,6 +149,7 @@ class ControlPageWindowsFeatureMixin:
             is_admin=bool(is_admin),
         )
         if start_plan.blocked:
+            log(f"Defender: действие не начато — {start_plan.blocked_title}", "WARNING")
             InfoBar.error(
                 title=start_plan.blocked_title,
                 content=start_plan.blocked_content,
@@ -154,6 +161,7 @@ class ControlPageWindowsFeatureMixin:
 
         for dialog_plan in start_plan.confirmations:
             if not self._confirm_windows_feature_action(dialog_plan, self.defender_toggle):
+                log("Defender: человек отказался в подтверждении", "INFO")
                 self._sync_program_settings()
                 return
 
