@@ -24,7 +24,7 @@ Write-Host "[1/6] Checking generated files" -ForegroundColor Cyan
 
 $buildInfo = Join-Path $Root "src\config\build_info.py"
 if (-not (Test-Path $buildInfo)) {
-    $lines = @('APP_VERSION = "0.11.67"', 'CHANNEL = "stable"')
+    $lines = @('APP_VERSION = "0.12.67"', 'CHANNEL = "stable"')
     Set-Content -Path $buildInfo -Value $lines -Encoding UTF8
     Write-Host "      created build_info.py" -ForegroundColor Yellow
 }
@@ -55,6 +55,8 @@ Write-Host "[3/6] Running PyInstaller" -ForegroundColor Cyan
 $BuildRoot = Join-Path $Root "build-local"
 $DistRoot = Join-Path $BuildRoot "dist"
 $Artifact = Join-Path $Root "artifact"
+# Trailing separator so that artifact2\ or artifact-old\ never match.
+$ArtifactFull = [System.IO.Path]::GetFullPath($Artifact).TrimEnd('\') + '\'
 
 # Release the DPI engine before touching the artifact.
 #
@@ -63,47 +65,72 @@ $Artifact = Join-Path $Root "artifact"
 # with "the file is used by another process" on exe\Monkey64.sys. The
 # driver survives closing the GUI - it has to be stopped explicitly.
 # Same sequence as exe\stop.bat from the engine bundle.
+function Test-InsideArtifact([string]$path) {
+    # Only things started from this artifact are ours to stop. The build
+    # used to stop every process named xray, and xray is also the core of
+    # third-party VPN clients (Happ ships one in Program Files): building
+    # net67 cut the developer's own VPN. Same for tunnel services - the
+    # AmneziaVPN client names its services AmneziaWGTunnel$... as well.
+    if (-not $path) { return $false }
+    return ($path.IndexOf($ArtifactFull, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)
+}
+
 function Stop-Net67Engine {
     # A VPN tunnel service keeps exe\amneziawg.exe and exe\wintun.dll
     # open, so it has to go before the WinDivert driver. Prefixes match
     # SERVICE_NAME_PREFIXES in src\vpn\tunnel.py.
     $tunnelPrefixes = @("AmneziaWGTunnel$", "AmneziaWG$", "WireGuardTunnel$")
-    Get-Service -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-CimInstance -ClassName Win32_Service -ErrorAction SilentlyContinue | ForEach-Object {
         $serviceName = $_.Name
         foreach ($prefix in $tunnelPrefixes) {
             if ($serviceName.StartsWith($prefix)) {
-                Write-Host ("      stopping tunnel service " + $serviceName)
-                & sc.exe stop $serviceName   | Out-Null
-                & sc.exe delete $serviceName | Out-Null
+                if (Test-InsideArtifact $_.PathName) {
+                    Write-Host ("      stopping tunnel service " + $serviceName)
+                    & sc.exe stop $serviceName   | Out-Null
+                    & sc.exe delete $serviceName | Out-Null
+                } else {
+                    Write-Host ("      leaving foreign tunnel service " + $serviceName)
+                }
                 break
             }
         }
     }
 
-    # xray в списке не просто так: ядро подключения по ссылке живёт
-    # своим процессом и держит artifact\bin\xray\xray.exe. Один сеанс
-    # подключения - и сборка падает на "Artifact folder is locked",
-    # причём про xray в сообщении нет ни слова.
+    # xray is on the list for a reason: the connect-by-link core runs as a
+    # separate process and holds artifact\bin\xray\xray.exe. One session
+    # of connecting and the build fails with "Artifact folder is locked",
+    # without a word about xray in the message.
     #
-    # tun2socks по той же причине, и он переживает приложение чаще
-    # остальных: его запускает режим "весь трафик", а останавливает
-    # только штатное сворачивание туннеля. Закрыли окно на живом
-    # туннеле - процесс остался и держит bin\tun2socks\tun2socks.exe
-    # вместе с wintun.dll.
+    # tun2socks for the same reason, and it outlives the app more often
+    # than the rest: the "all traffic" mode starts it, and only the normal
+    # tunnel shutdown stops it. Close the window on a live tunnel and the
+    # process stays, holding bin\tun2socks\tun2socks.exe and wintun.dll.
     foreach ($name in @("net67", "winws", "winws2", "amneziawg", "awg", "xray", "tun2socks")) {
         Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host ("      stopping process " + $_.ProcessName)
-            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            $exePath = $_.Path
+            if (Test-InsideArtifact $exePath) {
+                Write-Host ("      stopping process " + $_.ProcessName)
+                Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            } elseif ($exePath) {
+                Write-Host ("      leaving foreign process " + $_.ProcessName + " (" + $exePath + ")")
+            } else {
+                Write-Host ("      leaving process " + $_.ProcessName + " (path unreadable, not elevated?)")
+            }
         }
     }
 
     # Names the app itself looks for, see _WINDIVERT_DRIVER_SERVICE_NAMES.
+    # Another zapret build may run the same driver from its own folder;
+    # stopping that one would not unlock our files anyway.
     foreach ($service in @("Monkey", "Monkey64", "WinDivert", "WinDivert14", "WinDivert64")) {
-        $query = & sc.exe query $service 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $driver = Get-CimInstance -ClassName Win32_SystemDriver -Filter ("Name='" + $service + "'") -ErrorAction SilentlyContinue
+        if (-not $driver) { continue }
+        if (Test-InsideArtifact $driver.PathName) {
             Write-Host ("      stopping driver service " + $service)
             & sc.exe stop $service   | Out-Null
             & sc.exe delete $service | Out-Null
+        } else {
+            Write-Host ("      leaving foreign driver service " + $service + " (" + $driver.PathName + ")")
         }
     }
 
@@ -131,7 +158,9 @@ if (Test-Path $Artifact) {
         $locked | Select-Object -First 5 | ForEach-Object { Write-Host ("  " + $_.FullName) }
         Write-Host ""
         Write-Host "Something still holds them. From an elevated prompt:" -ForegroundColor Yellow
-        Write-Host "  taskkill /F /IM net67.exe /IM winws.exe /IM winws2.exe /IM amneziawg.exe /IM xray.exe /IM tun2socks.exe"
+        Write-Host "  taskkill /F /IM net67.exe /IM winws.exe /IM winws2.exe /IM amneziawg.exe"
+        Write-Host "  xray.exe / tun2socks.exe: end them in Task Manager, checking the path is under artifact\bin"
+        Write-Host "  (a VPN client may run its own xray - do not kill it by name)"
         Write-Host "  sc stop Monkey"
         Write-Host "  sc delete Monkey"
         Write-Host "  Get-Service AmneziaWG* | ForEach-Object { sc.exe delete `$_.Name }"
@@ -296,11 +325,11 @@ Write-Host "      engine: winws.exe, winws2.exe, WinDivert, lua, lists, bin - ok
 # was not enough.
 $docsIndex = Join-Path $Artifact "docs\index.html"
 if (-not (Test-Path $docsIndex)) {
-    throw "Wiki is broken: docs\index.html is missing. Rebuild it with wiki\Пересобрать сайт.cmd"
+    throw "Wiki is broken: docs\index.html is missing. Rebuild it with the rebuild .cmd in wiki\ (Peresobrat sayt.cmd)"
 }
 $docsPages = @(Get-ChildItem -Path (Join-Path $Artifact "docs") -Filter "*.html" -Force)
 if ($docsPages.Count -lt 10) {
-    throw ("Wiki looks truncated: only " + $docsPages.Count + " html pages in docs. Rebuild it with wiki\Пересобрать сайт.cmd")
+    throw ("Wiki looks truncated: only " + $docsPages.Count + " html pages in docs. Rebuild it with the rebuild .cmd in wiki\ (Peresobrat sayt.cmd)")
 }
 Write-Host ("      docs: " + $docsPages.Count + " pages - ok")
 

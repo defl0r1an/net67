@@ -28,7 +28,7 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 #: Ожидаемая версия. Меняя её, поменяйте и в трёх местах ниже — тест
 #: для того и написан, чтобы не дать поменять в одном.
-EXPECTED_VERSION = "0.11.67"
+EXPECTED_VERSION = "0.12.67"
 
 WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "windows-release.yml"
 
