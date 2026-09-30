@@ -76,6 +76,26 @@ class MainWindowStateStoreThreadMarshallingTests(unittest.TestCase):
         )
         return app, store
 
+    def test_late_background_delivery_does_not_overwrite_newer_state(self) -> None:
+        """Запоздавшая доставка несёт свежее состояние, а не снимок записи.
+
+        Остановка писала фазу из рабочего потока, доставка откладывалась в
+        GUI; GUI тем временем писал «running». Старый снимок приходил
+        последним: обход работал, а метка писала «Запуск…», кнопка —
+        «Обход выключен».
+        """
+        app, store = self._build_store()
+        seen: list[str] = []
+        store.subscribe(lambda state, _changed: seen.append(state.launch_phase), fields={"launch_phase"}, emit_initial=False)
+
+        _run_in_qthread(lambda: store.update(launch_phase="starting"))
+        store.update(launch_phase="running")
+        _process_events_until(app, lambda: len(seen) >= 2)
+
+        self.assertEqual(store.snapshot().launch_phase, "running")
+        self.assertEqual(seen[-1], "running")
+        self.assertNotIn("starting", seen[1:])
+
     def test_background_update_delivers_callbacks_in_gui_thread(self) -> None:
         app, store = self._build_store()
         gui_thread_id = threading.get_ident()

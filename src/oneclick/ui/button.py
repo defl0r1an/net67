@@ -271,6 +271,29 @@ class OneClickButton(QWidget):
         if initial_button_state(bypass_running=running) is OneClickState.RUNNING:
             self._apply_state(OneClickState.RUNNING, "")
 
+    def follow_runtime_phase(self, phase: str) -> None:
+        """Отражает обход, включённый или выключенный не этой кнопкой.
+
+        Кнопка смотрела на обход один раз — при сборке страницы. Автозапуск
+        поднимал обход секундой позже, и кнопка так и стояла на «Обход
+        выключен», пока метка в заголовке писала «Работает»: человек
+        видел два противоречащих ответа на одном экране. Так же она не
+        замечала выключение из метки или из трея.
+
+        Пока идёт собственная цепочка шагов кнопки (подготовка,
+        проверка) — не вмешиваемся: её итог она покажет сама.
+        """
+        if self._state in _BUSY:
+            return
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            return
+        normalized = str(phase or "").strip().lower()
+        if normalized == "running" and self._state is not OneClickState.RUNNING:
+            self._apply_state(OneClickState.RUNNING, "")
+        elif normalized == "stopped" and self._state is OneClickState.RUNNING:
+            self._apply_state(OneClickState.OFF, "")
+
     @staticmethod
     def text_column_width_for(available_width: int) -> int:
         """Ширина колонки с подписями при такой ширине окна.

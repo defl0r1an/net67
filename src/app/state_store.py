@@ -11,6 +11,10 @@ from branding import ALL_FEATURES_UNLOCKED
 class AppUiState:
     launch_method: str = ""
     launch_phase: str = "stopped"
+    # Состояние «одной кнопки» простого вида: пока она готовит и проверяет
+    # («preparing», «checking»), метка в заголовке пишет то же, а не
+    # «Работает» — обход уже поднят, но кнопка ещё не закончила.
+    oneclick_phase: str = ""
     launch_running: bool = False
     launch_busy: bool = False
     launch_busy_text: str = ""
@@ -30,6 +34,9 @@ class AppUiState:
     window_opacity: int = 100
     active_preset_revision: int = 0
     active_preset_file_name: str = ""
+    # Режим, к которому относится active_preset_file_name: store общий для
+    # zapret1 и zapret2, и без режима имя одного сравнивалось бы с пресетом другого.
+    active_preset_launch_method: str = ""
     preset_content_revision: int = 0
     preset_structure_revision: int = 0
     mode_revision: int = 0
@@ -131,7 +138,14 @@ class MainWindowStateStore:
         marshaller = self._ui_thread_marshaller
         if marshaller is not None and not self._is_ui_thread(marshaller):
             self._log_cross_thread_update(changed_fields)
-            marshaller.post(lambda: self._deliver_to_subscribers(snapshot, changed_fields))
+            # Доставляется состояние на момент доставки, а не снимок на
+            # момент записи. Запись из рабочего потока доходит до GUI позже;
+            # если GUI за это время записал новее, старый снимок приходил
+            # последним и перетирал его у подписчиков: обход работал, а метка
+            # в заголовке писала «Запуск…», главная кнопка — «Обход
+            # выключен». Поля — те, что менялись этой записью: подписчик
+            # решает по ним, что перерисовать, а значения берёт свежие.
+            marshaller.post(lambda: self._deliver_to_subscribers(self.snapshot(), changed_fields))
             return
 
         self._deliver_to_subscribers(snapshot, changed_fields)
@@ -197,11 +211,12 @@ class MainWindowStateStore:
     def set_window_opacity_value(self, value: int) -> bool:
         return self.update(window_opacity=max(0, min(100, int(value))))
 
-    def bump_active_preset_revision(self, *, file_name: str = "") -> bool:
+    def bump_active_preset_revision(self, *, file_name: str = "", launch_method: str = "") -> bool:
         current = self.snapshot().active_preset_revision
         return self.update(
             active_preset_revision=int(current) + 1,
             active_preset_file_name=str(file_name or "").strip(),
+            active_preset_launch_method=str(launch_method or "").strip(),
         )
 
     def bump_preset_content_revision(self, *, content_change_kind: str = "") -> bool:

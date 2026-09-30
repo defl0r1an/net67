@@ -412,6 +412,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             self.content,
             get_runtime_feature=lambda: self._runtime_actions,
         )
+        self.oneclick_button.stateChanged.connect(self._publish_oneclick_phase)
         self.add_widget(self.oneclick_button)
         self.add_spacing(16)
 
@@ -976,11 +977,12 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         if not changed or "last_status_message" in changed:
             self._refresh_last_status_message(state)
         if runtime_status_changed:
+            phase = state.launch_phase or ("running" if state.launch_running else "stopped")
             self.set_loading(bool(state.launch_busy), str(state.launch_busy_text or ""))
-            self.update_status(
-                state.launch_phase or ("running" if state.launch_running else "stopped"),
-                str(state.launch_last_error or ""),
-            )
+            self.update_status(phase, str(state.launch_last_error or ""))
+            oneclick = self.__dict__.get("oneclick_button")
+            if oneclick is not None:
+                oneclick.follow_runtime_phase(phase)
             if runtime is not None and not preset_apply_busy:
                 if runtime.take_top_summary_preset_apply_reload():
                     try:
@@ -991,6 +993,13 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
                     self._schedule_additional_settings_reload_after_preset_switch()
         if strategy_changed:
             self.update_strategy(str(state.current_strategy_summary or ""))
+
+    def _publish_oneclick_phase(self, state) -> None:
+        """Отдаёт состояние «одной кнопки» метке в заголовке — через store."""
+        store = self.__dict__.get("_ui_state_store")
+        if store is None:
+            return
+        store.update(oneclick_phase=str(getattr(state, "value", state) or ""))
 
     def _refresh_last_status_message(self, state: AppUiState | None = None) -> None:
         if self.last_status_message_label is None or self.last_status_message_dot is None:
