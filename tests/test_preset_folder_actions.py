@@ -43,7 +43,7 @@ class PresetFolderActionTests(unittest.TestCase):
         self.assertEqual(folder_key, "моя-папка")
         self.assertEqual(
             ordered_names,
-            ["ALL TCP & UDP", "Общие", "Моя папка", "1.10.0", "1.9.9", "Game filter", "Circular"],
+            ["ALL TCP & UDP", "Общие", "Моя папка", "1.10.3", "1.10.0", "1.9.9", "Game filter", "Circular"],
         )
 
     def test_delete_folder_moves_presets_to_common(self) -> None:
@@ -70,8 +70,9 @@ class PresetFolderActionTests(unittest.TestCase):
             folder["name"]
             for _key, folder in sorted(state["folders"].items(), key=lambda pair: pair[1]["order"])
         ]
-        # «Общие» сдвинулась на шаг вниз, на её место встала «1.10.0».
-        self.assertEqual(ordered_names[:2], ["ALL TCP & UDP", "1.10.0"])
+        # «Общие» сдвинулась на шаг вниз, на её место встала «1.10.3» —
+        # папка самых новых пресетов general.
+        self.assertEqual(ordered_names[:2], ["ALL TCP & UDP", "1.10.3"])
         self.assertIn("Общие", ordered_names)
 
     def test_duplicate_preset_folder_rename_skips_folder_state_save(self) -> None:
