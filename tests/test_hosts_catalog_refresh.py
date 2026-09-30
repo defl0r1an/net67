@@ -181,6 +181,31 @@ class ResolverConfigTests(unittest.TestCase):
         # обновится — и никто не поймёт почему.
         self.assertEqual(set(sources) & expected, expected, "источник каталога не описан")
 
+    def test_dns_ai_is_asked_over_tls_only(self) -> None:
+        """У DNS-AI закрыт 53-й порт: UDP не пробуем, чтобы не ждать таймаутов."""
+        from unittest.mock import patch
+
+        import refresh_hosts_catalog as tool
+
+        source = tool.load_resolvers()["sources"]["dns_ai"]
+        self.assertTrue(tool._has_transport(source))
+        with (
+            patch.object(tool, "resolve_over_tls", return_value=["20.0.0.1"]) as tls,
+            patch.object(tool, "resolve_over_udp") as udp,
+        ):
+            self.assertEqual(tool.resolve("chatgpt.com", TYPE_A, source), ["20.0.0.1"])
+        tls.assert_called_once()
+        self.assertEqual(tls.call_args.args[2], "dns.dns-ai.ru")
+        udp.assert_not_called()
+
+        with (
+            patch.object(tool, "resolve_over_tls", side_effect=DnsError("reset")),
+            patch.object(tool, "resolve_over_udp") as udp,
+        ):
+            with self.assertRaises(DnsError):
+                tool.resolve("chatgpt.com", TYPE_A, source)
+        udp.assert_not_called()
+
     def test_known_sources_have_servers(self) -> None:
         from refresh_hosts_catalog import load_resolvers
 

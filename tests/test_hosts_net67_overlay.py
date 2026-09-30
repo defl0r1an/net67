@@ -224,6 +224,31 @@ class OverlayRefreshTests(unittest.TestCase):
                 )
         self.assertEqual(data["ips"]["api.anthropic.com"], {"geohide": "30.0.0.1"})
 
+    def test_dead_domain_answered_with_sinkhole_gets_the_proxy_too(self) -> None:
+        # DNS-AI на несуществующее имя отвечает 0.0.0.0, а не пустотой
+        # (statsig.anthropic.com) — и Claude терял профиль из-за него.
+        import refresh_hosts_catalog as tool
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _catalog(root, overlay=None)
+
+            def fake_resolve(host, _qtype, source, **_kw):
+                if isinstance(source, dict):
+                    return {"claude.ai": ["30.0.0.1"], "api.anthropic.com": ["0.0.0.0"], "notion.so": ["1.1.1.3"]}[host]
+                return {"claude.ai": ["1.1.1.1"], "api.anthropic.com": [], "notion.so": ["1.1.1.3"]}[host]
+
+            with (
+                patch.object(tool, "CATALOG_ROOT", root),
+                patch.object(tool, "OVERLAY_FILE", root / proxy_domains.NET67_OVERLAY_FILE_NAME),
+                patch.object(tool, "resolve", side_effect=fake_resolve),
+                patch.object(tool, "PROXY_MIN_SERVICES", 1),
+            ):
+                data = tool.refresh_overlay(
+                    {"dns_ai": {"name": "DNS-AI", "overlay": True, "dot": "x"}}, ["1.1.1.1"], tool.Report()
+                )
+        self.assertEqual(data["ips"]["api.anthropic.com"], {"dns_ai": "30.0.0.1"})
+
     def test_sinkhole_answer_is_never_written(self) -> None:
         data, _report = self._run(
             {

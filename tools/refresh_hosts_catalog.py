@@ -205,6 +205,48 @@ def resolve_over_https(name: str, qtype: int, url: str, *, timeout=TIMEOUT_SECON
     return parse_addresses(response.content, txid=0)
 
 
+def resolve_over_tls(name: str, qtype: int, host: str, servers=(), *, timeout=TIMEOUT_SECONDS) -> list[str]:
+    """Тот же запрос по TLS на 853-й порт (DNS-over-TLS).
+
+    Нужен резолверам, которые закрыли 53-й порт, а DoH держат только по
+    HTTP/2: requests умеет лишь HTTP/1.1 и получает от них 505. Так
+    устроен DNS-AI.
+
+    Соединяемся по адресам из `servers`, а имя `host` идёт в SNI и в
+    проверку сертификата. Спрашивать адрес самого резолвера у системного
+    DNS незачем: его может не быть, а адреса и так известны.
+
+    По TCP перед пакетом идёт его длина — два байта (RFC 7858).
+    """
+    import ssl
+
+    context = ssl.create_default_context()
+    txid, packet = build_query(name, qtype)
+    last_error: Exception | None = None
+    for target in [*(servers or ()), host]:
+        try:
+            with socket.create_connection((str(target), 853), timeout=timeout) as raw:
+                with context.wrap_socket(raw, server_hostname=host) as tls:
+                    tls.sendall(struct.pack(">H", len(packet)) + packet)
+                    header = _recv_exact(tls, 2)
+                    data = _recv_exact(tls, struct.unpack(">H", header)[0])
+            return parse_addresses(data, txid=txid)
+        except (OSError, DnsError) as exc:
+            last_error = exc
+            continue
+    raise DnsError(str(last_error)[:160] if last_error else "не задан адрес резолвера")
+
+
+def _recv_exact(sock, size: int) -> bytes:
+    data = b""
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise DnsError("соединение оборвалось посреди ответа")
+        data += chunk
+    return data
+
+
 def resolve_over_udp(name: str, qtype: int, servers, *, timeout=TIMEOUT_SECONDS) -> list[str]:
     """Спрашивает резолверы по порядку до первого внятного ответа."""
     last_error = None
@@ -239,8 +281,10 @@ def resolve(name: str, qtype: int, source, *, timeout=TIMEOUT_SECONDS) -> list[s
     if isinstance(source, dict):
         servers = source.get("servers") or ()
         doh = str(source.get("doh") or "").strip()
+        dot = str(source.get("dot") or "").strip()
+        udp = not source.get("no_udp")
     else:
-        servers, doh = source, ""
+        servers, doh, dot, udp = source, "", "", True
 
     errors = []
     if doh:
@@ -248,6 +292,15 @@ def resolve(name: str, qtype: int, source, *, timeout=TIMEOUT_SECONDS) -> list[s
             return resolve_over_https(name, qtype, doh, timeout=timeout)
         except DnsError as exc:
             errors.append(f"https: {exc}")
+
+    if dot:
+        try:
+            return resolve_over_tls(name, qtype, dot, servers, timeout=timeout)
+        except DnsError as exc:
+            errors.append(f"tls: {exc}")
+
+    if not udp:
+        raise DnsError(f"{name}: " + "; ".join(errors))
 
     try:
         return resolve_over_udp(name, qtype, servers, timeout=timeout)
@@ -295,8 +348,12 @@ class Report:
 
 
 def _has_transport(source: dict) -> bool:
-    """Есть ли чем спросить этот источник — хоть по UDP, хоть по HTTPS."""
-    return bool(source.get("servers") or str(source.get("doh") or "").strip())
+    """Есть ли чем спросить этот источник — по UDP, HTTPS или TLS."""
+    return bool(
+        source.get("servers")
+        or str(source.get("doh") or "").strip()
+        or str(source.get("dot") or "").strip()
+    )
 
 
 def _is_overlay(source: dict) -> bool:
@@ -489,7 +546,7 @@ def refresh_overlay(
                 if answer is None:
                     report.unresolved.append(f"{name}: {host} через {key}")
                     continue
-                if answer == "" and not real.get(host):
+                if (answer == "" or answer in SINKHOLE_ADDRESSES) and not real.get(host):
                     # Мёртвый домен: его нет ни у резолвера, ни у публичного
                     # DNS (labs.openai.com, api.claude.ai…). Профиль в
                     # редакторе предлагается, только если адрес есть у
@@ -497,7 +554,8 @@ def refresh_overlay(
                     # AstraCat пропадал у ChatGPT, Claude и Grok — ровно там,
                     # где он нужен. XBOX и Comss на них отвечают своим прокси
                     # по маске; делаем так же. Строка для несуществующего
-                    # имени ничего не ломает.
+                    # имени ничего не ломает. DNS-AI на мёртвые имена отвечает
+                    # не пустотой, а заглушкой 0.0.0.0 (statsig.anthropic.com).
                     answer = service_proxy
                 if not answer or answer in SINKHOLE_ADDRESSES:
                     # Пустой ответ или заглушка: строки не будет, и профиль у
@@ -601,11 +659,14 @@ def check_resolvers(sources: dict) -> int:
         # положение дел, и пугать им не надо.
         for label, call in (
             ("https", lambda: resolve_over_https(probe, TYPE_A, str(value.get("doh") or ""))),
+            ("tls  ", lambda: resolve_over_tls(probe, TYPE_A, str(value.get("dot") or ""), value.get("servers") or [])),
             ("udp  ", lambda: resolve_over_udp(probe, TYPE_A, value.get("servers") or [])),
         ):
             if label.strip() == "https" and not str(value.get("doh") or "").strip():
                 continue
-            if label.strip() == "udp" and not (value.get("servers") or []):
+            if label.strip() == "tls" and not str(value.get("dot") or "").strip():
+                continue
+            if label.strip() == "udp" and (value.get("no_udp") or not (value.get("servers") or [])):
                 continue
             try:
                 addresses = call()
@@ -651,7 +712,9 @@ def main(argv=None) -> int:
             continue
         updated.append((path, refresh_dns_file(path, sources, report, only=args.only)))
 
-    public_servers = (config.get("hosts_profiles_resolver") or {}).get("servers") or []
+    # Вся запись целиком, а не только servers: resolve() тогда спросит по
+    # HTTPS, где ответы не подменяет провайдер.
+    public_servers = config.get("hosts_profiles_resolver") or {}
     if not args.only:
         for path in catalog_files("hosts"):
             if args.service and args.service.lower() not in path.name.lower():

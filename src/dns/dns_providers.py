@@ -29,6 +29,24 @@ DNS_PROVIDERS = {
             "color": "#00bcd4",
             "doh": "https://doh.sb/dns-query"
         },
+        # Серверы в России — самый короткий путь для большинства пользователей.
+        # DoH у Яндекса только по HTTP/2: requests его не проверит, Windows — умеет.
+        "Яндекс DNS": {
+            "ipv4": ["77.88.8.8", "77.88.8.1"],
+            "ipv6": ["2a02:6b8::feed:0ff", "2a02:6b8:0:1::feed:0ff"],
+            "desc": "Быстрый в России",
+            "icon": "fa5b.yandex",
+            "color": "#fc3f1d",
+            "doh": "https://common.dot.dns.yandex.net/dns-query"
+        },
+        "Control D": {
+            "ipv4": ["76.76.2.0", "76.76.10.0"],
+            "ipv6": ["2606:1a40::", "2606:1a40:1::"],
+            "desc": "Без фильтров",
+            "icon": "fa5s.sliders-h",
+            "color": "#5a67d8",
+            "doh": "https://freedns.controld.com/p0"
+        },
     },
     "Безопасные": {
         "Quad9": {
@@ -45,7 +63,8 @@ DNS_PROVIDERS = {
             "desc": "Без рекламы",
             "icon": "fa5s.ad",
             "color": "#68bc71",
-            "doh": "https://dns.adguard.com/dns-query"
+            # Прежний dns.adguard.com перестал отвечать (замер 2026-09-30).
+            "doh": "https://dns.adguard-dns.com/dns-query"
         },
         "OpenDNS": {
             "ipv4": ["208.67.222.222", "208.67.220.220"],
@@ -55,14 +74,32 @@ DNS_PROVIDERS = {
             "color": "#ff9800",
             "doh": "https://doh.opendns.com/dns-query"
         },
+        # Адрес у сервиса один. DoH переехал с порта 444 на обычный 443:
+        # 444 закрыт (замер 2026-09-30).
         "dnsdoh.art": {
-            "ipv4": ["194.180.189.33", "194.180.189.33"],
+            "ipv4": ["194.180.189.33"],
             "ipv6": [],
             "desc": "Максимальная приватность",
             "icon": "fa5s.lock",
             "color": "#9c27b0",
-            "doh": "https://dnsdoh.art:444/dns-query"
-        }
+            "doh": "https://dnsdoh.art/dns-query"
+        },
+        "Cloudflare Family": {
+            "ipv4": ["1.1.1.3", "1.0.0.3"],
+            "ipv6": ["2606:4700:4700::1113", "2606:4700:4700::1003"],
+            "desc": "Без вирусов и сайтов 18+",
+            "icon": "fa5s.child",
+            "color": "#f48120",
+            "doh": "https://family.cloudflare-dns.com/dns-query"
+        },
+        "Яндекс Безопасный": {
+            "ipv4": ["77.88.8.88", "77.88.8.2"],
+            "ipv6": ["2a02:6b8::feed:bad", "2a02:6b8:0:1::feed:bad"],
+            "desc": "Без мошеннических сайтов",
+            "icon": "fa5s.user-lock",
+            "color": "#fc3f1d",
+            "doh": "https://safe.dot.dns.yandex.net/dns-query"
+        },
     },
     "Для ИИ": {
         "Xbox DNS": {
@@ -79,14 +116,6 @@ DNS_PROVIDERS = {
             "desc": "ChatGPT",
             "icon": "fa5s.robot",
             "color": "#7b1fa2",
-            "doh": "https://xbox-dns.ru/dns-query"
-        },
-        "Xbox DNS (old)": {
-            "ipv4": ["176.99.11.77", "80.78.247.254"],
-            "ipv6": [],
-            "desc": "ChatGPT",
-            "icon": "fa5s.robot",
-            "color": "#6d6d6d",
             "doh": "https://xbox-dns.ru/dns-query"
         },
         "Comss DNS": {
@@ -153,6 +182,9 @@ OUTDATED_DNS_ADDRESS_REPLACEMENTS = {
     # Xbox DNS: стандартные адреса сменились на .54/.55
     "111.88.96.50": "111.88.96.54",
     "111.88.96.51": "111.88.96.55",
+    # Xbox DNS (old): замолчали на всех портах (замер 2026-09-30), плитка убрана
+    "176.99.11.77": "111.88.96.54",
+    "80.78.247.254": "111.88.96.55",
     # dns.malw.link: старые серверы больше не отвечают
     "84.21.189.133": "95.216.204.218",
     "64.188.98.242": "80.253.249.40",
