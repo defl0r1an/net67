@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from log.log import log
+from hosts.defaults import choose_profile
 from oneclick.plans import OneClickRequest
 
 #: Как называется профиль прямой записи в hosts. Совпадает с
@@ -394,15 +395,19 @@ def hosts_service_profiles(group_keys) -> dict[str, str]:
                 out[service] = PREFERRED_DNS_PROFILE
                 continue
 
-            out[service] = available[0]
+            # Порядок — общий с умолчаниями (hosts/defaults.py): без XBOX
+            # раньше брался первый в каталоге, XBOX DNS (old), самый слабый
+            # из живых профилей по замеру.
+            out[service] = choose_profile(available)
             # Сервисы с прямыми записями сюда попадают штатно: у них
-            # профиль один и называется иначе. А вот сервис с подменой
-            # DNS без xbox_dns — расхождение каталога с тем, что здесь
-            # написано, и молчать о нём нельзя.
+            # профиль один и называется иначе. Сервис с подменой DNS без
+            # xbox_dns — обычно XBOX, убранный по замеру
+            # (json/hosts_catalog/net67_dead_profiles.json); в журнал —
+            # какой профиль взят вместо него.
             if len(available) > 1 or available[0] != DIRECT_HOSTS_PROFILE:
                 log(
-                    f"{service}: нет профиля {PREFERRED_DNS_PROFILE}, взят {available[0]}",
-                    "⚠ WARNING",
+                    f"{service}: нет профиля {PREFERRED_DNS_PROFILE}, взят {out[service]}",
+                    "INFO",
                 )
     return out
 
@@ -546,16 +551,20 @@ def build_hosts_service_profiles(selection) -> dict[str, str]:
                 out[service] = PREFERRED_DNS_PROFILE
                 continue
 
-            out[service] = available[0]
+            # Порядок — общий с умолчаниями (hosts/defaults.py): без XBOX
+            # раньше брался первый в каталоге, XBOX DNS (old), самый слабый
+            # из живых профилей по замеру.
+            out[service] = choose_profile(available)
             # Сервисы с прямыми записями сюда попадают штатно: у них
-            # профиль один и называется иначе. А вот сервис с подменой
-            # DNS, у которого нет xbox_dns, — это расхождение каталога с
-            # тем, что здесь написано, и молчать о нём нельзя.
+            # профиль один и называется иначе. Сервис с подменой DNS без
+            # xbox_dns — обычно XBOX, убранный по замеру
+            # (json/hosts_catalog/net67_dead_profiles.json); в журнал —
+            # какой профиль взят вместо него.
             if len(available) > 1 or available[0] != DIRECT_HOSTS_PROFILE:
                 log(
                     f"{service}: нет профиля {PREFERRED_DNS_PROFILE}, "
-                    f"взят {available[0]}",
-                    "⚠ WARNING",
+                    f"взят {out[service]}",
+                    "INFO",
                 )
     return out
 

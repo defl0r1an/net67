@@ -42,6 +42,10 @@ class DefaultSelectionRuleTests(unittest.TestCase):
 
         self.assertEqual(choose_profile(["comss_dns", "xbox_dns", "zapret_dns"]), "xbox_dns")
         self.assertEqual(choose_profile(["comss_dns", "zapret_dns"]), "comss_dns")
+        # Без XBOX — не первый в каталоге (XBOX DNS old, самый слабый из
+        # живых), а следующий по замеру.
+        self.assertEqual(choose_profile(["xbox_dns_old", "geohide", "astracat"]), "astracat")
+        self.assertEqual(choose_profile(["zapret_dns"]), "zapret_dns")
 
     def test_falls_back_to_first_profile(self) -> None:
         """Сервисы «Напрямую из hosts» поддерживают только профиль hosts."""
@@ -67,13 +71,23 @@ class DefaultSelectionRuleTests(unittest.TestCase):
 
         self.assertEqual(selection, {"Claude": "xbox_dns", "Grok": "xbox_dns"})
 
-    def test_ai_service_without_xbox_dns_is_left_alone(self) -> None:
-        """Подставить другой резолвер молча — включить не то, что обещано."""
+    def test_ai_service_without_xbox_dns_takes_the_next_one(self) -> None:
+        """Обещание — «нейросети работают из коробки», а не «через XBOX».
+
+        Раньше без XBOX DNS нейросеть оставалась выключенной. Замер
+        30.09.2026 убрал мёртвый XBOX у Gemini и ещё четырёх, и они
+        остались бы выключенными у каждого нового человека.
+        """
         from hosts.defaults import build_default_selection
 
-        selection = build_default_selection(["Claude"], {"Claude": ["comss_dns", "zapret_dns"]})
+        selection = build_default_selection(["Claude"], {"Claude": ["xbox_dns_old", "comss_dns"]})
 
-        self.assertEqual(selection, {})
+        self.assertEqual(selection, {"Claude": "comss_dns"})
+
+    def test_ai_service_without_any_profile_is_left_alone(self) -> None:
+        from hosts.defaults import build_default_selection
+
+        self.assertEqual(build_default_selection(["Claude"], {"Claude": []}), {})
 
     def test_ai_group_matches_the_page(self) -> None:
         """Список «что такое нейросеть» обязан быть один на всё приложение.
@@ -123,9 +137,10 @@ class RealCatalogTests(unittest.TestCase):
         self.assertEqual(profiles, {"hosts"}, "подмена DNS попала за пределы группы «ИИ»")
 
     def test_every_ai_service_is_on_by_default(self) -> None:
-        """Просьба была прямая: все нейронки на XBOX DNS из коробки."""
-        from hosts.defaults import is_ai_service, load_default_selection
-        from hosts.proxy_domains import get_all_services
+        """Просьба была прямая: все нейронки из коробки, на XBOX DNS там,
+        где он работает, иначе — на следующем по замеру."""
+        from hosts.defaults import choose_profile, is_ai_service, load_default_selection
+        from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles
 
         selection = load_default_selection()
         catalog_ai = [name for name in (get_all_services() or ()) if is_ai_service(name)]
@@ -133,7 +148,9 @@ class RealCatalogTests(unittest.TestCase):
         self.assertGreaterEqual(len(catalog_ai), 10)
         for name in catalog_ai:
             with self.subTest(service=name):
-                self.assertEqual(selection.get(name), "xbox_dns")
+                expected = choose_profile(get_service_available_dns_profiles(name))
+                self.assertTrue(expected)
+                self.assertEqual(selection.get(name), expected)
 
     def test_no_default_points_at_a_service_address(self) -> None:
         """Локальные и приватные адреса в hosts убивают домен наверняка.
@@ -183,7 +200,12 @@ class RealCatalogTests(unittest.TestCase):
             "GitHub Copilot",
         ):
             with self.subTest(service=expected):
-                self.assertEqual(selection.get(expected), "xbox_dns")
+                self.assertIn(selection.get(expected), ("xbox_dns", "comss_dns", "astracat", "geohide"))
+        # Там, где XBOX DNS жив, он и стоит.
+        self.assertEqual(selection.get("Claude"), "xbox_dns")
+        self.assertEqual(selection.get("ChatGPT & Sora (OpenAI)"), "xbox_dns")
+        # У Gemini его прокси мертвы (замер 30.09.2026).
+        self.assertNotEqual(selection.get("Gemini AI"), "xbox_dns")
 
     def test_direct_hosts_group_is_enabled(self) -> None:
         """Именно эта группа была на скриншоте с просьбой включить всё."""

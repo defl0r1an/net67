@@ -398,6 +398,11 @@ def _iter_json_files(path: Path) -> list[Path]:
 #: ``"overlay": true`` в tools/hosts_catalog_resolvers.json).
 NET67_OVERLAY_FILE_NAME = "net67_dns_sources.json"
 
+#: Профили, через которые сервис не открывается, — рукописный список net67
+#: по итогам замеров. tools/refresh_hosts_catalog.py его не пишет:
+#: пересчёт адресов не возвращает убранное.
+NET67_DEAD_PROFILES_FILE_NAME = "net67_dead_profiles.json"
+
 
 def _split_catalog_files(root: Path) -> list[Path]:
     """Канонический список файлов split-каталога.
@@ -414,6 +419,9 @@ def _split_catalog_files(root: Path) -> list[Path]:
     overlay_path = root / NET67_OVERLAY_FILE_NAME
     if overlay_path.is_file():
         files.append(overlay_path)
+    dead_path = root / NET67_DEAD_PROFILES_FILE_NAME
+    if dead_path.is_file():
+        files.append(dead_path)
     return files
 
 
@@ -458,6 +466,61 @@ def _apply_net67_overlay(raw: object, profiles: list[dict[str, str]], services: 
                 if profile_id in values and profile_id not in ips:
                     ips[profile_id] = values[profile_id]
             domain["ips"] = ips
+
+
+def _apply_net67_dead_profiles(raw: object, profiles: list[dict[str, str]], services: list[dict]) -> None:
+    """Убирает профили DNS, через которые сервис не открывается.
+
+    В редакторе hosts у сервиса стояли кружки профилей, выбрав которые
+    человек получал неоткрывающийся сайт: Claude через Malw DNS открывал
+    8 доменов из 16, а Malw DNS v2 отдавал чужой сертификат на всё
+    подряд. Программа предлагала сломанный вариант наравне с рабочими.
+
+    Список ведётся по замерам (TLS с проверкой сертификата до каждого
+    адреса каталога) и лежит отдельным файлом, а не правкой каталога:
+    каталог приходит из zapret и пересчитывается инструментом, и то и
+    другое молча вернуло бы убранное. Причина и дата замера записаны
+    рядом с каждым исключением.
+
+    У кого убранный профиль был выбран, выбор в настройках остаётся как
+    есть, а запись в hosts берёт запасной профиль
+    (``_rows_from_fallback_profile`` в hosts/hosts.py).
+    """
+    if not isinstance(raw, dict):
+        return
+    dead_raw = raw.get("dead_profiles")
+    dead = {_clean_str(key) for key in (dead_raw if isinstance(dead_raw, dict) else {}) if _clean_str(key)}
+    by_service: dict[str, set[str]] = {}
+    services_raw = raw.get("services")
+    for name, entry in (services_raw if isinstance(services_raw, dict) else {}).items():
+        ids = {_clean_str(key) for key in (entry if isinstance(entry, dict) else {}) if _clean_str(key)}
+        if _clean_str(name) and ids:
+            by_service[_clean_str(name).casefold()] = ids
+    if not dead and not by_service:
+        return
+
+    if dead:
+        profiles[:] = [profile for profile in profiles if profile.get("id") not in dead]
+    emptied: list[dict] = []
+    for service in services:
+        drop = dead | by_service.get(_clean_str(service.get("name")).casefold(), set())
+        if not drop:
+            continue
+        for domain in service.get("domains") or []:
+            if isinstance(domain, dict) and isinstance(domain.get("ips"), dict):
+                domain["ips"] = {key: value for key, value in domain["ips"].items() if key not in drop}
+        if not any(
+            isinstance(domain, dict) and domain.get("ips")
+            for domain in service.get("domains") or []
+        ):
+            emptied.append(service)
+    # Сервис, у которого не осталось ни одного рабочего профиля, убирается
+    # целиком. Плитка без кружков — та же ловушка: видна наравне с
+    # остальными, а включить нечем. И хуже: сервис DNS без адресов прокси
+    # страница приняла бы за «напрямую из hosts».
+    for service in emptied:
+        services.remove(service)
+        _log(f"hosts: у «{service.get('name')}» не осталось рабочих профилей DNS — сервис скрыт", "INFO")
 
 
 def _normalize_split_profiles(raw: object) -> list[dict[str, str]]:
@@ -531,6 +594,16 @@ def _load_split_catalog_data_with_sig(path: Path) -> tuple[dict, tuple[int, int]
             # Битое дополнение не должно гасить каталог целиком: без него
             # пропадают только профили net67.
             _log(f"Не удалось прочитать профили net67 hosts-каталога: {exc}", "WARNING")
+
+    # После профилей net67: они тоже бывают мёртвыми.
+    dead_path = path / NET67_DEAD_PROFILES_FILE_NAME
+    if dead_path.is_file():
+        try:
+            _apply_net67_dead_profiles(read_json(dead_path), profiles, services)
+        except Exception as exc:
+            # Битый список не должен гасить каталог: без него просто
+            # вернутся неработающие кружки.
+            _log(f"Не удалось прочитать список неработающих профилей hosts: {exc}", "WARNING")
 
     for service_path in _iter_json_files(path / "hosts"):
         try:

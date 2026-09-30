@@ -34,6 +34,24 @@ from __future__ import annotations
 #: разных умолчания в одном приложении было бы источником расхождений.
 PREFERRED_DNS_PROFILE = "xbox_dns"
 
+#: Порядок, в котором берётся профиль, если XBOX DNS у сервиса нет.
+#:
+#: Раньше брался первый в списке каталога, то есть XBOX DNS (old) —
+#: самый слабый из живых. Порядок — по замеру 30.09.2026, доля
+#: открывшихся доменов дома / на работе: Comss 83/81 % на 733 доменах,
+#: AstraCat 87/81 % (но покрывает втрое меньше), GeoHide 80/80 %,
+#: XBOX DNS (old) 74/65 %, DNS-AI 86/73 % на 129 доменах. Этот же
+#: порядок берёт запасной профиль, когда выбранный человеком убран из
+#: каталога (hosts/hosts.py, _rows_from_fallback_profile).
+PROFILE_ORDER: tuple[str, ...] = (
+    PREFERRED_DNS_PROFILE,
+    "comss_dns",
+    "astracat",
+    "geohide",
+    "xbox_dns_old",
+    "dns_ai",
+)
+
 #: Профиль прямой записи в hosts: настоящий адрес сервиса, без прокси.
 DIRECT_HOSTS_PROFILE = "hosts"
 
@@ -80,8 +98,9 @@ def choose_profile(available_profiles) -> str:
     profiles = [str(p).strip() for p in (available_profiles or ()) if str(p).strip()]
     if not profiles:
         return ""
-    if PREFERRED_DNS_PROFILE in profiles:
-        return PREFERRED_DNS_PROFILE
+    for profile in PROFILE_ORDER:
+        if profile in profiles:
+            return profile
     return profiles[0]
 
 
@@ -102,11 +121,17 @@ def build_default_selection(
         available = (available_profiles_by_service or {}).get(name)
 
         if is_ai_service(name) and ENABLE_AI_DNS_SUBSTITUTION_BY_DEFAULT:
-            # Нейросети включаем ровно на XBOX DNS. Молча подставить
-            # другой резолвер, если этого нет, — значит включить не то,
-            # что здесь написано, и не сказать об этом.
-            if PREFERRED_DNS_PROFILE in [str(p).strip() for p in (available or ())]:
-                selection[name] = PREFERRED_DNS_PROFILE
+            # Нейросети включаем на XBOX DNS, а где его нет — на
+            # следующем по замеру. Раньше без XBOX сервис оставался
+            # выключенным: «подставить другой молча — включить не то, что
+            # обещано». Но замер 30.09.2026 показал, что у Gemini, Copilot,
+            # Manus, OpenRouter и GitHub Copilot прокси XBOX DNS мертвы, и
+            # их кружок убран (json/hosts_catalog/net67_dead_profiles.json).
+            # Обещание было «нейросети работают из коробки», а не «именно
+            # через XBOX»; выключенный Gemini нарушал бы его сильнее.
+            profile = choose_profile(available)
+            if profile and profile != DIRECT_HOSTS_PROFILE:
+                selection[name] = profile
                 continue
 
         profile = choose_profile(available)
@@ -132,6 +157,7 @@ __all__ = [
     "DISABLED_BY_DEFAULT",
     "is_ai_service",
     "PREFERRED_DNS_PROFILE",
+    "PROFILE_ORDER",
     "build_default_selection",
     "choose_profile",
     "is_disabled_by_default",

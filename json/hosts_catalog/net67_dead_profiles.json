@@ -1,0 +1,197 @@
+{
+  "_": [
+    "Профили DNS, через которые сервис не открывается. Редактор hosts их не показывает",
+    "(src/hosts/proxy_domains.py, _apply_net67_dead_profiles). Файл ведётся руками по замерам:",
+    "до каждого адреса каталога — TLS с проверкой сертификата и GET /. Профиль убран у сервиса,",
+    "если не открылся главный сайт или открылось меньше 70 % доменов — в обоих замерах",
+    "(дом и работа, разные сети), провалы перепроверены. Кто выбрал убранный профиль, тому",
+    "hosts пишет запасной профиль, выбор в настройках не меняется."
+  ],
+  "checked": "2026-09-30",
+  "dead_profiles": {
+    "malw_dns_v2": "открылось доменов: дома 0 из 732, на работе 0 из 732; прокси 45.95.233.23 отдаёт чужой сертификат на все домены"
+  },
+  "services": {
+    "Autodesk": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается www.autodesk.com"
+    },
+    "Badoo": {
+      "comss_dns": "дома 3/6, на работе 3/6; не открывается badoo.com",
+      "malw_dns": "дома 3/6, на работе 3/6; не открывается badoo.com",
+      "xbox_dns": "дома 3/6, на работе 3/6; не открывается badoo.com"
+    },
+    "Broadcom": {
+      "malw_dns": "дома 0/4, на работе 0/4; не открывается access.broadcom.com"
+    },
+    "Canva": {
+      "malw_dns": "дома 0/4, на работе 0/4; не открывается canva.com, www.canva.com"
+    },
+    "ChatGPT & Sora (OpenAI)": {
+      "malw_dns": "дома 4/45, на работе 4/45; не открывается chatgpt.com"
+    },
+    "Chess": {
+      "geohide": "дома 2/3, на работе 2/3",
+      "xbox_dns_old": "дома 2/3, на работе 2/3"
+    },
+    "Claude": {
+      "malw_dns": "дома 8/16, на работе 8/16; не открывается claude.ai"
+    },
+    "DeepL": {
+      "malw_dns": "дома 0/32, на работе 0/32; не открывается deepl.com, www.deepl.com"
+    },
+    "Deezer": {
+      "malw_dns": "дома 0/58, на работе 0/58; не открывается deezer.com, www.deezer.com"
+    },
+    "Dell": {
+      "malw_dns": "дома 1/7, на работе 1/7; не открывается www.dell.com"
+    },
+    "Dyson": {
+      "malw_dns": "дома 2/3, на работе 2/3; не открывается www.dyson.com"
+    },
+    "ElevenLabs": {
+      "geohide": "дома 0/9, на работе 0/9; не открывается elevenlabs.io, www.elevenlabs.io",
+      "malw_dns": "дома 0/9, на работе 0/9; не открывается elevenlabs.io, www.elevenlabs.io",
+      "xbox_dns": "дома 4/9, на работе 4/9",
+      "xbox_dns_old": "дома 0/9, на работе 0/9; не открывается elevenlabs.io, www.elevenlabs.io"
+    },
+    "Elgato": {
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается www.elgato.com"
+    },
+    "Fitbit": {
+      "malw_dns": "дома 0/4, на работе 0/4; не открывается www.fitbit.com, fitbit.google.com"
+    },
+    "Framer": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается framer.com, www.framer.com"
+    },
+    "Gemini AI": {
+      "malw_dns": "дома 24/40, на работе 24/40; не открывается gemini.google.com",
+      "xbox_dns": "дома 21/40, на работе 21/40; не открывается gemini.google.com"
+    },
+    "GitHub Copilot": {
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается api.individual.githubcopilot.com",
+      "xbox_dns": "дома 0/1, на работе 0/1; не открывается api.individual.githubcopilot.com"
+    },
+    "Grok": {
+      "malw_dns": "дома 0/26, на работе 0/26; не открывается grok.com"
+    },
+    "Guidedhacking": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается guidedhacking.com, www.guidedhacking.com"
+    },
+    "Imgur": {
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается api.imgur.com"
+    },
+    "Intel": {
+      "astracat": "дома 2/3, на работе 1/3; не открывается www.intel.com",
+      "comss_dns": "дома 1/3, на работе 0/3; не открывается www.intel.com",
+      "geohide": "дома 2/3, на работе 1/3; не открывается www.intel.com",
+      "malw_dns": "дома 1/3, на работе 0/3; не открывается www.intel.com",
+      "xbox_dns": "дома 2/3, на работе 1/3; не открывается www.intel.com",
+      "xbox_dns_old": "дома 2/3, на работе 0/3; не открывается www.intel.com"
+    },
+    "Linear.app": {
+      "malw_dns": "дома 0/7, на работе 0/7; не открывается linear.app"
+    },
+    "Manus": {
+      "malw_dns": "дома 1/3, на работе 1/3; не открывается manus.im",
+      "xbox_dns": "дома 0/3, на работе 0/3; не открывается manus.im"
+    },
+    "Microsoft (Copilot, Designer, Xbox)": {
+      "malw_dns": "дома 4/11, на работе 3/11; не открывается copilot.microsoft.com",
+      "xbox_dns": "дома 7/11, на работе 7/11; не открывается copilot.microsoft.com"
+    },
+    "Naukri": {
+      "geohide": "дома 106/155, на работе 106/155",
+      "xbox_dns_old": "дома 106/155, на работе 78/155"
+    },
+    "Notion": {
+      "astracat": "дома 3/6, на работе 3/6",
+      "malw_dns": "дома 3/6, на работе 3/6; не открывается notion.so, www.notion.so"
+    },
+    "Nvidia": {
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается developer.nvidia.com"
+    },
+    "OpenRouter": {
+      "xbox_dns": "дома 0/1, на работе 0/1; не открывается openrouter.ai"
+    },
+    "Parsec": {
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается builds.parsec.app"
+    },
+    "Patreon": {
+      "malw_dns": "дома 0/5, на работе 0/5; не открывается patreon.com, www.patreon.com",
+      "xbox_dns_old": "дома 0/5, на работе 0/5; не открывается patreon.com, www.patreon.com"
+    },
+    "Posthog": {
+      "comss_dns": "дома 0/1, на работе 0/1; не открывается eu.posthog.com",
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается eu.posthog.com"
+    },
+    "Pump.fun": {
+      "malw_dns": "дома 0/4, на работе 0/4; не открывается pump.fun"
+    },
+    "Qwant": {
+      "astracat": "дома 1/2, на работе 0/2",
+      "comss_dns": "дома 1/2, на работе 1/2",
+      "geohide": "дома 1/2, на работе 1/2",
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается qwant.com, www.qwant.com",
+      "xbox_dns_old": "дома 1/2, на работе 1/2"
+    },
+    "Spotify": {
+      "malw_dns": "дома 0/31, на работе 0/31; не открывается open.spotify.com, www.spotify.com",
+      "xbox_dns_old": "дома 19/31, на работе 16/31"
+    },
+    "Square": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается api.squareup.com"
+    },
+    "Strava": {
+      "malw_dns": "дома 0/26, на работе 0/26; не открывается strava.com, www.strava.com"
+    },
+    "Tailscale": {
+      "astracat": "дома 0/1, на работе 0/1; не открывается controlplane.tailscale.com",
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается controlplane.tailscale.com"
+    },
+    "TikTok": {
+      "malw_dns": "дома 1/2, на работе 1/2",
+      "xbox_dns_old": "дома 0/2, на работе 0/2; не открывается tiktok.com, www.tiktok.com"
+    },
+    "Trae.ai": {
+      "malw_dns": "дома 0/4, на работе 0/4; не открывается www.trae.ai, api.trae.ai"
+    },
+    "Tria.ge": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается tria.ge, www.tria.ge"
+    },
+    "Truth Social": {
+      "astracat": "дома 0/2, на работе 0/2; не открывается truthsocial.com"
+    },
+    "Tuta": {
+      "comss_dns": "дома 0/27, на работе 6/27; не открывается app.tuta.com",
+      "geohide": "дома 0/27, на работе 1/27",
+      "malw_dns": "дома 0/27, на работе 6/27; не открывается app.tuta.com",
+      "xbox_dns": "дома 0/27, на работе 6/27; не открывается app.tuta.com",
+      "xbox_dns_old": "дома 0/27, на работе 0/27; не открывается app.tuta.com"
+    },
+    "Twitch": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается gql.twitch.tv",
+      "xbox_dns_old": "дома 1/2, на работе 1/2"
+    },
+    "Weather Underground": {
+      "comss_dns": "дома 2/3, на работе 1/3",
+      "geohide": "дома 2/3, на работе 1/3",
+      "malw_dns": "дома 2/3, на работе 0/3",
+      "xbox_dns": "дома 2/3, на работе 0/3",
+      "xbox_dns_old": "дома 2/3, на работе 1/3"
+    },
+    "Weather.com": {
+      "malw_dns": "дома 0/2, на работе 0/2; не открывается weather.com"
+    },
+    "Web Archive": {
+      "malw_dns": "дома 0/1, на работе 0/1; не открывается web.archive.org"
+    },
+    "Windsurf": {
+      "malw_dns": "дома 0/9, на работе 0/9; не открывается windsurf.com"
+    },
+    "Xerox": {
+      "comss_dns": "дома 1/2, на работе 1/2",
+      "malw_dns": "дома 1/2, на работе 1/2",
+      "xbox_dns": "дома 1/2, на работе 1/2"
+    }
+  }
+}
