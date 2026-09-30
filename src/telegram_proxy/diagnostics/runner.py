@@ -81,6 +81,8 @@ def run_all(
         proxy_future = executor.submit(_test_proxy_liveness, "127.0.0.1", proxy_port)
         winws_future = executor.submit(_check_winws2_running)
 
+        upstream_state = _load_upstream_state()
+
         upstream_future = None
         upstream_target = telegram_proxy_settings.load_upstream_test_target()
         if upstream_target is not None:
@@ -129,8 +131,11 @@ def run_all(
         )
 
         dc_lines: list[str] = []
+        dc_probes: list[dict] = []
         for future in concurrent.futures.as_completed(dc_futures):
-            dc_lines.append(future.result())
+            probe = future.result()
+            dc_probes.append(probe)
+            dc_lines.append(probe["line"])
             if progress_callback is not None:
                 try:
                     progress_callback("\n".join(results + dc_lines))
@@ -140,8 +145,10 @@ def run_all(
         results.extend(dc_lines)
         results.append("")
         results.append("  Определение типа блокировки:")
-        results.append(f"  {sni_future.result()}")
-        results.append(f"  {http_future.result()}")
+        sni_result = sni_future.result()
+        http_result = http_future.result()
+        results.append(f"  {sni_result['line']}")
+        results.append(f"  {http_result['line']}")
         publish()
 
         wss_results = [future.result() for future in wss_futures]
@@ -198,6 +205,21 @@ def run_all(
         else:
             results.append(f"  SOCKS5: {proxy_result['status']} — {proxy_result.get('error', '')}")
 
+        if upstream_future is None and upstream_state == UPSTREAM_EMPTY:
+            # Раньше в этом случае раздела не было вовсе. Внешний прокси
+            # включён, проверять нечего — и отчёт молчал, хотя это ровно
+            # то место, куда прокси уходит, когда прямые пути закрыты.
+            results.extend(
+                [
+                    "",
+                    "=" * 76,
+                    "  ВНЕШНИЙ ПРОКСИ",
+                    "=" * 76,
+                    "  Включён, но не задан: адреса нет, встроенных в эту сборку нет.",
+                    "  Запасной путь на случай блокировки ведёт в никуда.",
+                ]
+            )
+
         if upstream_future is not None:
             upstream_result = upstream_future.result()
             up_host = upstream_result.get("host", "?")
@@ -232,7 +254,16 @@ def run_all(
             "=" * 76,
             "  ИТОГ",
             "=" * 76,
-            _build_summary(dc_lines, wss_results, proxy_result, winws2_running),
+            _build_summary(
+                dc_lines,
+                wss_results,
+                proxy_result,
+                winws2_running,
+                dc_probes=dc_probes,
+                foreign_sni=sni_result,
+                http80=http_result,
+                upstream=upstream_state,
+            ),
             f"\nВремя тестирования: {elapsed:.1f}s",
         ]
     )
@@ -467,7 +498,14 @@ def _test_upstream_proxy(
         result["error"] = str(exc)
     return result
 
-def _test_single_ip(ip: str, dc: str, wss: str) -> str:
+def _test_single_ip(ip: str, dc: str, wss: str) -> dict:
+    """Прямая проба адреса: TCP, затем TLS.
+
+    Возвращает строку для экрана и разобранный исход. Раньше отдавалась
+    одна строка, и итог отчёта вычитывал из неё исход поиском подстрок —
+    а вердикт о типе блокировки не читал его вовсе.
+    """
+    result = {"ip": ip, "dc": dc, "tcp": False, "tls": None, "line": ""}
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5)
     t0 = time.time()
@@ -476,8 +514,10 @@ def _test_single_ip(ip: str, dc: str, wss: str) -> str:
         tcp_ms = (time.time() - t0) * 1000
     except Exception:
         sock.close()
-        return f"{ip:<20} {dc:<12} {'FAIL':>8}  {'—':>8}  TCP не подключается"
+        result["line"] = f"{ip:<20} {dc:<12} {'FAIL':>8}  {'—':>8}  TCP не подключается"
+        return result
 
+    result["tcp"] = True
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
@@ -486,61 +526,98 @@ def _test_single_ip(ip: str, dc: str, wss: str) -> str:
         secure_sock = context.wrap_socket(sock, server_hostname="telegram.org")
         tls_ms = (time.time() - t1) * 1000
         secure_sock.close()
-        return f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {tls_ms:>6.0f}ms  OK"
+        result["tls"] = "ok"
+        result["line"] = f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {tls_ms:>6.0f}ms  OK"
     except ssl.SSLError as exc:
         tls_ms = (time.time() - t1) * 1000
         sock.close()
-        return f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {tls_ms:>6.0f}ms  BLOCKED ({exc.reason})"
+        result["tls"] = "blocked"
+        result["line"] = f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {tls_ms:>6.0f}ms  BLOCKED ({exc.reason})"
     except socket.timeout:
         sock.close()
-        return f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {'5000':>6}ms  TIMEOUT"
+        result["tls"] = "timeout"
+        result["line"] = f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {'5000':>6}ms  TIMEOUT"
     except Exception as exc:
         sock.close()
-        return f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {'—':>8}  {type(exc).__name__}"
+        result["tls"] = "error"
+        result["line"] = f"{ip:<20} {dc:<12} {tcp_ms:>6.0f}ms  {'—':>8}  {type(exc).__name__}"
+    return result
 
-def _test_sni_vs_ip() -> str:
+def _test_sni_vs_ip() -> dict:
+    """TLS с чужим SNI на адрес Telegram.
+
+    Отделяет «режут по имени» от «режут по адресу». Раньше TCP и TLS
+    здесь не различались: таймаут соединения и таймаут рукопожатия
+    попадали в одну ветку и подписывались одинаково, хотя значат разное.
+    Не установилось соединение — до имени дело не дошло вовсе, и вывод о
+    SNI из такой пробы делать нельзя.
+    """
     ip = "149.154.167.50"
+    result = {"tcp": False, "tls": None, "line": ""}
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5)
     try:
         sock.connect((ip, 443))
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        t0 = time.time()
+    except Exception:
+        sock.close()
+        result["line"] = (
+            f"TLS с чужим SNI (example.com → {ip}): TCP не устанавливается "
+            "→ до имени дело не доходит, режут по адресу"
+        )
+        return result
+
+    result["tcp"] = True
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    t0 = time.time()
+    try:
         secure_sock = context.wrap_socket(sock, server_hostname="example.com")
         ms = (time.time() - t0) * 1000
         secure_sock.close()
-        return f"TLS с чужим SNI (example.com → {ip}): OK ({ms:.0f}ms) → блокировка по SNI"
+        result["tls"] = "ok"
+        result["line"] = f"TLS с чужим SNI (example.com → {ip}): OK ({ms:.0f}ms) → блокировка по SNI"
     except ssl.SSLError:
         sock.close()
-        return f"TLS с чужим SNI (example.com → {ip}): BLOCKED → блокировка по IP (не SNI)"
+        result["tls"] = "blocked"
+        result["line"] = f"TLS с чужим SNI (example.com → {ip}): BLOCKED → TLS рвётся независимо от имени"
     except socket.timeout:
         sock.close()
-        return f"TLS с чужим SNI (example.com → {ip}): TIMEOUT → блокировка по IP (не SNI)"
+        result["tls"] = "timeout"
+        result["line"] = f"TLS с чужим SNI (example.com → {ip}): TIMEOUT → TLS рвётся независимо от имени"
     except Exception as exc:
         sock.close()
-        return f"TLS с чужим SNI: {type(exc).__name__}"
+        result["tls"] = "error"
+        result["line"] = f"TLS с чужим SNI: {type(exc).__name__}"
+    return result
 
-def _test_http_port80() -> str:
+def _test_http_port80() -> dict:
+    """Открытый HTTP на тот же адрес.
+
+    Если закрыт и он, дело не в TLS вообще: адрес недоступен целиком.
+    """
     ip = "149.154.167.50"
+    result = {"tcp": False, "ok": False, "line": ""}
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5)
     try:
         t0 = time.time()
         sock.connect((ip, 80))
+        result["tcp"] = True
         sock.send(b"GET / HTTP/1.0\r\nHost: test\r\n\r\n")
         sock.settimeout(3)
         data = sock.recv(1024)
         ms = (time.time() - t0) * 1000
         sock.close()
-        return f"HTTP {ip}:80 → {len(data)} байт ({ms:.0f}ms) — НЕ блокируется"
+        result["ok"] = True
+        result["line"] = f"HTTP {ip}:80 → {len(data)} байт ({ms:.0f}ms) — НЕ блокируется"
     except socket.timeout:
         sock.close()
-        return f"HTTP {ip}:80 → TIMEOUT — блокируется"
+        result["line"] = f"HTTP {ip}:80 → TIMEOUT — блокируется"
     except Exception as exc:
         sock.close()
-        return f"HTTP {ip}:80 → {type(exc).__name__}"
+        result["line"] = f"HTTP {ip}:80 → {type(exc).__name__}"
+    return result
 
 def _check_winws2_running() -> bool:
     try:
@@ -553,11 +630,183 @@ def _check_winws2_running() -> bool:
     except Exception:
         return False
 
+#: Виды блокировки. Строки, а не перечисление: они уходят в проверки и
+#: в журнал, и читать их там должен человек.
+BLOCK_NONE = "none"
+BLOCK_IP = "ip"
+BLOCK_PARTIAL_IP = "partial_ip"
+BLOCK_SNI = "sni"
+BLOCK_TLS = "tls"
+BLOCK_UNKNOWN = "unknown"
+
+#: Состояние внешнего прокси.
+UPSTREAM_OFF = "off"
+UPSTREAM_READY = "ready"
+UPSTREAM_EMPTY = "empty"
+
+
+def classify_blocking(dc_probes, *, foreign_sni=None, http80=None) -> dict:
+    """Какая блокировка перед нами — по собранным пробам.
+
+    Раньше итог писал «блокировка TLS к IP Telegram (DPI)» при любом
+    числе заблокированных адресов, одной строкой, и собственных проб не
+    смотрел вообще. В отчёте, где TCP не устанавливался ни к одному из
+    шестнадцати адресов, это была прямая неправда: SYN без ответа — это
+    не DPI, инспектировать там нечего. И неправда с последствием: вывод
+    «DPI» тянет за собой совет запустить обход, а обход против такой
+    блокировки бессилен.
+
+    Порядок проверок и есть смысл функции:
+
+    * соединение не устанавливается ни к одному адресу — режут по IP;
+    * к части не устанавливается — по IP, но частично;
+    * устанавливается, но TLS рвётся — это DPI, и дальше решает проба с
+      чужим именем: прошла — режут по SNI, не прошла — по адресу.
+
+    ``dpi_can_help`` — есть ли хоть одно установленное и порванное
+    соединение. Только с такими и работает обход: winws2 меняет пакеты
+    уже установленного соединения, а к несуществующему ему прикладывать
+    нечего.
+    """
+    probes = [p for p in (dc_probes or ()) if isinstance(p, dict)]
+    dead = [p for p in probes if not p.get("tcp")]
+    broken = [p for p in probes if p.get("tcp") and p.get("tls") != "ok"]
+    fine = [p for p in probes if p.get("tcp") and p.get("tls") == "ok"]
+
+    def _verdict(kind: str, title: str, detail: str = "") -> dict:
+        return {
+            "kind": kind,
+            "title": title,
+            "detail": detail,
+            "dpi_can_help": bool(broken),
+            "dead": len(dead),
+            "broken": len(broken),
+            "fine": len(fine),
+            "total": len(probes),
+        }
+
+    if not probes:
+        return _verdict(BLOCK_UNKNOWN, "Тип: не определён — пробы не дали результата")
+
+    if not dead and not broken:
+        return _verdict(BLOCK_NONE, "Блокировки не обнаружено")
+
+    if dead and not broken and not fine:
+        also = []
+        if isinstance(http80, dict) and not http80.get("tcp"):
+            also.append("порт 80 тоже")
+        if isinstance(foreign_sni, dict) and not foreign_sni.get("tcp"):
+            also.append("с чужим SNI тоже")
+        tail = f" ({', '.join(also)})" if also else ""
+        return _verdict(
+            BLOCK_IP,
+            "Тип: блокировка по IP — соединение не устанавливается",
+            f"TCP не открылся ни к одному из {len(probes)} адресов Telegram{tail}. "
+            "Это не DPI: инспектировать нечего, до TLS дело не доходит.",
+        )
+
+    if dead:
+        return _verdict(
+            BLOCK_PARTIAL_IP,
+            "Тип: частичная блокировка по IP",
+            f"К {len(dead)} из {len(probes)} адресов соединение не устанавливается вовсе"
+            + (f", ещё у {len(broken)} рвётся TLS." if broken else "."),
+        )
+
+    # Соединения есть, рвётся TLS: это DPI.
+    if isinstance(foreign_sni, dict) and foreign_sni.get("tls") == "ok":
+        return _verdict(
+            BLOCK_SNI,
+            "Тип: блокировка по SNI (DPI)",
+            "С чужим именем TLS проходит, с именем Telegram — рвётся.",
+        )
+    return _verdict(
+        BLOCK_TLS,
+        "Тип: блокировка TLS к адресам Telegram (DPI)",
+        "TCP устанавливается, TLS рвётся независимо от имени.",
+    )
+
+
+def classify_upstream(*, effective: bool, host: str, preset_id: str, has_bundled: bool) -> str:
+    """Есть ли внешнему прокси куда вести.
+
+    ``effective`` — включён ли он на деле. В режиме MTProxy он включён
+    всегда, тумблер там не решает ничего, и это стоит держать в голове:
+    выключенный на экране внешний прокси в этом режиме всё равно в деле.
+
+    Пустой адрес ещё не значит «некуда»: есть встроенные в сборку
+    адреса, и без своего берётся первый из них. «Некуда» — это когда нет
+    ни своего, ни выбранного, ни встроенных.
+    """
+    if not effective:
+        return UPSTREAM_OFF
+    if str(host or "").strip() or str(preset_id or "").strip() or has_bundled:
+        return UPSTREAM_READY
+    return UPSTREAM_EMPTY
+
+
+def _load_upstream_state() -> str:
+    """Состояние внешнего прокси по настройкам. Сбой — считаем выключенным.
+
+    Выключенным, а не пустым: пустое состояние в отчёте тянет за собой
+    предупреждение, и выдать его по ошибке чтения значит соврать.
+    """
+    try:
+        from settings.store import (
+            get_tg_proxy_mode,
+            get_tg_proxy_upstream_enabled,
+            get_tg_proxy_upstream_host,
+            get_tg_proxy_upstream_preset_id,
+        )
+        from telegram_proxy.config.upstream_catalog import UpstreamPresetResolver
+
+        effective = telegram_proxy_settings.effective_upstream_enabled(
+            get_tg_proxy_mode(), get_tg_proxy_upstream_enabled()
+        )
+        has_bundled = UpstreamPresetResolver.load_from_runtime().first_socks5() is not None
+        return classify_upstream(
+            effective=bool(effective),
+            host=str(get_tg_proxy_upstream_host() or ""),
+            preset_id=str(get_tg_proxy_upstream_preset_id() or ""),
+            has_bundled=bool(has_bundled),
+        )
+    except Exception as exc:
+        log(f"[TG_DIAG] состояние внешнего прокси не прочитано: {exc}", "DEBUG")
+        return UPSTREAM_OFF
+
+
+def _probes_from_lines(dc_lines) -> list[dict]:
+    """Разбирает старые строки проб в исходы.
+
+    Только для совместимости: так _build_summary зовут проверки, у
+    которых на руках одни строки. Основной путь передаёт исходы сразу.
+    """
+    probes: list[dict] = []
+    for line in dc_lines or ():
+        text = str(line or "")
+        if "TCP не подключается" in text:
+            probes.append({"tcp": False, "tls": None, "line": text})
+        elif text.strip().endswith("OK"):
+            probes.append({"tcp": True, "tls": "ok", "line": text})
+        elif "BLOCKED" in text:
+            probes.append({"tcp": True, "tls": "blocked", "line": text})
+        elif "TIMEOUT" in text:
+            probes.append({"tcp": True, "tls": "timeout", "line": text})
+        elif text.strip():
+            probes.append({"tcp": True, "tls": "error", "line": text})
+    return probes
+
+
 def _build_summary(
     dc_lines: list[str],
     wss_results: list[dict],
     proxy_result: dict,
     winws2_running: bool,
+    *,
+    dc_probes: list[dict] | None = None,
+    foreign_sni: dict | None = None,
+    http80: dict | None = None,
+    upstream: str = UPSTREAM_OFF,
 ) -> str:
     def _dc_num(name: str):
         if not name.startswith("DC"):
@@ -601,11 +850,26 @@ def _build_summary(
     proxy_running = proxy_result["status"] == "OK"
     proxy_not_running = proxy_result["status"] == "NOT_RUNNING"
 
-    summary: list[str] = ["── Тип блокировки ──", f"  Доступно: {ok_count}  |  Заблокировано: {blocked}"]
+    verdict = classify_blocking(
+        dc_probes if dc_probes is not None else _probes_from_lines(dc_lines),
+        foreign_sni=foreign_sni,
+        http80=http80,
+    )
+    dpi_can_help = bool(verdict["dpi_can_help"])
+
+    # Единица счёта названа явно. Рядом стоит вердикт, который считает
+    # адреса, а их больше, чем дата-центров: «заблокировано 11» и «ни к
+    # одному из 16» без подписи читались как противоречие.
+    summary: list[str] = [
+        "── Тип блокировки ──",
+        f"  Дата-центров доступно: {ok_count}  |  заблокировано: {blocked}",
+    ]
     if blocked == 0 and ok_count > 0:
         summary.append("  Блокировки не обнаружено")
     elif blocked > 0:
-        summary.append("  Тип: блокировка TLS к IP Telegram (DPI)")
+        summary.append(f"  {verdict['title']}")
+        if verdict["detail"]:
+            summary.append(f"  {verdict['detail']}")
         summary.append("  (подробности в секции 'Определение типа блокировки' выше)")
 
     summary.extend(["", "── Статус дата-центров ──"])
@@ -657,6 +921,25 @@ def _build_summary(
     else:
         summary.append(f"  Прокси: ошибка ({proxy_result.get('error', '?')})")
     summary.append(f"  {ENGINE_WINWS2}: {'запущен' if winws2_running else 'не запущен'}")
+    if upstream == UPSTREAM_EMPTY:
+        summary.append("  Внешний прокси: включён, но не задан")
+    elif upstream == UPSTREAM_READY:
+        summary.append("  Внешний прокси: задан")
+
+    if (
+        proxy_result.get("status") == "TIMEOUT"
+        and not relay_ok
+        and blocked > 0
+        and verdict["fine"] == 0
+    ):
+        # Таймаут вместо «порт закрыт» значит, что прокси жив и принял
+        # соединение. Висит он потому, что идти некуда, — а без этой
+        # строки таймаут читается как «прокси сломался».
+        route_tail = ", внешний прокси не задан" if upstream == UPSTREAM_EMPTY else ""
+        summary.append(
+            "  (прокси принял соединение, но идти ему некуда: relay недоступен, "
+            f"прямой путь закрыт{route_tail})"
+        )
 
     summary.extend(["", "── Рекомендации ──"])
     if blocked == 0 and ok_count > 0:
@@ -682,12 +965,28 @@ def _build_summary(
         else:
             summary.append(f"  [~] {names}: WSS relay доступен, но прокси не запущен")
 
-    if blocked_no_wss:
+    if blocked_no_wss and not dpi_can_help and verdict["fine"] == 0:
+        # Закрыто всё. Перечислять одиннадцать имён дважды подряд и
+        # писать «часть контента может не загружаться» — значит
+        # преуменьшить: не загружается ничего.
+        summary.append(
+            "  [x] Не открывается ни один дата-центр, relay тоже — соединение не "
+            f"устанавливается вовсе. Обход DPI тут бессилен: {ENGINE_WINWS2} работает "
+            "только с установленными соединениями"
+        )
+    elif blocked_no_wss:
         names = ", ".join(sorted(blocked_no_wss))
         summary.append(
             f"  [!] {names}: заблокированы, WSS relay нет — часть контента (эмодзи, стикеры) может не загружаться"
         )
-        if winws2_running:
+        if not dpi_can_help:
+            # Совет «запустите обход» здесь был бы вредным: человек
+            # запускает, ничего не меняется, и он ищет поломку в обходе.
+            summary.append(
+                f"  [x] {names}: соединение не устанавливается вовсе — обход DPI тут "
+                f"бессилен, {ENGINE_WINWS2} работает только с установленными соединениями"
+            )
+        elif winws2_running:
             summary.append(f"  [~] {ENGINE_WINWS2} запущен — {names} могут работать через zapret")
         else:
             summary.append(f"  [!] Для {names} запустите {ENGINE_WINWS2}/zapret на главной странице")
@@ -697,7 +996,20 @@ def _build_summary(
 
     if not relay_ok and blocked > 0:
         summary.append("  [x] прямой WSS relay сейчас недоступен — проверьте Telegram на практике")
-        if not winws2_running:
+        if not dpi_can_help:
+            if upstream == UPSTREAM_EMPTY:
+                summary.append(
+                    "  [!] Внешний прокси включён, но не задан. При блокировке по IP это "
+                    "единственный путь — укажите SOCKS5 в настройках прокси или используйте VPN"
+                )
+            elif upstream == UPSTREAM_READY:
+                summary.append(
+                    "  [~] Трафик пойдёт через внешний прокси — если Telegram не работает, "
+                    "проверьте его раздел выше"
+                )
+            else:
+                summary.append("  [!] Нужен внешний SOCKS5 или VPN: прямые пути закрыты")
+        elif not winws2_running:
             summary.append(f"  [!] Запустите {ENGINE_WINWS2}/zapret или используйте VPN")
 
     return "\n".join(summary)
