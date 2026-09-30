@@ -267,6 +267,16 @@ class _EntryRow(QFrame):
         self._pressed_at: QPoint | None = None
         self._hovered = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Мышью открывается — значит, и с клавиатуры: Tab до записи,
+        # Enter или пробел.
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            event.accept()
+            self._on_activate()
+            return
+        super().keyPressEvent(event)
 
     def watch(self, label: QLabel) -> None:
         """Выделяемый текст сам забирает мышь — щелчок по нему ловим фильтром."""
@@ -316,9 +326,17 @@ class _EntryRow(QFrame):
         self.update()
         super().leaveEvent(event)
 
+    def focusInEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        self.update()
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        self.update()
+        super().focusOutEvent(event)
+
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
         super().paintEvent(event)
-        if not self._hovered:
+        if not (self._hovered or self.hasFocus()):
             return
         # Подсветка под курсором — единственное, что говорит «это
         # нажимается» до щелчка. Текст — дочерние виджеты, он поверх.

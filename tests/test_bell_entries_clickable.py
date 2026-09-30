@@ -119,6 +119,15 @@ class PanelClickTests(unittest.TestCase):
         self.assertEqual(opened.call_args.args[0].source, "global_logger")
         self.assertFalse(panel.isVisible())
 
+    def test_enter_on_focused_row_opens_it(self) -> None:
+        panel, opened = self._panel({"level": "info", "title": "Готово", "content": "", "source": "launch.x"})
+        row = self._rows(panel)[0]
+        self.assertEqual(row.focusPolicy(), Qt.FocusPolicy.TabFocus)
+
+        QTest.keyClick(row, Qt.Key.Key_Return)
+
+        opened.assert_called_once()
+
     def test_click_on_selectable_text_opens_too(self) -> None:
         panel, opened = self._panel(
             {"level": "warning", "title": "Внимание", "content": "Длинный текст ошибки", "source": "launch.x"},

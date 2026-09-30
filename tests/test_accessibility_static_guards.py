@@ -81,6 +81,9 @@ ALLOWED_NO_FOCUS_SOURCES = {
     "src/ui/segmented_accessibility.py",
     "src/ui/widgets/fluent_scrollbar.py",
     "src/ui/widgets/win11_controls.py",
+    # Точка состояния из zapret 21.1.6.45: NoFocus — пока она лишь
+    # украшение; выключателем (set_clickable) она берёт StrongFocus.
+    "src/ui/pulsing_dot.py",
 }
 
 

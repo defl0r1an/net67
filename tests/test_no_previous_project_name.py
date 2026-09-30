@@ -63,7 +63,6 @@ ALLOWED: dict[str, str] = {
     "tests/test_max_blocker_hosts_marker.py": "проверка уборки старого блока",
     "tests/test_gui_autostart_contract.py": "проверка удаления прежней задачи и ярлыка",
     "tests/test_close_dialog_accessibility.py": "рассказ о том, как имя однажды протухло",
-    "tests/test_build_resource_layout.py": "проверки сборочной системы прежнего проекта",
     "tests/test_builtin_profile_catalog.py": "проверка раскладки списков",
     "tests/test_quick_actions_bar_layout.py": "проверка прежнего текста",
     "tests/test_win11_toggle_row.py": "проверка прежнего текста",
