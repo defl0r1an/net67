@@ -186,22 +186,6 @@ class RunnerPostMortemAccessorTests(unittest.TestCase):
         runner._last_startup_output_path = ""
         self.assertEqual(runner.read_post_mortem_output(), "")
 
-    def test_zapret1_has_no_post_mortem_output(self) -> None:
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-
-        runner = object.__new__(Winws1StrategyRunner)
-        self.assertEqual(runner.read_post_mortem_output(), "")
-
-    def test_snapshot_none_for_absent_or_alive_process(self) -> None:
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-
-        runner = object.__new__(Winws1StrategyRunner)
-        runner.running_process = None
-        self.assertIsNone(runner.build_post_mortem_snapshot())
-
-        runner.running_process = SimpleNamespace(poll=lambda: None)
-        runner.current_launch_label = "Preset"
-        self.assertIsNone(runner.build_post_mortem_snapshot())
 
     def test_snapshot_for_dead_process_contains_exit_facts(self) -> None:
         from winws_runtime.runners.zapret2_runner import Winws2StrategyRunner

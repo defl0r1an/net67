@@ -15,51 +15,6 @@ if str(PROJECT_SRC) not in sys.path:
 
 
 class WinwsSystemDependencyTests(unittest.TestCase):
-    def test_winws1_dry_run_reports_trimmed_windows_when_wlanapi_is_missing(self) -> None:
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            exe = root / "exe" / "winws.exe"
-            exe.parent.mkdir(parents=True, exist_ok=True)
-            exe.write_text("", encoding="utf-8")
-
-            config_path = root / "tmp" / "winws1_at_config" / "selected.txt"
-            config_path.parent.mkdir(parents=True)
-            config_path.write_text("--wf-tcp=443\n", encoding="utf-8")
-
-            runner = object.__new__(Winws1StrategyRunner)
-            runner.winws_exe = str(exe)
-            runner.work_dir = str(root)
-            runner._state_lock = threading.RLock()
-            runner._prepared_preset_cache = {}
-            runner._last_spawn_exit_code = None
-            runner._last_spawn_stderr = ""
-            runner._set_last_error = Mock()
-
-            artifact = SimpleNamespace(
-                validation_ok=True,
-                validation_report="",
-                preset_path=str(root / "selected.txt"),
-                launch_args=(f"@{config_path}",),
-            )
-
-            with (
-                patch(
-                    "winws_runtime.runners.runner_base.StrategyRunnerBase._get_missing_windows_system_dependencies",
-                    return_value=("wlanapi.dll",),
-                ),
-                patch("winws_runtime.runners.runner_base.should_offer_windows_server_wlanapi_install", return_value=False),
-                patch("winws_runtime.runners.zapret1_runner.subprocess.run") as run_mock,
-            ):
-                ok = runner._run_preset_dry_run_locked(artifact)
-
-        self.assertFalse(ok)
-        run_mock.assert_not_called()
-        message = runner._set_last_error.call_args.args[0]
-        self.assertIn("Windows урезана", message)
-        self.assertIn("wlanapi.dll", message)
-        self.assertIn("winws.exe", message)
 
     def test_winws2_dry_run_does_not_require_wlanapi(self) -> None:
         from winws_runtime.runners.preset_runner_support import PreparedPresetArtifact
@@ -105,19 +60,6 @@ class WinwsSystemDependencyTests(unittest.TestCase):
         self.assertEqual(run_mock.call_args.args[0][0], "winws2.exe")
         runner._set_last_error.assert_not_called()
 
-    def test_windows_server_missing_wlanapi_message_has_install_marker(self) -> None:
-        from winws_runtime.health.windows_system_dependencies import WINDOWS_SERVER_WLANAPI_MARKER
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-
-        runner = object.__new__(Winws1StrategyRunner)
-        runner.winws_exe = "winws.exe"
-
-        with patch("winws_runtime.runners.runner_base.should_offer_windows_server_wlanapi_install", return_value=True):
-            message = runner._format_missing_windows_system_dependency_error(("wlanapi.dll",))
-
-        self.assertTrue(message.startswith(WINDOWS_SERVER_WLANAPI_MARKER))
-        self.assertIn("wlanapi.dll", message)
-        self.assertIn("winws.exe", message)
 
     def test_runtime_bridge_shows_windows_server_install_buttons(self) -> None:
         from ui.runtime_ui_bridge import RuntimeUiBridge

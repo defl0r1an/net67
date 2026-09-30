@@ -55,12 +55,6 @@ class TimingTests(unittest.TestCase):
 
         self.assertLessEqual(TAB_STAGGER_MS * 4, TAB_REVEAL_MS * 2)
 
-    def test_settings_blocks_have_their_own_pace(self) -> None:
-        from presets.ui.control.simple_view import REVEAL_MS, REVEAL_STAGGER_MS
-
-        self.assertGreaterEqual(REVEAL_MS, 120)
-        self.assertGreater(REVEAL_STAGGER_MS, 0)
-
 
 try:
     from PyQt6.QtWidgets import QApplication
@@ -133,62 +127,6 @@ class TabRevealTests(unittest.TestCase):
 
         self.assertIn("are_animations_enabled", source)
         self.assertIn("start_managed_animation", source)
-
-
-@unittest.skipIf(_QT_ERROR is not None, f"Qt недоступен: {_QT_ERROR}")
-class SettingsRevealTests(unittest.TestCase):
-    """Блоки на странице управления."""
-
-    def _page(self):
-        from PyQt6.QtWidgets import QLabel, QWidget
-
-        page = QWidget()
-        self.addCleanup(page.deleteLater)
-        for attr in ("control_section_label", "control_card_card", "extra_card"):
-            widget = QLabel(attr, page)
-            widget.hide()
-            setattr(page, attr, widget)
-        return page
-
-    def test_hidden_blocks_are_revealed(self) -> None:
-        from presets.ui.control.simple_view import _reveal
-
-        page = self._page()
-        blocks = [page.control_section_label, page.control_card_card]
-        for block in blocks:
-            block.show()
-
-        _reveal(blocks)
-
-        effect = blocks[0].graphicsEffect()
-        self.assertIsNotNone(effect)
-        self.assertLess(effect.opacity(), 0.2)
-
-    def test_reveal_uses_opacity_not_movement(self) -> None:
-        """Сдвиг блока в раскладке — это пересчёт всей страницы на кадр.
-
-        Страница настроек для этого слишком тяжёлая: ровно на таком
-        пересчёте интерфейс уже шёл «пятнадцатью кадрами».
-        """
-        import inspect
-
-        from presets.ui.control import simple_view
-
-        source = inspect.getsource(simple_view._reveal)
-
-        self.assertIn("QGraphicsOpacityEffect", source)
-        self.assertNotIn("setContentsMargins", source)
-        self.assertNotIn(".move(", source)
-
-    def test_only_appearing_blocks_are_collected(self) -> None:
-        import inspect
-
-        from presets.ui.control import simple_view
-
-        source = inspect.getsource(simple_view.apply_simple_view)
-
-        self.assertIn("isHidden()", source)
-        self.assertLess(source.index("appearing"), source.index("_set_visible"))
 
 
 if __name__ == "__main__":

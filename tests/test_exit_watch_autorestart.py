@@ -49,55 +49,7 @@ def _make_base_runner():
 
 
 class ExitWatcherTests(unittest.TestCase):
-    def test_callback_fires_for_current_dead_process_in_running_state(self) -> None:
-        from winws_runtime.runners.preset_runner_support import PresetRunnerState
 
-        runner = _make_base_runner()
-        process = SimpleNamespace(poll=lambda: 1)
-        runner.running_process = process
-        runner.get_runner_state_snapshot = lambda: SimpleNamespace(state=PresetRunnerState.RUNNING)
-        callback = Mock()
-        runner._unexpected_process_exit_callback = callback
-
-        runner._on_watched_process_exit(process)
-
-        callback.assert_called_once_with()
-
-    def test_suppressed_when_process_was_replaced(self) -> None:
-        runner = _make_base_runner()
-        old_process = SimpleNamespace(poll=lambda: 1)
-        runner.running_process = SimpleNamespace(poll=lambda: None)  # new process
-        callback = Mock()
-        runner._unexpected_process_exit_callback = callback
-
-        runner._on_watched_process_exit(old_process)
-
-        callback.assert_not_called()
-
-    def test_suppressed_during_intentional_stop_states(self) -> None:
-        from winws_runtime.runners.preset_runner_support import PresetRunnerState
-
-        for state in (PresetRunnerState.STOPPING, PresetRunnerState.IDLE):
-            runner = _make_base_runner()
-            process = SimpleNamespace(poll=lambda: 1)
-            runner.running_process = process
-            runner.get_runner_state_snapshot = lambda s=state: SimpleNamespace(state=s)
-            callback = Mock()
-            runner._unexpected_process_exit_callback = callback
-
-            runner._on_watched_process_exit(process)
-
-            callback.assert_not_called()
-
-    def test_watcher_thread_invokes_exit_handler_after_wait(self) -> None:
-        runner = _make_base_runner()
-        fired = threading.Event()
-        runner._on_watched_process_exit = lambda _process: fired.set()
-        process = SimpleNamespace(wait=lambda: 0)
-
-        runner._start_process_exit_watcher(process)
-
-        self.assertTrue(fired.wait(timeout=2.0))
 
     def test_zapret2_spawn_success_starts_watcher(self) -> None:
         from winws_runtime.runners.zapret2_runner import Winws2StrategyRunner

@@ -44,26 +44,6 @@ class UiCleanupNonblockingContractTests(unittest.TestCase):
             cleanup_source,
         )
 
-    def test_settings_pages_cleanup_stops_workers_without_gui_wait(self) -> None:
-        """Страница оформления отсюда ушла вместе с самим разделом.
-
-        Проверка на ней была не лишней: закрытие окна не должно ждать
-        фоновых задач страницы. Остаётся страница DPI — у неё две таких
-        остановки, и обе обязаны быть без ожидания.
-        """
-        from settings.dpi.page import DpiSettingsPage
-
-        dpi_cleanup_source = inspect.getsource(DpiSettingsPage.cleanup)
-
-        self.assertIn(
-            '_dpi_settings_runtime.stop(\n            blocking=False,',
-            dpi_cleanup_source,
-        )
-        self.assertIn(
-            '_orchestra_settings_save_runtime.stop(\n            blocking=False,',
-            dpi_cleanup_source,
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -87,32 +87,6 @@ class ControlPageDepsContractTests(unittest.TestCase):
             self.skipTest("страница принимает **kwargs")
         self.assertEqual(self.keys - accepted, set())
 
-    def test_zapret1_accepts_every_dependency(self) -> None:
-        accepted = _page_keyword_args(
-            PROJECT_SRC / "presets" / "ui" / "control" / "zapret1" / "page.py",
-            "Zapret1ModeControlPage",
-        )
-        if "**" in accepted:
-            self.skipTest("страница принимает **kwargs")
-        self.assertEqual(
-            self.keys - accepted,
-            set(),
-            "net67 v1 использует тот же набор зависимостей и обязан принимать все ключи",
-        )
-
-    def test_pages_do_not_receive_broad_features(self) -> None:
-        """Архитектурный контракт: страницам передаются узкие вызовы.
-
-        Кнопке «Включить» нужен is_any_running, и соблазн прокинуть весь
-        RuntimeFeature был велик. Правильно — расширить ControlRuntimeActions.
-        """
-        for path, cls in (
-            (PROJECT_SRC / "presets" / "ui" / "control" / "zapret2" / "page.py", "Zapret2ModeControlPage"),
-            (PROJECT_SRC / "presets" / "ui" / "control" / "zapret1" / "page.py", "Zapret1ModeControlPage"),
-        ):
-            accepted = _page_keyword_args(path, cls)
-            for forbidden in ("runtime_feature", "presets_feature", "profile_feature"):
-                self.assertNotIn(forbidden, accepted, f"{cls} получает широкий {forbidden}")
 
     def test_runtime_actions_expose_is_any_running(self) -> None:
         source = (

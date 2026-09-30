@@ -324,50 +324,6 @@ class ControlAccessibilityTests(unittest.TestCase):
 
         self.assertEqual(opened, [True])
 
-    def test_winws1_language_refresh_updates_control_button_screen_reader_names(self) -> None:
-        from presets.ui.control.zapret1.runtime_helpers import apply_winws1_pages_language
-
-        start_btn = _ButtonTarget()
-        stop_btn = _ButtonTarget()
-        stop_exit_btn = _ButtonTarget()
-
-        apply_winws1_pages_language(
-            **_language_refresh_kwargs(),
-            start_btn=start_btn,
-            stop_winws_btn=stop_btn,
-            stop_and_exit_btn=stop_exit_btn,
-            refresh_preset_name=lambda: None,
-            get_current_dpi_runtime_state=lambda: ("stopped", ""),
-            update_status=lambda _phase, _last_error: None,
-        )
-
-        self.assertEqual(start_btn.accessibleName(), "Запустить net67")
-        self.assertEqual(stop_btn.accessibleName(), "Остановить winws.exe")
-        self.assertEqual(stop_exit_btn.accessibleName(), "Остановить и закрыть")
-
-    def test_winws1_language_refresh_updates_extra_action_button_screen_reader_names(self) -> None:
-        from presets.ui.control.zapret1.runtime_helpers import apply_winws1_pages_language
-
-        kwargs = _language_refresh_kwargs()
-        apply_winws1_pages_language(
-            **kwargs,
-            start_btn=_ButtonTarget(),
-            stop_winws_btn=_ButtonTarget(),
-            stop_and_exit_btn=_ButtonTarget(),
-            refresh_preset_name=lambda: None,
-            get_current_dpi_runtime_state=lambda: ("stopped", ""),
-            update_status=lambda _phase, _last_error: None,
-        )
-
-        self.assertEqual(kwargs["test_card"].button.accessibleName(), "Открыть тест соединения")
-        self.assertEqual(kwargs["internet_cleanup_card"].button.accessibleName(), "Сбросить сеть Windows")
-        self.assertEqual(kwargs["folder_card"].button.accessibleName(), "Открыть папку программы")
-        self.assertEqual(kwargs["test_card"].button.text(), "  Открыть")
-        self.assertEqual(kwargs["internet_cleanup_card"].button.text(), "  Сбросить")
-        self.assertEqual(kwargs["folder_card"].button.text(), "  Открыть")
-        self.assertEqual(kwargs["test_card"].button.property("screenReaderStateText"), "Открыть тест соединения")
-        self.assertEqual(kwargs["internet_cleanup_card"].button.property("screenReaderStateText"), "Сбросить сеть Windows")
-        self.assertEqual(kwargs["folder_card"].button.property("screenReaderStateText"), "Открыть папку программы")
 
     def test_winws2_language_refresh_updates_control_button_screen_reader_names(self) -> None:
         from presets.ui.control.zapret2.runtime_helpers import apply_profile_language

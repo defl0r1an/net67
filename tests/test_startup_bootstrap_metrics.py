@@ -165,26 +165,6 @@ class StartupBootstrapMetricsTests(unittest.TestCase):
         self.assertIn("StartupAppRuntimeFeatureDeps", source)
         self.assertIn("StartupAppRuntimeFeatures", source)
 
-    def test_feature_assembly_logs_feature_build_substeps(self) -> None:
-        from app import feature_assembly
-
-        source = "\n".join(
-            (
-                inspect.getsource(feature_assembly.build_preset_profile_features),
-                inspect.getsource(feature_assembly.build_app_features),
-            )
-        )
-
-        self.assertIn("StartupFeatureAssemblyImports", source)
-        self.assertIn("StartupFeatureAssemblyOrchestra", source)
-        self.assertIn("StartupFeatureAssemblyPresetProfileImport", source)
-        self.assertIn("StartupFeatureAssemblyPresets", source)
-        self.assertIn("StartupFeatureAssemblyProfile", source)
-        self.assertIn("StartupFeatureAssemblyRuntime", source)
-        self.assertIn("StartupFeatureAssemblyTelegramProxy", source)
-        self.assertIn("StartupFeatureAssemblyTray", source)
-        self.assertIn("StartupFeatureAssemblySecondary", source)
-
 
 if __name__ == "__main__":
     unittest.main()

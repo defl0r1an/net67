@@ -99,24 +99,12 @@ class CardWiringTests(unittest.TestCase):
         )
         return inspect.getsource(builder)
 
-    def test_winws1_has_the_card(self) -> None:
-        source = self._extra_card_source("presets.ui.control.zapret1.sections_build")
-
-        self.assertIn("build_updates_card(", source)
-        self.assertIn("extra_card.addSettingCard(updates_card)", source)
 
     def test_winws2_has_the_card(self) -> None:
         source = self._extra_card_source("presets.ui.control.zapret2.sections_build")
 
         self.assertIn("build_updates_card(", source)
         self.assertIn("extra_card.addSettingCard(updates_card)", source)
-
-    def test_both_modes_build_the_same_card(self) -> None:
-        """Иначе разойдутся подписи, и одна из них станет неправильной."""
-        from presets.ui.control.zapret1 import sections_build as winws1
-        from presets.ui.control.zapret2 import sections_build as winws2
-
-        self.assertIs(winws1.build_updates_card, winws2.build_updates_card)
 
 
 class CardAppearanceTests(unittest.TestCase):

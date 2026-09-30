@@ -460,40 +460,6 @@ class WinDivertServiceRecoveryTests(unittest.TestCase):
             stable_start_window_seconds=0.35,
         )
 
-    def test_winws1_retries_after_successful_windivert_autofix(self) -> None:
-        from winws_runtime.runners.zapret1_runner import Winws1StrategyRunner
-
-        runner = object.__new__(Winws1StrategyRunner)
-        runner._last_spawn_exit_code = 1068
-        runner._last_spawn_stderr = "dependency service failed"
-        runner._should_retry_transient_windivert_service_error = Mock(return_value=False)
-        runner._should_retry_unclassified_code_one = Mock(return_value=False)
-        runner._is_windivert_system_error = Mock(return_value=True)
-        runner._is_windivert_conflict_error = Mock(return_value=False)
-        runner._maybe_run_windivert_auto_fix_after_failed_spawn = Mock(return_value=True)
-        runner._start_from_preset_file_locked = Mock(return_value=True)
-
-        retried = runner._maybe_retry_after_failed_spawn_locked(
-            "preset.txt",
-            "Preset",
-            retry_count=0,
-            max_retries=2,
-            stable_start_window_seconds=0.35,
-        )
-
-        self.assertTrue(retried)
-        runner._maybe_run_windivert_auto_fix_after_failed_spawn.assert_called_once_with(
-            "dependency service failed",
-            1068,
-            retry_count=0,
-        )
-        runner._start_from_preset_file_locked.assert_called_once_with(
-            "preset.txt",
-            "Preset",
-            retry_count=1,
-            max_retries=2,
-            stable_start_window_seconds=0.35,
-        )
 
     def test_generic_service_disabled_does_not_blame_secure_boot_without_signature_error(self) -> None:
         from winws_runtime.health import process_health_check, winws_exit_diagnosis

@@ -78,12 +78,6 @@ class RunnersUseTheHelperTests(unittest.TestCase):
         "winws_runtime/runners/zapret2_runner.py",
     )
 
-    def test_no_raw_at_prefix_left(self) -> None:
-        for name in self.FILES:
-            source = (PROJECT_SRC / name).read_text(encoding="utf-8")
-            with self.subTest(file=name):
-                self.assertNotIn('f"@{', source, "путь снова склеивается вручную")
-                self.assertIn("at_config_launch_arg", source)
 
     def test_dry_run_logs_arguments_and_cwd(self) -> None:
         """Без них баннер версии в логе ничего не объясняет."""

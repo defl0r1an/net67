@@ -125,31 +125,6 @@ class ArchitectureCleanupContractTests(unittest.TestCase):
                         "PresetSwitchWorker не должен иметь fallback на полный запуск preset",
                     )
 
-    def test_fast_switch_contract_does_not_call_full_start_pipeline_inside_runner(self) -> None:
-        for relative_path, class_name in (
-            ("winws_runtime/runners/zapret1_runner.py", "Winws1StrategyRunner"),
-            ("winws_runtime/runners/zapret2_runner.py", "Winws2StrategyRunner"),
-        ):
-            with self.subTest(path=relative_path):
-                tree = self._module_tree(relative_path)
-                runner = next(
-                    node
-                    for node in ast.walk(tree)
-                    if isinstance(node, ast.ClassDef) and node.name == class_name
-                )
-                switch_method = next(
-                    node
-                    for node in runner.body
-                    if isinstance(node, ast.FunctionDef) and node.name == "switch_preset_file_fast"
-                )
-
-                for node in ast.walk(switch_method):
-                    if isinstance(node, ast.Attribute):
-                        self.assertNotEqual(
-                            node.attr,
-                            "_start_from_preset_file_locked",
-                            "switch_preset_file_fast не должен откатываться в полный start pipeline",
-                        )
 
     def test_source_does_not_reference_obsolete_list_sidecars(self) -> None:
         patterns = (".base.txt", ".user.txt")

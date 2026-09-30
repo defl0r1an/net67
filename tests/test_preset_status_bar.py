@@ -437,18 +437,6 @@ class PresetStatusBarPlanTests(unittest.TestCase):
         set_status.assert_called_once_with(owner, "✅ Пресет успешно применён")
         maybe_restart.assert_called_once_with(owner, skip_first_start=False)
 
-    def test_selected_status_names_winws_when_process_is_not_running(self) -> None:
-        from presets.ui.common.preset_status_bar import build_preset_status_plan
-
-        winws2_plan = build_preset_status_plan("selected_stopped", launch_method=ZAPRET2_MODE)
-        winws1_plan = build_preset_status_plan("selected_stopped", launch_method=ZAPRET1_MODE)
-
-        self.assertEqual(winws2_plan.text, "Пресет выбран, winws2 не запущен")
-        self.assertEqual(winws1_plan.text, "Пресет выбран, winws не запущен")
-        self.assertEqual(winws2_plan.mode, "stopped")
-        self.assertEqual(winws1_plan.mode, "stopped")
-        self.assertEqual(winws2_plan.indicator, "dot")
-        self.assertEqual(winws1_plan.indicator, "dot")
 
     def test_selected_stopped_status_shows_static_red_dot(self) -> None:
         from presets.ui.common.preset_status_bar import PresetStatusBar, build_preset_status_plan

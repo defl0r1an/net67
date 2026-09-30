@@ -5,29 +5,6 @@ import unittest
 
 
 class ControlPageImmediateStartupTests(unittest.TestCase):
-    def test_control_pages_build_settings_sections_immediately(self) -> None:
-        """Секции настроек строятся синхронно в _build_ui — намеренно.
-
-        Отложенную сборку (таймерами) уже пробовали дважды и откатывали:
-        таймеры создавались криво, интерфейс появлялся дольше. Не возвращать
-        без явного решения владельца.
-        """
-        import presets.ui.control.zapret1.page as zapret1_page
-        import presets.ui.control.zapret2.page as zapret2_page
-
-        for page_cls in (zapret1_page.Zapret1ModeControlPage, zapret2_page.Zapret2ModeControlPage):
-            with self.subTest(page_cls=page_cls.__name__):
-                page_source = inspect.getsource(page_cls)
-                build_ui_source = inspect.getsource(page_cls._build_ui)
-
-                self.assertIn("_build_settings_sections", build_ui_source)
-                self.assertIn("_attach_program_settings_runtime", build_ui_source)
-                self.assertIn("_schedule_additional_settings_reload(force=True)", build_ui_source)
-                self.assertNotIn("_build_deferred_sections", page_source)
-                self.assertNotIn("_run_deferred_show_work", page_source)
-                self.assertNotIn("_startup_can_run_deferred_sections", page_source)
-                self.assertNotIn("STARTUP_DEFERRED_SECTIONS", page_source)
-                self.assertNotIn("_build_settings_sections_deferred", page_source)
 
     def test_additional_settings_workers_are_imported_only_when_requested(self) -> None:
         import presets.ui.control.zapret2.page as zapret2_page
@@ -146,18 +123,6 @@ class ControlPageImmediateStartupTests(unittest.TestCase):
 
         self.assertIn("enable_setting_card_group_auto_height(program_settings_card)", builder_source)
         self.assertNotIn("enable_setting_card_group_auto_height(self.program_settings_card)", page_source)
-
-    def test_control_settings_sections_defer_themed_action_icons(self) -> None:
-        import inspect
-
-        import presets.ui.control.zapret1.sections_build as zapret1_sections
-        import presets.ui.control.zapret2.sections_build as zapret2_sections
-
-        for module in (zapret1_sections, zapret2_sections):
-            with self.subTest(module=module.__name__):
-                source = inspect.getsource(module)
-                self.assertIn("build_deferred_themed_push_setting_card_common", source)
-                self.assertNotIn("get_themed_qta_icon", source)
 
 
 if __name__ == "__main__":

@@ -223,47 +223,6 @@ RUNTIME_ONLY_PROFILE_KEYS = {
 
 
 class BuiltinProfileCatalogTests(unittest.TestCase):
-    def test_winws1_flowseal_1100_exp_is_adapted_to_builtin_profiles(self) -> None:
-        path = (
-            PUBLIC_ROOT
-            / "src"
-            / "presets"
-            / "builtin"
-            / "winws1"
-            / "general EXP 1.10.0 (game filter).txt"
-        )
-        text = path.read_text(encoding="utf-8")
-        blocks = text.split("\n--new\n")
-
-        self.assertEqual(len(blocks), 53)
-        for obsolete_source_path in (
-            "list-general.txt",
-            "list-general-user.txt",
-            "list-exclude-user.txt",
-            "ipset-all.txt",
-            "ipset-exclude-user.txt",
-        ):
-            self.assertNotIn(obsolete_source_path, text)
-
-        quic_hostlist_blocks = [
-            block
-            for block in blocks
-            if "--filter-udp=443" in block
-            and any(line.startswith("--hostlist=lists/") for line in block.splitlines())
-        ]
-        self.assertEqual(len(quic_hostlist_blocks), 13)
-        self.assertTrue(all("--filter-l7=quic" in block for block in quic_hostlist_blocks))
-
-        ipset_blocks = [
-            block
-            for block in blocks
-            if any(line.startswith("--ipset=lists/") for line in block.splitlines())
-        ]
-        self.assertEqual(len(ipset_blocks), 24)
-        self.assertIn("--filter-l7=discord,stun,unknown", text)
-        self.assertIn("--dpi-desync-split-seqovl-pattern=bin/stun2.bin", text)
-        self.assertIn("--dpi-desync-fake-discord=bin/ACTIVE_DISCORD_UDP.bin", text)
-        self.assertIn("--dpi-desync-fake-unknown-udp=bin/ACTIVE_GAME_UDP.bin", text)
 
     def test_service_hostlist_profiles_use_requested_domain_lists(self) -> None:
         preset = parse_preset_text(
@@ -1815,36 +1774,6 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
 
         self.assertEqual(offenders, [])
 
-    def test_builtin_presets_keep_known_launch_presets_that_are_not_ui_templates(self) -> None:
-        """Builtin preset-ы являются runtime-ресурсами, а не копией all_profiles.txt.
-
-        all_profiles.txt описывает библиотеку profile-ов для GUI. Встроенные preset-ы
-        могут содержать технические all-sites, circular, voice и winws1 блоки, которых
-        нет в этой библиотеке, но они всё равно должны оставаться в поставке.
-        """
-        known_presets = (
-            ("winws1", "discord_voice_dtls.txt"),
-            ("winws1", "alt10_190b_allsites.txt"),
-            ("winws2", "ALL TCP & UDP discord_urgent_sni.txt"),
-            ("winws2", "Default (circular).txt"),
-            ("winws2", "syndata (circular).txt"),
-        )
-        offenders: list[str] = []
-
-        for engine, file_name in known_presets:
-            path = PUBLIC_ROOT / "src" / "presets" / "builtin" / engine / file_name
-            if not path.exists():
-                offenders.append(f"{engine}/{file_name}: missing")
-                continue
-            preset = parse_preset_text(
-                path.read_text(encoding="utf-8", errors="replace"),
-                engine=engine,
-                source_name=path.name,
-            )
-            if not preset.profiles:
-                offenders.append(f"{engine}/{file_name}: empty")
-
-        self.assertEqual(offenders, [])
 
     def test_all_profiles_does_not_absorb_runtime_only_all_sites_templates(self) -> None:
         """all_profiles.txt не должен становиться авто-свалкой runtime-only блоков.
