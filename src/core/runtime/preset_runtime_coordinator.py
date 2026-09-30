@@ -74,6 +74,11 @@ class PresetWatchPathResolveWorker(QThread):
         return ""
 
 
+
+def _preset_display_stem(file_name: str) -> str:
+    text = str(file_name or "").strip().replace("\\", "/").rsplit("/", 1)[-1]
+    return text[:-4] if text.lower().endswith(".txt") else text
+
 class PresetRuntimeCoordinator(QObject):
     """Координирует применение выбранного source preset вне UI-страниц.
 
@@ -109,6 +114,8 @@ class PresetRuntimeCoordinator(QObject):
         self._active_preset_file_path: str = ""
         self._pending_preset_content_apply: PendingPresetApply | None = None
         self._last_active_preset_key: tuple[str, str] | None = None
+        # (режим, имя файла в исходном регистре) — то, что публикуется в store.
+        self._active_preset_projection: tuple[str, str] | None = None
         self._active_preset_revision_publish_pending = False
         self._active_preset_file_watcher_setup_pending = False
         self._pending_active_preset_watch: PendingPresetWatch | None = None
@@ -171,11 +178,18 @@ class PresetRuntimeCoordinator(QObject):
         active_key = (method, selected_file_name.lower())
         active_changed = self._last_active_preset_key != active_key
         self._last_active_preset_key = active_key
+        previous_projection = self.__dict__.get("_active_preset_projection")
+        self._active_preset_projection = (method, selected_file_name)
         if not active_changed:
             log(
                 f"Повторное переключение на тот же preset пропущено: {selected_file_name}",
                 "DEBUG",
             )
+            if previous_projection != self._active_preset_projection:
+                # Runtime уже на этом пресете, а страницам показывали запасной
+                # (вернулся пропавший файл): обновляем только показ.
+                self._publish_active_preset_revision_deferred()
+                self.schedule_refresh_after_preset_switch()
             return
         log(f"Пресет переключен: {selected_file_name}", "INFO")
         self._schedule_active_preset_file_watcher_setup(
@@ -198,6 +212,46 @@ class PresetRuntimeCoordinator(QObject):
             pass
         self.schedule_refresh_after_preset_switch()
 
+    def handle_selection_fallback(self, launch_method: str, missing_file_name: str, used_file_name: str) -> None:
+        """Выбранный пресет не найден, для запуска взят запасной.
+
+        Пользователю — сообщение; страницам — запасной как активный. Работающий
+        DPI сам по себе не переключаем: он продолжает на прежних настройках,
+        а следующий запуск возьмёт запасной (или вернувшийся выбранный)."""
+        method = normalize_launch_method(launch_method, default="")
+        if not self._is_current_preset_method(method):
+            return
+        used = str(used_file_name or "").strip()
+        if not used:
+            return
+        missing_name = _preset_display_stem(missing_file_name)
+        used_name = _preset_display_stem(used)
+        try:
+            store = self._ui_state_store
+            if store is not None:
+                store.set_last_status_message(
+                    f"Пресет «{missing_name}» не найден — используется «{used_name}». "
+                    "Вернётся файл — вернётся и выбор."
+                )
+        except Exception:
+            pass
+        # _last_active_preset_key не трогаем: это пресет, на котором реально
+        # работает runtime. Запасной — только показ; иначе щелчок по нему
+        # считался бы «уже выбран», и DPI нельзя было бы на него перевести.
+        self._active_preset_projection = (method, used)
+        self._publish_active_preset_revision_deferred()
+        self.schedule_refresh_after_preset_switch()
+
+    def handle_selection_restored(self, launch_method: str, preset_file_name: str) -> None:
+        """Вернулся выбранный файл. На чём сейчас работает runtime — неизвестно
+        (мог перезапуститься на запасном), поэтому применяем без сравнения с
+        последним переключением. Одинаковый конфиг runner распознаёт сам."""
+        method = normalize_launch_method(launch_method, default="")
+        if not self._is_current_preset_method(method):
+            return
+        self._last_active_preset_key = None
+        self.handle_preset_switched(method, preset_file_name)
+
     def handle_preset_identity_changed(self, launch_method: str, preset_file_name: str) -> None:
         method = normalize_launch_method(launch_method, default="")
         if not self._is_current_preset_method(method):
@@ -207,6 +261,7 @@ class PresetRuntimeCoordinator(QObject):
         selected_file_name = str(preset_file_name or "").strip()
         if selected_file_name:
             self._last_active_preset_key = (method, selected_file_name.lower())
+            self._active_preset_projection = (method, selected_file_name)
         self._schedule_active_preset_file_watcher_setup(
             launch_method=method,
             preset_file_name=selected_file_name,
@@ -348,14 +403,20 @@ class PresetRuntimeCoordinator(QObject):
         try:
             store = self._ui_state_store
             if store is not None:
-                last_key = self._last_active_preset_key
-                file_name = str(last_key[1] or "") if isinstance(last_key, tuple) and len(last_key) > 1 else ""
+                projection = self.__dict__.get("_active_preset_projection")
+                if not isinstance(projection, tuple) or len(projection) < 2:
+                    last_key = self._last_active_preset_key
+                    projection = last_key if isinstance(last_key, tuple) and len(last_key) > 1 else ("", "")
+                method, file_name = str(projection[0] or ""), str(projection[1] or "")
                 try:
-                    store.bump_active_preset_revision(file_name=file_name)
+                    store.bump_active_preset_revision(file_name=file_name, launch_method=method)
                 except TypeError as exc:
-                    if "file_name" not in str(exc):
+                    if "launch_method" in str(exc):
+                        store.bump_active_preset_revision(file_name=file_name)
+                    elif "file_name" in str(exc):
+                        store.bump_active_preset_revision()
+                    else:
                         raise
-                    store.bump_active_preset_revision()
         except Exception:
             pass
 

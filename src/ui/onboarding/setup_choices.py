@@ -71,13 +71,13 @@ class SetupAnswers:
 # ── запись ────────────────────────────────────────────────────────────
 
 
-def apply_provider_answer(answers: SetupAnswers) -> None:
+def apply_provider_answer(answers: SetupAnswers, *, select_preset=None) -> None:
     if answers.provider_applied == answers.provider:
         return
     try:
         from provider.apply import apply_provider_choice
 
-        ok, detail = apply_provider_choice(answers.provider)
+        ok, detail = apply_provider_choice(answers.provider, select_preset=select_preset)
         if not ok:
             log(f"Первичная настройка, провайдер: {detail}", "WARNING")
     except Exception as exc:
@@ -85,7 +85,7 @@ def apply_provider_answer(answers: SetupAnswers) -> None:
     answers.provider_applied = answers.provider
 
 
-def apply_setup_answers(window, answers: SetupAnswers) -> bool:
+def apply_setup_answers(window, answers: SetupAnswers, *, select_preset=None) -> bool:
     """Записывает ответы и отмечает первичную настройку пройденной.
 
     Флаг «пройдена» ставит apply_wizard последним: если запись упала,
@@ -93,7 +93,7 @@ def apply_setup_answers(window, answers: SetupAnswers) -> bool:
     """
     if answers.applied:
         return True
-    apply_provider_answer(answers)
+    apply_provider_answer(answers, select_preset=select_preset)
     try:
         from wizard.apply import apply_wizard
         from wizard.plans import default_selection

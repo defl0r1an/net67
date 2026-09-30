@@ -4405,6 +4405,170 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
         "ru": "дней",
         "en": "days",
     },
+    "launch.action.start": {
+        "ru": "Запустить net67",
+        "en": "Start net67",
+    },
+    "launch.action.stop": {
+        "ru": "Остановить net67",
+        "en": "Stop net67",
+    },
+    "launch.action.stopping": {
+        "ru": "net67 останавливается",
+        "en": "net67 is stopping",
+    },
+    "launch.action.close_app": {
+        "ru": "Закрыть программу",
+        "en": "Close app",
+    },
+    "launch.action.close_app.description": {
+        "ru": "Остановить net67 и закрыть программу",
+        "en": "Stop net67 and close the app",
+    },
+    "launch.dot.description": {
+        "ru": "Нажмите на точку, чтобы запустить или остановить net67",
+        "en": "Click the dot to start or stop net67",
+    },
+    "launch.badge.running": {
+        "ru": "Работает",
+        "en": "Running",
+    },
+    "launch.badge.starting": {
+        "ru": "Запуск…",
+        "en": "Starting…",
+    },
+    "launch.badge.stopping": {
+        "ru": "Остановка…",
+        "en": "Stopping…",
+    },
+    "launch.badge.stopped": {
+        "ru": "Остановлен",
+        "en": "Stopped",
+    },
+    "launch.badge.failed": {
+        "ru": "Ошибка",
+        "en": "Error",
+    },
+    "launch.badge.tooltip.running": {
+        "ru": "{mode} работает · нажмите, чтобы остановить",
+        "en": "{mode} is running · click to stop",
+    },
+    "launch.badge.tooltip.starting": {
+        "ru": "{mode} запускается · нажмите, чтобы остановить",
+        "en": "{mode} is starting · click to stop",
+    },
+    "launch.badge.tooltip.stopping": {
+        "ru": "{mode} останавливается…",
+        "en": "{mode} is stopping…",
+    },
+    "launch.badge.tooltip.stopped": {
+        "ru": "{mode} остановлен · нажмите, чтобы запустить",
+        "en": "{mode} is stopped · click to start",
+    },
+    "launch.badge.tooltip.failed": {
+        "ru": "Ошибка запуска {mode} · нажмите, чтобы попробовать снова",
+        "en": "{mode} failed to start · click to try again",
+    },
+    "tray.status.running": {
+        "ru": "работает",
+        "en": "running",
+    },
+    "tray.status.starting": {
+        "ru": "запускается",
+        "en": "starting",
+    },
+    "tray.status.stopping": {
+        "ru": "останавливается",
+        "en": "stopping",
+    },
+    "tray.status.stopped": {
+        "ru": "остановлен",
+        "en": "stopped",
+    },
+    "tray.status.failed": {
+        "ru": "ошибка запуска",
+        "en": "failed to start",
+    },
+    "tray.tooltip.preset": {
+        "ru": "Пресет: {preset}",
+        "en": "Preset: {preset}",
+    },
+    "tray.menu.start": {
+        "ru": "Запустить net67",
+        "en": "Start net67",
+    },
+    "tray.menu.stop": {
+        "ru": "Остановить net67",
+        "en": "Stop net67",
+    },
+    "tray.menu.starting": {
+        "ru": "net67 запускается…",
+        "en": "net67 is starting…",
+    },
+    "tray.menu.stopping": {
+        "ru": "net67 останавливается…",
+        "en": "net67 is stopping…",
+    },
+    "tray.menu.restart": {
+        "ru": "Перезапустить",
+        "en": "Restart",
+    },
+    "tray.menu.preset": {
+        "ru": "Пресет",
+        "en": "Preset",
+    },
+    "tray.menu.presets_empty": {
+        "ru": "Пресетов пока нет",
+        "en": "No presets yet",
+    },
+    "tray.menu.show": {
+        "ru": "Показать окно",
+        "en": "Show window",
+    },
+    "tray.menu.hide": {
+        "ru": "Скрыть в трей",
+        "en": "Hide to tray",
+    },
+    "tray.menu.opacity": {
+        "ru": "Прозрачность окна",
+        "en": "Window transparency",
+    },
+    "tray.menu.acrylic": {
+        "ru": "Эффект акрилика окна",
+        "en": "Window acrylic effect",
+    },
+    "tray.menu.console": {
+        "ru": "Консоль",
+        "en": "Console",
+    },
+    "tray.menu.exit": {
+        "ru": "Выход",
+        "en": "Exit",
+    },
+    "tray.menu.exit_stop": {
+        "ru": "Выход и остановить",
+        "en": "Stop and exit",
+    },
+    "tray.notify.started.title": {
+        "ru": "net67 запущен",
+        "en": "net67 started",
+    },
+    "tray.notify.started.body": {
+        "ru": "Обход блокировок активен · пресет: {preset}",
+        "en": "Bypass is active · preset: {preset}",
+    },
+    "tray.notify.started.body_no_preset": {
+        "ru": "Обход блокировок активен",
+        "en": "Bypass is active",
+    },
+    "tray.notify.stopped.title": {
+        "ru": "net67 остановлен",
+        "en": "net67 stopped",
+    },
+    "tray.notify.stopped.body": {
+        "ru": "Обход блокировок выключен",
+        "en": "Bypass is off",
+    },
     "titlebar.subscription.free": {
         "ru": "FREE",
         "en": "FREE",

@@ -11,7 +11,7 @@ def build_application_post_startup_deps(*, window, app_runtime) -> PostStartupDe
     notifications = window.window_notification_center
     runtime_snapshot = features.runtime.snapshot()
     return PostStartupDeps(
-        startup_host=build_post_startup_host(window),
+        startup_host=build_post_startup_host(window, select_preset=_preset_selector(features.presets)),
         hosts_feature=features.hosts,
         profile_feature=features.profile,
         presets_feature=features.presets,
@@ -29,6 +29,13 @@ def build_application_post_startup_deps(*, window, app_runtime) -> PostStartupDe
         updater_feature=features.updater,
         launch_method=str(getattr(runtime_snapshot, "launch_method", "") or ""),
     )
+
+
+def _preset_selector(presets_feature):
+    """Выбор пресета winws2 по имени файла — через фасад пресетов."""
+    from settings.mode import ZAPRET2_MODE
+
+    return lambda file_name: presets_feature.select_preset(ZAPRET2_MODE, file_name)
 
 
 __all__ = ["build_application_post_startup_deps"]

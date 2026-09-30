@@ -706,7 +706,7 @@ class OnboardingOverlay(QWidget):
             return
         if step is not None and step.choice == "provider" and self._answers is not None:
             # Провайдер выбирает пресет, а пресеты — следующие шаги тура.
-            apply_provider_answer(self._answers)
+            apply_provider_answer(self._answers, select_preset=self._ctx.select_preset)
         if self._index >= len(self._steps) - 1:
             self.finish("done")
             return
@@ -739,7 +739,7 @@ class OnboardingOverlay(QWidget):
             # экране: без записи настройка открывалась бы на каждом запуске.
             # Окно спрятали в трей посреди тура — не пишем ничего: человек
             # не ответил, и в следующий раз тур начнётся заново.
-            apply_setup_answers(self._window, self._answers)
+            apply_setup_answers(self._window, self._answers, select_preset=self._ctx.select_preset)
         self._opacity_target = 0.0
         self._blur_timer.stop()
         if immediate or not self._animated:

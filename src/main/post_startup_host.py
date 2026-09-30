@@ -7,6 +7,9 @@ from typing import Any
 @dataclass(frozen=True, slots=True)
 class PostStartupHost:
     _window: Any
+    # Выбор пресета фасада пресетов: туру первого запуска нужен для
+    # ответа о провайдере. Окно фасадов не держит.
+    _select_preset: Any = None
 
     @property
     def close_state(self):
@@ -63,7 +66,9 @@ class PostStartupHost:
         """Пробует показать обучающий тур. False — окно пока не готово."""
         from ui.onboarding import start_onboarding_tour
 
-        return bool(start_onboarding_tour(self._window, automatic=True, setup=setup))
+        return bool(
+            start_onboarding_tour(self._window, automatic=True, setup=setup, select_preset=self._select_preset)
+        )
 
     def get_loaded_page(self, page_name):
         from ui.window_adapter import get_loaded_page
@@ -71,8 +76,8 @@ class PostStartupHost:
         return get_loaded_page(self._window, page_name)
 
 
-def build_post_startup_host(window) -> PostStartupHost:
-    return PostStartupHost(window)
+def build_post_startup_host(window, *, select_preset=None) -> PostStartupHost:
+    return PostStartupHost(window, select_preset)
 
 
 __all__ = ["PostStartupHost", "build_post_startup_host"]

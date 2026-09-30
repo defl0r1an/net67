@@ -74,6 +74,51 @@ def attach_window_ui_root(window, *, features, state, page_actions) -> None:
         "StartupWindowUiRootConstruct",
         f"{(_time.perf_counter() - t_construct) * 1000:.0f}ms",
     )
+    from shell.launch_badge import bind_launch_title_badge
+
+    launch_control = _build_window_launch_control(
+        window,
+        features=features,
+        state=state,
+        page_actions=page_actions,
+    )
+    window.launchControl = launch_control
+    bind_launch_title_badge(window, state.ui, launch_control)
+
+
+def _build_window_launch_control(window, *, features, state, page_actions):
+    """Пульт пуска/остановки для метки в заголовке окна.
+
+    В zapret через него же ходят страница управления и трей. У net67
+    своя страница управления (большая кнопка, простой и расширенный
+    вид) и свой трей, их переделку не переносили; обе двери зовут одни
+    и те же команды runtime и читают один UI-store.
+    """
+    from app.page_names import PageName
+    from ui.launch_control import build_launch_control
+
+    def _stop_conflicting_checks() -> bool:
+        from ui.window_adapter import send_page_command
+
+        return bool(
+            send_page_command(
+                window,
+                PageName.BLOCKCHECK,
+                "stop_runtime_conflicting_checks",
+                {"source": "dpi_start"},
+                ensure=False,
+            )
+        )
+
+    launch_control = build_launch_control(
+        runtime_feature=features.runtime,
+        ui_state_store=state.ui,
+        stop_conflicting_checks=_stop_conflicting_checks,
+        set_status=page_actions.set_status,
+        request_exit=page_actions.request_exit,
+        parent=window,
+    )
+    return launch_control
 
 
 __all__ = ["attach_window_ui_root", "build_window_page_deps_sources"]

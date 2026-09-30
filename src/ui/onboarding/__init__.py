@@ -36,7 +36,14 @@ def _window_ready_for_automatic_tour(window: QWidget) -> bool:
     return True
 
 
-def start_onboarding_tour(window, *, automatic: bool = False, setup: bool = False, kind: str = "main") -> bool:
+def start_onboarding_tour(
+    window,
+    *,
+    automatic: bool = False,
+    setup: bool = False,
+    kind: str = "main",
+    select_preset=None,
+) -> bool:
     """Показывает тур поверх окна.
 
     automatic=True — тур стартует, только если окно видно и не занято
@@ -65,6 +72,7 @@ def start_onboarding_tour(window, *, automatic: bool = False, setup: bool = Fals
     bypass = kind == "bypass"
     # Экскурсия по обходу ничего не спрашивает: вопросы — дело основного тура.
     context.setup = bool(setup) and not bypass
+    context.select_preset = select_preset
 
     overlay = OnboardingOverlay(
         window,

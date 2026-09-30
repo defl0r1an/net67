@@ -77,6 +77,9 @@ class TourContext:
     # Необязательные ветки, которые человек открыл кнопкой на карточке
     # (например, подробный разбор пресета).
     branches: set[str] = field(default_factory=set)
+    # Выбор пресета через фасад пресетов — для ответа о провайдере.
+    # Передаётся со стартом тура: окно не держит фич (architecture_checks).
+    select_preset: Callable[[str], object] | None = None
 
 
 TargetResolver = Callable[[TourContext], list[TourTarget]]

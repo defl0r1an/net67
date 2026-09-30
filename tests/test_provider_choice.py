@@ -129,15 +129,15 @@ class ApplyTests(unittest.TestCase):
         original = settings_store.MAIN_DIRECTORY
         settings_store.MAIN_DIRECTORY = tempfile.mkdtemp()
         try:
-            ok, preset = apply_provider_choice("rostelecom")
+            chosen = []
+            ok, preset = apply_provider_choice("rostelecom", select_preset=chosen.append)
 
             self.assertTrue(ok, preset)
             self.assertEqual(preset, "Ростелеком.txt")
             self.assertEqual(settings_store.get_provider_key(), "rostelecom")
-            self.assertEqual(
-                settings_store.get_selected_source_preset_file_name("winws2"),
-                "Ростелеком.txt",
-            )
+            # Пресет выбирает фасад пресетов, а не прямая запись в
+            # настройки: иначе главная страница не узнала бы о смене.
+            self.assertEqual(chosen, ["Ростелеком.txt"])
         finally:
             settings_store.MAIN_DIRECTORY = original
 
@@ -151,10 +151,29 @@ class ApplyTests(unittest.TestCase):
         original = settings_store.MAIN_DIRECTORY
         settings_store.MAIN_DIRECTORY = tempfile.mkdtemp()
         try:
-            ok, preset = apply_provider_choice("unknown")
+            ok, preset = apply_provider_choice("unknown", select_preset=lambda _name: None)
 
             self.assertTrue(ok, preset)
             self.assertEqual(preset, "Стандартный 1.txt")
+        finally:
+            settings_store.MAIN_DIRECTORY = original
+
+
+class ApplyWithoutSelectorTests(unittest.TestCase):
+    def test_without_selector_provider_is_saved_but_preset_is_not(self) -> None:
+        """Писать выбранный пресет в обход сервиса выбора нельзя."""
+        import tempfile
+
+        import settings.store as settings_store
+        from provider.apply import apply_provider_choice
+
+        original = settings_store.MAIN_DIRECTORY
+        settings_store.MAIN_DIRECTORY = tempfile.mkdtemp()
+        try:
+            ok, _detail = apply_provider_choice("rostelecom", select_preset=None)
+
+            self.assertFalse(ok)
+            self.assertEqual(settings_store.get_provider_key(), "rostelecom")
         finally:
             settings_store.MAIN_DIRECTORY = original
 
@@ -175,7 +194,7 @@ class WizardWiringTests(unittest.TestCase):
         answers = setup_choices.SetupAnswers(provider="rostelecom", hosts_groups=set())
         result = type("R", (), {"saved": True, "message": "", "warnings": ()})()
         with (
-            patch("provider.apply.apply_provider_choice", side_effect=lambda key: calls.append("provider") or (True, "")),
+            patch("provider.apply.apply_provider_choice", side_effect=lambda key, **_k: calls.append("provider") or (True, "")),
             patch("wizard.apply.apply_wizard", side_effect=lambda **_k: calls.append("wizard") or result),
             patch("settings.store.set_onboarding_tour_done"),
             patch("main.post_startup_wizard.resync_open_pages"),

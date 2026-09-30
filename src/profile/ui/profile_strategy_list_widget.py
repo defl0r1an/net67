@@ -681,6 +681,7 @@ class ProfileStrategyListWidget(QWidget):
             for strategy_id in changed_strategy_ids:
                 item = self._item_by_strategy_id.get(strategy_id)
                 self._refresh_strategy_item(item, strategy_id, is_current=strategy_id == self._current_strategy_id)
+            self._supersede_running_strategy_filter()
             return
         single_move = self._move_strategy_row_in_place(next_entries, next_states)
         if single_move is not None:
@@ -700,12 +701,25 @@ class ProfileStrategyListWidget(QWidget):
                     continue
                 item = self._item_by_strategy_id.get(strategy_id)
                 self._refresh_strategy_item(item, strategy_id, is_current=strategy_id == self._current_strategy_id)
+            self._supersede_running_strategy_filter()
             return
         self._entries = next_entries
         self._states = next_states
         self._current_strategy_id = next_current_id
         self._rows_signature = next_signature
         self._request_tree_rebuild(immediate=True)
+
+    def _supersede_running_strategy_filter(self) -> None:
+        """Строки обновлены на месте, а фильтр ещё считает по старому снимку:
+        его план затёр бы свежие оценки/избранное/порядок. Новый запрос
+        делает старый результат устаревшим (has_pending) и пересчитывает."""
+        runtime = self.__dict__.get("_strategy_filter_runtime")
+        try:
+            running = runtime is not None and runtime.is_running()
+        except Exception:
+            running = False
+        if running:
+            self._request_tree_rebuild()
 
     def _can_update_strategy_rows_in_place(self, next_entries: dict, next_states: dict) -> bool:
         if set(self._entries.keys()) != set(next_entries.keys()):
@@ -964,7 +978,9 @@ class ProfileStrategyListWidget(QWidget):
             states=states,
             current_strategy_id=current_strategy_id,
             search_text=search_text,
-            parent=self,
+            # Без родителя — см. ProfilesList._start_view_state_worker: виджет
+            # удаляется вместе со страницей профиля, пока фильтр ещё считает.
+            parent=None,
         )
 
     def _on_strategy_filter_loaded(self, request_id: int, plan: ProfileStrategyListPlan) -> None:

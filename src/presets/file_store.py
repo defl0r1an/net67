@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import time
 
 from core.paths import AppPaths
 from utils.atomic_text import atomic_write_text, decode_preset_bytes, read_preset_file_text
@@ -44,11 +45,32 @@ def _read_header_text(path: Path) -> str:
     return decode_preset_bytes(b"\n".join(lines))
 
 
+_DEGRADED_SCAN_TTL_SEC = 2.0
+_LOGGED_UNREADABLE_PRESETS: set[str] = set()
+
+
+def _log_unreadable_preset(path: Path, exc: Exception) -> None:
+    # Один раз на файл: постоянно недоступный файл иначе писал бы в лог при
+    # каждом пересканировании.
+    key = str(path).lower()
+    if key in _LOGGED_UNREADABLE_PRESETS:
+        return
+    _LOGGED_UNREADABLE_PRESETS.add(key)
+    try:
+        from log.log import log
+
+        log(f"Не удалось прочитать шапку пресета {path.name}: {exc}", "WARNING")
+    except Exception:
+        pass
+
+
 def _normalize_preset_file_name_candidate(value: str) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    return text if Path(text).suffix else f"{text}.txt"
+    # Пресеты — только *.txt: «v1.5» — это имя «v1.5.txt», а не файл с
+    # расширением «.5» (иначе поиск по основе имени находил чужой v1.txt).
+    return text if text.lower().endswith(".txt") else f"{text}.txt"
 
 
 class PresetFileStore:
@@ -75,31 +97,59 @@ class PresetFileStore:
             return ""
 
         normalized_candidate = _normalize_preset_file_name_candidate(candidate)
+        lowered_names = {candidate.lower(), normalized_candidate.lower()}
+
+        # Сначала — имя так, как оно записано на диске (из сканирования папки):
+        # на Windows exists() верен при любом регистре, и в настройки/мету
+        # уходило написание вызывающего, а не файла.
+        for manifest in self._load_manifests(engine):
+            manifest_name = str(manifest.file_name or "").strip()
+            if manifest_name and manifest_name.lower() in lowered_names:
+                return manifest_name
+
         engine_paths = self._engine_paths(engine)
         for presets_dir in (engine_paths.user_presets_dir, engine_paths.builtin_presets_dir):
             candidate_path = presets_dir / normalized_candidate
             if candidate_path.exists():
                 return candidate_path.name
 
-            raw_path = presets_dir / candidate
-            if raw_path.exists():
-                return raw_path.name
-
-        lowered_candidate = candidate.lower()
-        lowered_normalized = normalized_candidate.lower()
-        stem_candidate = Path(candidate).stem.strip().lower()
-
-        for manifest in self._load_manifests(engine):
-            manifest_name = str(manifest.file_name or "").strip()
-            if not manifest_name:
-                continue
-            lowered_manifest = manifest_name.lower()
-            if lowered_manifest in {lowered_candidate, lowered_normalized}:
-                return manifest_name
-            if stem_candidate and Path(manifest_name).stem.strip().lower() == stem_candidate:
-                return manifest_name
-
         return normalized_candidate or candidate
+
+    def unique_preset_name(self, engine: str, name: str, *, exclude_file_name: str | None = None) -> str:
+        """Имя, свободное и среди отображаемых имён, и среди имён файлов.
+
+        Раньше файл получал «X (2).txt», а шапка оставалась «# Preset: X» —
+        в списке стояли два одинаковых «X». Теперь «X (2)» и там и там."""
+        base = str(name or "").strip()
+        if not base:
+            return base
+        engine_paths = self._engine_paths(engine)
+        presets_dirs = (engine_paths.user_presets_dir, engine_paths.builtin_presets_dir)
+        excluded = str(exclude_file_name or "").strip().lower()
+        taken_names = {
+            str(manifest.name or "").strip().casefold()
+            for manifest in self._load_manifests(engine)
+            if str(manifest.file_name or "").strip().lower() != excluded
+        }
+
+        def _file_taken(candidate_name: str) -> bool:
+            file_name = f"{_sanitize_file_stem(candidate_name)}.txt"
+            if file_name.lower() == excluded:
+                return False
+            return any((presets_dir / file_name).exists() for presets_dir in presets_dirs)
+
+        candidate = base
+        counter = 2
+        while candidate.casefold() in taken_names or _file_taken(candidate):
+            suffix = f" ({counter})"
+            # Имя файла обрезается до 100 символов (_sanitize_file_stem): без
+            # укорачивания основы длинное «имя (2)» давало тот же файл, что и
+            # «имя», и цикл никогда не заканчивался.
+            candidate = f"{base[: max(1, 100 - len(suffix))].rstrip()}{suffix}"
+            counter += 1
+            if counter > 10_000:
+                raise ValueError(f"Не удалось подобрать свободное имя для пресета: {base}")
+        return candidate
 
     def read_source_text(self, engine: str, file_name: str) -> str:
         manifest = self.get_manifest(engine, file_name)
@@ -250,11 +300,31 @@ class PresetFileStore:
         normalized_engine = str(engine or "").strip().lower()
         cache_key = self._current_manifest_cache_key(normalized_engine)
         cached_entry = self._manifest_cache.get(normalized_engine)
-        if cache_key is not None and cached_entry is not None and cached_entry[0] == cache_key:
-            return list(cached_entry[1])
+        if cache_key is not None and cached_entry is not None:
+            if cached_entry[0] == cache_key or cached_entry[0] == (
+                *cache_key,
+                ("degraded", int(time.monotonic() // _DEGRADED_SCAN_TTL_SEC)),
+            ):
+                return list(cached_entry[1])
 
+        self._scan_degraded = False
         manifests = self._scan_manifests_from_files(engine)
-        self._cache_manifests(normalized_engine, manifests)
+        if self.__dict__.get("_scan_degraded"):
+            # Какой-то файл был заблокирован: его запись неполная (имя из
+            # имени файла). Кэшируем ненадолго — чтобы горячие пути не
+            # перечитывали папку на каждый вызов, но разблокированный файл
+            # скоро получил настоящее имя.
+            if cache_key is not None:
+                self._manifest_cache[normalized_engine] = (
+                    (*cache_key, ("degraded", int(time.monotonic() // _DEGRADED_SCAN_TTL_SEC))),
+                    list(manifests),
+                )
+            return manifests
+        # Ключ — снятый ДО сканирования: файл, созданный во время сканирования,
+        # сменит ключ, и следующий вызов пересканирует. Ключ, снятый после,
+        # закрепил бы в кэше список без этого файла.
+        if cache_key is not None:
+            self._manifest_cache[normalized_engine] = (cache_key, list(manifests))
         return manifests
 
     def _scan_manifests_from_files(self, engine: str) -> list[PresetManifest]:
@@ -265,7 +335,17 @@ class PresetFileStore:
             ("user", engine_paths.user_presets_dir),
         ):
             for preset_path in sorted(presets_dir.glob("*.txt"), key=lambda p: p.name.lower()):
-                header_text = _read_header_text(preset_path)
+                if not preset_path.is_file():
+                    continue
+                try:
+                    header_text = _read_header_text(preset_path)
+                except OSError as exc:
+                    # Файл заблокирован антивирусом/редактором: один такой
+                    # файл не должен ронять весь список пресетов — показываем
+                    # его по имени файла.
+                    _log_unreadable_preset(preset_path, exc)
+                    self._scan_degraded = True
+                    header_text = ""
                 display_name = self._extract_name(header_text, preset_path.stem)
                 updated_at = self._file_time_to_iso(preset_path) or _now_iso()
                 preset_kind = self._extract_preset_kind(header_text)
@@ -316,15 +396,6 @@ class PresetFileStore:
         if normalized_current_kind == "imported":
             return "imported"
         return "user"
-
-    def _cache_manifests(self, engine: str, manifests: list[PresetManifest]) -> None:
-        cache_key = self._current_manifest_cache_key(engine)
-        if cache_key is None:
-            return
-        self._manifest_cache[str(engine or "").strip().lower()] = (
-            cache_key,
-            list(manifests),
-        )
 
     def _current_manifest_cache_key(self, engine: str) -> tuple[object, ...] | None:
         try:
