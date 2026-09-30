@@ -9,7 +9,7 @@ from app_notifications import advisory_notification, normalize_notification_payl
 from log.log import global_logger, log
 from ui.accessibility import set_control_accessibility, set_state_text
 from ui.latest_value_worker_state import LatestValueWorkerState
-from ui.notification_inbox import NotificationInbox, routes_to_inbox
+from ui.notification_inbox import NotificationInbox
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 from ui.window_notification_actions import WindowNotificationActionHandler, WindowNotificationRuntimeActions
 
@@ -817,9 +817,36 @@ class WindowNotificationCenter(QObject):
 
     def attach_bell(self, bell) -> None:
         """Подключает кнопку-колокольчик из заголовка окна."""
+        from ui.infobar_inbox_capture import install_infobar_capture
+
         self._bell = bell
         bell.clicked.connect(self.open_inbox_panel)
+        # С этого момента любая плашка окна попадает и в колокольчик.
+        install_infobar_capture()
         self._sync_bell()
+
+    def take_infobar(self, payload: dict) -> bool:
+        """Плашка страницы — не на экран, а в колокольчик. True — забрали.
+
+        См. ui/infobar_inbox_capture.py. Ошибки и предупреждения зажигают
+        счётчик; «Готово» только качает колокольчик — счётчик для того,
+        что требует внимания.
+        """
+        if self._bell is None:
+            return False
+        entry = self.inbox.add(payload)
+        self._sync_bell()
+        self._ring_bell(strong=bool(getattr(entry, "unread", True)))
+        return True
+
+    def _ring_bell(self, *, strong: bool) -> None:
+        bell = self._bell
+        if bell is None:
+            return
+        try:
+            bell.ring(strong=strong)
+        except RuntimeError:
+            self._bell = None
 
     def _sync_bell(self) -> None:
         bell = self._bell
@@ -850,6 +877,7 @@ class WindowNotificationCenter(QObject):
             self.inbox,
             build_action=self._action_handler.build_action_callback,
             on_changed=self._sync_bell,
+            open_entry=self._open_inbox_entry,
             parent=bell.window(),
         )
         self._inbox_panel = panel
@@ -860,6 +888,36 @@ class WindowNotificationCenter(QObject):
         # надо разгребать.
         self.inbox.mark_all_read()
         self._sync_bell()
+
+    def _open_inbox_entry(self, entry) -> bool:
+        """Открывает раздел записи из колокольчика; не вышло — журнал.
+
+        Раздел может быть вложенным (редактор пресета, файл hosts) — туда
+        из меню не попасть, но плашка пришла именно оттуда. Раздел
+        может быть и недоступен в текущем режиме — тогда журнал: щелчок
+        по записи не должен ничего не делать.
+        """
+        from app.page_names import PageName
+        from ui.notification_inbox import FALLBACK_PAGE, target_page
+
+        for name in dict.fromkeys((target_page(entry), FALLBACK_PAGE)):
+            page = PageName.__members__.get(name)
+            if page is None:
+                continue
+            try:
+                if self._show_page(page, allow_internal=True):
+                    return True
+            except Exception as exc:
+                log(f"Колокольчик: раздел {name} не открылся: {exc}", "WARNING")
+        return False
+
+    def _current_page_name(self) -> str:
+        try:
+            from ui.infobar_inbox_capture import page_name_for
+
+            return page_name_for(self._parent)
+        except Exception:
+            return ""
 
     def _on_inbox_panel_closing(self, panel, by_bell: bool) -> None:
         from ui.widgets.notification_bell import anchor_point
@@ -877,10 +935,14 @@ class WindowNotificationCenter(QObject):
             pass
 
     def _present_notification(self, payload: dict) -> None:
-        # Фоновое не всплывает, а копится за колокольчиком. Без
+        # Плашек нет: всё уходит в колокольчик, и он качается (решение
+        # владельца 30.09.2026). Раньше ответ на действие человека всплывал
+        # плашкой поверх окна, а в колокольчик ложился просмотренным — и
+        # человек видел на экране одно, в списке другое. Кнопки действий
+        # («Исправить» и т. п.) есть и в панели колокольчика. Без
         # колокольчика (окно ещё не собрано) показываем по-старому:
         # потерять предупреждение хуже, чем показать его плашкой.
-        to_inbox = routes_to_inbox(payload) and self._bell is not None
+        to_inbox = self._bell is not None
 
         try:
             log(
@@ -893,11 +955,16 @@ class WindowNotificationCenter(QObject):
             pass
 
         if to_inbox:
-            self.inbox.add(payload)
+            from ui.notification_inbox import source_page
+
+            # Источник без правила — ответ на действие на открытом
+            # разделе: туда и вернёт щелчок по записи.
+            if not payload.get("page") and not source_page(str(payload.get("source") or "")):
+                payload = {**payload, "page": self._current_page_name()}
+            entry = self.inbox.add(payload)
             self._sync_bell()
+            self._ring_bell(strong=bool(getattr(entry, "unread", True)))
             return
-        self.inbox.add(payload, seen=True)
-        self._sync_bell()
         self._show_infobar_notification(payload)
 
     def _show_infobar_notification(self, payload: dict) -> None:
@@ -921,14 +988,18 @@ class WindowNotificationCenter(QObject):
                 "warning": _InfoBar.warning,
             }.get(level, _InfoBar.warning)
 
-            bar = factory(
-                title=title,
-                content=content,
-                isClosable=True,
-                position=position,
-                duration=duration,
-                parent=self._parent,
-            )
+            from ui.infobar_inbox_capture import center_owned_infobar
+
+            # Эту плашку центр уже записал в колокольчик — с кнопками действий.
+            with center_owned_infobar():
+                bar = factory(
+                    title=title,
+                    content=content,
+                    isClosable=True,
+                    position=position,
+                    duration=duration,
+                    parent=self._parent,
+                )
             self._set_infobar_accessibility(bar, level=level, title=title, content=content)
 
             for action in payload.get("buttons") or []:

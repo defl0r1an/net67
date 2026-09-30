@@ -29,6 +29,8 @@ __all__ = [
     "human_content",
     "human_title",
     "routes_to_inbox",
+    "source_page",
+    "target_page",
 ]
 
 #: Сколько записей держит история. Старые вытесняются: это не журнал, а
@@ -38,6 +40,32 @@ INBOX_LIMIT = 60
 _BACKGROUND_PREFIXES = ("global_logger", "startup.", "deferred.")
 _BACKGROUND_SOURCES = frozenset({"startup", "presets.remote_sync", "installation.repair"})
 _ATTENTION_LEVELS = frozenset({"warning", "error"})
+#: Куда ведёт щелчок по записи, если она сама не знает своего раздела.
+#:
+#: Имена — члены PageName (строкой: модуль чистый). Проверяется по
+#: началу источника, первое совпадение выигрывает — поэтому
+#: частные правила стоят выше общих.
+_SOURCE_PAGES: tuple[tuple[str, str], ...] = (
+    ("global_logger", "LOGS"),
+    ("startup.update_check", "SERVERS"),
+    ("startup.telega", "TELEGRAM_PROXY"),
+    ("deferred.telega", "TELEGRAM_PROXY"),
+    ("telegram", "TELEGRAM_PROXY"),
+    ("startup.proxy", "NETWORK"),
+    ("launch.", "ZAPRET2_MODE_CONTROL"),
+    ("dpi_start", "ZAPRET2_MODE_CONTROL"),
+    ("autostart.", "ZAPRET2_MODE_CONTROL"),
+    ("navigation.preset_setup_page", "ZAPRET2_USER_PRESETS"),
+    ("presets.", "ZAPRET2_USER_PRESETS"),
+    ("hosts", "HOSTS"),
+    ("dns", "NETWORK"),
+    ("vpn", "VPN"),
+)
+
+#: Запись, у которой нет ни своего раздела, ни правила, ведёт в журнал:
+#: там лежит всё, что программа писала рядом с этим уведомлением.
+FALLBACK_PAGE = "LOGS"
+
 _SERVICE_PREFIX_RE = re.compile(r"^\[[^\[\]]{1,32}\]\s*")
 _LEVEL_WORD_RE = re.compile(r"^(ERROR|WARNING|CRITICAL|INFO)\s*:\s*", re.IGNORECASE)
 
@@ -53,6 +81,30 @@ def routes_to_inbox(payload: dict) -> bool:
     if source.endswith(".action"):
         return False
     return source in _BACKGROUND_SOURCES or source.startswith(_BACKGROUND_PREFIXES)
+
+
+def source_page(source: str) -> str:
+    """Раздел по источнику уведомления, или пустая строка.
+
+    Ответ на кнопку («….action») ведёт туда же, куда исходное
+    уведомление.
+    """
+    source = str(source or "").strip()
+    source = source.removesuffix(".action")
+    for prefix, page in _SOURCE_PAGES:
+        if source.startswith(prefix):
+            return page
+    return ""
+
+
+def target_page(entry: "InboxEntry") -> str:
+    """Куда ведёт щелчок по записи. Всегда куда-то: кликабельна каждая.
+
+    Раздел, записанный при появлении (плашка со страницы пресетов —
+    на страницу пресетов), важнее правила по источнику: правило
+    угадывает, а запись знает.
+    """
+    return entry.page or source_page(entry.source) or FALLBACK_PAGE
 
 
 def human_title(payload: dict) -> str:
@@ -97,6 +149,9 @@ class InboxEntry:
     content: str
     source: str
     buttons: tuple[dict, ...] = ()
+    #: Раздел окна (имя PageName), откуда пришло уведомление. Пусто —
+    #: раздел подберёт target_page по источнику.
+    page: str = ""
     count: int = 1
     unread: bool = True
     first_seen: float = field(default_factory=time.time)
@@ -128,6 +183,7 @@ class NotificationInbox:
             content=human_content(str(payload.get("content") or "")),
             source=str(payload.get("source") or ""),
             buttons=tuple(payload.get("buttons") or ()),
+            page=str(payload.get("page") or ""),
             unread=not seen and level in _ATTENTION_LEVELS,
             first_seen=stamp,
             last_seen=stamp,
@@ -139,6 +195,8 @@ class NotificationInbox:
                 existing.unread = existing.unread or entry.unread
                 if entry.buttons:
                     existing.buttons = entry.buttons
+                if entry.page:
+                    existing.page = entry.page
                 self._entries.insert(0, self._entries.pop(index))
                 return existing
         self._entries.insert(0, entry)

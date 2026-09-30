@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 
-from PyQt6.QtCore import QPoint, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QVariantAnimation, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QFont, QPainter
 from PyQt6.QtWidgets import (
     QFrame,
@@ -22,7 +23,7 @@ from PyQt6.QtWidgets import (
 
 from ui.notification_inbox import InboxEntry, NotificationInbox
 
-__all__ = ["NotificationBell", "NotificationPanel", "anchor_point"]
+__all__ = ["NotificationBell", "NotificationPanel", "anchor_point", "badge_pop_scale", "ring_angle"]
 
 #: Размер кнопки. Под высоту строки заголовка, как у кнопок окна.
 BELL_SIZE = QSize(34, 28)
@@ -30,6 +31,33 @@ BELL_SIZE = QSize(34, 28)
 #: Ширина панели. Шире — строки ошибок растягиваются в одну длинную
 #: ленту, которую глазу неудобно читать; уже — заголовки рвутся на два слова.
 PANEL_WIDTH = 380
+
+#: Качание колокольчика при новом уведомлении.
+#:
+#: Колокольчик качается от верхней точки, как настоящий: размах гаснет
+#: по экспоненте, качнувшись пару раз. Перелёт здесь уместен — у
+#: колокольчика есть физика, и именно качание читается как «звонок».
+#: Новое непрочитанное — заметный размах; запись о плашке, которую
+#: человек и так видит на экране, — лёгкий, чтобы не кричать дважды.
+RING_MS = 760
+RING_STRONG_DEG = 16.0
+RING_SOFT_DEG = 7.0
+_RING_DAMPING = 4.2
+_RING_SWINGS = 2.3
+#: Счётчик «выпрыгивает» в первые 45 % качания.
+BADGE_POP_SCALE = 0.35
+
+
+def ring_angle(t: float, amplitude: float) -> float:
+    """Угол качания в момент t (0..1): затухающая синусоида."""
+    t = max(0.0, min(1.0, float(t)))
+    return amplitude * math.exp(-_RING_DAMPING * t) * math.sin(2.0 * math.pi * _RING_SWINGS * t) * (1.0 - t)
+
+
+def badge_pop_scale(t: float) -> float:
+    t = max(0.0, min(1.0, float(t) / 0.45))
+    return 1.0 + BADGE_POP_SCALE * math.sin(math.pi * t) * (1.0 - t * 0.3)
+
 
 _LEVEL_ICONS = {
     "error": "fa5s.exclamation-circle",
@@ -62,6 +90,17 @@ class NotificationBell(QPushButton):
         self._unread = 0
         self._level = ""
         self._hover = False
+        self._ring_t = 1.0
+        self._ring_amplitude = 0.0
+        self._ring_pop = False
+        # QVariantAnimation, а не QPropertyAnimation: общий выключатель
+        # анимаций подменяет только второй.
+        self._ring = QVariantAnimation(self)
+        self._ring.setStartValue(0.0)
+        self._ring.setEndValue(1.0)
+        self._ring.setDuration(RING_MS)
+        self._ring.valueChanged.connect(self._on_ring_value)
+        self._ring.finished.connect(self._on_ring_finished)
         self._sync_text()
 
     def set_state(self, unread: int, level: str) -> None:
@@ -73,6 +112,41 @@ class NotificationBell(QPushButton):
     @property
     def unread(self) -> int:
         return self._unread
+
+    def ring(self, *, strong: bool) -> None:
+        """Качнуться: пришло новое уведомление.
+
+        Раньше колокольчик молча менял цифру — новое замечали, только
+        случайно взглянув на заголовок. Повторный звонок во время
+        качания не начинает его заново с нуля: размах берётся больший из
+        двух, а время — с начала, так что движение не дёргается.
+        """
+        from ui.animation_policy import are_live_animations_enabled
+
+        if not are_live_animations_enabled() or not self.isVisible():
+            return
+        amplitude = RING_STRONG_DEG if strong else RING_SOFT_DEG
+        if self.is_ringing():
+            amplitude = max(amplitude, self._ring_amplitude)
+        self._ring_amplitude = amplitude
+        self._ring_pop = bool(strong and self._unread)
+        self._ring.stop()
+        self._ring.start()
+
+    def is_ringing(self) -> bool:
+        return self._ring.state() == QVariantAnimation.State.Running
+
+    def ring_angle(self) -> float:
+        return ring_angle(self._ring_t, self._ring_amplitude) if self.is_ringing() else 0.0
+
+    def _on_ring_value(self, value) -> None:
+        self._ring_t = float(value)
+        self.update()
+
+    def _on_ring_finished(self) -> None:
+        self._ring_t = 1.0
+        self._ring_pop = False
+        self.update()
 
     def _sync_text(self) -> None:
         from ui.accessibility import set_control_accessibility
@@ -120,10 +194,21 @@ class NotificationBell(QPushButton):
             ratio = pixmap.devicePixelRatio() or 1.0
             width = pixmap.width() / ratio
             height = pixmap.height() / ratio
-            painter.drawPixmap(
-                QPoint(int((rect.width() - width) / 2), int((rect.height() - height) / 2)),
-                pixmap,
-            )
+            left = int((rect.width() - width) / 2)
+            top = int((rect.height() - height) / 2)
+            angle = self.ring_angle()
+            if abs(angle) > 0.05:
+                # Качается от верхней точки — там, где колокольчик висит.
+                pivot = QPointF(left + width / 2, top + 1.0)
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+                painter.translate(pivot)
+                painter.rotate(angle)
+                painter.translate(-pivot)
+                painter.drawPixmap(QPoint(left, top), pixmap)
+                painter.restore()
+            else:
+                painter.drawPixmap(QPoint(left, top), pixmap)
 
         if self._unread:
             text = str(self._unread) if self._unread < 10 else "9+"
@@ -133,6 +218,11 @@ class NotificationBell(QPushButton):
             painter.setFont(font)
             badge_width = max(14.0, painter.fontMetrics().horizontalAdvance(text) + 7.0)
             badge = QRectF(rect.width() - badge_width - 2, 2, badge_width, 14)
+            if self._ring_pop and self.is_ringing():
+                scale = badge_pop_scale(self._ring_t)
+                center = badge.center()
+                badge = QRectF(0, 0, badge.width() * scale, badge.height() * scale)
+                badge.moveCenter(center)
             # Ошибка — заливка акцентом (самое контрастное в монохромной
             # теме), предупреждение — приглушённым: вес важности держит
             # светлота, а не цвет, как во всём интерфейсе.
@@ -155,6 +245,91 @@ class _EntryCloser:
         self._on_close()
 
 
+#: Насколько можно сдвинуть мышь между нажатием и отпусканием, чтобы это
+#: всё ещё был щелчок. Дальше — человек выделял текст, а не открывал.
+CLICK_SLOP_PX = 4
+
+
+class _EntryRow(QFrame):
+    """Запись в панели — целиком кнопка: щелчок открывает её раздел.
+
+    Раньше открыть что-то из списка можно было только кнопкой действия,
+    а она есть у немногих записей. Остальные только читались:
+    «Пресет сохранён» — а где он, куда смотреть — ищи сам.
+
+    Текст записи по-прежнему выделяется мышью (скопировать ошибку):
+    протяжка — выделение, щелчок на месте — переход.
+    """
+
+    def __init__(self, on_activate: Callable[[], None]) -> None:
+        super().__init__()
+        self._on_activate = on_activate
+        self._pressed_at: QPoint | None = None
+        self._hovered = False
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def watch(self, label: QLabel) -> None:
+        """Выделяемый текст сам забирает мышь — щелчок по нему ловим фильтром."""
+        label.installEventFilter(self)
+        label.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt override)
+        kind = event.type()
+        if kind == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            self._pressed_at = event.globalPosition().toPoint()
+        elif kind == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
+            if isinstance(obj, QLabel) and obj.hasSelectedText():
+                self._pressed_at = None
+                return False
+            self._release_at(event.globalPosition().toPoint())
+        return False
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed_at = event.globalPosition().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._release_at(event.globalPosition().toPoint())
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def _release_at(self, point: QPoint) -> None:
+        pressed, self._pressed_at = self._pressed_at, None
+        if pressed is None or (point - pressed).manhattanLength() > CLICK_SLOP_PX:
+            return
+        if not self.rect().contains(self.mapFromGlobal(point)):
+            return
+        self._on_activate()
+
+    def enterEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().paintEvent(event)
+        if not self._hovered:
+            return
+        # Подсветка под курсором — единственное, что говорит «это
+        # нажимается» до щелчка. Текст — дочерние виджеты, он поверх.
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(_shell_colors().surface_hover))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0, 3, 0, -3), 8, 8)
+        painter.end()
+
+
 class NotificationPanel(QFrame):
     """Всплывающий список под колокольчиком."""
 
@@ -172,6 +347,7 @@ class NotificationPanel(QFrame):
         *,
         build_action: Callable[[dict, object], Callable[[], None] | None],
         on_changed: Callable[[], None],
+        open_entry: Callable[[InboxEntry], None] | None = None,
         parent=None,
     ) -> None:
         # Системная тень Windows прямоугольная и под скруглённой панелью
@@ -192,6 +368,7 @@ class NotificationPanel(QFrame):
         self._anchor: QWidget | None = None
         self._build_action = build_action
         self._on_changed = on_changed
+        self._open_entry = open_entry
         self.setFixedWidth(PANEL_WIDTH)
 
         colors = _shell_colors()
@@ -296,10 +473,12 @@ class NotificationPanel(QFrame):
         from ui.theme import get_cached_qta_pixmap
 
         colors = _shell_colors()
-        box = QFrame()
+        box = _EntryRow(lambda e=entry: self._activate(e))
         box.setObjectName("net67InboxEntry")
         layout = QHBoxLayout(box)
-        layout.setContentsMargins(0, 10, 0, 10)
+        # Поля по бокам — под подсветку наведения: без них текст
+        # упирался бы в её край.
+        layout.setContentsMargins(6, 10, 6, 10)
         layout.setSpacing(10)
 
         text = QVBoxLayout()
@@ -333,6 +512,7 @@ class NotificationPanel(QFrame):
             body.setObjectName("net67InboxMuted")
             body.setWordWrap(True)
             body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            box.watch(body)
             text.addWidget(body)
         if entry.source == "global_logger":
             hint = QLabel("Подробности — в журнале: Диагностика → Логи", box)
@@ -360,6 +540,13 @@ class NotificationPanel(QFrame):
         return box
 
     # ── действия ─────────────────────────────────────────────
+
+    def _activate(self, entry: InboxEntry) -> None:
+        """Щелчок по записи: панель уходит, окно открывает раздел записи."""
+        open_entry = self._open_entry
+        self.close()
+        if open_entry is not None:
+            open_entry(entry)
 
     def _dismiss(self, entry: InboxEntry) -> None:
         self._inbox.remove(entry)

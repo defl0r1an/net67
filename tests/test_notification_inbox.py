@@ -120,11 +120,21 @@ class CenterRoutingTests(unittest.TestCase):
         popup.assert_not_called()
         self.assertEqual(bell.unread, 1)
 
-    def test_answer_to_action_pops_up_and_is_kept_as_seen(self) -> None:
+    def test_answer_to_action_goes_to_bell_too(self) -> None:
+        """Плашек нет вовсе (решение владельца 30.09): ответ на действие —
+        тоже в колокольчик, непрочитанным."""
         center, bell = self._center()
         with patch.object(center, "_show_infobar_notification") as popup:
             center._present_notification({"level": "error", "source": "launch.dpi_error", "title": "Не запустилось"})
-        popup.assert_called_once()
+        popup.assert_not_called()
+        self.assertEqual(bell.unread, 1)
+        self.assertEqual(len(center.inbox.entries()), 1)
+
+    def test_success_rings_but_does_not_light_counter(self) -> None:
+        center, bell = self._center()
+        with patch.object(center, "_show_infobar_notification") as popup:
+            center._present_notification({"level": "success", "source": "program_settings", "title": "Готово"})
+        popup.assert_not_called()
         self.assertEqual(bell.unread, 0)
         self.assertEqual(len(center.inbox.entries()), 1)
 
