@@ -71,4 +71,8 @@ def bind_launch_title_badge(window, ui_state_store, launch_control) -> LaunchTit
             pass
 
     badge.destroyed.connect(_drop)
+    # Пока главный круг страницы виден, метки нет: она — его продолжение.
+    from shell.launch_badge_handoff import LaunchBadgeHandoff
+
+    window.launchBadgeHandoff = LaunchBadgeHandoff(window, badge)
     return badge

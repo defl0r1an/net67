@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QVariantAnimation
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QSizePolicy
 from qfluentwidgets import TransparentPushButton, setCustomStyleSheet
 
@@ -104,12 +104,19 @@ class LaunchTitleBadge(TransparentPushButton):
         self._launch_method = ""
         self._override_text = ""
         self._styled_phase: str | None = None
+        # Насколько метка на экране: 0 — её место занимает главный круг
+        # страницы (shell/launch_badge_handoff.py), 1 — стоит как есть.
+        self._presence = 1.0
 
         self.setObjectName(LAUNCH_TITLE_BADGE_OBJECT_NAME)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.setFixedHeight(NET67_BADGE_HEIGHT)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        policy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        # Спрятанная метка держит место: иначе вкладки заголовка рядом
+        # прыгали бы на каждом переходе круга в метку и обратно.
+        policy.setRetainSizeWhenHidden(True)
+        self.setSizePolicy(policy)
 
         self._breath_t = 0.0
         # QVariantAnimation, а не QPropertyAnimation: при выключенных
@@ -155,6 +162,37 @@ class LaunchTitleBadge(TransparentPushButton):
         self._override_text = text
         return self._render() if self._phase else False
 
+    def set_presence(self, value: float) -> None:
+        """0 — метки нет (её место у главного круга), 1 — видна целиком.
+
+        Промежуточное — только проявление без движения, когда «лёгкие
+        анимации» выключены: полёт снимка тогда не показывают.
+        """
+        value = max(0.0, min(1.0, float(value)))
+        self._presence = value
+        # Полупрозрачную метку не нажать: щелчок по тени выключателя
+        # выключил бы обход, которого человек не видел.
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, value < 0.999)
+        if value <= 0.001:
+            if not self.isHidden():
+                self.hide()
+            return
+        if self.isHidden() and self._phase:
+            self.show()
+        self.update()
+
+    def presence(self) -> float:
+        return self._presence
+
+    def grab_full(self) -> QPixmap:
+        """Снимок метки целиком, как она встанет, — для полёта из круга."""
+        saved = self._presence
+        self._presence = 1.0
+        try:
+            return self.grab()
+        finally:
+            self._presence = saved
+
     def retranslate(self) -> bool:
         if not self._phase:
             return False
@@ -186,7 +224,7 @@ class LaunchTitleBadge(TransparentPushButton):
         set_tooltip(self, view.tooltip)
         set_control_accessibility(self, name=f"Состояние net67: {view.text}", description=view.tooltip)
         self._sync_breath()
-        if was_hidden:
+        if was_hidden and self._presence > 0.001:
             self.show()
         self.update()
         return was_hidden or old_text != view.text
@@ -298,6 +336,7 @@ class LaunchTitleBadge(TransparentPushButton):
         hovered = bool(getattr(self, "isHover", False)) or self.underMouse()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setOpacity(self._presence)
         body = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = body.height() / 2
 
