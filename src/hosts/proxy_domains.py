@@ -45,6 +45,10 @@ class HostsCatalog:
     #: жили списком QUICK_SERVICES в коде и расходились с каталогом: новый
     #: сервис получал глобус, пока кто-нибудь не дописывал его руками.
     service_icons: dict[str, tuple[str, str | None]] = field(default_factory=dict)
+    #: Профили, которые остаются в списке, но сами не выбираются: главный
+    #: сайт через них в замере не открылся. Ключ — casefold имени сервиса.
+    #: См. prefer_measured_profiles.
+    not_default_profiles: dict[str, frozenset[str]] = field(default_factory=dict)
 
 
 #: Сервис каталога, чьи записи в hosts ведёт другая страница.
@@ -349,7 +353,17 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         service_modes=service_modes,
         service_categories=service_categories,
         service_icons=service_icons,
+        not_default_profiles=_parse_not_default(data.get("net67_not_default")),
     )
+
+
+def _parse_not_default(raw: object) -> dict[str, frozenset[str]]:
+    out: dict[str, frozenset[str]] = {}
+    for name, entry in (raw if isinstance(raw, dict) else {}).items():
+        ids = frozenset(_clean_str(key) for key in (entry if isinstance(entry, dict) else {}) if _clean_str(key))
+        if _clean_str(name) and ids:
+            out[_clean_str(name).casefold()] = ids
+    return out
 
 
 def _read_json_file(path: Path) -> object:
@@ -597,9 +611,13 @@ def _load_split_catalog_data_with_sig(path: Path) -> tuple[dict, tuple[int, int]
 
     # После профилей net67: они тоже бывают мёртвыми.
     dead_path = path / NET67_DEAD_PROFILES_FILE_NAME
+    not_default: object = {}
     if dead_path.is_file():
         try:
-            _apply_net67_dead_profiles(read_json(dead_path), profiles, services)
+            dead_raw = read_json(dead_path)
+            _apply_net67_dead_profiles(dead_raw, profiles, services)
+            if isinstance(dead_raw, dict):
+                not_default = dead_raw.get("not_default") or {}
         except Exception as exc:
             # Битый список не должен гасить каталог: без него просто
             # вернутся неработающие кружки.
@@ -615,6 +633,7 @@ def _load_split_catalog_data_with_sig(path: Path) -> tuple[dict, tuple[int, int]
         "version": 1,
         "profiles": profiles,
         "services": services,
+        "net67_not_default": not_default,
     }, _combine_content_sig(sig_entries)
 
 
@@ -845,6 +864,28 @@ def _get_complete_profile_rows(cat: HostsCatalog, service_name: str, profile_id:
     if not required_domains or covered_domains != required_domains:
         return []
     return out
+
+
+def prefer_measured_profiles(service_name: str, available) -> list[str]:
+    """Профили, из которых программа выбирает сама, без человека.
+
+    Замер 30.09.2026 шёл из двух сетей в России. Адреса, молчавшие в
+    обеих, с других узлов отвечали: у другого человека профиль может
+    работать, поэтому из списка он не убран. Но ставить его по
+    умолчанию — значит включить Gemini на XBOX DNS, через который
+    gemini.google.com в замере не открылся ни дома, ни на работе.
+    Выбрать такой профиль вручную можно; сама программа берёт
+    проверенный. Если проверенных нет — прежний список.
+    """
+    profiles = [str(p) for p in (available or ())]
+    try:
+        avoid = _load_catalog().not_default_profiles.get(str(service_name or "").strip().casefold())
+    except Exception:
+        avoid = None
+    if not avoid:
+        return profiles
+    measured = [p for p in profiles if p not in avoid]
+    return measured or profiles
 
 
 def get_service_available_dns_profiles(service_name: str) -> list[str]:

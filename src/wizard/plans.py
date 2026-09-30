@@ -378,7 +378,7 @@ def hosts_service_profiles(group_keys) -> dict[str, str]:
     «Сервисы»: переключатели и колонка «Профиль» читают его.
     """
     try:
-        from hosts.proxy_domains import get_service_available_dns_profiles
+        from hosts.proxy_domains import get_service_available_dns_profiles, prefer_measured_profiles
     except Exception:
         return {}
 
@@ -386,7 +386,7 @@ def hosts_service_profiles(group_keys) -> dict[str, str]:
     for key in sorted(normalize_hosts_groups(group_keys)):
         for service in group_services(key):
             try:
-                available = list(get_service_available_dns_profiles(service) or [])
+                available = prefer_measured_profiles(service, get_service_available_dns_profiles(service) or [])
             except Exception:
                 available = []
             if not available:
@@ -534,7 +534,7 @@ def build_hosts_service_profiles(selection) -> dict[str, str]:
     что мастер ничего не сделал.
     """
     try:
-        from hosts.proxy_domains import get_service_available_dns_profiles
+        from hosts.proxy_domains import get_service_available_dns_profiles, prefer_measured_profiles
     except Exception:
         return {}
 
@@ -542,7 +542,7 @@ def build_hosts_service_profiles(selection) -> dict[str, str]:
     for key in sorted(normalize_selection(selection)):
         for service in _CHOICE_BY_KEY[key].hosts_services:
             try:
-                available = list(get_service_available_dns_profiles(service) or [])
+                available = prefer_measured_profiles(service, get_service_available_dns_profiles(service) or [])
             except Exception:
                 available = []
             if not available:

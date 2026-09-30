@@ -15,7 +15,7 @@ from __future__ import annotations
 import unittest
 
 from hosts.page_plans import is_ai_service
-from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles
+from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles, prefer_measured_profiles
 from wizard.plans import (
     HOSTS_GROUPS,
     PREFERRED_DNS_PROFILE,
@@ -79,7 +79,9 @@ class ProfileTests(unittest.TestCase):
         self.assertTrue(chosen, "ни один сервис не выбран — проверять нечего")
 
         for service, profile in chosen.items():
-            available = list(get_service_available_dns_profiles(service) or [])
+            # Профиль, через который главный сайт в замере не открылся,
+            # сама программа не ставит (prefer_measured_profiles).
+            available = prefer_measured_profiles(service, get_service_available_dns_profiles(service) or [])
             if PREFERRED_DNS_PROFILE in available:
                 self.assertEqual(
                     profile,

@@ -145,10 +145,12 @@ def build_default_selection(
 
 def load_default_selection() -> dict[str, str]:
     """Тот же выбор, но с чтением каталога сервисов."""
-    from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles
+    from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles, prefer_measured_profiles
 
     services = list(get_all_services() or ())
-    available = {name: list(get_service_available_dns_profiles(name) or ()) for name in services}
+    available = {
+        name: prefer_measured_profiles(name, get_service_available_dns_profiles(name) or ()) for name in services
+    }
     return build_default_selection(services, available)
 
 

@@ -140,7 +140,7 @@ class RealCatalogTests(unittest.TestCase):
         """Просьба была прямая: все нейронки из коробки, на XBOX DNS там,
         где он работает, иначе — на следующем по замеру."""
         from hosts.defaults import choose_profile, is_ai_service, load_default_selection
-        from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles
+        from hosts.proxy_domains import get_all_services, get_service_available_dns_profiles, prefer_measured_profiles
 
         selection = load_default_selection()
         catalog_ai = [name for name in (get_all_services() or ()) if is_ai_service(name)]
@@ -148,7 +148,9 @@ class RealCatalogTests(unittest.TestCase):
         self.assertGreaterEqual(len(catalog_ai), 10)
         for name in catalog_ai:
             with self.subTest(service=name):
-                expected = choose_profile(get_service_available_dns_profiles(name))
+                # Сама программа берёт профиль, через который главный сайт
+                # в замере открылся (prefer_measured_profiles).
+                expected = choose_profile(prefer_measured_profiles(name, get_service_available_dns_profiles(name)))
                 self.assertTrue(expected)
                 self.assertEqual(selection.get(name), expected)
 

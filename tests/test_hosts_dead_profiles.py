@@ -12,6 +12,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src"
@@ -90,6 +91,25 @@ class DeadProfilesLoaderTests(unittest.TestCase):
         data = self._load()
         self.assertEqual(len(self._ips(data, "Другой")), 3)
 
+    def test_not_default_profile_stays_visible_but_is_not_chosen(self) -> None:
+        """Адрес молчал в двух сетях, а с других узлов отвечал: убирать
+        нельзя, у другого человека может работать. Но сама программа его
+        не ставит."""
+        _write(
+            self.root / proxy_domains.NET67_DEAD_PROFILES_FILE_NAME,
+            {"not_default": {"Сервис": {"a": "главный сайт не открылся"}}},
+        )
+        data = self._load()
+        self.assertEqual(self._ips(data, "Сервис"), {"a": "1.1.1.1", "b": "2.2.2.2", "c": "3.3.3.3"})
+
+        catalog = proxy_domains._parse_hosts_catalog_json(json.dumps(data))
+        self.assertEqual(catalog.not_default_profiles, {"сервис": frozenset({"a"})})
+        with unittest.mock.patch.object(proxy_domains, "_load_catalog", return_value=catalog):
+            self.assertEqual(proxy_domains.prefer_measured_profiles("Сервис", ["a", "b"]), ["b"])
+            # Проверенных нет — выбирать всё равно из чего-то надо.
+            self.assertEqual(proxy_domains.prefer_measured_profiles("Сервис", ["a"]), ["a"])
+            self.assertEqual(proxy_domains.prefer_measured_profiles("Другой", ["a", "b"]), ["a", "b"])
+
     def test_file_is_part_of_the_catalog_signature(self) -> None:
         """Правка списка должна сбрасывать кэш каталога, как правка любого файла."""
         _write(self.root / proxy_domains.NET67_DEAD_PROFILES_FILE_NAME, {"dead_profiles": {}})
@@ -116,17 +136,22 @@ class RealDeadProfilesListTests(unittest.TestCase):
 
     def test_every_profile_exists(self) -> None:
         named = set(self.data.get("dead_profiles", {}))
-        for entry in self.data.get("services", {}).values():
-            named |= set(entry)
+        for section in ("services", "not_default"):
+            for entry in self.data.get(section, {}).values():
+                named |= set(entry)
         self.assertEqual(named - self.profiles, set())
 
     def test_every_service_exists(self) -> None:
-        self.assertEqual({name.casefold() for name in self.data.get("services", {})} - self.services, set())
+        for section in ("services", "not_default"):
+            with self.subTest(section=section):
+                names = {name.casefold() for name in self.data.get(section, {})}
+                self.assertEqual(names - self.services, set())
 
     def test_every_exclusion_says_why(self) -> None:
         reasons = list(self.data.get("dead_profiles", {}).values())
-        for entry in self.data.get("services", {}).values():
-            reasons.extend(entry.values())
+        for section in ("services", "not_default"):
+            for entry in self.data.get(section, {}).values():
+                reasons.extend(entry.values())
         self.assertTrue(reasons)
         self.assertTrue(all(isinstance(r, str) and r.strip() for r in reasons))
         self.assertTrue(str(self.data.get("checked", "")).strip())

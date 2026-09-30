@@ -501,9 +501,11 @@ def _rows_from_fallback_profile(service_name: str, missing_profile: str) -> list
     """
     try:
         from .defaults import choose_profile
-        from .proxy_domains import get_service_available_dns_profiles
+        from .proxy_domains import get_service_available_dns_profiles, prefer_measured_profiles
 
-        fallback = choose_profile(get_service_available_dns_profiles(service_name))
+        fallback = choose_profile(
+            prefer_measured_profiles(service_name, get_service_available_dns_profiles(service_name))
+        )
     except Exception as exc:
         log(f"Запасной профиль для «{service_name}» не выбран: {exc}", "DEBUG")
         return []
