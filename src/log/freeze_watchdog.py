@@ -58,7 +58,7 @@ HEARTBEAT_INTERVAL_MS = 1000
 _state_lock = threading.Lock()
 _last_heartbeat = 0.0
 _installed = False
-_dump_file = None
+_dump_path: Path | None = None
 
 
 def _touch_heartbeat() -> None:
@@ -76,20 +76,25 @@ def _seconds_since_heartbeat() -> float:
 
 
 def _dump_stacks(stalled_for: float) -> None:
-    """Пишет стеки всех потоков в файл сторожа."""
-    if _dump_file is None:
+    """Пишет стеки всех потоков в файл сторожа.
+
+    Файл открывается на время записи. Раньше он висел открытым всю жизнь
+    процесса: каждый запуск оставлял пустой freeze.log, а папку с отчётами
+    о сбоях нельзя было удалить, пока программа работает.
+    """
+    if _dump_path is None:
         return
     try:
-        _dump_file.write(f"\n{'=' * 60}\n")
-        _dump_file.write(f"Главный поток не отвечает {stalled_for:.0f} с\n")
-        _dump_file.write(f"Время: {datetime.datetime.now()}\n")
-        _dump_file.write(f"{'=' * 60}\n")
-        _dump_file.flush()
-        # dump_traceback безопасно звать из чужого потока: он читает
-        # состояние интерпретатора, а не ждёт главный поток.
-        faulthandler.dump_traceback(file=_dump_file, all_threads=True)
-        _dump_file.write("\n")
-        _dump_file.flush()
+        with open(_dump_path, "a", encoding="utf-8") as dump_file:
+            dump_file.write(f"\n{'=' * 60}\n")
+            dump_file.write(f"Главный поток не отвечает {stalled_for:.0f} с\n")
+            dump_file.write(f"Время: {datetime.datetime.now()}\n")
+            dump_file.write(f"{'=' * 60}\n")
+            dump_file.flush()
+            # dump_traceback безопасно звать из чужого потока: он читает
+            # состояние интерпретатора, а не ждёт главный поток.
+            faulthandler.dump_traceback(file=dump_file, all_threads=True)
+            dump_file.write("\n")
     except Exception:
         # Сторож не имеет права уронить приложение, которое стережёт.
         pass
@@ -138,7 +143,7 @@ def install_freeze_watchdog(app, *, crash_folder: Path | str | None = None) -> b
     `app` нужен как хозяин таймера: таймер живёт в главном потоке и
     гибнет вместе с приложением.
     """
-    global _installed, _dump_file
+    global _installed, _dump_path
 
     if _installed:
         return True
@@ -156,9 +161,9 @@ def install_freeze_watchdog(app, *, crash_folder: Path | str | None = None) -> b
 
         folder = Path(crash_folder)
         folder.mkdir(parents=True, exist_ok=True)
-        _dump_file = open(folder / "freeze.log", "a", encoding="utf-8")
+        _dump_path = folder / "freeze.log"
     except Exception:
-        _dump_file = None
+        _dump_path = None
 
     _touch_heartbeat()
 
