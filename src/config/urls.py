@@ -55,9 +55,10 @@ BLOCKCHECK_ISSUES_URL = _BRAND_SUPPORT_URL
 ONBOARDING_WIKI_URLS: dict[str, str] = {
     "welcome": "index",
     "how_it_works": "how-it-works",
-    "oneclick": "first-run",
+    "oneclick": "interface#главная-кнопка",
     "services": "not-working#4-сайт-закрыт-по-стране",
     "program_settings": "first-run#автозапуск",
+    "bell": "interface#колокольчик",
     "view_switch": "first-run#простой-и-расширенный-вид",
     "building_blocks": "bypass#три-слова-которые-легко-перепутать",
     "preset": "bypass#как-выбирается-пресет",

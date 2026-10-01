@@ -7,7 +7,7 @@ configuration:
   analytics:
     provider: null
   locale: ru-RU
-  baseUrl: localhost:8080
+  baseUrl: defl0r1an.github.io/net67
   ignorePatterns:
     - private
     - templates
