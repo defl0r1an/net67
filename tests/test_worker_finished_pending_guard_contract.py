@@ -21,6 +21,27 @@ FRESHNESS_GUARD_MARKERS = (
 )
 
 
+def _finish_handlers_guarded_by_runtime(tree: ast.AST) -> set[str]:
+    """Имена обработчиков, переданных в start_qthread_worker(on_finished=...).
+
+    OneShotWorkerRuntime зовёт их только для текущего воркера
+    (_finish_qthread_worker сверяет self.worker is worker): проверка
+    свежести у них есть, просто живёт уровнем ниже, а не в теле обработчика.
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == "start_qthread_worker"):
+            continue
+        for keyword in node.keywords:
+            value = keyword.value
+            if keyword.arg == "on_finished" and isinstance(value, ast.Attribute):
+                names.add(value.attr)
+    return names
+
+
 class WorkerFinishedPendingGuardContractTests(unittest.TestCase):
     def test_pending_finished_handlers_check_current_worker_or_request(self) -> None:
         offenders: list[str] = []
@@ -30,12 +51,15 @@ class WorkerFinishedPendingGuardContractTests(unittest.TestCase):
                 continue
 
             tree = ast.parse(text)
+            guarded_by_runtime = _finish_handlers_guarded_by_runtime(tree)
             for node in ast.walk(tree):
                 if not isinstance(node, ast.FunctionDef):
                     continue
                 if not node.name.startswith("_on_"):
                     continue
                 if "finished" not in node.name:
+                    continue
+                if node.name in guarded_by_runtime:
                     continue
 
                 source = ast.get_source_segment(text, node) or ""

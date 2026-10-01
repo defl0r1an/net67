@@ -232,7 +232,13 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
             "--out-range=-d8",
             "--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4",
         )
-        preset_paths = sorted(Path("src/presets/builtin/winws2").glob("*.txt"))
+        # «Стандартный 1» — собственный пресет net67, и git.zapret.moe в нём
+        # не было с создания. Профиль нужен оболочке zapret, которая оттуда
+        # обновляется; net67 обновляется с GitHub и туда не ходит.
+        own_presets = {"Стандартный 1.txt"}
+        preset_paths = sorted(
+            path for path in Path("src/presets/builtin/winws2").glob("*.txt") if path.name not in own_presets
+        )
 
         self.assertGreater(len(preset_paths), 0)
         for path in preset_paths:

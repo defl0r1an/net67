@@ -15,33 +15,25 @@ if str(PROJECT_SRC) not in sys.path:
 
 class ThemeManagerPersistenceTests(unittest.TestCase):
     def test_theme_persistence_runs_through_worker(self) -> None:
+        # Отдельного ThemePersistWorker больше нет: он писал ключ
+        # appearance.selected_theme, который никто не читал. Светлая или
+        # тёмная тема хранится в appearance.display_mode и сохраняется общим
+        # воркером настроек вида. Смысл проверки прежний — ThemeManager не
+        # пишет настройки в GUI-потоке.
+        from PyQt6.QtCore import QThread
+
         from app.feature_facades.appearance import AppearanceFeature
         import settings.appearance_workers as appearance_workers
         import ui.theme as theme
 
-        self.assertTrue(hasattr(appearance_workers, "ThemePersistWorker"))
-
-        feature_source = inspect.getsource(AppearanceFeature)
-        worker_source = inspect.getsource(appearance_workers.ThemePersistWorker.run)
-        manager_init_source = inspect.getsource(theme.ThemeManager.__init__)
         apply_source = inspect.getsource(theme.ThemeManager._apply_css_only)
-        request_source = inspect.getsource(theme.ThemeManager._request_theme_persist)
-        start_source = inspect.getsource(theme.ThemeManager._start_theme_persist_worker)
-        finished_source = inspect.getsource(theme.ThemeManager._on_theme_persist_finished)
+        for write_call in ("set_selected_theme", "set_display_mode", "save_display_mode", "settings_store"):
+            self.assertNotIn(write_call, apply_source)
 
-        self.assertIn("create_theme_persist_worker", feature_source)
-        self.assertIn("save_selected_theme=self.save_selected_theme", feature_source)
-        self.assertIn("create_theme_persist_worker", manager_init_source)
-        self.assertIn("_theme_persist_runtime = OneShotWorkerRuntime()", manager_init_source)
-        self.assertIn("_create_theme_persist_worker", start_source)
-        self.assertIn("start_qthread_worker", start_source)
-        self.assertNotIn("ThemePersistWorker(", start_source)
-        self.assertNotIn("worker.start()", start_source)
-        self.assertNotIn("settings_store", worker_source)
-        self.assertIn("_request_theme_persist", apply_source)
-        self.assertNotIn("set_selected_theme(clean)", apply_source)
-        self.assertIn("_theme_persist_state_obj()", request_source)
-        self.assertIn("_theme_persist_state_obj()", finished_source)
+        worker = appearance_workers.AppearanceSettingsSaveWorker
+        self.assertTrue(issubclass(worker, QThread))
+        self.assertIn('self._action == "display_mode"', inspect.getsource(worker.run))
+        self.assertIn("save_display_mode=", inspect.getsource(AppearanceFeature))
 
 
     def test_theme_build_runs_through_runtime(self) -> None:
@@ -66,22 +58,12 @@ class ThemeManagerPersistenceTests(unittest.TestCase):
 
     def test_cleanup_does_not_wait_for_theme_build_workers(self) -> None:
         import ui.theme as theme
-        from ui.latest_value_worker_state import LatestValueWorkerState
 
         build_runtime = SimpleNamespace(stop=Mock(), cancel=Mock())
-        persist_runtime = SimpleNamespace(stop=Mock(), cancel=Mock())
         manager = theme.ThemeManager.__new__(theme.ThemeManager)
         manager._cleanup_in_progress = False
         manager._active_theme_build_jobs = {1: build_runtime}
         manager._cleanup_theme_build_thread = Mock()
-        manager._theme_persist_state = LatestValueWorkerState(
-            persist_runtime,
-            empty_value=None,
-            pending="dark",
-            start_scheduled=True,
-        )
-        manager._theme_persist_runtime_worker = object()
-        manager._theme_persist_runtime = persist_runtime
 
         theme.ThemeManager.cleanup(manager)
 
@@ -93,16 +75,7 @@ class ThemeManagerPersistenceTests(unittest.TestCase):
             warning_prefix="theme build worker",
         )
         build_runtime.cancel.assert_called_once_with()
-        persist_runtime.stop.assert_called_once_with(
-            blocking=False,
-            wait_timeout_ms=1000,
-            log_fn=theme.log,
-            warning_prefix="theme persist worker",
-        )
-        persist_runtime.cancel.assert_called_once_with()
-        self.assertIsNone(manager._theme_persist_state.pending)
-        self.assertFalse(manager._theme_persist_state.start_scheduled)
-        self.assertIsNone(manager._theme_persist_runtime_worker)
+        manager._cleanup_theme_build_thread.assert_called_once_with()
 
 
 class ThemeModeSyncTests(unittest.TestCase):

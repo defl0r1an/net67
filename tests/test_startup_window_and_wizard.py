@@ -88,9 +88,10 @@ class WizardStepsTests(unittest.TestCase):
 
         # Вопрос «чем вы пользуетесь?» убран: обходы включаются все
         # сразу. Вопрос о провайдере, наоборот, добавлен — от него
-        # зависит, какой пресет взять за основу.
+        # зависит, какой пресет взять за основу. «hosts» — вопрос о
+        # сайтах, закрывших доступ по стране: им обход DPI не поможет.
         self.assertNotIn("services", keys)
-        self.assertEqual(keys, ["provider", "detect", "startup"])
+        self.assertEqual(keys, ["provider", "hosts", "detect", "startup"])
 
     def test_default_selection_covers_all_categories(self) -> None:
         """Раз спрашивать перестали — берём всё, иначе часть обходов пропала бы."""

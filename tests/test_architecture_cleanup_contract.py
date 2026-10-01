@@ -187,6 +187,10 @@ class ArchitectureCleanupContractTests(unittest.TestCase):
         for path in SRC_ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8", errors="replace")
             for line_number, line in enumerate(text.splitlines(), 1):
+                # Комментарий — не логика: «светлая или тёмная тема живёт
+                # в display_mode» рассказывает о коде, а не сравнивает имена.
+                if line.lstrip().startswith("#"):
+                    continue
                 if any(pattern in line for pattern in patterns):
                     offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
 

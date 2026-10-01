@@ -101,6 +101,9 @@ class UserPresetsLifecycleGuardTests(unittest.TestCase):
         page._schedule_layout_resync = Mock(
             side_effect=AssertionError("clean activation must not schedule full layout resync")
         )
+        # Значок статуса пересчитывается при каждом открытии — страховка
+        # от застывшего «занято», если уведомление подписки не дошло.
+        page._refresh_preset_status_bar = Mock()
         scheduled: list[object] = []
 
         with patch(
@@ -113,6 +116,7 @@ class UserPresetsLifecycleGuardTests(unittest.TestCase):
         self.assertEqual(presets_list.visible_calls, [])
         page.refresh_presets_view_if_possible.assert_not_called()
         page._update_presets_view_height.assert_called_once_with()
+        page._refresh_preset_status_bar.assert_called_once_with()
         self.assertEqual(scheduled, [])
 
 

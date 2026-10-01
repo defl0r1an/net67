@@ -469,6 +469,13 @@ class WinDivertServiceRecoveryTests(unittest.TestCase):
             "either because it is disabled or because it has no enabled devices associated with it."
         )
 
+        # Поиск конфликтов и проба драйвера читают настоящую систему: на
+        # машине, где net67 установлен, а тесты идут из исходников без прав
+        # администратора, служба WinDivert указывает на «чужую» папку, а проба
+        # получает «отказано в доступе» — диагноз зависел от машины.
+        from types import SimpleNamespace
+
+        idle_probe = SimpleNamespace(installed=False, ready=False, error_code=None)
         with (
             patch.object(winws_exit_diagnosis, "_check_windivert_files", return_value=[]),
             patch.object(winws_exit_diagnosis, "_check_bfe_service", return_value=True),
@@ -476,6 +483,8 @@ class WinDivertServiceRecoveryTests(unittest.TestCase):
             patch.object(winws_exit_diagnosis, "_find_disabled_windivert_driver_service", return_value=None),
             patch.object(winws_exit_diagnosis, "_detect_active_antivirus", return_value=None),
             patch.object(winws_exit_diagnosis, "_check_network_adapters", return_value=True),
+            patch("winws_runtime.health.launch_conflicts.build_launch_conflict_advice", return_value=None),
+            patch("winws_runtime.runtime.system_ops.probe_windivert_state_runtime", return_value=idle_probe),
         ):
             diagnosis = process_health_check.diagnose_winws_exit(34, stderr)
 

@@ -2095,7 +2095,12 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("peek_warmed_background_preset", combined)
         self.assertIn("peek_warmed_window_opacity", combined)
         self.assertNotIn("load_background_preset", combined)
-        self.assertNotIn("mica_enabled", combined)
+        # Mica тоже берётся из прогретого состояния; запрещено чтение
+        # настройки, а не само слово — локальная переменная mica_enabled
+        # законна.
+        self.assertIn("peek_warmed_mica_enabled", combined)
+        self.assertNotIn("load_mica_enabled", combined)
+        self.assertNotIn("get_mica_enabled", combined)
         self.assertNotIn("load_window_opacity", combined)
 
 
@@ -2797,10 +2802,15 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         page_source = inspect.getsource(StrategyScanPage)
         feature_source = inspect.getsource(BlockcheckFeature)
 
-        # Порядок стратегий теперь задаёт история подбора, а не курсор продолжения.
+        # Порядок стратегий задаёт история подбора, а не курсор продолжения.
+        # «Продолжить с места остановки» вернулось 30 сентября, но считается
+        # по той же истории (сколько стратегий на цели уже не сработало) —
+        # отдельного сохранённого курсора по-прежнему нет.
         self.assertFalse(hasattr(blockcheck_workers, "StrategyScanResumeSaveWorker"))
-        self.assertNotIn("resume", page_source)
-        self.assertNotIn("resume", feature_source)
+        for source in (page_source, feature_source):
+            for cursor_marker in ("resume_cursor", "ResumeSave", "save_resume", "resume_index"):
+                self.assertNotIn(cursor_marker, source)
+        self.assertIn("count_resumable_strategies", feature_source)
 
     def test_strategy_scan_finish_plan_finalizes_through_worker(self) -> None:
         import blockcheck.workers as blockcheck_workers
@@ -2856,10 +2866,10 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("update_stats_fn=self._update_stats", runtime_source)
         self.assertNotIn("refresh_logs_fn=", runtime_source)
 
+        # orchestra_feature ушёл вместе с оркестратором (30 сентября).
         kwargs = build_logs_page_kwargs(
             page_name=PageName.LOGS,
             logs_feature=Mock(),
-            orchestra_feature=Mock(),
         )
         self.assertNotIn("runtime_feature", kwargs)
 
@@ -3443,25 +3453,25 @@ class PresetProfileAsyncArchitectureTests(unittest.TestCase):
         self.assertIn("open_hosts_file", inspect.getsource(hosts_commands.open_hosts_file))
 
     def test_hosts_restore_permissions_runs_through_worker(self) -> None:
-        spec = importlib.util.find_spec("hosts.permission_restore_worker")
-        self.assertIsNotNone(spec)
-        permission_restore_worker = importlib.import_module("hosts.permission_restore_worker")
+        # Отдельный permission_restore_worker.py ушёл вместе со старой
+        # страницей hosts: теперь любой вызов фасада hosts идёт через общий
+        # HostsCallWorker (QThread). Смысл проверки прежний — восстановление
+        # прав не выполняется в GUI-потоке и не зовёт hosts.commands напрямую.
+        from PyQt6.QtCore import QThread
 
-        init_source = inspect.getsource(HostsPage.__init__)
-        restore_source = inspect.getsource(HostsPage._restore_hosts_permissions)
-        request_source = inspect.getsource(HostsPage._request_restore_hosts_permissions)
-        create_source = inspect.getsource(HostsPage.create_permission_restore_worker)
-        worker_source = inspect.getsource(permission_restore_worker.HostsPermissionRestoreWorker.run)
+        from app.feature_facades import hosts as hosts_feature_module
+        from hosts.call_worker import HostsCallWorker
 
-        self.assertIn("self._hosts = deps.hosts_feature", init_source)
-        self.assertIn("_permission_restore_runtime", init_source)
-        self.assertIn("_request_restore_hosts_permissions", restore_source)
-        self.assertNotIn("restore_hosts_permissions_flow(", restore_source)
-        self.assertIn("create_permission_restore_worker", request_source)
-        self.assertIn("self._hosts.create_permission_restore_worker", create_source)
-        self.assertIn("_restore_hosts_permissions", worker_source)
-        self.assertNotIn("hosts.commands", worker_source)
-        self.assertNotIn("self._controller", worker_source)
+        restore_source = inspect.getsource(HostsPage._restore_permissions)
+        facade_source = inspect.getsource(hosts_feature_module.build_hosts_feature)
+
+        self.assertIn("start_qthread_worker", restore_source)
+        self.assertIn("self._hosts.create_permission_restore_worker", restore_source)
+        self.assertNotIn("restore_hosts_permissions(", restore_source)
+        self.assertNotIn("hosts.commands", restore_source)
+        self.assertIn("restore_hosts_permissions()", facade_source)
+        self.assertTrue(issubclass(HostsCallWorker, QThread))
+        self.assertIn("self._call()", inspect.getsource(HostsCallWorker.run))
         self.assertIn("restore_hosts_permissions", inspect.getsource(hosts_commands.restore_hosts_permissions))
 
 

@@ -686,15 +686,16 @@ class AccessibilityHelpersTests(unittest.TestCase):
         self._app.processEvents()
 
     def test_round_menu_hairline_fix_is_not_called_per_menu(self) -> None:
+        # Обходим весь src, а не перечень файлов: перечень устаревал —
+        # services_matrix.py удалили, и проверка падала на пропавшем файле.
         root = Path(__file__).resolve().parents[1]
+        definition = root / "src" / "ui" / "popup_menu_style.py"
 
-        for relative_path in (
-            "src/hosts/ui/services_matrix.py",
-            "src/ui/combo_accessibility.py",
-            "src/tray.py",
-        ):
-            with self.subTest(path=relative_path):
-                source = (root / relative_path).read_text(encoding="utf-8")
+        for path in sorted((root / "src").rglob("*.py")):
+            if path == definition:
+                continue
+            with self.subTest(path=path.relative_to(root).as_posix()):
+                source = path.read_text(encoding="utf-8", errors="replace")
                 self.assertNotIn("suppress_round_menu_hairline(", source)
 
     def test_startup_installs_global_round_menu_hairline_fix(self) -> None:

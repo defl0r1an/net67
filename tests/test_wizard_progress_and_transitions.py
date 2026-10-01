@@ -67,8 +67,12 @@ class ProgressMathTests(unittest.TestCase):
         self.assertEqual(self._percent(1, checked=0, to_check=0), self._percent(1))
 
     def test_out_of_range_step_is_clamped(self) -> None:
+        from wizard.plans import WIZARD_STEPS
+
+        # Последний шаг — по длине списка: шагов стало четыре, когда
+        # добавили вопрос про сайты без VPN, и число здесь устарело.
         self.assertEqual(self._percent(-5), self._percent(0))
-        self.assertEqual(self._percent(99), self._percent(2))
+        self.assertEqual(self._percent(99), self._percent(len(WIZARD_STEPS) - 1))
 
 
 if __name__ == "__main__":

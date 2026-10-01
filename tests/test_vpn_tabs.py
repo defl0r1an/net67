@@ -56,11 +56,11 @@ class TabSetTests(unittest.TestCase):
         self.assertEqual(TAB_TITLES[TAB_AMNEZIA], "Amnezia")
         self.assertEqual(TAB_TITLES[TAB_LINKS], "VPN")
 
-    def test_amnezia_comes_first(self) -> None:
-        """Ей пользуются, ссылки — про запас."""
-        from vpn.tabs import TAB_AMNEZIA, TAB_ORDER
+    def test_links_come_first(self) -> None:
+        """Подпиской пользуются каждый день, Amnezia настраивают один раз."""
+        from vpn.tabs import TAB_LINKS, TAB_ORDER
 
-        self.assertEqual(TAB_ORDER[0], TAB_AMNEZIA)
+        self.assertEqual(TAB_ORDER[0], TAB_LINKS)
 
     def test_every_tab_has_a_hint_and_a_placeholder(self) -> None:
         from vpn.tabs import TAB_HINTS, TAB_ORDER, TAB_PLACEHOLDERS
@@ -120,11 +120,13 @@ class SavedChoiceTests(unittest.TestCase):
         self.assertEqual(normalize_tab(TAB_WIREGUARD), TAB_AMNEZIA)
 
     def test_junk_falls_back_instead_of_failing(self) -> None:
-        from vpn.tabs import TAB_AMNEZIA, normalize_tab
+        # Мусор открывает первую вкладку по порядку, а не зашитую: когда
+        # вкладки поменяли местами, зашитый ответ открыл бы не ту.
+        from vpn.tabs import TAB_ORDER, normalize_tab
 
         for junk in ("", None, 17, "что-то новое"):
             with self.subTest(value=junk):
-                self.assertEqual(normalize_tab(junk), TAB_AMNEZIA)
+                self.assertEqual(normalize_tab(junk), TAB_ORDER[0])
 
     def test_known_keys_survive(self) -> None:
         from vpn.tabs import TAB_ORDER, normalize_tab

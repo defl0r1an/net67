@@ -33,11 +33,15 @@ ACCEPTED_LEGACY_CLOUDFLARE_TCP_PROFILES = {
 # Default v1 намеренно направляет весь Amazon AS16509 через ipset.
 ACCEPTED_IPSET_AMAZON_TCP_PROFILES = {
     ("Стандартный 1.txt", "Amazon TCP"),
+    ("Default v1 (game filter).txt", "Amazon TCP"),
 }
 # Текущий Default v1 направляет Cloudflare TCP по полной IP-сети, как и
 # соседний UDP-профиль. Остальные встроенные пресеты пока используют hostlist.
+# Default v1 (game filter) — тот же пресет с игровым фильтром, и так у него
+# с появления в 0.10.67; в перечень его просто не внесли.
 ACCEPTED_IPSET_CLOUDFLARE_TCP_PROFILES = {
     ("Стандартный 1.txt", "Cloudflare TCP"),
+    ("Default v1 (game filter).txt", "Cloudflare TCP"),
 }
 ACCEPTED_WIDER_PROFILE_KEYS = {
     "winws2|hostlist=discord.txt|tcp=80,443-65535",
