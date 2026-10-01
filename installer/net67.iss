@@ -58,7 +58,6 @@ UninstallDisplayName={#AppName}
 
 Compression=lzma2/max
 SolidCompression=yes
-WizardStyle=modern
 ; Мьютекс всё время работы установщика. net67, открытый вручную посреди
 ; установки, видит его и сразу выходит, не держа файлы (main/shell.py,
 ; _respect_running_setup): раньше открытая программа срывала замену
@@ -67,6 +66,9 @@ SetupMutex=net67SetupRunning,Global\net67SetupRunning
 CloseApplications=yes
 CloseApplicationsFilter=*.exe,*.dll
 RestartApplications=no
+
+; Внешний вид и тексты окна — отдельным файлом, см. look.iss.
+#include "look.iss"
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -130,7 +132,8 @@ Name: "{autodesktop}\{#AppName}";  Filename: "{app}\_internal\{#AppExeName}"; Wo
 Filename: "{app}\_internal\{#AppExeName}"; Description: "Запустить {#AppName}"; \
   WorkingDir: "{app}\_internal"; Flags: nowait postinstall skipifsilent shellexec
 
-; Автообновление из программы идёт с /VERYSILENT, и строка выше с
+; Автообновление из программы идёт с /SILENT (из 0.12 — с /VERYSILENT), и
+; строка выше с
 ; skipifsilent его пропускает: после обновления net67 не открывался, со
 ; стороны — «молча закрылся». Здесь он открывается сам. --after-update:
 ; установщик в этот момент ещё держит свой мьютекс, и без флага запуск
@@ -226,6 +229,20 @@ begin
       Result := True;
       Exit;
     end;
+end;
+
+{ При обновлении из программы окно установки видно (/SILENT): человек
+  видит, что идёт установка, а не гадает, куда делась программа. Кнопок
+  и вопросов в нём нет, поэтому подпись говорит главное: ждать и ничего
+  не делать. }
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpInstalling) and IsAutoUpdate() then
+  begin
+    WizardForm.PageNameLabel.Caption := 'Обновление net67';
+    WizardForm.PageDescriptionLabel.Caption :=
+      'Программа откроется сама, когда установка закончится.';
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

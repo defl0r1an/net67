@@ -603,9 +603,13 @@ def prepare_handoff(
         temporary_path.unlink(missing_ok=True)
 
     setup_log = persistent_dir / "setup.log"
+    # /SILENT, а не /VERYSILENT: окно с ходом установки видно. Молчаливая
+    # установка выглядела так, будто программа просто исчезла; владелец
+    # попросил показывать установщик. Вопросов и кнопок «Далее» при этом
+    # нет — только полоса и подпись «откроется сама».
     arguments = (
         "/AUTOUPDATE",
-        "/VERYSILENT",
+        "/SILENT",
         "/SUPPRESSMSGBOXES",
         "/NORESTART",
         "/NOCANCEL",
