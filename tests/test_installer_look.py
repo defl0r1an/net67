@@ -57,6 +57,28 @@ class LookTests(unittest.TestCase):
         messages = self.look.split("[Messages]", 1)[1]
         self.assertNotIn("Мастер установки", messages)
 
+    def test_installer_does_not_ask_about_autostart(self) -> None:
+        """Про автозапуск спрашивает программа, в экскурсии первого запуска.
+
+        Вопрос стоял ещё и в установщике — дважды об одном за минуту.
+        Владелец убрал пункт; задачу в Планировщике установщик больше
+        не создаёт, но при удалении программы по-прежнему её снимает.
+        """
+        tasks = self.iss.split("[Tasks]", 1)[1].split("[Files]", 1)[0]
+        self.assertNotIn("launchatlogon", self.iss)
+        self.assertNotIn("при входе в Windows", tasks)
+        self.assertIn('Name: "desktopicon"', tasks)
+        # На месте убранного пункта — ярлык в меню «Пуск».
+        self.assertIn('Name: "startmenuicon"', tasks)
+        icons = self.iss.split("[Icons]", 1)[1].split("[Run]", 1)[0]
+        group_lines = [line for line in icons.splitlines() if line.startswith('Name: "{group}')]
+        self.assertEqual(len(group_lines), 2)
+        for line in group_lines:
+            self.assertIn("Tasks: startmenuicon", line)
+        self.assertNotIn("/Create", self.iss)
+        self.assertIn('/Delete /F /TN ""net67 Autostart""', self.iss)
+        self.assertNotIn("втозапуск", self.look.split("[Messages]", 1)[1])
+
     def test_images_exist_for_every_screen_scale(self) -> None:
         for scale in SCALES:
             for kind in ("side", "small"):

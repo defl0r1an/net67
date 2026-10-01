@@ -74,8 +74,11 @@ RestartApplications=no
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
+; Автозапуска здесь нет намеренно: про него спрашивает сама программа, в
+; экскурсии первого запуска, и там же его включает. Два вопроса об одном
+; и том же — в установщике и через минуту в программе — владелец убрал.
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Ярлыки:"
-Name: "launchatlogon"; Description: "Запускать net67 при входе в Windows"; GroupDescription: "Автозапуск:"; Flags: unchecked
+Name: "startmenuicon"; Description: "Создать ярлык в меню «Пуск»"; GroupDescription: "Ярлыки:"
 
 [Files]
 ; Артефакт копируется целиком, одной строкой.
@@ -115,8 +118,11 @@ Type: filesandordirs; Name: "{app}\tmp"
 Type: files;          Name: "{app}\logs\*.log"
 
 [Icons]
-Name: "{group}\{#AppName}";        Filename: "{app}\_internal\{#AppExeName}"; WorkingDir: "{app}\_internal"
-Name: "{group}\Удалить {#AppName}"; Filename: "{uninstallexe}"
+; Ярлыки меню «Пуск» — по отметке на странице ярлыков. Отметка стоит по
+; умолчанию, и при обновлении старой версии, где такого пункта не было,
+; ярлыки остаются.
+Name: "{group}\{#AppName}";        Filename: "{app}\_internal\{#AppExeName}"; WorkingDir: "{app}\_internal"; Tasks: startmenuicon
+Name: "{group}\Удалить {#AppName}"; Filename: "{uninstallexe}"; Tasks: startmenuicon
 Name: "{autodesktop}\{#AppName}";  Filename: "{app}\_internal\{#AppExeName}"; WorkingDir: "{app}\_internal"; Tasks: desktopicon
 
 [Run]
@@ -140,13 +146,6 @@ Filename: "{app}\_internal\{#AppExeName}"; Description: "Запустить {#Ap
 ; принял бы себя за ручной посреди установки и вышел.
 Filename: "{app}\_internal\{#AppExeName}"; Parameters: "--after-update"; \
   WorkingDir: "{app}\_internal"; Flags: nowait shellexec; Check: IsAutoUpdate
-
-; Автозапуск ставим задачей планировщика, а не ключом реестра Run:
-; приложению нужны права администратора, а задача с RunLevel=Highest
-; поднимает его без запроса UAC на каждом входе в систему.
-Filename: "schtasks.exe"; \
-  Parameters: "/Create /F /TN ""net67 Autostart"" /TR ""\""{app}\_internal\{#AppExeName}\"""" /SC ONLOGON /RL HIGHEST"; \
-  Flags: runhidden waituntilterminated; Tasks: launchatlogon
 
 [UninstallRun]
 ; Порядок важен: сначала останавливаем то, что держит файлы, потом
