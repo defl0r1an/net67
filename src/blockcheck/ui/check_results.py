@@ -20,7 +20,7 @@ from ui.theme import get_cached_qta_pixmap
 from ui.theme_refresh import ThemeRefreshBinding
 from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips
 from ui.widgets.fun import FunTicker, Mascot, burst_confetti
-from ui.widgets.fun.mascot import MOOD_ALARM, MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD
+from ui.widgets.fun.mascot import MOOD_ALARM, MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD, place_mascot
 from ui.widgets.stagger_float_in import float_in
 
 ActionHandler = Callable[[str, str], None]
@@ -181,9 +181,9 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
         header.setSpacing(12)
         # Значок программы: работает, пока идёт проверка, и реагирует на итог.
         self.mascot = Mascot(self, size=44)
-        header.addWidget(self.mascot, 0, Qt.AlignmentFlag.AlignTop)
         titles = QVBoxLayout()
         titles.setSpacing(2)
+        place_mascot(header, self.mascot, titles, left=16, top=14)
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
         self._icon = QLabel(self)
@@ -200,6 +200,9 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
         self.ticker.setVisible(False)
         titles.addWidget(self.ticker)
         header.addLayout(titles, 1)
+        # Текст — от верха, вровень со значком: в карточке выше нужного он
+        # иначе всплывал бы к середине, а значок оставался наверху.
+        header.setAlignment(titles, Qt.AlignmentFlag.AlignTop)
         root.addLayout(header)
 
         self._problems_host = QWidget(self)

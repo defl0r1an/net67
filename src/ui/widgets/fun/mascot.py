@@ -87,6 +87,14 @@ class Mascot(QWidget):
         self._look_timer.timeout.connect(self._on_look_timer)
         set_state_text(self, "Талисман: ждёт")
 
+    def headroom(self) -> int:
+        """Сколько пустого места в виджете над значком (запас на прыжок)."""
+        return max(0, self.height() - 2 - self._side)
+
+    def side(self) -> int:
+        """Сторона самого значка, без запаса вокруг."""
+        return self._side
+
     # --- настроение -----------------------------------------------------------
 
     def mood(self) -> str:
@@ -260,4 +268,38 @@ class Mascot(QWidget):
         painter.end()
 
 
-__all__ = ["MOODS", "MOOD_ALARM", "MOOD_BUSY", "MOOD_HAPPY", "MOOD_IDLE", "MOOD_SAD", "Mascot"]
+def place_mascot(row, mascot: Mascot, text_column, *, left: int, top: int) -> None:
+    """Ставит значок в строку карточки вровень с текстом рядом.
+
+    Виджет значка выше самого значка: над ним запас на прыжок, а значок
+    стоит на «полу» — у нижнего края. Прижатый раскладкой к верху
+    карточки, он оказывался ниже заголовка на этот запас: значок на 44
+    пикселя висел на семнадцать пикселей ниже текста. Владелец: «сделай
+    повыше и поровнее с текстом».
+
+    Раскладка здесь не помощник: отрицательных отступов вложенная
+    раскладка не слушается, а в контейнере поменьше прыжок обрезался бы.
+    Поэтому значок стоит в карточке сам по себе, по координатам, а в
+    строке за ним держит место распорка размером с сам значок.
+
+    ``left`` и ``top`` — отступы карточки. Запас на прыжок уходит в
+    верхний отступ, где и так пусто. Выше края карточки поднимать нельзя
+    — она обрезала бы прыжок, — поэтому остаток разницы добирает текст:
+    он опускается на пару пикселей. Верх значка и верх заголовка
+    сходятся, карточка становится ниже.
+    """
+    from PyQt6.QtWidgets import QSizePolicy, QSpacerItem
+
+    headroom = mascot.headroom()
+    lift = max(0, min(headroom, int(top)))
+    drop = headroom - lift
+    row.addSpacerItem(
+        QSpacerItem(mascot.width(), mascot.side() + drop, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+    )
+    mascot.move(int(left), int(top) - lift)
+    mascot.raise_()
+    margins = text_column.contentsMargins()
+    text_column.setContentsMargins(margins.left(), margins.top() + drop, margins.right(), margins.bottom())
+
+
+__all__ = ["MOODS", "MOOD_ALARM", "MOOD_BUSY", "MOOD_HAPPY", "MOOD_IDLE", "MOOD_SAD", "Mascot", "place_mascot"]

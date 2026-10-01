@@ -35,7 +35,7 @@ from ui.animation_policy import are_live_animations_enabled
 from ui.theme import get_cached_qta_pixmap
 from ui.theme_refresh import ThemeRefreshBinding
 from ui.widgets.fun import CounterBadge, FunTicker, Mascot, StepList, burst_confetti
-from ui.widgets.fun.mascot import MOOD_ALARM, MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD
+from ui.widgets.fun.mascot import MOOD_ALARM, MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD, place_mascot
 from ui.widgets.fun.steps import STEP_PENDING
 from ui.widgets.motion_icon import MotionIcon
 from ui.widgets.stagger_float_in import float_in
@@ -335,10 +335,10 @@ class ScanProgressPanel(_HeightKeeper, SimpleCardWidget):
         root.setSpacing(16)
 
         self.mascot = Mascot(self, size=56)
-        root.addWidget(self.mascot, 0, Qt.AlignmentFlag.AlignTop)
 
         body = QVBoxLayout()
         body.setSpacing(8)
+        place_mascot(root, self.mascot, body, left=18, top=16)
         self.title_label = SubtitleLabel("", self)
         self.title_label.setWordWrap(True)
         body.addWidget(self.title_label)
@@ -384,6 +384,8 @@ class ScanProgressPanel(_HeightKeeper, SimpleCardWidget):
         body.addWidget(self._actions_host)
 
         root.addLayout(body, 1)
+        # Текст — от верха, вровень со значком.
+        root.setAlignment(body, Qt.AlignmentFlag.AlignTop)
         self._state = ""
         self._running = False
         self._happy_timer = QTimer(self)
