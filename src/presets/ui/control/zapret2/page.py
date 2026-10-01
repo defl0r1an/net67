@@ -411,6 +411,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.oneclick_button = OneClickButton(
             self.content,
             get_runtime_feature=lambda: self._runtime_actions,
+            get_runtime_phase=self._current_launch_phase,
         )
         self.oneclick_button.stateChanged.connect(self._publish_oneclick_phase)
         self.add_widget(self.oneclick_button)
@@ -993,6 +994,15 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
                     self._schedule_additional_settings_reload_after_preset_switch()
         if strategy_changed:
             self.update_strategy(str(state.current_strategy_summary or ""))
+
+    def _current_launch_phase(self) -> str:
+        """Фаза обхода из общего состояния в эту секунду; пусто — состояния ещё нет."""
+        store = self.__dict__.get("_ui_state_store")
+        if store is None:
+            return ""
+        from ui.launch_control import launch_phase_from_state
+
+        return launch_phase_from_state(store.snapshot())
 
     def _publish_oneclick_phase(self, state) -> None:
         """Отдаёт состояние «одной кнопки» метке в заголовке — через store."""

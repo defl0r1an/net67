@@ -150,9 +150,12 @@ class OneClickButton(QWidget):
 
     stateChanged = pyqtSignal(object)
 
-    def __init__(self, parent=None, *, get_runtime_feature=None):
+    def __init__(self, parent=None, *, get_runtime_feature=None, get_runtime_phase=None):
         super().__init__(parent)
         self._get_runtime_feature = get_runtime_feature
+        # Живая фаза обхода из общего состояния, см. _catch_up_with_runtime.
+        self._get_runtime_phase = get_runtime_phase
+        self._runtime_phase = ""
         self._state = OneClickState.OFF
         self._worker: _OneClickWorker | None = None
 
@@ -283,16 +286,49 @@ class OneClickButton(QWidget):
         Пока идёт собственная цепочка шагов кнопки (подготовка,
         проверка) — не вмешиваемся: её итог она покажет сама.
         """
+        normalized = str(phase or "").strip().lower()
+        # Запоминаем и тогда, когда вмешиваться рано: к этой фазе кнопка
+        # вернётся, когда закончит свои шаги.
+        self._runtime_phase = normalized
         if self._state in _BUSY:
             return
         worker = self._worker
         if worker is not None and worker.isRunning():
             return
-        normalized = str(phase or "").strip().lower()
         if normalized == "running" and self._state is not OneClickState.RUNNING:
             self._apply_state(OneClickState.RUNNING, "")
         elif normalized == "stopped" and self._state is OneClickState.RUNNING:
             self._apply_state(OneClickState.OFF, "")
+
+    def _catch_up_with_runtime(self) -> None:
+        """Сверяет кнопку с обходом, когда её собственные шаги закончились.
+
+        Пока кнопка занята, перемены обхода она пропускает — и после
+        этого её никто не догонял. Выключили кругом, обход тут же подняли
+        заново (перезапуск после первичной настройки) — шаги кнопки
+        кончились позже, она написала «Обход выключен», а метка в
+        заголовке — «Работает». Так и стояло, пока обход не трогали:
+        новой перемены, которая поправила бы кнопку, не приходило.
+
+        Фаза читается из общего состояния в эту секунду, а не из
+        последней доставленной: доставка подписчикам идёт через очередь
+        и может отставать от самого состояния.
+        """
+        phase = self.__dict__.get("_runtime_phase", "")
+        getter = self.__dict__.get("_get_runtime_phase")
+        if callable(getter):
+            try:
+                phase = str(getter() or "")
+            except Exception as exc:
+                log(f"Кнопка обхода: фаза обхода недоступна: {exc}", "DEBUG")
+        if phase:
+            self.follow_runtime_phase(phase)
+
+    def showEvent(self, event):  # noqa: N802 — имя от Qt
+        super().showEvent(event)
+        # Страница могла быть спрятана, пока обход включали и выключали
+        # из заголовка или трея.
+        QTimer.singleShot(0, self._catch_up_with_runtime)
 
     @staticmethod
     def text_column_width_for(available_width: int) -> int:
@@ -333,17 +369,10 @@ class OneClickButton(QWidget):
 
     @staticmethod
     def format_uptime(seconds: float) -> str:
-        """Время работы словами часов, минут и секунд.
+        """Время работы словами часов, минут и секунд."""
+        from ui.launch_uptime import format_uptime
 
-        Секунды показываем всегда: без них первые минуты выглядят
-        застывшими, и человек не понимает, идёт ли отсчёт.
-        """
-        total = max(0, int(seconds))
-        hours, rest = divmod(total, 3600)
-        minutes, secs = divmod(rest, 60)
-        if hours:
-            return f"{hours}:{minutes:02d}:{secs:02d}"
-        return f"{minutes}:{secs:02d}"
+        return format_uptime(seconds)
 
     def _refresh_uptime(self) -> None:
         if self._running_since is None:
@@ -445,7 +474,12 @@ class OneClickButton(QWidget):
         """Запускает и останавливает отсчёт вместе с обходом."""
         if state is OneClickState.RUNNING:
             if self._running_since is None:
-                self._running_since = _time.monotonic()
+                # Общие часы обхода, если они уже идут: метка в заголовке
+                # пишет то же время, и расходиться им нельзя
+                # (ui/launch_uptime.py).
+                from ui.launch_uptime import since as shared_since
+
+                self._running_since = shared_since() or _time.monotonic()
             self._refresh_uptime()
             self.uptime_label.show()
             self.uptime_label.raise_()
@@ -626,6 +660,8 @@ class OneClickButton(QWidget):
             if self._state in _BUSY:
                 log("Поток «одной кнопки» завершился без результата", "⚠ WARNING")
                 self._apply_state(OneClickState.ERROR, "Операция прервана, попробуйте ещё раз")
+            else:
+                self._catch_up_with_runtime()
         if worker is not None:
             worker.deleteLater()
 

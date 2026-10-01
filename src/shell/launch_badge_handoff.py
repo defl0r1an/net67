@@ -14,9 +14,15 @@
 а не прилетает туда, где круг был в начале.
 
 Пока снимок в пути, настоящей метки нет: две метки на экране — та же
-двойственность, от которой уходили. Место в заголовке за ней держится
-(retainSizeWhenHidden), иначе вкладки рядом прыгали бы на каждом
-переходе.
+двойственность, от которой уходили. По той же причине нет и настоящего
+круга: на обратном пути страница уже открыта, и круг стоял на месте,
+пока к нему летел его же снимок, — два круга рядом. Круг невидим всё
+время, пока он «живёт» в метке, и проявляется, когда снимок сел.
+
+Места в заголовке спрятанная метка не занимает. Сначала занимала (чтобы
+вкладки рядом не прыгали), и на главной в заголовке оставалась дыра.
+Теперь место раздвигается вместе с полётом: вкладки отъезжают плавно, к
+приземлению снимка оно готово.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ import time
 from PyQt6 import sip
 from PyQt6.QtCore import QEvent, QObject, QPoint, QRectF, QTimer, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QPixmap
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QGraphicsOpacityEffect, QWidget
 
 from ui.popup_motion import DAMPING, FRAME_MS, MAX_FRAME_DT_S, Spring, popup_motion_mode
 
@@ -162,6 +168,9 @@ class LaunchBadgeHandoff(QObject):
         self._timer.setInterval(FRAME_MS)
         self._timer.timeout.connect(self._tick)
         self._pending = False
+        # Круг, спрятанный на время, пока он в метке, и его эффект.
+        self._veiled = None
+        self._veil = None
         # Первое решение принимается без движения. Главная страница
         # строится уже после метки, и без этого флага запуск программы
         # начинался с полёта метки в круг — движения, которого никто не
@@ -220,8 +229,67 @@ class LaunchBadgeHandoff(QObject):
         return page_current, fraction, circle_rect, view_rect
 
     def _badge_rect(self) -> QRectF:
-        spot = self._badge.mapTo(self._window, QPoint(0, 0))
-        return QRectF(spot.x(), spot.y(), self._badge.width(), self._badge.height())
+        """Где метка встанет целиком — и когда её место ещё не раздвинуто.
+
+        Метка прижата вправо, к колокольчику: место растёт влево. Поэтому
+        правый край берём у соседа справа, а не у самой метки — спрятанная
+        метка раскладкой не расставлена, и её координаты устарели.
+        """
+        badge = self._badge
+        width = badge.full_width() if hasattr(badge, "full_width") else badge.width()
+        height = badge.height()
+        parent = badge.parentWidget()
+        layout = parent.layout() if parent is not None else None
+        if layout is None:
+            layout = getattr(parent, "hBoxLayout", None)
+        neighbour = None
+        if layout is not None:
+            index = layout.indexOf(badge)
+            for position in range(index + 1, layout.count()) if index >= 0 else ():
+                widget = layout.itemAt(position).widget()
+                if widget is not None and not widget.isHidden():
+                    neighbour = widget
+                    break
+        if neighbour is None:
+            spot = badge.mapTo(self._window, QPoint(0, 0))
+            return QRectF(spot.x() + badge.width() - width, spot.y(), width, height)
+        spot = neighbour.mapTo(self._window, QPoint(0, 0))
+        right = spot.x() - max(0, layout.spacing())
+        if badge.isHidden():
+            top = spot.y() + (neighbour.height() - height) / 2.0
+        else:
+            # Раздвигающееся место уже расставлено: высоту знает раскладка.
+            top = badge.mapTo(self._window, QPoint(0, 0)).y()
+        return QRectF(right - width, top, width, height)
+
+    # ── круг, пока он в метке ────────────────────────────────
+
+    def _veil_circle(self, hidden: bool) -> None:
+        """Прячет настоящий круг, не трогая раскладку страницы.
+
+        Эффект прозрачности, а не hide(): спрятанный виджет освободил бы
+        место, и подписи под кругом подпрыгнули бы.
+        """
+        _page, circle = self._locate_circle(self._window)
+        if circle is None or sip.isdeleted(circle):
+            self._veiled = self._veil = None
+            return
+        if self._veiled is not circle:
+            # Страницу пересобрали: прежний круг и его эффект удалены с ней.
+            self._veiled = self._veil = None
+        if not hidden:
+            if self._veil is not None and not sip.isdeleted(self._veil):
+                circle.setGraphicsEffect(None)
+            self._veiled = self._veil = None
+            return
+        if self._veil is None or sip.isdeleted(self._veil):
+            effect = QGraphicsOpacityEffect(circle)
+            effect.setOpacity(0.0)
+            circle.setGraphicsEffect(effect)
+            self._veiled, self._veil = circle, effect
+
+    def _flying(self) -> bool:
+        return self._mode == "spring" and self._timer.isActive()
 
     # ── решение ──────────────────────────────────────────────
 
@@ -266,7 +334,6 @@ class LaunchBadgeHandoff(QObject):
         self._mode = mode
         if mode == "spring" and not self._timer.isActive():
             self._take_snapshots()
-        self._badge.set_presence(0.0 if mode == "spring" else self._spring.value)
         self._spring.retarget(target)
         if not self._timer.isActive():
             self._last_tick = time.monotonic()
@@ -275,7 +342,21 @@ class LaunchBadgeHandoff(QObject):
 
     def _take_snapshots(self) -> None:
         _page, circle = self._locate_circle(self._window)
-        self._ghost.circle = circle.grab() if circle is not None and not sip.isdeleted(circle) else QPixmap()
+        snapshot = QPixmap()
+        if circle is not None and not sip.isdeleted(circle):
+            # Спрятанный круг снялся бы пустым: на время снимка эффект
+            # выключаем. Перерисовки между строками нет — на экране он
+            # не мелькнёт.
+            veil = self._veil if self._veiled is circle else None
+            live = veil is not None and not sip.isdeleted(veil)
+            if live:
+                veil.setEnabled(False)
+            try:
+                snapshot = circle.grab()
+            finally:
+                if live:
+                    veil.setEnabled(True)
+        self._ghost.circle = snapshot
         self._ghost.badge = self._badge.grab_full()
 
     # ── движение ─────────────────────────────────────────────
@@ -293,8 +374,12 @@ class LaunchBadgeHandoff(QObject):
             self._finish(self._spring.target)
             return
         if self._mode == "fade":
-            self._badge.set_presence(progress)
+            self._veil_circle(self._shown)
+            self._badge.set_handoff(slot=progress, presence=progress)
             return
+        # Место под метку растёт вместе с полётом, самой метки ещё нет.
+        self._veil_circle(True)
+        self._badge.set_handoff(slot=progress, presence=0.0)
         _current, _fraction, circle_rect, view_rect = self._geometry()
         end = self._badge_rect()
         start = circle_rect if circle_rect is not None else end
@@ -313,4 +398,7 @@ class LaunchBadgeHandoff(QObject):
         self._ghost.hide()
         self._ghost.circle = QPixmap()
         self._ghost.badge = QPixmap()
-        self._badge.set_presence(target)
+        self._mode = "none"
+        self._badge.set_handoff(slot=target, presence=target)
+        # Метка стоит — круг «в ней»; метка ушла — круг снова на странице.
+        self._veil_circle(target >= 0.5)

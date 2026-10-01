@@ -132,8 +132,10 @@ class HandoffTests(unittest.TestCase):
         window, badge, motion = self._bind("none")
         self.assertFalse(motion.is_badge_wanted())
         self.assertTrue(badge.isHidden())
-        # Место в заголовке держится: вкладки рядом не прыгают.
-        self.assertTrue(badge.sizePolicy().retainSizeWhenHidden())
+        # Места в заголовке спрятанная метка не занимает: на главной
+        # между вкладками и колокольчиком оставалась дыра.
+        self.assertFalse(badge.sizePolicy().retainSizeWhenHidden())
+        self.assertEqual(badge.slot(), 0.0)
 
     def test_first_decision_does_not_fly(self) -> None:
         """Страница строится после метки: запуск не должен начинаться с полёта."""
@@ -155,15 +157,55 @@ class HandoffTests(unittest.TestCase):
     def test_leaving_the_page_flies_the_circle_into_the_badge(self) -> None:
         window, badge, motion = self._bind("spring")
         window.stackedWidget.setCurrentWidget(window.other)
-        _wait(0.08)
+        _wait(0.12)
         # В пути: снимок летит, настоящей метки нет — двух меток на экране
-        # быть не должно.
+        # быть не должно. Но место под неё уже раздвигается: вкладки
+        # отъезжают плавно, а не прыгают, когда снимок сел.
         self.assertTrue(motion._ghost.isVisible())
-        self.assertTrue(badge.isHidden())
+        self.assertEqual(badge.presence(), 0.0)
+        self.assertGreater(badge.slot(), 0.0)
+        self.assertLess(badge.slot(), 1.0)
+        self.assertLess(badge.width(), badge.full_width())
         _wait(1.2)
         self.assertFalse(motion._ghost.isVisible())
         self.assertFalse(badge.isHidden())
         self.assertEqual(badge.presence(), 1.0)
+        self.assertEqual(badge.width(), badge.full_width())
+
+    def test_flight_lands_where_the_badge_will_stand(self) -> None:
+        """Цель полёта — место метки целиком, а не её растущая щель."""
+        window, badge, motion = self._bind("spring")
+        window.stackedWidget.setCurrentWidget(window.other)
+        _wait(0.12)
+        target = motion._badge_rect()
+        _wait(1.2)
+        spot = badge.mapTo(window, badge.rect().topLeft())
+        self.assertAlmostEqual(target.x(), spot.x(), delta=1.5)
+        self.assertAlmostEqual(target.y(), spot.y(), delta=1.5)
+        self.assertAlmostEqual(target.width(), badge.width(), delta=1.0)
+
+    def test_real_circle_is_not_drawn_next_to_its_flying_snapshot(self) -> None:
+        """На обратном пути на экране было два круга: настоящий и снимок."""
+        window, badge, motion = self._bind("spring")
+        window.stackedWidget.setCurrentWidget(window.other)
+        _wait(1.2)
+        # Круг «в метке»: настоящий невидим, пока метка стоит.
+        effect = window.circle.graphicsEffect()
+        self.assertIsNotNone(effect)
+        self.assertEqual(effect.opacity(), 0.0)
+
+        window.stackedWidget.setCurrentWidget(window.page)
+        _wait(0.12)
+        self.assertTrue(motion._ghost.isVisible())
+        self.assertIsNotNone(window.circle.graphicsEffect())
+        # Снимок круга для обратного пути не пустой, хотя сам круг спрятан.
+        image = motion._ghost.circle.toImage()
+        self.assertGreater(image.pixelColor(image.width() // 2, image.height() // 2).alpha(), 0)
+
+        _wait(1.2)
+        self.assertFalse(motion._ghost.isVisible())
+        self.assertIsNone(window.circle.graphicsEffect())
+        self.assertTrue(badge.isHidden())
 
     def test_reversal_continues_from_the_value_on_screen(self) -> None:
         window, _badge, motion = self._bind("spring")

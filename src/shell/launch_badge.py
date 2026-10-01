@@ -1,4 +1,4 @@
-"""Метка «● Работает / Остановлен» в заголовке окна net67.
+"""Метка состояния обхода в заголовке окна net67: время работы или «Остановлен».
 
 Включить или выключить обход можно было только с главной страницы: ушёл
 в «Пресеты» или «Инструменты» — и не видно, работает ли обход, и нечем
@@ -19,6 +19,7 @@ from PyQt6 import sip
 
 from ui.launch_control import launch_phase_from_state
 from ui.launch_title_badge import LaunchTitleBadge
+from ui.launch_uptime import track_phase
 
 __all__ = ["LAUNCH_BADGE_FIELDS", "bind_launch_title_badge"]
 
@@ -56,6 +57,9 @@ def bind_launch_title_badge(window, ui_state_store, launch_control) -> LaunchTit
     def _on_state(state, _changed) -> None:
         if sip.isdeleted(badge):
             return
+        # Часы времени работы — до метки: она прочтёт их, когда будет
+        # рисовать себя (ui/launch_uptime.py).
+        track_phase(launch_phase_from_state(state))
         badge.set_override(ONECLICK_BADGE_TEXT.get(str(getattr(state, "oneclick_phase", "") or "")))
         badge.set_state(
             phase=launch_phase_from_state(state),

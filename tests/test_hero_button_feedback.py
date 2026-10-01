@@ -65,6 +65,14 @@ else:
 
 @unittest.skipIf(_QT_ERROR is not None, f"Qt недоступен: {_QT_ERROR}")
 class HeroButtonTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Общие часы обхода — одни на процесс: другой тест мог оставить
+        # их идущими, и круг показал бы не «0:00».
+        from ui import launch_uptime
+
+        launch_uptime.clear()
+        self.addCleanup(launch_uptime.clear)
+
     def _button(self):
         import qfluentwidgets
 

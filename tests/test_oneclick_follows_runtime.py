@@ -32,6 +32,8 @@ class FollowRuntimeTests(unittest.TestCase):
 
         button = OneClickButton.__new__(OneClickButton)
         button._worker = worker
+        button._runtime_phase = ""
+        button._get_runtime_phase = None
         button._state = getattr(OneClickState, state_name)
         button._applied = []
         button._apply_state = lambda state, detail: (
@@ -64,6 +66,47 @@ class FollowRuntimeTests(unittest.TestCase):
         button = self._button("OFF", worker=_Worker(True))
         button.follow_runtime_phase("running")
         self.assertEqual(button._applied, [])
+
+    def test_button_catches_up_when_its_own_steps_end(self) -> None:
+        """Выключили кругом, обход тут же подняли заново — кнопка стояла на «выключен».
+
+        Фаза «работает» пришла, пока кнопка была занята своими шагами, и
+        пропала: после них кнопку никто не догонял. Метка в заголовке
+        писала «Работает», круг — «Обход выключен».
+        """
+        from oneclick.state import OneClickState
+
+        worker = _Worker(True)
+        button = self._button("PREPARING", worker=worker)
+        button._get_runtime_phase = None
+        button.follow_runtime_phase("running")
+        self.assertEqual(button._applied, [])
+
+        # Шаги кончились итогом «выключено».
+        button._state = OneClickState.OFF
+        worker._running = False
+        button.deleteLater = lambda: None
+        worker.deleteLater = lambda: None
+        button._on_worker_done(worker)
+        self.assertIs(button._state, OneClickState.RUNNING)
+
+    def test_catch_up_reads_the_live_phase(self) -> None:
+        """Живое состояние главнее последней доставленной фазы."""
+        from oneclick.state import OneClickState
+
+        button = self._button("RUNNING")
+        button._runtime_phase = "running"
+        button._get_runtime_phase = lambda: "stopped"
+        button._catch_up_with_runtime()
+        self.assertIs(button._state, OneClickState.OFF)
+
+    def test_error_is_kept_when_bypass_is_really_stopped(self) -> None:
+        from oneclick.state import OneClickState
+
+        button = self._button("ERROR")
+        button._get_runtime_phase = lambda: "stopped"
+        button._catch_up_with_runtime()
+        self.assertIs(button._state, OneClickState.ERROR)
 
     def test_transitional_phases_change_nothing(self) -> None:
         for phase in ("starting", "stopping", "autostart_pending", ""):

@@ -11,7 +11,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 SRC = Path(__file__).resolve().parents[1] / "src"
@@ -76,8 +76,51 @@ class LaunchTitleBadgeBindingTests(unittest.TestCase):
         self._set_phase(store, "starting")
         self.assertEqual(badge.text(), "Запуск…")
         self._set_phase(store, "running")
-        self.assertEqual(badge.text(), "Работает")
+        # Работающий обход метка показывает временем работы, а не словом:
+        # слово осталось в подсказке и в имени для экранного доступа.
+        self.assertEqual(badge.text(), "0:00")
+        self.assertEqual(badge.state_text(), "Работает")
+        self.assertIn("Работает", badge.accessibleName())
+        self.assertNotIn("0:00", badge.accessibleName())
         self.assertIn("остановить", badge.toolTip())
+        self._set_phase(store, "stopped")
+        self.assertEqual(badge.text(), "Остановлен")
+
+    def test_running_badge_counts_uptime_from_one_shared_clock(self) -> None:
+        import time
+
+        from ui import launch_uptime
+
+        window = self._window()
+        store = MainWindowStateStore()
+        badge = bind_launch_title_badge(window, store, Mock())
+        self._set_phase(store, "running")
+        started = launch_uptime.since()
+        self.assertIsNotNone(started)
+
+        with patch.object(time, "monotonic", return_value=started + 605):
+            badge._refresh_uptime()
+        self.assertEqual(badge.text(), "10:05")
+
+        # Перезапуск — новый отсчёт: важно, сколько работает нынешний обход.
+        self._set_phase(store, "stopping")
+        self.assertIsNone(launch_uptime.since())
+        self._set_phase(store, "running")
+        self.assertEqual(badge.text(), "0:00")
+
+    def test_uptime_width_does_not_jitter_with_narrow_digits(self) -> None:
+        window = self._window()
+        store = MainWindowStateStore()
+        badge = bind_launch_title_badge(window, store, Mock())
+        self._set_phase(store, "running")
+
+        widths = set()
+        for text in ("0:00", "1:11", "7:41", "9:59"):
+            badge.setText(text)
+            widths.add(badge.full_width())
+        self.assertEqual(len(widths), 1)
+        badge.setText("10:00")
+        self.assertGreater(badge.full_width(), widths.pop())
 
     def test_click_toggles_through_launch_control(self) -> None:
         window = self._window()
@@ -114,7 +157,8 @@ class LaunchTitleBadgeBindingTests(unittest.TestCase):
         self.assertFalse(badge.isEnabled())
 
         store.update(oneclick_phase="running")
-        self.assertEqual(badge.text(), "Работает")
+        self.assertEqual(badge.state_text(), "Работает")
+        self.assertRegex(badge.text(), r"^\d+:\d\d$")
         self.assertTrue(badge.isEnabled())
 
     def test_badge_shows_oneclick_steps_instead_of_running(self) -> None:
@@ -136,7 +180,8 @@ class LaunchTitleBadgeBindingTests(unittest.TestCase):
         launch_control.toggle.assert_not_called()
 
         store.update(oneclick_phase="running")
-        self.assertEqual(badge.text(), "Работает")
+        self.assertEqual(badge.state_text(), "Работает")
+        self.assertRegex(badge.text(), r"^\d+:\d\d$")
         self.assertTrue(badge.isEnabled())
 
     def test_badge_sits_left_of_the_bell(self) -> None:

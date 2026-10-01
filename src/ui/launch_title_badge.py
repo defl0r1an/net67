@@ -1,19 +1,25 @@
-"""Метка «● Работает / ● Остановлен» в верхней панели окна.
+"""Метка состояния обхода в верхней панели окна.
 
-Метка видна в любом разделе и сама является выключателем: клик запускает
-или останавливает net67 через единый пульт ui.launch_control.LaunchControl.
-Состояние она не вычисляет — фаза приходит из общего UI-store через
-ui/window_state_binder.py.
+Метка сама является выключателем: клик запускает или останавливает net67
+через единый пульт ui.launch_control.LaunchControl. Состояние она не
+вычисляет — фаза приходит из общего UI-store.
+
+Пока обход работает, метка — маленькая копия главного круга: кружок
+«включено» и время работы, как на самом круге. Слово «Работает» рядом с
+ним ничего не добавляло, а время было видно только на главной странице.
+Остановленный обход метка называет словом — «Остановлен».
 """
 
 from __future__ import annotations
 
 import math
+import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QVariantAnimation
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation
+from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import QSizePolicy
 from qfluentwidgets import TransparentPushButton, setCustomStyleSheet
 
@@ -44,6 +50,13 @@ NET67_BADGE_HEIGHT = 26
 NET67_DOT_LEFT = 13
 NET67_TEXT_LEFT = 25
 NET67_TEXT_RIGHT = 12
+#: Кружок «включено» — главный круг в миниатюре: заливка акцентом и знак
+#: питания. 16 px в метке высотой 26: по пять пикселей воздуха сверху и снизу.
+NET67_ON_RADIUS = 8.0
+NET67_ON_TEXT_LEFT = 28
+#: От кружка расходится кольцо; дальше трёх пикселей оно вылезло бы из метки.
+NET67_ON_RING_GROWTH = 3.0
+UPTIME_TICK_MS = 1000
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,16 +120,24 @@ class LaunchTitleBadge(TransparentPushButton):
         # Насколько метка на экране: 0 — её место занимает главный круг
         # страницы (shell/launch_badge_handoff.py), 1 — стоит как есть.
         self._presence = 1.0
+        # Какую долю своей ширины метка занимает в заголовке, см. set_handoff.
+        self._slot = 1.0
+        self._state_text = ""
+        self._tooltip_text = ""
 
         self.setObjectName(LAUNCH_TITLE_BADGE_OBJECT_NAME)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.setFixedHeight(NET67_BADGE_HEIGHT)
-        policy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        # Спрятанная метка держит место: иначе вкладки заголовка рядом
-        # прыгали бы на каждом переходе круга в метку и обратно.
-        policy.setRetainSizeWhenHidden(True)
-        self.setSizePolicy(policy)
+        # Спрятанная метка места не держит. Сначала держала — чтобы вкладки
+        # рядом не прыгали, — и на главной странице в заголовке зияла
+        # дыра шириной в метку: владелец спросил, чего там не хватает.
+        # Теперь вкладки не прыгают по другой причине: место раздвигается
+        # и сходится плавно, вместе с полётом круга (set_handoff).
+        self.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed))
+        self._uptime_timer = QTimer(self)
+        self._uptime_timer.setInterval(UPTIME_TICK_MS)
+        self._uptime_timer.timeout.connect(self._refresh_uptime)
 
         self._breath_t = 0.0
         # QVariantAnimation, а не QPropertyAnimation: при выключенных
@@ -162,18 +183,26 @@ class LaunchTitleBadge(TransparentPushButton):
         self._override_text = text
         return self._render() if self._phase else False
 
-    def set_presence(self, value: float) -> None:
-        """0 — метки нет (её место у главного круга), 1 — видна целиком.
+    def set_handoff(self, *, slot: float, presence: float) -> None:
+        """Место метки в заголовке и её видимость — порознь.
 
-        Промежуточное — только проявление без движения, когда «лёгкие
-        анимации» выключены: полёт снимка тогда не показывают.
+        ``slot`` — доля ширины, которую метка занимает в раскладке
+        заголовка: 0 — её нет вовсе, и вкладки стоят вплотную к
+        колокольчику, 1 — занимает своё место целиком. ``presence`` —
+        насколько она нарисована.
+
+        Порознь они ради полёта: пока снимок круга летит в заголовок,
+        место под метку уже раздвигается (вкладки едут плавно, а не
+        прыгают в конце), но самой метки ещё нет — иначе на экране их
+        было бы две.
         """
-        value = max(0.0, min(1.0, float(value)))
-        self._presence = value
+        self._slot = max(0.0, min(1.0, float(slot)))
+        self._presence = max(0.0, min(1.0, float(presence)))
         # Полупрозрачную метку не нажать: щелчок по тени выключателя
         # выключил бы обход, которого человек не видел.
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, value < 0.999)
-        if value <= 0.001:
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, self._presence < 0.999)
+        self._apply_width()
+        if self._slot <= 0.001:
             if not self.isHidden():
                 self.hide()
             return
@@ -181,17 +210,37 @@ class LaunchTitleBadge(TransparentPushButton):
             self.show()
         self.update()
 
+    def set_presence(self, value: float) -> None:
+        """0 — метки нет (её место у главного круга), 1 — видна целиком.
+
+        Промежуточное — только проявление без движения, когда «лёгкие
+        анимации» выключены: полёт снимка тогда не показывают.
+        """
+        value = max(0.0, min(1.0, float(value)))
+        self.set_handoff(slot=0.0 if value <= 0.001 else 1.0, presence=value)
+
     def presence(self) -> float:
         return self._presence
 
+    def slot(self) -> float:
+        return self._slot
+
     def grab_full(self) -> QPixmap:
-        """Снимок метки целиком, как она встанет, — для полёта из круга."""
-        saved = self._presence
-        self._presence = 1.0
-        try:
-            return self.grab()
-        finally:
-            self._presence = saved
+        """Снимок метки целиком, как она встанет, — для полёта из круга.
+
+        Рисуется отдельно, а не снимается с виджета: пока метка в пути,
+        виджет стоит прозрачным и шириной в долю своего места.
+        """
+        self._refresh_uptime()
+        ratio = max(1.0, float(self.devicePixelRatioF()))
+        width, height = self.full_width(), self.height()
+        pixmap = QPixmap(max(1, round(width * ratio)), max(1, round(height * ratio)))
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        self._paint_net67(painter, width=width, presence=1.0, live=False)
+        painter.end()
+        return pixmap
 
     def retranslate(self) -> bool:
         if not self._phase:
@@ -218,16 +267,49 @@ class LaunchTitleBadge(TransparentPushButton):
         # И пока «одна кнопка» выполняет шаги: выключить обход посреди них
         # значит оставить её цепочку на полпути.
         self.setEnabled(view.phase != "stopping" and not self._override_text)
-        if old_text != view.text:
-            self.setText(view.text)
-            self.setFixedWidth(self.sizeHint().width())
+        state_changed = self._state_text != view.text
+        self._state_text = view.text
+        self._tooltip_text = view.tooltip
+        shown = self._uptime_text() if self._shows_uptime() else view.text
+        if old_text != shown:
+            self.setText(shown)
+        self._apply_width()
         set_tooltip(self, view.tooltip)
+        # Время работы в имя не идёт: оно менялось бы каждую секунду, и
+        # программа экранного доступа читала бы метку без остановки.
         set_control_accessibility(self, name=f"Состояние net67: {view.text}", description=view.tooltip)
         self._sync_breath()
-        if was_hidden and self._presence > 0.001:
+        if was_hidden and self._slot > 0.001:
             self.show()
         self.update()
-        return was_hidden or old_text != view.text
+        return was_hidden or state_changed
+
+    # ---- время работы -----------------------------------------------------
+
+    def state_text(self) -> str:
+        """Состояние словом («Работает», «Остановлен») — и когда на метке время."""
+        return self._state_text
+
+    def _shows_uptime(self) -> bool:
+        return self._phase == "running" and not self._override_text
+
+    def _uptime_text(self) -> str:
+        from ui.launch_uptime import ensure, format_uptime
+
+        return format_uptime(time.monotonic() - ensure())
+
+    def _refresh_uptime(self) -> None:
+        if not self._shows_uptime():
+            return
+        text = self._uptime_text()
+        if text == self.text():
+            return
+        grew = len(text) != len(self.text())
+        self.setText(text)
+        if grew:
+            # «9:59» → «10:00»: метка шире на цифру.
+            self._apply_width()
+        self.update()
 
     # ---- «дыхание» точки во время запуска/остановки --------------------
 
@@ -259,6 +341,12 @@ class LaunchTitleBadge(TransparentPushButton):
         else:
             self._pulse.stop()
             self._pulse_t = 0.0
+        if self._shows_uptime() and self.isVisible():
+            self._refresh_uptime()
+            if not self._uptime_timer.isActive():
+                self._uptime_timer.start()
+        else:
+            self._uptime_timer.stop()
 
     def is_pulsing(self) -> bool:
         return self._pulse.state() == QVariantAnimation.State.Running
@@ -287,6 +375,7 @@ class LaunchTitleBadge(TransparentPushButton):
     def hideEvent(self, event) -> None:  # noqa: N802
         self._breath.stop()
         self._pulse.stop()
+        self._uptime_timer.stop()
         super().hideEvent(event)
 
     def changeEvent(self, event) -> None:  # noqa: N802
@@ -294,10 +383,24 @@ class LaunchTitleBadge(TransparentPushButton):
         if event.type() == QEvent.Type.WindowStateChange:
             self._sync_breath()
 
+    def _text_left(self) -> int:
+        return NET67_ON_TEXT_LEFT if self._shows_uptime() else NET67_TEXT_LEFT
+
+    def full_width(self) -> int:
+        """Ширина метки, когда она стоит целиком.
+
+        Цифры меряются как нули: у пропорционального шрифта «1» уже «0»,
+        и метка со временем работы дрожала бы на пиксель каждую секунду —
+        а с ней и вкладки заголовка.
+        """
+        text = re.sub(r"[0-9]", "0", self.text() or "")
+        return self._text_left() + self._text_metrics().horizontalAdvance(text) + NET67_TEXT_RIGHT
+
+    def _apply_width(self) -> None:
+        self.setFixedWidth(max(0, round(self.full_width() * self._slot)))
+
     def sizeHint(self) -> QSize:  # noqa: N802
-        metrics = self._text_metrics()
-        width = NET67_TEXT_LEFT + metrics.horizontalAdvance(self.text() or "") + NET67_TEXT_RIGHT
-        return QSize(width, NET67_BADGE_HEIGHT)
+        return QSize(self.full_width(), NET67_BADGE_HEIGHT)
 
     def _text_font(self) -> QFont:
         font = QFont(self.font())
@@ -319,9 +422,20 @@ class LaunchTitleBadge(TransparentPushButton):
         выбивались из монохромного заголовка — вес держит светлота, а не
         цвет, как во всём интерфейсе net67 (так же рисует себя колокольчик).
         """
-        self._paint_net67()
+        if self._presence <= 0.001:
+            # Место занято, а метки ещё нет: её снимок в пути из круга.
+            return
+        painter = QPainter(self)
+        # В пути место уже метки: рисуем её целиком от правого края, и
+        # левый край обрезается — метка «выезжает» из-под вкладок.
+        full = self.full_width()
+        if self.width() < full:
+            painter.translate(self.width() - full, 0)
+        self._paint_net67(painter, width=full, presence=self._presence, live=True)
+        painter.end()
 
-    def _paint_net67(self) -> None:
+    def _paint_net67(self, painter: QPainter, *, width: int, presence: float, live: bool) -> None:
+        """Рисует метку шириной ``width``. ``live`` — с наведением и пульсом."""
         from shell.theme import palette
         from ui.theme import get_theme_tokens
 
@@ -333,11 +447,10 @@ class LaunchTitleBadge(TransparentPushButton):
         colors = palette(dark)
         phase = "starting" if self._override_text else self._phase
         running = phase == "running"
-        hovered = bool(getattr(self, "isHover", False)) or self.underMouse()
-        painter = QPainter(self)
+        hovered = live and (bool(getattr(self, "isHover", False)) or self.underMouse())
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setOpacity(self._presence)
-        body = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.setOpacity(presence)
+        body = QRectF(0, 0, width, self.height()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = body.height() / 2
 
         # Работает — светлая подложка; остальное — рамка, как у соседних
@@ -352,11 +465,13 @@ class LaunchTitleBadge(TransparentPushButton):
             painter.setBrush(QColor(colors.surface_hover) if hovered else Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(body, radius, radius)
 
-        if phase:
-            dot = QColor(colors.text if running else colors.text_muted)
-            center = QPointF(NET67_DOT_LEFT, self.height() / 2)
+        center = QPointF(NET67_DOT_LEFT, self.height() / 2)
+        if running:
+            self._paint_on_mark(painter, center, colors, body, radius, live=live)
+        elif phase:
+            dot = QColor(colors.text_muted)
             painter.setPen(Qt.PenStyle.NoPen)
-            if self.is_pulsing():
+            if live and self.is_pulsing():
                 p = self._pulse_t
                 ring = QColor(dot)
                 ring.setAlphaF(0.8 * (1.0 - p) ** 1.3)
@@ -366,21 +481,57 @@ class LaunchTitleBadge(TransparentPushButton):
                 r = BADGE_DOT_RADIUS + 1.0 + RUNNING_RING_GROWTH * (1.0 - (1.0 - p) ** 2)
                 painter.drawEllipse(center, r, r)
                 painter.restore()
-            if self.is_breathing():
+            if live and self.is_breathing():
                 strength = 0.35 + 0.65 * (0.5 - 0.5 * math.cos(2.0 * math.pi * self._breath_t))
                 dot.setAlphaF(0.35 + 0.65 * strength)
             painter.setBrush(dot)
             painter.drawEllipse(center, BADGE_DOT_RADIUS, BADGE_DOT_RADIUS)
 
+        text_left = self._text_left()
         painter.setFont(self._text_font())
         painter.setPen(QColor(colors.text if (running or hovered) else colors.text_muted))
-        text_rect = QRectF(NET67_TEXT_LEFT, 0, self.width() - NET67_TEXT_LEFT - NET67_TEXT_RIGHT + 4, self.height())
+        text_rect = QRectF(text_left, 0, width - text_left - NET67_TEXT_RIGHT + 4, self.height())
         painter.drawText(text_rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), self.text())
-        if self.hasFocus():
+        if live and self.hasFocus():
             painter.setPen(QPen(QColor(colors.text_muted), 1.0))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(body.adjusted(1, 1, -1, -1), radius - 1, radius - 1)
-        painter.end()
+
+    def _paint_on_mark(self, painter: QPainter, center: QPointF, colors, body: QRectF, radius: float, *, live: bool) -> None:
+        """Кружок «включено»: главный круг страницы в миниатюре.
+
+        Те же цвета, что у круга в работающем состоянии (заливка акцентом,
+        знак цветом «на акценте»), — метка читается как он же, только
+        маленький. Знак питания рисуется линиями: значок из шрифта в
+        шестнадцати пикселях расплывался.
+        """
+        fill = QColor(colors.accent)
+        ink = QColor(colors.on_accent)
+        if live and self.is_pulsing():
+            p = self._pulse_t
+            ring = QColor(fill)
+            ring.setAlphaF(0.7 * (1.0 - p) ** 1.3)
+            painter.save()
+            clip = QPainterPath()
+            clip.addRoundedRect(body, radius, radius)
+            painter.setClipPath(clip)
+            painter.setPen(QPen(ring, 1.4))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            r = NET67_ON_RADIUS + 0.5 + NET67_ON_RING_GROWTH * (1.0 - (1.0 - p) ** 2)
+            painter.drawEllipse(center, r, r)
+            painter.restore()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawEllipse(center, NET67_ON_RADIUS, NET67_ON_RADIUS)
+
+        pen = QPen(ink, 1.5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        arc = 3.6
+        # Дуга с разрывом сверху и чёрточка в разрыве.
+        painter.drawArc(QRectF(center.x() - arc, center.y() - arc + 0.4, arc * 2, arc * 2), (90 + 38) * 16, 284 * 16)
+        painter.drawLine(QPointF(center.x(), center.y() - arc - 0.6), QPointF(center.x(), center.y() - 0.4))
 
     def _paint_zapret(self, event) -> None:
         _fg, background, hover = _badge_colors(phase=self._phase, theme_name=current_theme_name())
