@@ -15,10 +15,10 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QHBoxLayout, QHeaderView, QLabel, QSizePolicy, QTableWidgetItem, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, CaptionLabel, PushButton, SimpleCardWidget, StrongBodyLabel, TableWidget
 
-from ui.accessibility import set_control_accessibility, set_state_text
+from ui.accessibility import set_control_accessibility, set_item_accessible_text, set_state_text
 from ui.theme import get_cached_qta_pixmap
 from ui.theme_refresh import ThemeRefreshBinding
-from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips
+from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips, set_fluent_item_tooltip
 from ui.widgets.fun import FunTicker, Mascot, burst_confetti
 from ui.widgets.fun.mascot import MOOD_ALARM, MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD, place_mascot
 from ui.widgets.stagger_float_in import float_in
@@ -400,9 +400,16 @@ class BlockcheckSitesTable(TableWidget):
     def _add_row(self, name: str, level: str, result_text: str, details: str, tooltip: str) -> None:
         row = self.rowCount()
         self.insertRow(row)
+        # Диктор читает ячейку саму по себе: без этого на «Не открылся» он
+        # не говорил, какой сайт не открылся. Каждой ячейке — всю строку.
+        spoken = ". ".join(part for part in (name, result_text, details) if part)
         for column, text in enumerate((name, result_text, details)):
             item = QTableWidgetItem(text)
-            item.setToolTip(tooltip or details)
+            # Фирменная подсказка таблицы читает свою роль данных, а не
+            # стандартную: через setToolTip текст до неё не доходил, и
+            # подсказки в результатах не показывались вовсе.
+            set_fluent_item_tooltip(item, tooltip or details)
+            set_item_accessible_text(item, spoken)
             self.setItem(row, column, item)
         self._levels.append(level)
 

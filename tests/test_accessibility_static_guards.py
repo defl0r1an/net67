@@ -111,6 +111,15 @@ UPSTREAM_KNOWN_GAPS = {
     "src/ui/onboarding/overlay.py",
 }
 
+#: Свои файлы net67, где мышь включает только украшение. Действия, до
+#: которого клавиатуре надо дотянуться, у них нет.
+#:
+#: - widgets/fun/mascot.py — значок на карточках проверок: по щелчку
+#:   крутится, и всё; в Tab-порядок украшение не ставим.
+DECORATIVE_MOUSE_ONLY = {
+    "src/ui/widgets/fun/mascot.py",
+}
+
 
 def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
@@ -163,7 +172,7 @@ def test_custom_mouse_actions_keep_keyboard_activation() -> None:
             continue
         if any(marker in source for marker in CUSTOM_KEYBOARD_ACTION_MARKERS):
             continue
-        if rel_path in UPSTREAM_KNOWN_GAPS:
+        if rel_path in UPSTREAM_KNOWN_GAPS or rel_path in DECORATIVE_MOUSE_ONLY:
             continue
         missing.append(rel_path)
 
