@@ -104,7 +104,10 @@ class WinwsLogAnalyzerPage(BasePage):
             if not path or not os.path.isfile(path):
                 continue
             if path.lower().endswith(_DROP_ALLOWED_EXTENSIONS):
-                return path
+                # QUrl отдаёт «C:/Users/...», а список недавних логов —
+                # «C:\Users\...»: один файл, две строки, и открытый
+                # перетаскиванием лог не узнавался в списке.
+                return os.path.normpath(path)
         return ""
 
     def dragEnterEvent(self, event):  # noqa: N802 (Qt override)
