@@ -242,6 +242,22 @@ class ProfileSetupAccessibilityTests(unittest.TestCase):
         self.assertTrue(page._strategy_list._search_row.isVisible())
         self.assertIs(self.app.focusWidget(), page._strategy_list._search)
 
+    def test_ctrl_f_outside_the_strategy_list_does_not_open_its_search(self) -> None:
+        # Ради этого Ctrl+F однажды убирали целиком: сочетание ловилось на
+        # всё окно, и строка поиска выскакивала в чужих разделах. Теперь оно
+        # действует только с фокусом внутри списка.
+        page = self._make_page()
+        self.addCleanup(page.deleteLater)
+        page.show()
+        self.app.processEvents()
+        page._strategy_tabs.setFocus()
+        self.app.processEvents()
+
+        QTest.keyClick(page._strategy_tabs, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
+        self.app.processEvents()
+
+        self.assertFalse(page._strategy_list._search_row.isVisible())
+
     def test_range_mode_combo_options_are_named_for_screen_reader(self) -> None:
         page = self._make_page()
         self.addCleanup(page.deleteLater)

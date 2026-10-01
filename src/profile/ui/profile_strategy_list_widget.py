@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from PyQt6.QtCore import QEvent, QModelIndex, QPoint, QRect, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QFontMetrics, QPainter
+from PyQt6.QtGui import QAction, QFontMetrics, QKeySequence, QPainter, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
@@ -486,16 +486,19 @@ class ProfileStrategyListWidget(QWidget):
         self._search_row.hide()
         layout.addWidget(top_row)
 
-        # Ctrl+F убран.
+        # Ctrl+F — только пока фокус в списке или в строке поиска.
         #
-        # Сочетание ловилось на всё окно (WindowShortcut), а от чужих
-        # страниц спасала только проверка isVisible() в обработчике.
-        # Виджет считается видимым и когда лежит на неактивной вкладке —
-        # оттого строка поиска и выскакивала посреди совсем других
-        # разделов, будто сама по себе.
-        #
-        # Фильтр никуда не делся: строка открывается кнопкой рядом со
-        # списком и закрывается Esc.
+        # Когда-то сочетание ловилось на всё окно (WindowShortcut), а от
+        # чужих страниц спасала проверка isVisible(): виджет на неактивной
+        # вкладке тоже считается видимым, и строка поиска выскакивала
+        # посреди совсем других разделов. Тогда Ctrl+F убрали целиком — но
+        # другой двери в поиск так и не появилось, а подсказки и описание
+        # для диктора продолжали обещать Ctrl+F: строку нельзя было открыть
+        # вовсе. WidgetWithChildrenShortcut срабатывает только с фокусом
+        # внутри этого виджета, с чужой страницы его не нажать.
+        self._search_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
+        self._search_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._search_shortcut.activated.connect(self._toggle_search)
 
         self._list = ProfileStrategyListView(self)
         self._list.setItemDelegate(ProfileStrategyListDelegate(self._list))
@@ -550,6 +553,13 @@ class ProfileStrategyListWidget(QWidget):
                     event.accept()
                     return True
         return super().eventFilter(watched, event)
+
+    def _toggle_search(self) -> None:
+        # Повторное Ctrl+F закрывает поиск и сбрасывает фильтр, как Esc.
+        if self._search_row.isVisible():
+            self.hide_search()
+        else:
+            self.show_search()
 
     def show_search(self) -> None:
         self._search_row.show()
