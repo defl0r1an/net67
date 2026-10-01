@@ -53,7 +53,10 @@ class ButtonReflectsButDoesNotDoubleStartTests(unittest.TestCase):
     def test_initial_sync_reflects_state_only(self) -> None:
         src = self._button_source("_sync_initial_state")
         self.assertIn("initial_button_state", src)
-        self.assertIn("is_any_running", src)
+        # Движок спрашивает _probe_bypass_running: им же пользуется и
+        # сверка при показе страницы.
+        self.assertIn("_probe_bypass_running", src)
+        self.assertIn("is_any_running", self._button_source("_probe_bypass_running"))
 
     def test_initial_sync_does_not_start_a_worker(self) -> None:
         """Кнопка при появлении не запускает обход — это делает координатор."""
