@@ -246,7 +246,16 @@ def apply_relay_result(
     )
     status_label.setText(plan.status_text)
     if plan.show_warning and info_bar_cls is not None:
-        info_bar_cls.warning(
+        # Плашка бессрочная (duration=-1). В net67 её забирает колокольчик,
+        # и на экране её нет, но сам объект остаётся жить невидимым: без
+        # замены каждый перезапуск прокси оставлял бы в памяти ещё один.
+        previous = getattr(parent, "_relay_warning_bar", None)
+        if previous is not None:
+            try:
+                previous.close()
+            except RuntimeError:
+                pass
+        parent._relay_warning_bar = info_bar_cls.warning(
             plan.warning_title,
             plan.warning_content,
             duration=-1,
