@@ -113,7 +113,8 @@ class WorkerLifetimeTests(unittest.TestCase):
 
         self.assertIn("worker", signature.parameters)
 
-        source = inspect.getsource(OneClickButton._on_clicked)
+        # Поток создаёт и подключает _start_worker, а не сам _on_clicked.
+        source = inspect.getsource(OneClickButton._start_worker)
         self.assertIn("lambda finished=worker", source)
 
 

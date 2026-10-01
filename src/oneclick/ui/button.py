@@ -249,10 +249,11 @@ class OneClickButton(QWidget):
         Это самый достоверный источник: не состояние из хранилища, которое
         может отставать или быть ещё не привязанным, а сам рантайм.
         """
-        if not callable(self._get_runtime_feature):
+        getter = self.__dict__.get("_get_runtime_feature")
+        if not callable(getter):
             return None
         try:
-            feature = self._get_runtime_feature()
+            feature = getter()
         except Exception as exc:
             log(f"Кнопка обхода: подсистема недоступна: {exc}", "DEBUG")
             return None
