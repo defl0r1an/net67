@@ -117,9 +117,12 @@ class ExternalPageActionWorkerBoundaryTests(unittest.TestCase):
 
         self.assertEqual(worker, ("forum_for_beginners", None))
         self.assertTrue(result.ok)
-        # DOCS_URL берётся из branding.py и по умолчанию пуст:
-        # ссылки на ресурсы автора удалены.
-        self.assertEqual(opened_urls, [""])
+        # DOCS_URL берётся из branding.py: там адрес вики net67 на сайте,
+        # а не ресурсы автора исходного проекта — те удалены.
+        from branding import DOCS_URL
+
+        self.assertEqual(opened_urls, [DOCS_URL])
+        self.assertTrue(DOCS_URL.startswith("https://defl0r1an.github.io/net67"))
 
     def test_support_open_actions_are_queued_while_worker_runs(self) -> None:
         class _Runtime:
