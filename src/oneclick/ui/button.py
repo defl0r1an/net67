@@ -243,6 +243,31 @@ class OneClickButton(QWidget):
 
     # ──────────────────────────────────────────────────────────────────
 
+    def _probe_bypass_running(self) -> bool | None:
+        """Спрашивает движок напрямую: работает ли обход. None — спросить нечем.
+
+        Это самый достоверный источник: не состояние из хранилища, которое
+        может отставать или быть ещё не привязанным, а сам рантайм.
+        """
+        if not callable(self._get_runtime_feature):
+            return None
+        try:
+            feature = self._get_runtime_feature()
+        except Exception as exc:
+            log(f"Кнопка обхода: подсистема недоступна: {exc}", "DEBUG")
+            return None
+        if feature is None:
+            return None
+        try:
+            return bool(feature.is_any_running(silent=True))
+        except TypeError:
+            try:
+                return bool(feature.is_any_running())
+            except Exception:
+                return None
+        except Exception:
+            return None
+
     def _sync_initial_state(self) -> None:
         """Показывает «Обход включён», если он уже работает.
 
@@ -252,25 +277,7 @@ class OneClickButton(QWidget):
         if self._state in _BUSY or self._state is OneClickState.RUNNING:
             return
 
-        feature = None
-        if callable(self._get_runtime_feature):
-            try:
-                feature = self._get_runtime_feature()
-            except Exception as exc:
-                log(f"Кнопка обхода: подсистема недоступна: {exc}", "DEBUG")
-
-        running = False
-        if feature is not None:
-            try:
-                running = bool(feature.is_any_running(silent=True))
-            except TypeError:
-                try:
-                    running = bool(feature.is_any_running())
-                except Exception:
-                    running = False
-            except Exception:
-                running = False
-
+        running = bool(self._probe_bypass_running())
         if initial_button_state(bypass_running=running) is OneClickState.RUNNING:
             self._apply_state(OneClickState.RUNNING, "")
 
@@ -321,6 +328,17 @@ class OneClickButton(QWidget):
                 phase = str(getter() or "")
             except Exception as exc:
                 log(f"Кнопка обхода: фаза обхода недоступна: {exc}", "DEBUG")
+        # Состояние из хранилища бывает ненадёжным: при показе страницы оно
+        # ещё не привязано (пусто), а обход, запущенный через плашку в
+        # заголовке до первого показа главной, оставлял круг на «выключен».
+        # Поэтому, когда хранилище не говорит «работает», спрашиваем сам
+        # движок — он знает точно.
+        if phase not in ("running", "starting", "stopping") and self._state not in _BUSY:
+            running = self._probe_bypass_running()
+            if running is True:
+                phase = "running"
+            elif running is False and not phase:
+                phase = "stopped"
         if phase:
             self.follow_runtime_phase(phase)
 

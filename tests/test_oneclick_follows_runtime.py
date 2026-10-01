@@ -34,6 +34,7 @@ class FollowRuntimeTests(unittest.TestCase):
         button._worker = worker
         button._runtime_phase = ""
         button._get_runtime_phase = None
+        button._get_runtime_feature = None
         button._state = getattr(OneClickState, state_name)
         button._applied = []
         button._apply_state = lambda state, detail: (
@@ -79,6 +80,7 @@ class FollowRuntimeTests(unittest.TestCase):
         worker = _Worker(True)
         button = self._button("PREPARING", worker=worker)
         button._get_runtime_phase = None
+        button._get_runtime_feature = None
         button.follow_runtime_phase("running")
         self.assertEqual(button._applied, [])
 
@@ -88,6 +90,25 @@ class FollowRuntimeTests(unittest.TestCase):
         button.deleteLater = lambda: None
         worker.deleteLater = lambda: None
         button._on_worker_done(worker)
+        self.assertIs(button._state, OneClickState.RUNNING)
+
+    def test_catch_up_asks_the_engine_when_the_store_is_silent(self) -> None:
+        """Обход запустили плашкой до первого показа главной — круг не знал.
+
+        Хранилище при показе ещё не привязано (фаза пустая), и круг стоял
+        на «Обход выключен». Теперь он спрашивает сам движок.
+        """
+        from oneclick.state import OneClickState
+
+        class _Feature:
+            def is_any_running(self, *, silent=False):
+                return True
+
+        button = self._button("OFF")
+        button._runtime_phase = ""
+        button._get_runtime_phase = lambda: ""        # хранилище молчит
+        button._get_runtime_feature = lambda: _Feature()
+        button._catch_up_with_runtime()
         self.assertIs(button._state, OneClickState.RUNNING)
 
     def test_catch_up_reads_the_live_phase(self) -> None:
