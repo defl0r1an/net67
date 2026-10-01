@@ -15,12 +15,16 @@ def stop_dpi_async(
     cleanup_services: bool = False,
 ) -> None:
     """Останавливает DPI через общий асинхронный pipeline."""
-    try:
-        if runtime_owner._dpi_stop_thread and runtime_owner._dpi_stop_thread.isRunning():
-            log("Остановка DPI уже выполняется", "DEBUG")
-            return
-    except RuntimeError:
-        runtime_owner._dpi_stop_thread = None
+    # Идёт ли остановка, говорит работник, а не поток. Поток после работы
+    # ещё досиживает в своём цикле событий, и isRunning() отвечает «да»,
+    # когда остановка давно кончилась. По потоку и выходило, что обход
+    # выключался один раз за сеанс: прежний поток остановки числился
+    # живым вечно (см. _ThreadJanitor в thread_runtime.py), и каждая
+    # следующая остановка молча выходила отсюда. Запуск на ту же ошибку
+    # уже натыкался — _stop_in_progress в start_flow.py.
+    if getattr(runtime_owner, "_dpi_stop_worker", None) is not None:
+        log("Остановка DPI уже выполняется", "INFO")
+        return
 
     snapshot = runtime_owner._runtime_service().snapshot()
     launch_method = str(getattr(snapshot, "launch_method", "") or "").strip().lower()

@@ -33,6 +33,10 @@ class _FakeThread:
     def start(self) -> None:
         pass
 
+    def moveToThread(self, thread) -> None:  # noqa: N802
+        # Объект потока отдают потоку окна — см. _ThreadJanitor.
+        self.moved_to_thread = thread
+
     def quit(self) -> None:
         self.quit_called = True
 
