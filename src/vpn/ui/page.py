@@ -26,6 +26,7 @@ from log.log import log
 from ui.accessibility import set_control_accessibility
 from ui.pages.base_page import BasePage
 from ui.theme import get_theme_tokens
+from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips, set_fluent_item_tooltip
 
 from vpn.parser import VpnConfigError, parse_any, to_conf_text
 from vpn.tabs import (
@@ -387,6 +388,7 @@ class VpnPage(BasePage):
 
         self.profile_list = QListWidget(self.content)
         self.profile_list.setObjectName("net67ServerList")
+        install_fluent_item_tooltips(self.profile_list)
         self.profile_list.setFixedHeight(SERVER_LIST_HEIGHT)
         # Ширину ограничиваем, а не задаём: на узком окне список сожмётся
         # вместе с ним, на широком — остановится и не растянется в полосу
@@ -720,7 +722,7 @@ class VpnPage(BasePage):
         if hint.isValid():
             item.setSizeHint(QSize(hint.width(), hint.height() + 14))
 
-        item.setToolTip("Нажмите, чтобы свернуть или развернуть группу")
+        set_fluent_item_tooltip(item, "Нажмите, чтобы свернуть или развернуть группу")
         return item
 
     def _on_list_item_clicked(self, item) -> None:

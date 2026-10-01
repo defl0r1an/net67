@@ -25,6 +25,7 @@ from qfluentwidgets import getFont, isDarkTheme, themeColor
 from ui.accessibility import set_control_accessibility
 from ui.animation_policy import are_live_animations_enabled
 from ui.theme import get_cached_qta_pixmap, get_theme_tokens, to_qcolor
+from ui.widgets.fluent_item_tooltip import install_fluent_hover_tooltip
 from ui.widgets.stagger_float_in import (
     FLOAT_IN_DURATION_MS,
     FLOAT_IN_RISE_PX,
@@ -163,6 +164,7 @@ class HostsTilesGrid(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         set_control_accessibility(self, name="Сервисы hosts")
+        install_fluent_hover_tooltip(self, self._tooltip_at)
 
     # ── данные ───────────────────────────────────────────────
 
@@ -897,17 +899,20 @@ class HostsTilesGrid(QWidget):
         tile = self._tiles[index] if index >= 0 else None
         clickable = tile is not None and hover >= 0 and (slot >= 0 or tile.has_switch)
         self.setCursor(Qt.CursorShape.PointingHandCursor if clickable else Qt.CursorShape.ArrowCursor)
-        if tile is None:
-            self.setToolTip("")
-        elif slot >= 0:
+        super().mouseMoveEvent(event)
+
+    def _tooltip_at(self, point: QPoint) -> str:
+        index = self.index_at(point)
+        if index < 0:
+            return ""
+        tile = self._tiles[index]
+        slot = self._choice_at(index, point) if self._is_clickable(index) else -1
+        if slot >= 0:
             choice = tile.choices[slot]
             if choice.profile_id == tile.selected:
-                self.setToolTip(f"{choice.label} — выбран, щёлкните, чтобы выключить")
-            else:
-                self.setToolTip(choice.label)
-        else:
-            self.setToolTip(f"{tile.title}\n{tile.note}" if tile.note else tile.title)
-        super().mouseMoveEvent(event)
+                return f"{choice.label} — выбран, щёлкните, чтобы выключить"
+            return choice.label
+        return f"{tile.title}\n{tile.note}" if tile.note else tile.title
 
     def leaveEvent(self, event) -> None:  # noqa: N802
         self._set_hover(-1, -1)

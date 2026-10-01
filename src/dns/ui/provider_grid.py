@@ -39,6 +39,7 @@ from qfluentwidgets import FluentIcon, getFont, isDarkTheme, themeColor
 from ui.accessibility import set_control_accessibility
 from ui.animation_policy import are_live_animations_enabled
 from ui.theme import get_cached_qta_pixmap, get_theme_tokens, to_qcolor
+from ui.widgets.fluent_item_tooltip import install_fluent_hover_tooltip
 from ui.widgets.hover_row import paint_sheen
 from ui.widgets.row_hover_motion import TileHoverMotion, paint_rotated
 
@@ -306,6 +307,7 @@ class DnsProviderGrid(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         set_control_accessibility(self, name=self._texts.grid_name, description=self._texts.grid_description)
+        install_fluent_hover_tooltip(self, self._tooltip_at)
 
     # ── данные ───────────────────────────────────────────────
 
@@ -857,8 +859,11 @@ class DnsProviderGrid(QWidget):
         index = self.index_at(event.position().toPoint())
         self._set_hover(index)
         self.setCursor(Qt.CursorShape.PointingHandCursor if index >= 0 else Qt.CursorShape.ArrowCursor)
-        self.setToolTip(self._tiles[index].tooltip if index >= 0 else "")
         super().mouseMoveEvent(event)
+
+    def _tooltip_at(self, point: QPoint) -> str:
+        index = self.index_at(point)
+        return self._tiles[index].tooltip if index >= 0 else ""
 
     def leaveEvent(self, event) -> None:  # noqa: N802
         self._set_hover(-1)

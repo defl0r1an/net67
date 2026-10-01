@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.accessibility import set_control_accessibility, set_state_text
+from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips, set_fluent_item_tooltip
 
 MAX_VISIBLE_ROWS = 7
 MIN_VISIBLE_ROWS = 3
@@ -110,6 +111,9 @@ class CompletionPopup(QFrame):
         self.list_widget.setUniformItemSizes(True)
         self.list_widget.setMouseTracking(False)
         self.list_widget.setItemDelegate(_CompletionItemDelegate(self))
+        # Длинное пояснение в строке обрезается — целиком его показывает
+        # подсказка, в общем для программы виде.
+        install_fluent_item_tooltips(self.list_widget)
         self.list_widget.itemClicked.connect(self._on_item_clicked)
         self.list_widget.currentRowChanged.connect(self._on_current_row_changed)
         self.list_widget.viewport().installEventFilter(self)
@@ -150,7 +154,7 @@ class CompletionPopup(QFrame):
             for label, detail in zip(labels, details):
                 item = QListWidgetItem(str(label))
                 item.setData(_DETAIL_ROLE, str(detail or ""))
-                item.setToolTip(str(detail or ""))
+                set_fluent_item_tooltip(item, str(detail or ""))
                 self.list_widget.addItem(item)
             if self.list_widget.count():
                 self.list_widget.setCurrentRow(0)

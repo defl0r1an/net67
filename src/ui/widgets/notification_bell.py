@@ -233,13 +233,18 @@ class NotificationBell(QPushButton):
         self.update()
 
     def _sync_text(self) -> None:
+        from qfluentwidgets import ToolTipPosition
+
         from ui.accessibility import set_control_accessibility
+        from ui.fluent_widgets import set_tooltip
 
         if self._unread:
             name = f"Уведомления: непрочитанных {self._unread}"
         else:
             name = "Уведомления"
-        self.setToolTip(name)
+        # Колокольчик в заголовке окна: подсказка сверху у развёрнутого окна
+        # упёрлась бы в край экрана и легла бы на сам колокольчик.
+        set_tooltip(self, name, position=ToolTipPosition.BOTTOM)
         set_control_accessibility(self, name=name, description="Показать историю уведомлений и ошибок")
 
     def enterEvent(self, event) -> None:  # noqa: N802 (Qt override)

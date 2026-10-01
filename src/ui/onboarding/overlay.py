@@ -34,7 +34,7 @@ import re
 from PyQt6 import sip
 from PyQt6.QtCore import QElapsedTimer, QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QKeySequence, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient, QRegion, QShortcut
-from PyQt6.QtWidgets import QApplication, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QSizePolicy, QToolTip, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
@@ -208,6 +208,11 @@ class _ProgressDots(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Название шага над точкой — фирменной подсказкой, как везде в
+        # программе: системная была белой посреди тёмного тура.
+        from ui.widgets.fluent_item_tooltip import FluentItemToolTipController
+
+        self._tooltip = FluentItemToolTipController(self)
 
     def set_progress(self, current: int, count: int, titles: list[str] | None = None) -> None:
         count = max(0, int(count))
@@ -321,9 +326,9 @@ class _ProgressDots(QWidget):
             self._hover = index
             self.update()
             if 0 <= index < len(self._titles):
-                QToolTip.showText(event.globalPosition().toPoint(), f"{index + 1}. {self._titles[index]}", self)
+                self._tooltip.show_text(f"{index + 1}. {self._titles[index]}", event.globalPosition().toPoint())
             else:
-                QToolTip.hideText()
+                self._tooltip.hide()
         event.accept()
 
     def leaveEvent(self, event):  # noqa: N802 (Qt override)
