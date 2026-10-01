@@ -208,7 +208,6 @@ jobs:
             @("ico",                            "ico"),
             @("src\ico",                        "ico"),
             @("src\presets\builtin\winws2",     "presets\winws2_builtin"),
-            @("wiki\site",                      "docs"),
             @("src\profile\strategy_catalogs",  "profile\strategy_catalogs"),
             @("src\profile\templates",          "profile\templates"),
             @("lists",                          "lists"),
@@ -253,22 +252,6 @@ jobs:
             throw "В артефакте $($lists.Count) списков хостов вместо сотни с лишним. Обход не заработает."
           }
           Write-Host "Списков хостов: $($lists.Count)"
-
-          # Вика. У неё обязана быть главная страница, а не только стили.
-          #
-          # Неудачная пересборка Quartz оставляет папку недописанной: css
-          # на месте, а все .html кроме 404 пропали. Копирование выше
-          # такое переносит охотно, папка docs выглядит наполненной, а
-          # кнопка «Документация» открывает пустоту. Один раз уже уехало.
-          $docsIndex = Join-Path $artifact "docs\index.html"
-          if (-not (Test-Path -LiteralPath $docsIndex -PathType Leaf)) {
-            throw "Вика битая: нет docs\index.html. Пересоберите её через wiki\Пересобрать сайт.cmd"
-          }
-          $docsPages = @(Get-ChildItem (Join-Path $artifact "docs") -Filter *.html -ErrorAction SilentlyContinue)
-          if ($docsPages.Count -lt 10) {
-            throw "Вика урезана: $($docsPages.Count) страниц вместо полутора десятков."
-          }
-          Write-Host "Страниц документации: $($docsPages.Count)"
 
       - name: Build installer
         shell: pwsh

@@ -81,9 +81,8 @@ def _resolve_wiki_url(link: str) -> str:
     """Ссылка шага → адрес, который откроет кнопка «Подробнее в вики».
 
     Полный адрес (``https://…``) остаётся как есть. Ссылка на статью нашей
-    вики (``presets#фейки``) ведёт на встроенную копию через локальный
-    сервер документации. Нет вики в сборке — кнопки нет: ссылка в пустоту
-    хуже её отсутствия.
+    вики (``presets#фейки``) ведёт на сайт документации. Адрес сайта не
+    задан — кнопки нет: ссылка в пустоту хуже её отсутствия.
     """
     link = str(link or "").strip()
     if not link:
@@ -91,7 +90,7 @@ def _resolve_wiki_url(link: str) -> str:
     if "://" in link:
         return link
     try:
-        from docs.local_site import page_url
+        from docs.wiki_site import page_url
 
         return page_url(link)
     except Exception:

@@ -165,7 +165,11 @@ def get_palette(*, dark: bool) -> BrandPalette:
 SUPPORT_URL = ""
 
 #: Куда ведёт «Документация». Пусто — пункта нет.
-DOCS_URL = ""
+#:
+#: Вики net67 на GitHub Pages (ветка gh-pages, собирается из wiki/content).
+#: На этот же адрес ведут «Подробнее в вики» в экскурсии, см.
+#: docs/wiki_site.py.
+DOCS_URL = "https://defl0r1an.github.io/net67/"
 
 #: Почта техподдержки для формы обращения. Пусто — форма скрыта.
 SUPPORT_EMAIL = ""

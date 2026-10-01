@@ -413,11 +413,11 @@ def build_docs_card(*, push_setting_card_cls, tr_fn, parent):
     branding.py опустел, и карточка перестала показываться. Своей
     документации тогда не было, и показывать было нечего.
 
-    Теперь она есть и едет вместе с программой — папка `docs` рядом с
-    исполняемым файлом. Открывается без интернета: программа поднимает
-    её на локальном адресе и зовёт браузер, см. docs/local_site.py.
+    Теперь она есть — сайт в интернете, см. docs/wiki_site.py. Сначала
+    вики ехала вместе с программой и открывалась с локального адреса;
+    когда её опубликовали, встроенную копию убрали.
     """
-    from docs.local_site import open_in_browser
+    from docs.wiki_site import open_in_browser
 
     return build_deferred_themed_push_setting_card_common(
         push_setting_card_cls=push_setting_card_cls,

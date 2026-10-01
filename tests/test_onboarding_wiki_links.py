@@ -5,6 +5,10 @@
 (wiki/content), и ссылка — страница с якорем заголовка. Такая ссылка
 ломается молча: переименовали заголовок — браузер откроет статью с
 начала. Тест находит это раньше человека.
+
+Вики открывается с сайта, и проверить ссылку по сети тест не может:
+статьи и заголовки сверяются по исходникам в wiki/content, из которых
+сайт собирается.
 """
 
 from __future__ import annotations
@@ -69,37 +73,24 @@ class WikiLinksTests(unittest.TestCase):
 
 
 class PageUrlTests(unittest.TestCase):
-    def test_page_and_anchor_are_quoted_for_the_local_server(self) -> None:
-        from docs import local_site
+    def test_every_tour_link_resolves_to_the_site(self) -> None:
+        from config.urls import ONBOARDING_WIKI_URLS
+        from ui.onboarding import overlay
 
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "presets.html").write_text("x", encoding="utf-8")
-            with (
-                patch.object(local_site, "is_available", return_value=True),
-                patch.object(local_site, "docs_root", return_value=Path(tmp)),
-                patch.object(local_site, "start", return_value="http://127.0.0.1:8317/"),
-            ):
-                url = local_site.page_url("presets#фейки")
-                # Статьи нет в собранном сайте — кнопки нет, а не 404.
-                missing = local_site.page_url("techniques#fake")
-        self.assertEqual(url, "http://127.0.0.1:8317/presets#%D1%84%D0%B5%D0%B9%D0%BA%D0%B8")
-        self.assertEqual(missing, "")
-
-    def test_no_docs_no_link(self) -> None:
-        from docs import local_site
-
-        with patch.object(local_site, "is_available", return_value=False):
-            self.assertEqual(local_site.page_url("presets"), "")
+        for step, link in ONBOARDING_WIKI_URLS.items():
+            with self.subTest(step=step):
+                url = overlay._resolve_wiki_url(link)
+                self.assertTrue(url.startswith("https://defl0r1an.github.io/net67/"), url)
+                # Локальный адрес — признак вернувшейся встроенной копии.
+                self.assertNotIn("127.0.0.1", url)
 
     def test_tour_card_keeps_full_urls_and_resolves_wiki_pages(self) -> None:
         from ui.onboarding import overlay
 
         self.assertEqual(overlay._resolve_wiki_url("https://example.org/a"), "https://example.org/a")
         self.assertEqual(overlay._resolve_wiki_url(""), "")
-        with patch("docs.local_site.page_url", return_value="http://127.0.0.1:1/presets") as page_url:
-            self.assertEqual(overlay._resolve_wiki_url("presets"), "http://127.0.0.1:1/presets")
+        with patch("docs.wiki_site.page_url", return_value="https://example.org/presets") as page_url:
+            self.assertEqual(overlay._resolve_wiki_url("presets"), "https://example.org/presets")
         page_url.assert_called_once_with("presets")
 
 
