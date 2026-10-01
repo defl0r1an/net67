@@ -113,8 +113,14 @@ plugins:
   - source: "@quartz-community/roam"
     enabled: false
     order: 92
+  # Выключен: без настроек он ставит заголовкам свой шрифт по умолчанию,
+  # Schibsted Grotesk, прямым правилом поверх нашего. В нём нет русских
+  # букв и нет запасного шрифта — кириллица в заголовках рисовалась
+  # шрифтом браузера с засечками, а латиница рядом — гротеском
+  # («Подписка» и «MTProxy» в словаре выглядели набранными по-разному).
+  # Шрифты задаёт theme.typography выше, запасные — custom.scss.
   - source: "@quartz-community/quartz-fonts"
-    enabled: true
+    enabled: false
   - source: "@quartz-themes/core"
     enabled: false
     options:
