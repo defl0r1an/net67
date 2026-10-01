@@ -150,6 +150,25 @@ def set_defender_disabled(
         manager = WindowsDefenderManager(status_callback=status_callback)
 
         if disable:
+            # Пока включена защита от подделки, Windows не даёт отключить
+            # Defender из программы — записи в реестр возвращают «Отказано
+            # в доступе». Снять её может только сам человек в «Безопасности
+            # Windows»; обходить её программа не будет. Поэтому не делаем
+            # вид, что сработало, а ведём человека снять защиту.
+            if manager.is_tamper_protection_enabled() is True:
+                manager.open_tamper_protection_settings()
+                return ProgramSettingActionResult(
+                    level="warning",
+                    title="Сначала снимите защиту от подделки",
+                    content=(
+                        "Windows не даёт отключить Defender, пока включена «Защита от подделки».\n\n"
+                        "Открылось окно «Безопасность Windows». Выключите там «Защита от подделки» "
+                        "(Tamper Protection), вернитесь и снова включите этот переключатель."
+                    ),
+                    revert_checked=False,
+                    final_status="Готово",
+                )
+
             success, count = manager.disable_defender()
             if success:
                 remember_defender_disabled(True)
@@ -163,12 +182,26 @@ def set_defender_disabled(
                     revert_checked=None,
                     final_status="Готово",
                 )
+            # Не отключился. Чаще всего защиту от подделки включили заново
+            # посреди операции — снова ведём к ней, а не пишем глухое «ошибка».
+            if manager.is_tamper_protection_enabled() is True:
+                manager.open_tamper_protection_settings()
+                return ProgramSettingActionResult(
+                    level="warning",
+                    title="Сначала снимите защиту от подделки",
+                    content=(
+                        "Defender не отключился: включена «Защита от подделки».\n\n"
+                        "Выключите её в открывшемся окне «Безопасность Windows» и попробуйте снова."
+                    ),
+                    revert_checked=False,
+                    final_status="Готово",
+                )
             return ProgramSettingActionResult(
                 level="error",
-                title="Ошибка",
+                title="Не удалось отключить Windows Defender",
                 content=(
-                    "Не удалось отключить Windows Defender. "
-                    "Возможно, некоторые настройки заблокированы системой."
+                    "Часть настроек заблокирована системой. Проверьте, что выключена "
+                    "«Защита от подделки» в «Безопасности Windows», и попробуйте снова."
                 ),
                 revert_checked=False,
                 final_status="Готово",

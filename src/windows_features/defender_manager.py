@@ -68,6 +68,56 @@ class WindowsDefenderManager:
             log(f"Ошибка при выполнении команды реестра: {e}", "❌ ERROR")
             return False
     
+    def _query_mp_status(self, field: str) -> Optional[bool]:
+        """Читает булево поле Get-MpComputerStatus. None — определить не удалось.
+
+        Единственный надёжный способ узнать настоящее состояние Defender:
+        не «сколько команд реестра прошло», а что сам Defender о себе
+        сообщает. Отсюда и честный отчёт вместо «16/20 успешно» при живой
+        защите.
+        """
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"(Get-MpComputerStatus).{field}"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                creationflags=_NO_WINDOW, timeout=25,
+            )
+        except Exception as e:
+            log(f"Не удалось прочитать статус Defender ({field}): {e}", "DEBUG")
+            return None
+        out = (result.stdout or "").strip().lower()
+        if out.startswith("true"):
+            return True
+        if out.startswith("false"):
+            return False
+        return None
+
+    def is_tamper_protection_enabled(self) -> Optional[bool]:
+        """Включена ли защита от подделки (Tamper Protection). None — не знаем.
+
+        Пока она включена, Windows намеренно не даёт никакой программе
+        отключить Defender из реестра — записи возвращают «Отказано в
+        доступе». Снять её можно только руками в «Безопасности Windows».
+        """
+        return self._query_mp_status("IsTamperProtected")
+
+    def is_realtime_protection_active(self) -> Optional[bool]:
+        """Работает ли защита в реальном времени — то есть жив ли Defender."""
+        return self._query_mp_status("RealTimeProtectionEnabled")
+
+    def open_tamper_protection_settings(self) -> bool:
+        """Открывает «Безопасность Windows», где человек сам снимает защиту от подделки.
+
+        Это не обход: переключатель снимает сам пользователь в родном
+        окне Windows. Программа только приводит его туда.
+        """
+        try:
+            os.startfile("windowsdefender://threatsettings")  # type: ignore[attr-defined]
+            return True
+        except Exception as e:
+            log(f"Не удалось открыть «Безопасность Windows»: {e}", "WARNING")
+            return False
+
     def is_defender_disabled(self) -> bool:
         """Проверяет, отключен ли Windows Defender"""
         try:
@@ -159,13 +209,25 @@ class WindowsDefenderManager:
         else:
             log(f"⚠️ Не удалось отключить автозапуск WinDefend: {disable_result.stderr}", "WARNING")
         
-        success = success_count > 0
-        if success:
-            log(f"Windows Defender отключен: {success_count}/{total} команд выполнено успешно", "✅ INFO")
+        # Честная проверка: отключён ли Defender на самом деле, а не
+        # «сколько команд реестра не вернули ошибку». Политика
+        # DisableRealtimeMonitoring применяется сразу; если защиту от
+        # подделки не сняли, записи не прошли — защита останется включённой,
+        # и раньше кнопка всё равно рапортовала «успешно».
+        realtime = self.is_realtime_protection_active()
+        if realtime is False:
+            disabled = True
+        elif realtime is True:
+            disabled = False
         else:
-            log("Не удалось отключить Windows Defender", "❌ ERROR")
-            
-        return success, success_count
+            disabled = success_count > 0  # статус не прочитался — по старинке
+
+        if disabled:
+            log(f"Windows Defender отключён (применено {success_count}/{total})", "✅ INFO")
+        else:
+            log("Windows Defender не отключён — вероятно, включена защита от подделки", "⚠️ WARNING")
+
+        return disabled, success_count
     
     def enable_defender(self) -> Tuple[bool, int]:
         """
