@@ -136,9 +136,10 @@ class BellRingTests(unittest.TestCase):
     def _bell(self):
         from ui.widgets.notification_bell import NotificationBell
 
-        item = patch("ui.animation_policy.are_live_animations_enabled", return_value=True)
-        item.start()
-        self.addCleanup(item.stop)
+        for name in ("are_live_animations_enabled", "are_animations_enabled"):
+            item = patch(f"ui.animation_policy.{name}", return_value=True)
+            item.start()
+            self.addCleanup(item.stop)
         bell = NotificationBell()
         bell.show()
         self.addCleanup(bell.deleteLater)
@@ -154,28 +155,92 @@ class BellRingTests(unittest.TestCase):
         self.assertTrue(bell.is_ringing())
         _wait(0.08)
         self.assertGreater(abs(bell.ring_angle()), 0.5)
+        self.assertGreater(bell.ring_scale(), 1.0)
         self.assertFalse(bell.grab().isNull())
-        _wait(1.0)
+        _wait(1.8)
         self.assertFalse(bell.is_ringing())
         self.assertEqual(bell.ring_angle(), 0.0)
+        self.assertEqual(bell.ring_scale(), 1.0)
 
-    def test_soft_ring_is_smaller(self) -> None:
+    def test_soft_ring_is_smaller_but_still_visible(self) -> None:
+        """«Готово» качало на градус-другой: низ значка сдвигался на пиксель."""
         from ui.widgets.notification_bell import RING_SOFT_DEG, RING_STRONG_DEG, ring_angle
 
         peak_soft = max(abs(ring_angle(i / 200, RING_SOFT_DEG)) for i in range(201))
         peak_strong = max(abs(ring_angle(i / 200, RING_STRONG_DEG)) for i in range(201))
         self.assertLess(peak_soft, peak_strong)
         self.assertEqual(ring_angle(1.0, RING_STRONG_DEG), 0.0)
+        # Значок 15 px: при 15 градусах его низ уходит на четыре пикселя —
+        # меньше глаз на заголовке не ловит.
+        self.assertGreater(peak_soft, 15.0)
 
-    def test_no_motion_when_live_animations_are_off(self) -> None:
+    def test_ring_does_not_end_before_the_eye_gets_there(self) -> None:
+        from ui.widgets.notification_bell import RING_MS, ring_angle
+
+        self.assertGreaterEqual(RING_MS, 1200)
+        # Через полсекунды колокольчик ещё заметно качается.
+        late = max(abs(ring_angle(t / 100, 34.0)) for t in range(30, 45))
+        self.assertGreater(late, 4.0)
+
+    def test_every_notification_leaves_a_dot_until_the_list_is_opened(self) -> None:
+        """«Готово» только качало: моргнул — и следа нет."""
+        bell = self._bell()
+        bell.set_state(0, "")
+        self.assertFalse(bell.has_fresh())
+        bell.ring(strong=False)
+        self.assertTrue(bell.has_fresh())
+        self.assertTrue(bell.is_ringing())
+        bell.mark_seen()
+        self.assertFalse(bell.has_fresh())
+
+    def test_ring_while_hidden_plays_when_the_window_is_shown(self) -> None:
+        """Уведомление пришло, пока окно в трее, — колокольчик молчал навсегда."""
         from ui.widgets.notification_bell import NotificationBell
 
-        with patch("ui.animation_policy.are_live_animations_enabled", return_value=False):
+        for name in ("are_live_animations_enabled", "are_animations_enabled"):
+            item = patch(f"ui.animation_policy.{name}", return_value=True)
+            item.start()
+            self.addCleanup(item.stop)
+        bell = NotificationBell()
+        self.addCleanup(bell.deleteLater)
+        bell.ring(strong=True)
+        self.assertFalse(bell.is_ringing())
+        self.assertTrue(bell.has_fresh())
+        bell.show()
+        _wait(0.8)
+        self.assertTrue(bell.is_ringing())
+
+    def test_no_swing_but_a_flash_when_live_animations_are_off(self) -> None:
+        """Просьба убрать движение — не просьба убрать сигнал."""
+        from ui.widgets.notification_bell import NotificationBell
+
+        with (
+            patch("ui.animation_policy.are_live_animations_enabled", return_value=False),
+            patch("ui.animation_policy.are_animations_enabled", return_value=True),
+        ):
+            bell = NotificationBell()
+            bell.show()
+            self.addCleanup(bell.deleteLater)
+            bell.ring(strong=True)
+            self.assertTrue(bell.is_ringing())
+            _wait(0.08)
+            self.assertEqual(bell.ring_angle(), 0.0)
+            self.assertEqual(bell.ring_scale(), 1.0)
+
+    def test_nothing_moves_when_windows_animations_are_off(self) -> None:
+        from ui.widgets.notification_bell import NotificationBell
+
+        with (
+            patch("ui.animation_policy.are_live_animations_enabled", return_value=False),
+            patch("ui.animation_policy.are_animations_enabled", return_value=False),
+        ):
             bell = NotificationBell()
             bell.show()
             self.addCleanup(bell.deleteLater)
             bell.ring(strong=True)
         self.assertFalse(bell.is_ringing())
+        # Точка остаётся и здесь: это не движение.
+        self.assertTrue(bell.has_fresh())
 
 
 if __name__ == "__main__":

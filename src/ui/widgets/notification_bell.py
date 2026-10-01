@@ -9,7 +9,7 @@ import math
 import time
 from collections.abc import Callable
 
-from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QVariantAnimation, pyqtSignal
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QFont, QPainter
 from PyQt6.QtWidgets import (
     QFrame,
@@ -23,7 +23,15 @@ from PyQt6.QtWidgets import (
 
 from ui.notification_inbox import InboxEntry, NotificationInbox
 
-__all__ = ["NotificationBell", "NotificationPanel", "anchor_point", "badge_pop_scale", "ring_angle"]
+__all__ = [
+    "NotificationBell",
+    "NotificationPanel",
+    "anchor_point",
+    "badge_pop_scale",
+    "bell_bump_scale",
+    "ring_angle",
+    "ring_flash",
+]
 
 #: Размер кнопки. Под высоту строки заголовка, как у кнопок окна.
 BELL_SIZE = QSize(34, 28)
@@ -35,23 +43,54 @@ PANEL_WIDTH = 380
 #: Качание колокольчика при новом уведомлении.
 #:
 #: Колокольчик качается от верхней точки, как настоящий: размах гаснет
-#: по экспоненте, качнувшись пару раз. Перелёт здесь уместен — у
-#: колокольчика есть физика, и именно качание читается как «звонок».
-#: Новое непрочитанное — заметный размах; запись о плашке, которую
-#: человек и так видит на экране, — лёгкий, чтобы не кричать дважды.
-RING_MS = 760
-RING_STRONG_DEG = 16.0
-RING_SOFT_DEG = 7.0
-_RING_DAMPING = 4.2
-_RING_SWINGS = 2.3
+#: по экспоненте. Перелёт здесь уместен — у колокольчика есть физика, и
+#: именно качание читается как «звонок».
+#:
+#: Первая версия качалась на 16 и 7 градусов за три четверти секунды.
+#: Значок — пятнадцать пикселей: 7 градусов сдвигали его низ на один
+#: пиксель, 16 — на два с небольшим, и всё гасло раньше, чем глаз
+#: успевал дойти до заголовка. Владелец: «двигается далеко не на все
+#: уведомления и еле заметно». На «Готово» и «Сохранено» качание было
+#: тем самым однопиксельным — его не видел никто.
+#:
+#: Теперь слабого качания нет: любое уведомление качает заметно, важное
+#: — сильнее. Качаний три с половиной за полторы секунды, как у
+#: настоящего колокольчика, и значок на первом взмахе подрастает.
+RING_MS = 1500
+RING_STRONG_DEG = 34.0
+RING_SOFT_DEG = 26.0
+_RING_DAMPING = 2.6
+_RING_SWINGS = 3.5
 #: Счётчик «выпрыгивает» в первые 45 % качания.
 BADGE_POP_SCALE = 0.35
+#: Насколько значок подрастает на первом взмахе и какую долю качания.
+BELL_BUMP_SCALE = 0.22
+_BELL_BUMP_SPAN = 0.3
+#: Подсветка под колокольчиком в начале звонка (доля непрозрачности).
+#: Она же — весь отклик, когда «лёгкие анимации» выключены: просьба
+#: убрать движение — не просьба убрать сигнал.
+RING_FLASH_ALPHA = 0.26
+#: Колокольчик, скрытый вместе с окном, отзвонит при показе — с такой
+#: задержкой, чтобы окно успело появиться.
+PENDING_RING_DELAY_MS = 350
 
 
 def ring_angle(t: float, amplitude: float) -> float:
     """Угол качания в момент t (0..1): затухающая синусоида."""
     t = max(0.0, min(1.0, float(t)))
     return amplitude * math.exp(-_RING_DAMPING * t) * math.sin(2.0 * math.pi * _RING_SWINGS * t) * (1.0 - t)
+
+
+def bell_bump_scale(t: float) -> float:
+    """Размер значка в момент t: подрастает на первом взмахе и возвращается."""
+    t = max(0.0, min(1.0, float(t) / _BELL_BUMP_SPAN))
+    return 1.0 + BELL_BUMP_SCALE * math.sin(math.pi * t)
+
+
+def ring_flash(t: float) -> float:
+    """Непрозрачность подсветки в момент t: вспыхивает сразу и гаснет."""
+    t = max(0.0, min(1.0, float(t)))
+    return RING_FLASH_ALPHA * (1.0 - t) ** 1.5
 
 
 def badge_pop_scale(t: float) -> float:
@@ -93,6 +132,10 @@ class NotificationBell(QPushButton):
         self._ring_t = 1.0
         self._ring_amplitude = 0.0
         self._ring_pop = False
+        # Есть новое, которого человек ещё не открывал, — см. ring().
+        self._fresh = False
+        # Звонок, пришедший, пока колокольчика не было на экране.
+        self._pending_ring: bool | None = None
         # QVariantAnimation, а не QPropertyAnimation: общий выключатель
         # анимаций подменяет только второй.
         self._ring = QVariantAnimation(self)
@@ -120,24 +163,65 @@ class NotificationBell(QPushButton):
         случайно взглянув на заголовок. Повторный звонок во время
         качания не начинает его заново с нуля: размах берётся больший из
         двух, а время — с начала, так что движение не дёргается.
-        """
-        from ui.animation_policy import are_live_animations_enabled
 
-        if not are_live_animations_enabled() or not self.isVisible():
+        Три вещи, чтобы звонок не пропал:
+
+        - на колокольчике остаётся точка, пока список не открыли.
+          Счётчик зажигают только ошибки и предупреждения, а «Готово»
+          лишь качало — моргнул, и следа нет;
+        - звонок, пришедший при спрятанном окне (трей), не теряется:
+          колокольчик отзвонит, когда окно покажут;
+        - при выключенных «лёгких анимациях» качания нет, но подсветка
+          остаётся.
+        """
+        from ui.animation_policy import are_animations_enabled, are_live_animations_enabled
+
+        self._fresh = True
+        if not self.isVisible():
+            self._pending_ring = bool(strong or self._pending_ring)
             return
-        amplitude = RING_STRONG_DEG if strong else RING_SOFT_DEG
+        swing = are_live_animations_enabled()
+        if not swing and not are_animations_enabled():
+            # Движение выключено в самой Windows: остаётся только точка.
+            self.update()
+            return
+        amplitude = (RING_STRONG_DEG if strong else RING_SOFT_DEG) if swing else 0.0
         if self.is_ringing():
             amplitude = max(amplitude, self._ring_amplitude)
         self._ring_amplitude = amplitude
-        self._ring_pop = bool(strong and self._unread)
+        self._ring_pop = bool(strong and self._unread) or not self._unread
         self._ring.stop()
         self._ring.start()
+
+    def mark_seen(self) -> None:
+        """Список открыли — точка «есть новое» гаснет."""
+        if self._fresh:
+            self._fresh = False
+            self.update()
+
+    def has_fresh(self) -> bool:
+        return self._fresh
+
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().showEvent(event)
+        pending, self._pending_ring = self._pending_ring, None
+        if pending is not None:
+            QTimer.singleShot(PENDING_RING_DELAY_MS, lambda strong=pending: self._ring_if_shown(strong))
+
+    def _ring_if_shown(self, strong: bool) -> None:
+        if self.isVisible() and self._fresh:
+            self.ring(strong=strong)
 
     def is_ringing(self) -> bool:
         return self._ring.state() == QVariantAnimation.State.Running
 
     def ring_angle(self) -> float:
         return ring_angle(self._ring_t, self._ring_amplitude) if self.is_ringing() else 0.0
+
+    def ring_scale(self) -> float:
+        if not self.is_ringing() or self._ring_amplitude <= 0.0:
+            return 1.0
+        return bell_bump_scale(self._ring_t)
 
     def _on_ring_value(self, value) -> None:
         self._ring_t = float(value)
@@ -179,6 +263,14 @@ class NotificationBell(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(colors.surface_hover))
             painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 8, 8)
+        if self.is_ringing():
+            # Вспышка под значком: её видно краем глаза, когда взгляд на
+            # странице, а не на заголовке.
+            flash = QColor(colors.text)
+            flash.setAlphaF(ring_flash(self._ring_t))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(flash)
+            painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 8, 8)
         if self.hasFocus():
             # Кнопка рисуется целиком здесь, стиль Qt её не касается — без
             # этой рамки человек с клавиатурой не видит, где фокус.
@@ -188,7 +280,7 @@ class NotificationBell(QPushButton):
 
         # Значок рисуется при каждой отрисовке по текущей палитре: смена
         # темы тогда не оставляет его чёрным на чёрном.
-        icon_color = colors.text if (self._hover or self._unread) else colors.text_muted
+        icon_color = colors.text if (self._hover or self._unread or self._fresh) else colors.text_muted
         pixmap = get_cached_qta_pixmap("fa5s.bell", color=icon_color, size=15)
         if not pixmap.isNull():
             ratio = pixmap.devicePixelRatio() or 1.0
@@ -197,18 +289,30 @@ class NotificationBell(QPushButton):
             left = int((rect.width() - width) / 2)
             top = int((rect.height() - height) / 2)
             angle = self.ring_angle()
-            if abs(angle) > 0.05:
-                # Качается от верхней точки — там, где колокольчик висит.
+            scale = self.ring_scale()
+            if abs(angle) > 0.05 or scale > 1.001:
+                # Качается от верхней точки — там, где колокольчик висит;
+                # оттуда же и растёт, так что верх стоит на месте.
                 pivot = QPointF(left + width / 2, top + 1.0)
                 painter.save()
                 painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
                 painter.translate(pivot)
                 painter.rotate(angle)
+                painter.scale(scale, scale)
                 painter.translate(-pivot)
                 painter.drawPixmap(QPoint(left, top), pixmap)
                 painter.restore()
             else:
                 painter.drawPixmap(QPoint(left, top), pixmap)
+
+        if self._fresh and not self._unread:
+            # Новое без счётчика («Готово», «Сохранено»): точка без цифры.
+            radius = 3.0
+            if self._ring_pop and self.is_ringing():
+                radius *= badge_pop_scale(self._ring_t)
+            painter.setPen(QColor(colors.window))
+            painter.setBrush(QColor(colors.text))
+            painter.drawEllipse(QPointF(rect.width() - 9.0, 8.0), radius, radius)
 
         if self._unread:
             text = str(self._unread) if self._unread < 10 else "9+"

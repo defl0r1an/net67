@@ -888,6 +888,10 @@ class WindowNotificationCenter(QObject):
         # надо разгребать.
         self.inbox.mark_all_read()
         self._sync_bell()
+        try:
+            bell.mark_seen()
+        except (AttributeError, RuntimeError):
+            pass
 
     def _open_inbox_entry(self, entry) -> bool:
         """Открывает раздел записи из колокольчика; не вышло — журнал.
