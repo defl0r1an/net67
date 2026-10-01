@@ -69,12 +69,14 @@ if ($dirty.Count -gt 0) {
     foreach ($item in $dirty) { Write-Host ("        " + $item) }
 }
 
-$builtin1 = @(Get-ChildItem -Path (Join-Path $Artifact "presets\winws1_builtin") -Filter *.txt -ErrorAction SilentlyContinue)
+# Only winws2 presets: the winws1 mode was removed from the application,
+# and this check kept failing the installer build on a folder that no
+# longer exists.
 $builtin2 = @(Get-ChildItem -Path (Join-Path $Artifact "presets\winws2_builtin") -Filter *.txt -ErrorAction SilentlyContinue)
-if ($builtin1.Count -eq 0 -or $builtin2.Count -eq 0) {
+if ($builtin2.Count -eq 0) {
     throw "No builtin presets in the artifact - rebuild with scripts\build_local.ps1."
 }
-Write-Host ("      engine ok, builtin presets: winws1=" + $builtin1.Count + " winws2=" + $builtin2.Count)
+Write-Host ("      engine ok, builtin presets: " + $builtin2.Count)
 
 Write-Host "[2/4] Reading the version" -ForegroundColor Cyan
 
