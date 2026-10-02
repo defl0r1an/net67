@@ -213,3 +213,6 @@ www_youtube_com.txt
 # в клон 0.12.67 оба чуть не уехали вместе с исходниками.
 /config/
 /artifact.rar
+
+# Кэш обновлятора при запуске из исходников (tools/preview_update_dialog.py)
+/tmp/
