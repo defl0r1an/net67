@@ -169,6 +169,15 @@ class UpdaterFeature:
     def run_startup_update_check(self) -> dict:
         return self._commands().run_startup_update_check()
 
+    def remember_skipped_update(self, version: str) -> None:
+        self._commands().remember_skipped_update(version)
+
+    def remember_whats_new(self, version: str, history) -> None:
+        self._commands().remember_whats_new(version, history)
+
+    def pending_whats_new(self) -> tuple[str, list[dict]]:
+        return self._commands().pending_whats_new()
+
     def open_update_channel(self, channel: str):
         return self._commands().open_update_channel(channel)
 

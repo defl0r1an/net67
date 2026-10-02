@@ -1,69 +1,48 @@
+"""Окно обновления при запуске названо для диктора.
+
+Раньше проверялось окошко в одну строку с кнопками «Скачать и
+установить» и «Позже». Его сменило большое окно «Доступно обновление»;
+требование прежнее — каждая кнопка говорит диктору, что она сделает.
+"""
+
 from __future__ import annotations
 
-from types import SimpleNamespace
+import os
+import sys
 import unittest
-from unittest.mock import patch
 
-from main.post_startup_host import PostStartupHost
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtWidgets import QApplication, QWidget
 
-class _DialogButton:
-    def __init__(self) -> None:
-        self._text = ""
-        self._accessible_name = ""
-        self._accessible_description = ""
+_APP = QApplication.instance() or QApplication(sys.argv)
 
-    def setText(self, text: str) -> None:  # noqa: N802
-        self._text = str(text)
-
-    def text(self) -> str:
-        return self._text
-
-    def accessibleName(self) -> str:  # noqa: N802
-        return self._accessible_name
-
-    def setAccessibleName(self, text: str) -> None:  # noqa: N802
-        self._accessible_name = str(text)
-
-    def accessibleDescription(self) -> str:  # noqa: N802
-        return self._accessible_description
-
-    def setAccessibleDescription(self, text: str) -> None:  # noqa: N802
-        self._accessible_description = str(text)
-
-
-class _MessageBox:
-    instances: list["_MessageBox"] = []
-
-    def __init__(self, title: str, body: str, parent=None) -> None:
-        self.title = title
-        self.body = body
-        self.parent = parent
-        self.yesButton = _DialogButton()
-        self.cancelButton = _DialogButton()
-        self.exec_called = False
-        _MessageBox.instances.append(self)
-
-    def exec(self) -> bool:
-        self.exec_called = True
-        return False
+from updater.ui.update_dialog import UpdateOfferDialog  # noqa: E402
 
 
 class PostStartupHostAccessibilityTests(unittest.TestCase):
     def test_update_confirm_buttons_are_named_for_screen_reader(self) -> None:
-        window = SimpleNamespace()
-        host = PostStartupHost(window)
-        _MessageBox.instances = []
+        host = QWidget()
+        self.addCleanup(host.deleteLater)
+        dialog = UpdateOfferDialog(
+            host,
+            current_version="1.2.2",
+            target_version="1.2.3",
+            history=[{"version": "1.2.3", "notes": "- исправления", "is_new": True}],
+            release_url="https://example.com/release",
+        )
+        self.addCleanup(dialog.deleteLater)
 
-        with patch("ui.fluent_dialog.MessageBox", _MessageBox):
-            confirmed = host.confirm_update_install("1.2.3")
-
-        self.assertFalse(confirmed)
-        dialog = _MessageBox.instances[0]
-        self.assertEqual(dialog.yesButton.accessibleName(), "Скачать и установить обновление")
-        self.assertIn("Выпущена версия 1.2.3", dialog.yesButton.accessibleDescription())
-        self.assertEqual(dialog.cancelButton.accessibleName(), "Отложить установку обновления")
-        self.assertTrue(dialog.exec_called)
+        self.assertEqual(dialog.install_btn.accessibleName(), "Скачать и установить обновление")
+        self.assertIn("Программа закроется и откроется снова", dialog.install_btn.accessibleDescription())
+        self.assertEqual(dialog.later_btn.accessibleName(), "Отложить обновление")
+        self.assertEqual(dialog.skip_btn.accessibleName(), "Пропустить версию")
+        self.assertIn("больше не напоминать", dialog.skip_btn.accessibleDescription())
+        self.assertEqual(dialog.browser_btn.accessibleName(), "Открыть в браузере")
+        # Поле с изменениями читается диктору целиком: версия и её текст.
+        self.assertIn("Версия 1.2.3", dialog.browser.accessibleName())
+        self.assertIn("исправления", dialog.browser.accessibleName())
+        self.assertIn("v1.2.3", dialog.subtitle_label.text())
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ def install_update_check(
     update_bridge = _UpdateCheckBridge(QCoreApplication.instance())
     startup_check_token: int | None = None
 
-    def _on_update_found(version: str, release_notes: str) -> None:
+    def _on_update_found(version: str, release_notes: str, details: dict | None = None) -> None:
         if not is_startup_host_alive(startup_host):
             return
         try:
@@ -32,8 +32,18 @@ def install_update_check(
                 pass
             from app.page_names import PageName as StartupPageName
 
-            if not startup_host.confirm_update_install(version):
+            # Окну нужны история выпусков, источник и адрес страницы —
+            # всё это проверка уже собрала в фоне.
+            action, history = startup_host.ask_update(version, details or {})
+            if action == "skip":
+                # «Пропустить версию»: при запуске о ней больше не напомним.
+                updater_feature.remember_skipped_update(version)
                 return
+            if action != "install":
+                return
+            # Текст изменений сохраняется до установки: новая версия
+            # покажет «Что нового» сама, без сети.
+            updater_feature.remember_whats_new(version, history)
             startup_host.show_page(StartupPageName.SERVERS)
             page = startup_host.get_loaded_page(StartupPageName.SERVERS)
             if page is not None:
@@ -117,6 +127,7 @@ def install_update_check(
             _on_update_found(
                 str(payload.get("version") or ""),
                 str(payload.get("release_notes") or ""),
+                payload,
             )
             return
         _on_no_update(str(payload.get("version") or ""))
@@ -173,5 +184,35 @@ def install_update_check(
     bind_startup_gate(
         startup_host.startup_post_init_ready,
         _schedule_startup_update_check_deferred,
+        is_ready=lambda: bool(startup_host.startup_state.post_init_ready),
+    )
+
+
+def install_whats_new(startup_host, *, updater_feature) -> None:
+    """После обновления один раз показывает, что изменилось в новой версии.
+
+    Текст сохранён окном обновления перед установкой, сеть не нужна. Окно
+    появляется вскоре после готовности интерфейса — раньше, чем проверка
+    обновлений, которая отложена на двенадцать секунд.
+    """
+
+    def _show() -> None:
+        if not is_startup_host_alive(startup_host):
+            return
+        try:
+            version, history = updater_feature.pending_whats_new()
+            if version and history:
+                startup_host.show_whats_new(version, history)
+        except Exception as exc:
+            log(f"Не удалось показать «Что нового»: {exc}", "⚠️ UPDATE")
+
+    ready_signal = getattr(startup_host, "startup_post_init_ready", None)
+    if ready_signal is None:
+        # Хозяин без сигнала готовности (урезанный в тестах запуска):
+        # «Что нового» — не то, ради чего стоит ронять запуск.
+        return
+    bind_startup_gate(
+        ready_signal,
+        lambda: schedule_after(2500, _show),
         is_ready=lambda: bool(startup_host.startup_state.post_init_ready),
     )

@@ -283,9 +283,28 @@ jobs:
 
       # Выпуск создаётся только по тегу. Сборка по push в main остаётся
       # проверкой: она собирает и установщик, но никуда его не публикует.
+      # Описание выпуска — человеческий текст из release-notes/<версия>.md.
+      # Его показывает окно «Доступно обновление» в программе. Описание,
+      # которое GitHub пишет сам, — одна ссылка на сравнение коммитов:
+      # читать там нечего. Нет файла — остаётся автоматическое.
+      - name: Pick release notes
+        id: notes
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: python
+        run: |
+          import os, pathlib, re
+
+          tag = os.environ.get("GITHUB_REF_NAME", "")
+          match = re.fullmatch(r"v?(\d+(?:\.\d+){1,3})", tag)
+          path = pathlib.Path("release-notes") / f"{match.group(1)}.md" if match else None
+          found = bool(path and path.is_file())
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"path={path.as_posix() if found else ''}", file=out)
+
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: installer/output/*.exe
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.path == '' }}

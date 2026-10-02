@@ -46,7 +46,7 @@ class PostStartupUpdateContractTests(unittest.TestCase):
             startup_post_init_ready=object(),
             startup_state=SimpleNamespace(post_init_ready=True),
             is_alive=Mock(return_value=True),
-            confirm_update_install=Mock(),
+            ask_update=Mock(),
             show_page=Mock(),
             get_loaded_page=Mock(),
         )

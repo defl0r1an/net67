@@ -256,6 +256,15 @@ def default_updater() -> dict[str, Any]:
             "vps_block_until": 0,
             "server_stats": {},
         },
+        # «Пропустить версию» в окне обновления: при запуске о ней не напоминаем.
+        "skipped_version": "",
+        # «Что нового»: какую версию уже показали и что сохранено перед
+        # установкой, чтобы показать после неё без сети.
+        "whats_new": {
+            "seen_version": "",
+            "pending_version": "",
+            "pending_history": [],
+        },
     }
 
 

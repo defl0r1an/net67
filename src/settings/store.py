@@ -445,6 +445,47 @@ def set_updater_settings(values: dict[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(updated["updater"])
 
 
+def get_skipped_update_version() -> str:
+    """Версия, о которой человек попросил не напоминать («Пропустить версию»)."""
+    return str(read_settings()["updater"].get("skipped_version") or "")
+
+
+def set_skipped_update_version(version: str) -> bool:
+    _update_settings(lambda data: data["updater"].update({"skipped_version": str(version or "").strip()}))
+    return True
+
+
+def get_whats_new_state() -> dict[str, Any]:
+    return copy.deepcopy(_as_dict(read_settings()["updater"].get("whats_new")))
+
+
+def set_whats_new_pending(version: str, history: object) -> bool:
+    """Запоминает изменения перед установкой: новая версия покажет их без сети."""
+    items = [dict(item) for item in (history or ()) if isinstance(item, dict)]
+
+    def mutate(data: dict[str, Any]) -> None:
+        state = _as_dict(data["updater"].get("whats_new"))
+        state["pending_version"] = str(version or "").strip()
+        state["pending_history"] = items
+        data["updater"]["whats_new"] = state
+
+    _update_settings(mutate)
+    return True
+
+
+def set_whats_new_seen_version(version: str) -> bool:
+    def mutate(data: dict[str, Any]) -> None:
+        state = _as_dict(data["updater"].get("whats_new"))
+        state["seen_version"] = str(version or "").strip()
+        # Показанное больше не нужно: текст выпусков — десятки килобайт.
+        state["pending_version"] = ""
+        state["pending_history"] = []
+        data["updater"]["whats_new"] = state
+
+    _update_settings(mutate)
+    return True
+
+
 def get_blockcheck_settings() -> dict[str, Any]:
     return copy.deepcopy(read_settings()["blockcheck"])
 
@@ -1106,6 +1147,11 @@ def set_tg_proxy_auto_deeplink(value: bool) -> bool:
 
 
 __all__ = [
+    "get_skipped_update_version",
+    "set_skipped_update_version",
+    "get_whats_new_state",
+    "set_whats_new_pending",
+    "set_whats_new_seen_version",
     "get_accent_color",
     "get_active_hosts_domains",
     "get_animations_enabled",

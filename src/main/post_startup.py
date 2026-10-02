@@ -153,6 +153,12 @@ def install_update_check(*args, **kwargs):
     return install(*args, **kwargs)
 
 
+def install_whats_new(*args, **kwargs):
+    from main.post_startup_update import install_whats_new as install
+
+    return install(*args, **kwargs)
+
+
 @dataclass(frozen=True, slots=True)
 class PostStartupDeps:
     startup_host: Any
@@ -294,6 +300,7 @@ def install_post_startup_tasks(deps: PostStartupDeps) -> None:
         notify=deps.notify,
         set_status=deps.set_status,
     )
+    install_whats_new(startup_host, updater_feature=deps.updater_feature)
     # Проверка целостности установки из исходного проекта здесь не
     # ставится: она опирается на его updater, которого в net67 нет.
     # Обучающий тур ставится, но сам ждёт, пока пройден мастер первого

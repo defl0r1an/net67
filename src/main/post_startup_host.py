@@ -37,26 +37,43 @@ class PostStartupHost:
         close_state = self.close_state
         return not bool(close_state.is_exiting or close_state.closing_completely)
 
-    def confirm_update_install(self, version: str) -> bool:
-        from ui.fluent_dialog import MessageBox
-        from ui.message_box_accessibility import set_message_box_button_accessibility
+    def ask_update(self, version: str, details: dict | None = None) -> tuple[str, list[dict]]:
+        """Окно «Доступно обновление»: (что нажали, показанная история).
 
-        body = f"Выпущена версия {version}. Скачать и установить сейчас?"
-        box = MessageBox(
-            "Доступно обновление",
-            body,
+        Раньше здесь было окошко в одну строку: «Выпущена версия X.
+        Установить?» — что в ней нового, узнать было негде, а отказаться
+        можно было только до следующего запуска.
+
+        Хозяин окна только показывает и возвращает ответ: "install",
+        "skip" или "later". Что с ним делать — запомнить пропуск, сохранить
+        текст «Что нового», начать установку, — решает тот, кто спросил:
+        у него есть фасад обновлятора.
+        """
+        from updater.ui.update_dialog import ask_update
+
+        details = dict(details or {})
+        release = details.get("release_info") if isinstance(details.get("release_info"), dict) else {}
+        history = [item for item in (details.get("history") or ()) if isinstance(item, dict)]
+        if not history:
+            # Источник не дал историю — показываем хотя бы сам выпуск.
+            history = [{"version": version, "notes": str(details.get("release_notes") or ""), "is_new": True}]
+        action = ask_update(
             self._window,
+            current_version=str(details.get("current_version") or ""),
+            target_version=version,
+            history=history,
+            source=str(details.get("source") or ""),
+            release_url=str(details.get("release_url") or ""),
+            file_name=str(release.get("file_name") or ""),
+            file_size=release.get("file_size") or 0,
         )
-        box.yesButton.setText("Скачать и установить")
-        box.cancelButton.setText("Позже")
-        set_message_box_button_accessibility(
-            box,
-            yes_name="Скачать и установить обновление",
-            yes_description=body,
-            cancel_name="Отложить установку обновления",
-            cancel_description="Закрывает диалог без установки обновления сейчас.",
-        )
-        return bool(box.exec())
+        return str(action), history
+
+    def show_whats_new(self, version: str, history) -> None:
+        """Окно «Что нового» после установки новой версии."""
+        from updater.ui.update_dialog import show_whats_new
+
+        show_whats_new(self._window, version=version, history=history)
 
     def show_page(self, page_name) -> None:
         from ui.window_adapter import show_page

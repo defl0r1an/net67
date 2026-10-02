@@ -605,6 +605,8 @@ def normalize_updater(data: object) -> dict[str, Any]:
 
     server_pool_raw = as_dict(raw.get("server_pool"))
     release_manager_raw = as_dict(raw.get("release_manager"))
+    whats_new_raw = as_dict(raw.get("whats_new"))
+    pending_history = _json_safe(whats_new_raw.get("pending_history"))
 
     return {
         "release_cache": as_dict(_json_safe(raw.get("release_cache"))),
@@ -623,6 +625,14 @@ def normalize_updater(data: object) -> dict[str, Any]:
                 minimum=0,
             ),
             "server_stats": as_dict(_json_safe(release_manager_raw.get("server_stats"))),
+        },
+        "skipped_version": as_clean_str(raw.get("skipped_version")),
+        "whats_new": {
+            "seen_version": as_clean_str(whats_new_raw.get("seen_version")),
+            "pending_version": as_clean_str(whats_new_raw.get("pending_version")),
+            "pending_history": [item for item in pending_history if isinstance(item, dict)]
+            if isinstance(pending_history, list)
+            else [],
         },
     }
 

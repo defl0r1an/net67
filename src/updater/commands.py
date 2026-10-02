@@ -34,6 +34,63 @@ def run_startup_update_check() -> dict:
     return check_for_update_sync()
 
 
+def _in_background(name: str, target) -> None:
+    import threading
+
+    def run() -> None:
+        try:
+            target()
+        except Exception as exc:
+            from log.log import log
+
+            log(f"Обновление ({name}): {exc}", "WARNING")
+
+    threading.Thread(target=run, name=f"updater-{name}", daemon=True).start()
+
+
+def remember_skipped_update(version: str) -> None:
+    """«Пропустить версию»: при запуске о ней больше не напоминаем."""
+    from settings.store import set_skipped_update_version
+
+    _in_background("skip", lambda: set_skipped_update_version(str(version or "")))
+
+
+def remember_whats_new(version: str, history) -> None:
+    """Перед установкой сохраняет изменения: новая версия покажет их без сети."""
+    from settings.store import set_whats_new_pending
+
+    items = [dict(item) for item in (history or ()) if isinstance(item, dict)]
+    _in_background("whats-new", lambda: set_whats_new_pending(str(version or ""), items))
+
+
+def pending_whats_new() -> tuple[str, list[dict]]:
+    """Что показать после обновления: (версия, история) или ("", []).
+
+    Показывается один раз и только той версии, ради которой сохраняли:
+    сохранённое для 0.14 не должно всплыть в 0.15. Отметка «показано»
+    ставится сразу, чтобы окно не вернулось при следующем запуске.
+    """
+    from config.build_info import APP_VERSION
+    from settings.store import get_whats_new_state, set_whats_new_seen_version
+    from updater.release_notes import version_key
+
+    state = get_whats_new_state()
+    pending_version = str(state.get("pending_version") or "")
+    history = [dict(item) for item in (state.get("pending_history") or ()) if isinstance(item, dict)]
+    if not pending_version:
+        return "", []
+    try:
+        matches = version_key(pending_version) == version_key(APP_VERSION)
+    except ValueError:
+        matches = False
+    if not matches:
+        # Установщик не запускали или поставили другую версию: ждём, пока
+        # сохранённая версия не окажется установленной.
+        return "", []
+    _in_background("whats-new-seen", lambda: set_whats_new_seen_version(pending_version))
+    return pending_version, history
+
+
 def open_update_channel(channel: str) -> UpdateChannelActionResult:
     """Открывает телеграм-канал выпусков. Пока открывать нечего.
 
