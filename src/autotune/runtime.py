@@ -32,9 +32,9 @@ SCAN_TIMEOUT_SECONDS = 600.0
 
 def is_engine_running() -> bool:
     try:
-        from winws_runtime.runtime.system_ops import get_all_winws_process_pids
+        from winws_runtime.runtime.system_ops import has_own_winws_process
 
-        return bool(get_all_winws_process_pids())
+        return bool(has_own_winws_process())
     except Exception as exc:
         log(f"Автоподбор: состояние движка не определить: {exc}", "DEBUG")
         return False
