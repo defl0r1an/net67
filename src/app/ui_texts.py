@@ -6201,8 +6201,8 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': "The app's own settings live here on the main page. Choose how it should behave from now on — you can change this here at any time.",
     },
     'onboarding.step.view_switch.body_setup': {
-        'ru': 'Остальные вопросы стоят у разделов расширенного вида, поэтому сейчас включим его — это кнопка «Расширенные настройки» в заголовке. Вернуть простой вид можно ей же: в расширенном на ней написано «Простой режим».',
-        'en': "The remaining questions sit next to the sections of the advanced view, so let's turn it on now — it is the Advanced settings button in the title bar. The same button brings the simple view back: in the advanced view it says Simple mode.",
+        'ru': 'Остальные вопросы стоят у разделов расширенного вида, поэтому «Далее» сейчас включит его. Это то же, что кнопка «Расширенные настройки» в заголовке окна. Вернуть простой вид можно ей же: в расширенном на ней написано «Простой режим».',
+        'en': "The remaining questions sit next to the sections of the advanced view, so Next will turn it on now. It is the same as the Advanced settings button in the title bar. The same button brings the simple view back: in the advanced view it reads Simple mode.",
     },
     'onboarding.step.menu_presets.title_setup': {
         'ru': 'Какой у вас провайдер?',

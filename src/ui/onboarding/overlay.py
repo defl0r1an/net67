@@ -698,14 +698,22 @@ class OnboardingOverlay(QWidget):
     def step_keys(self) -> list[str]:
         return [step.key for step in self._steps]
 
+    def _next_does_step_action(self, step: TourStep) -> bool:
+        """«Далее» само выполняет действие шага — отдельной кнопки тогда нет.
+
+        На первом запуске вопросы о провайдере и hosts стоят у разделов
+        расширенного вида. Остаться в простом — значит пропустить их молча,
+        поэтому «Далее» на шаге про виды включает расширенный. Раньше рядом
+        стояла и кнопка «Включить расширенные настройки»: две кнопки делали
+        одно и то же, и было непонятно, какую жать.
+        """
+        return self._ctx.setup and step.action == "enable_advanced" and self._step_action_available(step)
+
     def go_next(self) -> None:
         if self._finishing:
             return
         step = self._steps[self._index] if 0 <= self._index < len(self._steps) else None
-        if step is not None and self._ctx.setup and step.action == "enable_advanced" and self._step_action_available(step):
-            # На первом запуске вопросы о провайдере и hosts стоят у разделов
-            # расширенного вида. Остаться в простом — значит пропустить их
-            # молча, поэтому «Далее» здесь включает расширенный вид.
+        if step is not None and self._next_does_step_action(step):
             self._run_step_action()
             return
         if step is not None and step.choice == "provider" and self._answers is not None:
@@ -856,6 +864,10 @@ class OnboardingOverlay(QWidget):
         button = getattr(self._window, "advancedButton", None)
         if not is_widget_shown(button):
             return
+        if self.__dict__.get("_advanced_wait_left", 0) > 0:
+            # Вид уже переключается. Второй щелчок по той же кнопке заголовка
+            # вернул бы простой вид — а «Далее» во время анимации жмут дважды.
+            return
         self._card.action_button.setEnabled(False)
         # Та же кнопка, что в заголовке окна, а не прямой вызов переключения:
         # у неё уже есть вся логика — сохранить настройку, показать меню,
@@ -885,6 +897,7 @@ class OnboardingOverlay(QWidget):
             self._card.action_button.setEnabled(True)
             return
         current_key = self._steps[self._index].key if 0 <= self._index < len(self._steps) else ""
+        self._advanced_wait_left = 0
         self._ctx.advanced = True
         self._ctx.pages = fresh.pages
         self._ctx.control_page_name = fresh.control_page_name
@@ -1052,7 +1065,7 @@ class OnboardingOverlay(QWidget):
         card.illustration.set_scene(step.illustration)
         card.illustration.setVisible(bool(step.illustration))
         self._show_choice(step)
-        show_action = self._step_action_available(step)
+        show_action = self._step_action_available(step) and not self._next_does_step_action(step)
         card.action_button.setVisible(show_action)
         if show_action:
             action_key = step.action.replace(":", "_")

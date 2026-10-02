@@ -168,6 +168,52 @@ class EnableAdvancedActionTests(unittest.TestCase):
         self.assertIn("Включить расширенные настройки", body)
         self.assertEqual(tr("onboarding.action.enable_advanced", language="ru", default=""), "Включить расширенные настройки")
 
+    def _view_switch_step(self):
+        from ui.onboarding.steps import TOUR_STEPS
+
+        return next(step for step in TOUR_STEPS if step.key == "view_switch")
+
+    def test_first_run_has_one_button_for_enabling_advanced(self) -> None:
+        """На первом запуске «Далее» само включает расширенный вид.
+
+        Рядом стояла и кнопка «Включить расширенные настройки»: две кнопки
+        делали одно и то же. В обычной экскурсии они разные — «Далее» идёт
+        дальше в простом виде, — и там кнопка остаётся.
+        """
+        from app.ui_texts import tr
+
+        step = self._view_switch_step()
+        overlay_cls, fake = self._overlay(advanced=False, button_shown=True)
+        fake._step_action_available = lambda item: overlay_cls._step_action_available(fake, item)
+
+        fake._ctx.setup = True
+        self.assertTrue(overlay_cls._next_does_step_action(fake, step))
+        fake._ctx.setup = False
+        self.assertFalse(overlay_cls._next_does_step_action(fake, step))
+
+        # Текст первого запуска говорит про «Далее», а не про кнопку, которой нет.
+        body = tr("onboarding.step.view_switch.body_setup", language="ru", default="")
+        self.assertIn("«Далее»", body)
+        self.assertNotIn("Включить расширенные настройки", body)
+
+    def test_second_press_while_switching_does_not_toggle_the_view_back(self) -> None:
+        # «Далее» во время анимации жмут дважды; второй щелчок по кнопке
+        # заголовка вернул бы простой вид.
+        step = self._view_switch_step()
+        overlay_cls, fake = self._overlay(advanced=False, button_shown=True)
+        clicks: list[bool] = []
+        fake._window.advancedButton.clicked.connect(lambda: clicks.append(True))
+        fake._finishing = False
+        fake._steps = [step]
+        fake._index = 0
+        fake._card = SimpleNamespace(action_button=QPushButton())
+        fake._continue_after_advanced = lambda: None
+
+        overlay_cls._run_step_action(fake)
+        overlay_cls._run_step_action(fake)
+
+        self.assertEqual(len(clicks), 1)
+
 
 class FirstRunSetupTourTests(unittest.TestCase):
     """Первый запуск: тур сам задаёт вопросы мастера и записывает ответы."""
