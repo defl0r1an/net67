@@ -793,27 +793,33 @@ class HostsPage(BasePage):
             can_probe = not entry.is_direct and not entry.unavailable_reason and bool(entry.profiles)
             probing = can_probe and (entry.name == self._probing or entry.name in self._probe_queue)
             probe = self._probe_results.get(entry.name) if can_probe and not probing else None
-            suggested = None
+            # Подпись справа от названия: обычно выбранный профиль, во время
+            # проверки — её ход, после — имя лучшего (молнию рисует плитка).
+            caption = state
+            best = None
             marks: dict[str, tuple[str, str]] = {}
+            accessible = f"{entry.name}: {state}" + (f", {writing_text}" if pending else "")
             if probing:
                 done, total = self._probe_progress
                 if entry.name != self._probing:
-                    state = self._tr("page.hosts.probe.queued", "в очереди")
+                    caption = self._tr("page.hosts.probe.queued", "в очереди")
                 elif total:
-                    state = self._tr("page.hosts.probe.progress", "{done}/{total}", done=done, total=total)
+                    caption = self._tr("page.hosts.probe.progress", "{done}/{total}", done=done, total=total)
                 else:
-                    state = self._tr("page.hosts.probe.starting", "проверяю")
+                    caption = self._tr("page.hosts.probe.starting", "проверяю")
+                accessible += ". " + self._tr("page.hosts.probe.a11y.running", "Идёт проверка профилей")
             elif probe is not None:
                 for item in probe.profiles:
                     is_best = item.profile_id == probe.best
                     mark = "best" if is_best else ("ok" if item.works else "bad")
                     marks[item.profile_id] = (mark, self._probe_note(item, best=is_best))
-                if probe.best is None:
-                    state = self._tr("page.hosts.probe.none", "нет рабочих")
-                elif probe.best != value and probe.best in entry.profiles:
-                    suggested = probe.best
-                    state = self._tr("page.hosts.probe.suggest", "→ {name}", name=labels.get(probe.best, probe.best))
-            accessible = f"{entry.name}: {state}" + (f", {writing_text}" if pending else "")
+                if probe.best is not None and probe.best in entry.profiles:
+                    best = probe.best
+                    caption = labels.get(best, best)
+                    accessible += ". " + self._tr("page.hosts.probe.a11y.best", "Лучший по проверке — {name}", name=caption)
+                else:
+                    caption = self._tr("page.hosts.probe.none", "нет рабочих")
+                    accessible += ". " + self._tr("page.hosts.probe.a11y.none", "Проверка: ни один профиль не открыл сайт")
             grouped.setdefault(entry.category, []).append(
                 HostsTile(
                     kind="tile",
@@ -834,13 +840,13 @@ class HostsPage(BasePage):
                         for choice in all_choices
                     ),
                     selected=None if entry.is_direct else value,
-                    state_text="" if entry.is_direct else state,
+                    state_text="" if entry.is_direct else caption,
                     pending=pending,
                     enabled=not entry.unavailable_reason,
                     accessible_text=accessible,
                     can_probe=can_probe,
                     probing=probing,
-                    suggested=suggested,
+                    best=best,
                 )
             )
         tiles: list[HostsTile] = []

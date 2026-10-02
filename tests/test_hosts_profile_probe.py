@@ -212,12 +212,57 @@ class ProbeButtonTests(unittest.TestCase):
         self.assertEqual(self.requested, ["Grok"])
         self.assertEqual(self.chosen, [])
 
-    def test_click_on_a_suggestion_picks_the_best_profile(self) -> None:
-        grid = self._grid(suggested="p2", choices=(_choice("p1", mark="ok"), _choice("p2", mark="best")))
+    def test_click_after_a_result_probes_again_and_keeps_the_choice(self) -> None:
+        # Кнопка не переставляет профиль на лучший: человек мог нарочно
+        # оставить другой. После проверки она — «проверить ещё раз».
+        grid = self._grid(best="p2", choices=(_choice("p1", mark="ok"), _choice("p2", mark="best")))
         QTest.mouseClick(grid, Qt.MouseButton.LeftButton, pos=grid.probe_rect("Grok").center())
 
+        self.assertEqual(self.requested, ["Grok"])
+        self.assertEqual(self.chosen, [])
+        self.assertIn("ещё раз", grid._tooltip_at(grid.probe_rect("Grok").center()))
+
+    def test_best_is_picked_by_a_click_on_its_own_icon(self) -> None:
+        grid = self._grid(best="p2", choices=(_choice("p1", mark="ok"), _choice("p2", mark="best")))
+        QTest.mouseClick(grid, Qt.MouseButton.LeftButton, pos=grid.choice_rect("Grok", "p2").center())
+
         self.assertEqual(self.chosen, [("Grok", "p2")])
-        self.assertEqual(self.requested, [])
+
+    def test_best_name_with_a_bolt_stands_on_the_right(self) -> None:
+        grid = self._grid(best="p2", choices=(_choice("p1", mark="ok"), _choice("p2", mark="best")))
+        tile = grid.tiles()[0]
+        plain = HostsTile(kind="tile", title="Grok", key="Grok", choices=tile.choices, selected="p1", state_text="P1", can_probe=True)
+        rect = grid.tile_rect("Grok")
+
+        self.assertTrue(grid._shows_best(tile))
+        # Под молнию перед именем отведено место.
+        self.assertGreater(grid._state_width(tile, rect), grid._state_width(plain, rect))
+        # Пока идёт запись или проверка, справа их ход, а не имя лучшего.
+        self.assertFalse(grid._shows_best(HostsTile(kind="tile", title="G", best="p2", probing=True)))
+
+    def test_finish_effects_play_and_end(self) -> None:
+        """Конец проверки: вспышка, искры, блик — и после них обычная плитка."""
+        import hosts.ui.services_tiles as tiles_module
+
+        with patch.object(tiles_module, "are_live_animations_enabled", return_value=True):
+            grid = self._grid(probing=True)
+            clock = [50.0]
+            grid._now = lambda: clock[0]
+            done = HostsTile(
+                kind="tile", title="Grok", key="Grok", selected="p1", state_text="P2", can_probe=True, best="p2",
+                choices=(_choice("p1", mark="bad"), _choice("p2", mark="best")),
+            )
+            grid.set_tiles([done])
+
+            self.assertEqual(grid._changes["Grok"].kind, "probe")
+            self.assertEqual(grid._changes["Grok"].profile_id, "p2")
+            for moment in (0.02, 0.2, 0.45, 0.8, 1.1):
+                clock[0] = 50.0 + moment
+                grid.grab()  # рисуется без ошибок на всём протяжении
+            clock[0] = 50.0 + grid.PROBE_DONE_SECONDS + 0.05
+            grid._on_frame()
+
+            self.assertNotIn("Grok", grid._changes)
 
     def test_click_while_probing_does_nothing(self) -> None:
         grid = self._grid(probing=True)
@@ -242,9 +287,12 @@ class ProbeButtonTests(unittest.TestCase):
         self.assertEqual(self.chosen, [])  # обычный Enter листал бы профили
 
     def test_tooltips_tell_what_the_button_and_the_marks_mean(self) -> None:
-        grid = self._grid(choices=(_choice("p1", mark="bad", note="не открылся (0 из 6): адрес не отвечает"), _choice("p2")))
+        fresh = self._grid()
+        self.assertIn("подсказать лучший", fresh._tooltip_at(fresh.probe_rect("Grok").center()))
 
-        self.assertIn("подсказать лучший", grid._tooltip_at(grid.probe_rect("Grok").center()))
+        grid = self._grid(choices=(_choice("p1", mark="bad", note="не открылся (0 из 6): адрес не отвечает"), _choice("p2")))
+        # Рабочих нет — про молнию подсказка не говорит: молнии на плитке нет.
+        self.assertEqual(grid._tooltip_at(grid.probe_rect("Grok").center()), "Проверить ещё раз (Shift+Enter)")
         self.assertIn("адрес не отвечает", grid._tooltip_at(grid.choice_rect("Grok", "p1").center()))
         self.assertEqual(grid._tooltip_at(grid.choice_rect("Grok", "p2").center()), "P2")
 
@@ -341,20 +389,35 @@ class ProbePageFlowTests(unittest.TestCase):
         marks = {choice.profile_id: choice.mark for choice in tile.choices if choice.available}
         self.assertFalse(tile.probing)
         self.assertEqual(marks, {"p1": "bad", "p2": "best"})
-        self.assertEqual(tile.suggested, "p2")
-        self.assertIn("Профиль 2", tile.state_text)
+        self.assertEqual(tile.best, "p2")
+        self.assertEqual(tile.state_text, "Профиль 2")
+        self.assertIsNone(tile.selected)  # выбор проверка не трогает
+        self.assertIn("Лучший по проверке — Профиль 2", tile.accessible_text)
 
-    def test_taking_the_advice_removes_the_suggestion(self) -> None:
+    def test_marks_stay_whatever_profile_is_chosen(self) -> None:
         page = self._page()
         page.tiles.probe_requested.emit("Alpha")
         self.starts[0]["on_loaded"](1, self._result("Alpha", "p2"))
-        page._set_service_profile("Alpha", "p2")
+
+        for chosen in ("p1", "p2"):
+            page._set_service_profile("Alpha", chosen)
+            tile = self._tile(page, "Alpha")
+            with self.subTest(chosen=chosen):
+                self.assertEqual(tile.selected, chosen)
+                # Лучший остаётся лучшим, какой бы профиль ни выбрали.
+                self.assertEqual(tile.best, "p2")
+                self.assertEqual({c.profile_id: c.mark for c in tile.choices if c.available}["p2"], "best")
+
+    def test_probing_again_drops_the_old_result(self) -> None:
+        page = self._page()
+        page.tiles.probe_requested.emit("Alpha")
+        self.starts[0]["on_loaded"](1, self._result("Alpha", "p2"))
+        page.tiles.probe_requested.emit("Alpha")
 
         tile = self._tile(page, "Alpha")
-        self.assertEqual(tile.selected, "p2")
-        self.assertIsNone(tile.suggested)
-        # Отметки остаются: видно, почему выбран этот профиль.
-        self.assertEqual({c.profile_id: c.mark for c in tile.choices if c.available}["p2"], "best")
+        self.assertTrue(tile.probing)
+        self.assertIsNone(tile.best)
+        self.assertEqual([c.mark for c in tile.choices if c.available], ["", ""])
 
     def test_nothing_works_is_said_plainly(self) -> None:
         page = self._page()
@@ -362,7 +425,7 @@ class ProbePageFlowTests(unittest.TestCase):
         self.starts[0]["on_loaded"](1, ServiceProbe("Alpha", (ProfileProbe("p1", 0, 2, None, VERDICT_DEAD),), None))
 
         tile = self._tile(page, "Alpha")
-        self.assertIsNone(tile.suggested)
+        self.assertIsNone(tile.best)
         self.assertEqual(tile.state_text, "нет рабочих")
 
     def test_second_service_waits_for_its_turn(self) -> None:

@@ -90,11 +90,12 @@ class HostsTile:
     accessible_text: str = ""
     # У заголовка группы DNS-сервисов: легенда «иконка — провайдер».
     legend: tuple[HostsChoice, ...] = ()
-    # Круглая кнопка проверки за названием: есть, идёт проверка, и профиль,
-    # который проверка советует вместо выбранного (None — советовать нечего).
+    # Круглая кнопка проверки за названием: есть, идёт проверка, и лучший
+    # профиль по её итогу (None — не проверяли или рабочих нет). Имя лучшего
+    # с молнией встаёт справа от названия; выбор кнопка сама не меняет.
     can_probe: bool = False
     probing: bool = False
-    suggested: str | None = None
+    best: str | None = None
 
     @property
     def has_choices(self) -> bool:
@@ -145,8 +146,15 @@ class HostsTilesGrid(QWidget):
     _PROBE_GAP = 8
     # Один проход блика по кнопке при наведении.
     PROBE_SHEEN_SECONDS = 0.55
+    # Конец проверки: блик по плитке, вспышка и искры у лучшего, отметки
+    # «выскакивают» по очереди. Дольше обычной смены — успеть разглядеть.
+    PROBE_DONE_SECONDS = 1.15
     _MARK_GOOD = "#3fb950"
     _MARK_BAD = "#ff6b61"
+    # Лучший — золотая молния: зелёным отмечены все открывшиеся, и среди
+    # них лучший терялся.
+    _MARK_BEST = "#ffc83d"
+    _BEST_BOLT = 10
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -304,11 +312,14 @@ class HostsTilesGrid(QWidget):
                 keys.add(self._probe_sheen[0])
         return keys
 
+    def _change_seconds(self, change: _Change) -> float:
+        return self.PROBE_DONE_SECONDS if change.kind == "probe" else self.CHANGE_SECONDS
+
     def _change_progress(self, key: str) -> tuple[_Change | None, float]:
         change = self._changes.get(key)
         if change is None:
             return None, 1.0
-        return change, min(1.0, max(0.0, (self._now() - change.started) / self.CHANGE_SECONDS))
+        return change, min(1.0, max(0.0, (self._now() - change.started) / self._change_seconds(change)))
 
     def _sync_frames(self) -> None:
         if self._spinning_keys() or self._entrance_start is not None:
@@ -324,7 +335,7 @@ class HostsTilesGrid(QWidget):
             if self._entrance_finished(now):
                 self._entrance_start = None
                 self._entrance_order = {}
-        finished = [key for key, change in self._changes.items() if now - change.started >= self.CHANGE_SECONDS]
+        finished = [key for key, change in self._changes.items() if now - change.started >= self._change_seconds(change)]
         for key in finished:
             del self._changes[key]
         if self._probe_sheen is not None and now - self._probe_sheen[1] >= self.PROBE_SHEEN_SECONDS:
@@ -484,13 +495,20 @@ class HostsTilesGrid(QWidget):
             return ""
         return self._pending_text() if tile.pending else tile.state_text
 
+    @staticmethod
+    def _shows_best(tile: HostsTile) -> bool:
+        """Справа стоит имя лучшего профиля с молнией (а не ход записи или проверки)."""
+        return bool(tile.best) and not tile.pending and not tile.probing
+
     def _state_width(self, tile: HostsTile, rect: QRect) -> int:
         state = self._state_text(tile)
         if not state:
             return 0
         width = QFontMetrics(self._caption_font).horizontalAdvance(state) + 2
+        if self._shows_best(tile):
+            width += self._BEST_BOLT + 4
         limit = (rect.width() - 2 * self._PAD) // 2
-        if tile.probing or tile.suggested:
+        if tile.probing or self._shows_best(tile):
             # Ход и итог проверки — подписи временные: уступает подпись, а не
             # название сервиса, иначе «ChatGPT & Sora» превращался в «ChatGP…».
             usable = rect.width() - 2 * self._PAD - self._ICON - 10
@@ -727,15 +745,21 @@ class HostsTilesGrid(QWidget):
                 state_width = self._state_width(tile, rect)
                 state_rect = QRect(rect.right() - pad - state_width, rect.top() + pad - 2, state_width, 22)
                 painter.setFont(self._caption_font)
-                if tile.pending or tile.is_on or tile.probing or tile.suggested:
+                shows_best = self._shows_best(tile)
+                if shows_best:
+                    painter.setPen(QColor(self._MARK_BEST))
+                elif tile.pending or tile.is_on or tile.probing:
                     painter.setPen(QColor(themeColor()))
                 else:
                     painter.setPen(to_qcolor(tokens.fg_muted))
-                painter.drawText(
-                    state_rect,
-                    int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
-                    metrics.elidedText(state, Qt.TextElideMode.ElideRight, state_width),
-                )
+                bolt_room = self._BEST_BOLT + 4 if shows_best else 0
+                text = metrics.elidedText(state, Qt.TextElideMode.ElideRight, max(0, state_width - bolt_room))
+                painter.drawText(state_rect, int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), text)
+                if shows_best:
+                    # Молния перед именем лучшего профиля — та же, что на его значке.
+                    bolt = get_cached_qta_pixmap("fa5s.bolt", color=self._MARK_BEST, size=self._BEST_BOLT)
+                    bolt_left = state_rect.left() + state_width - metrics.horizontalAdvance(text) - bolt_room
+                    painter.drawPixmap(bolt_left, state_rect.top() + (state_rect.height() - self._BEST_BOLT) // 2 + 1, bolt)
 
         # Название: как BodyLabel, 14 px; лишнее — многоточием (полное — в подсказке).
         title_font = self._title_font_on if tile.is_on else self._title_font
@@ -760,7 +784,11 @@ class HostsTilesGrid(QWidget):
 
         # Вторая строка: иконки профилей или пояснение (как CaptionLabel, 12 px).
         if tile.has_choices:
-            self._paint_choices(painter, index, rect, tile, dark)
+            self._paint_choices(painter, index, rect, tile, tokens, dark)
+            change, progress = self._change_progress(tile.key)
+            if change is not None and change.kind == "probe" and change.profile_id and progress < 1.0:
+                # Проверка нашла лучший: по всей плитке проходит блик.
+                paint_sheen(painter, rect, tokens, min(1.0, progress / 0.7), radius=self._RADIUS)
         else:
             caption_rect = QRect(text_left, rect.top() + pad + 22 + title_shift, rect.right() - pad - text_left, 20)
             if tile.pending:
@@ -789,7 +817,7 @@ class HostsTilesGrid(QWidget):
             QFontMetrics(self._caption_font).elidedText(text, Qt.TextElideMode.ElideRight, area.width()),
         )
 
-    def _paint_choices(self, painter: QPainter, index: int, rect: QRect, tile: HostsTile, dark: bool) -> None:
+    def _paint_choices(self, painter: QPainter, index: int, rect: QRect, tile: HostsTile, tokens, dark: bool) -> None:
         """Ряд иконок профилей. Интерфейс безрамочный: выбранная выделена только
         мягкой заливкой цвета провайдера и значком в полном цвете, без обводки."""
         hover_slot = self._hover_choice if index == self._hover else -1
@@ -797,6 +825,7 @@ class HostsTilesGrid(QWidget):
         muted = QColor(255, 255, 255, 110) if dark else QColor(0, 0, 0, 95)
         change, progress = self._change_progress(tile.key)
         spinning = tile.pending and are_live_animations_enabled()
+        sparks_from: QPointF | None = None
         for slot, position in self._placed_choices(tile, rect):
             choice = tile.choices[slot]
             area = QRectF(self._choice_rect(rect, position))
@@ -813,7 +842,9 @@ class HostsTilesGrid(QWidget):
                 if change.kind == "probe":
                     # Проверка назвала лучший: вспышка без оборота — оборот
                     # означает «выбрано», а тут только совет.
-                    glow_color = QColor(self._MARK_GOOD)
+                    glow_color = QColor(self._MARK_BEST)
+                    glow_radius = 13.0 + 16.0 * eased
+                    glow_alpha = int(210 * (1.0 - progress) ** 1.4)
                 else:
                     angle = 360.0 * eased * (1 if change.kind == "pick" else -1)
                     if change.kind == "drop":
@@ -858,46 +889,109 @@ class HostsTilesGrid(QWidget):
             if dimmed:
                 painter.setOpacity(painter.opacity() / 0.45)
             if choice.mark:
-                self._paint_mark(painter, area, choice.mark, dark)
+                finishing = change is not None and change.kind == "probe" and progress < 1.0
+                scale = 1.0
+                if finishing:
+                    # Отметки «выскакивают» по очереди, слева направо.
+                    elapsed = progress * self.PROBE_DONE_SECONDS - 0.05 * position
+                    scale = _ease_out_back(min(1.0, max(0.0, elapsed / 0.3)))
+                self._paint_mark(painter, area, choice.mark, dark, scale)
+                if finishing and choice.mark == "best":
+                    # Блик по значку лучшего; искры — после всего ряда, иначе
+                    # их закрывали бы круги соседних значков.
+                    paint_sheen(painter, area.toRect(), tokens, min(1.0, progress / 0.55), radius=self._CHOICE / 2)
+                    sparks_from = area.center()
+        if sparks_from is not None:
+            self._paint_sparks(painter, sparks_from, progress)
 
-    def _paint_mark(self, painter: QPainter, area: QRectF, mark: str, dark: bool) -> None:
-        """Итог проверки на значке профиля: точка в углу, у лучшего ещё и кольцо."""
-        color = QColor(self._MARK_BAD if mark == "bad" else self._MARK_GOOD)
+    def _paint_mark(self, painter: QPainter, area: QRectF, mark: str, dark: bool, scale: float = 1.0) -> None:
+        """Итог проверки на значке профиля: точка в углу; у лучшего — кольцо и
+        золотой кружок с молнией."""
+        if scale <= 0.0:
+            return
+        # Ободок цвета карточки отделяет отметку от круга значка.
+        rim = QColor(43, 43, 43) if dark else QColor(250, 250, 250)
+        painter.save()
         if mark == "best":
-            pen = QPen(color)
+            color = QColor(self._MARK_BEST)
+            ring = QColor(color)
+            ring.setAlphaF(min(1.0, scale))
+            pen = QPen(ring)
             pen.setWidthF(1.6)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(area.adjusted(0.8, 0.8, -0.8, -0.8))
-        # Ободок цвета карточки отделяет точку от круга значка.
-        rim = QColor(43, 43, 43) if dark else QColor(250, 250, 250)
-        center = QPointF(area.right() - 3.5, area.bottom() - 3.5)
+            center = QPointF(area.right() - 3.0, area.bottom() - 3.0)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(rim)
+            painter.drawEllipse(center, 6.6 * scale, 6.6 * scale)
+            painter.setBrush(color)
+            painter.drawEllipse(center, 5.4 * scale, 5.4 * scale)
+            bolt = get_cached_qta_pixmap("fa5s.bolt", color="#2a2000", size=7)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.translate(center)
+            painter.scale(scale, scale)
+            painter.drawPixmap(QPointF(-3.5, -3.5), bolt)
+        else:
+            color = QColor(self._MARK_BAD if mark == "bad" else self._MARK_GOOD)
+            center = QPointF(area.right() - 3.5, area.bottom() - 3.5)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(rim)
+            painter.drawEllipse(center, 4.5 * scale, 4.5 * scale)
+            painter.setBrush(color)
+            painter.drawEllipse(center, 3.0 * scale, 3.0 * scale)
+        painter.restore()
+
+    def _paint_sparks(self, painter: QPainter, center: QPointF, progress: float) -> None:
+        """Искры от лучшего профиля: четырёхлучевые звёздочки разлетаются и гаснут."""
+        eased = 1.0 - (1.0 - progress) ** 3
+        fade = (1.0 - progress) ** 1.3
+        if fade <= 0.01:
+            return
+        painter.save()
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(rim)
-        painter.drawEllipse(center, 4.5, 4.5)
-        painter.setBrush(color)
-        painter.drawEllipse(center, 3.0, 3.0)
+        for number in range(7):
+            angle = math.radians(18.0 + number * (360.0 / 7.0))
+            # Через одну — дальше и мельче: разлёт не выглядит ровным кольцом.
+            far = number % 2 == 0
+            distance = (9.0 + 19.0 * eased) * (1.0 if far else 0.72)
+            size = (2.9 if far else 2.1) * (0.35 + 0.65 * fade)
+            color = QColor(self._MARK_BEST if far else "#ffffff")
+            color.setAlphaF(min(1.0, fade * (1.0 if far else 0.85)))
+            painter.setBrush(color)
+            point = QPointF(center.x() + math.cos(angle) * distance, center.y() + math.sin(angle) * distance)
+            painter.drawPath(_spark_path(point, size))
+        painter.restore()
 
     def _paint_probe(self, painter: QPainter, index: int, rect: QRect, tile: HostsTile, tokens, dark: bool) -> None:
         """Кнопка проверки: круг как у значков профилей, со своим значком.
 
         Покой — полоски сигнала; идёт проверка — кольцо крутится и светится,
-        как выбранный профиль во время записи; есть совет — зелёная галочка,
-        щелчок по ней ставит лучший профиль.
+        как выбранный профиль во время записи. Выбор кнопка не меняет никогда:
+        после проверки щелчок по ней — проверка заново, а лучший профиль
+        человек ставит сам, щелчком по его значку с молнией.
         """
         area = QRectF(self._probe_rect(tile, rect))
         hovered = self._hover_probe and index == self._hover
         pressed = self._pressed_probe and index == self._pressed
         accent = QColor(themeColor())
-        good = QColor(self._MARK_GOOD)
         now = self._now()
         live = are_live_animations_enabled()
         if tile.probing and live:
             self._paint_glow(painter, area.center(), 15.0, accent, int(70 + 45 * math.sin(now * 7.0)))
-        if tile.suggested and not tile.probing:
-            back = QColor(good)
-            back.setAlpha((110 if hovered else 80) if dark else (80 if hovered else 56))
-        elif pressed:
+        change, done = self._change_progress(tile.key)
+        if change is not None and change.kind == "probe" and done < 1.0:
+            # Проверка закончилась: от кнопки расходится кольцо — золотое,
+            # если лучший нашёлся, красное, если не открылся ни один.
+            ripple = QColor(self._MARK_BEST if change.profile_id else self._MARK_BAD)
+            ripple.setAlphaF(0.75 * (1.0 - done) ** 1.5)
+            pen = QPen(ripple)
+            pen.setWidthF(1.5)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            radius = self._PROBE / 2 + 8.0 * (1.0 - (1.0 - done) ** 3)
+            painter.drawEllipse(area.center(), radius, radius)
+        if pressed:
             back = QColor(255, 255, 255, 10) if dark else QColor(0, 0, 0, 14)
         elif hovered or tile.probing:
             back = QColor(255, 255, 255, 26) if dark else QColor(0, 0, 0, 10)
@@ -910,14 +1004,10 @@ class HostsTilesGrid(QWidget):
         if tile.probing:
             self._paint_probe_spinner(painter, area, accent, now if live else 0.0)
         else:
-            if tile.suggested:
-                icon_name, icon_color = "fa5s.check", good.name()
-            else:
-                muted = QColor(255, 255, 255, 140) if dark else QColor(0, 0, 0, 120)
-                icon_name = "fa5s.signal"
-                icon_color = accent.name() if hovered else muted.name(QColor.NameFormat.HexArgb)
+            muted = QColor(255, 255, 255, 140) if dark else QColor(0, 0, 0, 120)
+            icon_color = accent.name() if hovered else muted.name(QColor.NameFormat.HexArgb)
             size = self._PROBE_ICON
-            pixmap = get_cached_qta_pixmap(icon_name, color=icon_color, size=size)
+            pixmap = get_cached_qta_pixmap("fa5s.signal", color=icon_color, size=size)
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
             painter.translate(area.center())
@@ -967,7 +1057,7 @@ class HostsTilesGrid(QWidget):
         change = self._changes.get(tile.key)
         if change is None or change.kind == "probe":
             return 0.0, 0, QColor()
-        progress = min(1.0, max(0.0, (now - change.started) / self.CHANGE_SECONDS))
+        progress = min(1.0, max(0.0, (now - change.started) / self._change_seconds(change)))
         if progress >= 1.0:
             return 0.0, 0, QColor()
         angle = 16.0 * math.sin(progress * 4.0 * math.pi) * (1.0 - progress)
@@ -1055,16 +1145,17 @@ class HostsTilesGrid(QWidget):
         self.profile_chosen.emit(tile.key, value)
 
     def _probe_click(self, index: int) -> None:
-        """Кнопка проверки: совет есть — принять его, иначе начать проверку."""
+        """Кнопка проверки всегда проверяет — в первый раз или заново.
+
+        Выбор она не меняет: человек мог нарочно оставить не лучший профиль,
+        и кнопка, которая молча переставляла бы его, была бы ловушкой.
+        """
         if not self._is_clickable(index):
             return
         tile = self._tiles[index]
         if not tile.can_probe or tile.probing:
             return
-        if tile.suggested:
-            self.profile_chosen.emit(tile.key, tile.suggested)
-        else:
-            self.probe_requested.emit(tile.key)
+        self.probe_requested.emit(tile.key)
 
     def _activate(self, index: int) -> None:
         """Enter/Пробел: тумблер переключается, DNS-профиль — следующий."""
@@ -1135,9 +1226,10 @@ class HostsTilesGrid(QWidget):
         if self._probe_hit(index, point):
             if tile.probing:
                 return "Проверяю, через какой профиль сайт открывается…"
-            if tile.suggested:
-                label = next((choice.label for choice in tile.choices if choice.profile_id == tile.suggested), tile.suggested)
-                return f"Выбрать «{label}» — лучший по проверке"
+            if tile.best:
+                return "Проверить ещё раз (Shift+Enter). Лучший профиль отмечен молнией — выберите его щелчком по значку"
+            if any(choice.mark for choice in tile.choices):
+                return "Проверить ещё раз (Shift+Enter)"
             return "Проверить все DNS-профили и подсказать лучший (Shift+Enter)"
         slot = self._choice_at(index, point) if self._is_clickable(index) else -1
         if slot >= 0:
@@ -1251,6 +1343,27 @@ class HostsTilesGrid(QWidget):
 
 
 __all__ = ["HostsChoice", "HostsTile", "HostsTilesGrid", "split_service_title", "wrap_lines"]
+
+
+def _ease_out_back(value: float) -> float:
+    """0..1 с лёгким перелётом в конце: отметка «выскакивает» и садится на место."""
+    overshoot = 1.70158
+    shifted = value - 1.0
+    return 1.0 + (overshoot + 1.0) * shifted**3 + overshoot * shifted**2
+
+
+def _spark_path(center: QPointF, size: float) -> QPainterPath:
+    """Четырёхлучевая звёздочка: лучи по осям, между ними — вогнуто."""
+    waist = size * 0.28
+    path = QPainterPath()
+    path.moveTo(center.x(), center.y() - size)
+    for dx, dy in (
+        (waist, -waist), (size, 0.0), (waist, waist), (0.0, size),
+        (-waist, waist), (-size, 0.0), (-waist, -waist),
+    ):
+        path.lineTo(center.x() + dx, center.y() + dy)
+    path.closeSubpath()
+    return path
 
 
 def _split_long_word(word: str, metrics: QFontMetrics, width: int) -> list[str]:
