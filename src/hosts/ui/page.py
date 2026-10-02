@@ -40,6 +40,15 @@ from app.ui_texts import tr as tr_catalog
 from hosts.draft import MIXED, HostsDraft
 from hosts.hosts_blocks import BLOCK_NET67
 from hosts.page_snapshot import CATEGORY_AI, CATEGORY_DIRECT, CATEGORY_OTHER, HostsPageSnapshot
+from hosts.profile_probe import (
+    VERDICT_BADCERT,
+    VERDICT_DEAD,
+    VERDICT_NOHTTP,
+    VERDICT_REGION,
+    VERDICT_RESET,
+    ProfileProbe,
+    ServiceProbe,
+)
 from hosts.ui.profile_icons import profile_icon
 from hosts.ui.services_tiles import HostsChoice, HostsTile, HostsTilesGrid, split_service_title
 from ui.accessibility import set_control_accessibility, set_state_text
@@ -52,6 +61,15 @@ from ui.theme_semantic import get_semantic_palette
 
 
 ADOBE_TILE_KEY = "__adobe__"
+
+#: Почему профиль не открыл сайт — словами для подсказки на значке.
+_PROBE_REASONS = {
+    VERDICT_DEAD: ("page.hosts.probe.reason.dead", "адрес не отвечает"),
+    VERDICT_RESET: ("page.hosts.probe.reason.reset", "соединение обрывается"),
+    VERDICT_BADCERT: ("page.hosts.probe.reason.badcert", "адрес отдаёт чужой сертификат"),
+    VERDICT_REGION: ("page.hosts.probe.reason.region", "сайт отвечает «недоступно в вашей стране»"),
+    VERDICT_NOHTTP: ("page.hosts.probe.reason.nohttp", "сайт не ответил"),
+}
 
 _GROUP_TITLES = {
     CATEGORY_DIRECT: ("page.hosts.group.direct", "Напрямую"),
@@ -164,6 +182,14 @@ class HostsPage(BasePage):
         self._apply_force_pending = False
         self._just_written = False
         self._restore_runtime = OneShotWorkerRuntime()
+        # Проверка профилей кнопкой на плитке: по одному сервису за раз,
+        # остальные нажатые ждут очереди — адреса профилей чужие серверы,
+        # и сотню соединений разом им слать незачем.
+        self._probe_runtime = OneShotWorkerRuntime()
+        self._probing: str | None = None
+        self._probe_queue: list[str] = []
+        self._probe_progress: tuple[int, int] = (0, 0)
+        self._probe_results: dict[str, ServiceProbe] = {}
         # Меню «DNS для всех» пересобирается, только когда меняется его содержимое.
         self._dns_all_menu_key: tuple | None = None
 
@@ -246,6 +272,7 @@ class HostsPage(BasePage):
         self.tiles = HostsTilesGrid(self.content)
         self.tiles.activated.connect(self._on_tile_activated)
         self.tiles.profile_chosen.connect(self._set_service_profile)
+        self.tiles.probe_requested.connect(self._on_probe_requested)
         self.add_widget(self.tiles)
 
     def _build_header(self) -> None:
@@ -334,7 +361,9 @@ class HostsPage(BasePage):
 
     def cleanup(self) -> None:
         self._cleanup_in_progress = True
-        for runtime in (self._snapshot_runtime, self._apply_runtime, self._restore_runtime):
+        self._probe_queue.clear()
+        self._probing = None
+        for runtime in (self._snapshot_runtime, self._apply_runtime, self._restore_runtime, self._probe_runtime):
             try:
                 runtime.stop(blocking=False, warning_prefix="Hosts worker")
                 runtime.cancel()
@@ -528,6 +557,84 @@ class HostsPage(BasePage):
         self._render_dns_all()
         self._render_tiles()
 
+    # ── проверка профилей ────────────────────────────────────
+
+    def _on_probe_requested(self, service_name: str) -> None:
+        """Кнопка на плитке: проверить все профили сервиса и подсказать лучший."""
+        if self._cleanup_in_progress or self._draft is None:
+            return
+        if service_name == self._probing or service_name in self._probe_queue:
+            return
+        entry = self._draft.snapshot.service(service_name)
+        if entry is None or entry.is_direct or entry.unavailable_reason or not entry.profiles:
+            return
+        # Прежний итог устарел, как только попросили новый.
+        self._probe_results.pop(service_name, None)
+        self._probe_queue.append(service_name)
+        self._start_next_probe()
+        self._render_tiles()
+
+    def _start_next_probe(self) -> None:
+        if self._probing is not None or self._cleanup_in_progress:
+            return
+        draft = self._draft
+        while self._probe_queue and draft is not None:
+            service_name = self._probe_queue.pop(0)
+            entry = draft.snapshot.service(service_name)
+            if entry is None or not entry.profiles:
+                continue
+            rows = {profile: draft.snapshot.rows.get((service_name, profile), ()) for profile in entry.profiles}
+            self._probing = service_name
+            self._probe_progress = (0, 0)
+            self._probe_runtime.start_qthread_worker(
+                worker_factory=lambda request_id: self._hosts.create_profile_probe_worker(request_id, service_name, rows, self),
+                on_loaded=self._on_probe_loaded,
+                on_failed=self._on_probe_failed,
+                bind_worker=lambda worker: worker.progress.connect(self._on_probe_progress),
+            )
+            return
+
+    def _on_probe_progress(self, request_id: int, done: int, total: int) -> None:
+        if not self._probe_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        self._probe_progress = (int(done), int(total))
+        self._render_tiles()
+
+    def _on_probe_loaded(self, request_id: int, result) -> None:
+        if not self._probe_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        service_name, self._probing = self._probing, None
+        if service_name and isinstance(result, ServiceProbe):
+            self._probe_results[service_name] = result
+        self._start_next_probe()
+        self._render_tiles()
+
+    def _on_probe_failed(self, request_id: int, error: str) -> None:
+        if not self._probe_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        self._probing = None
+        self._start_next_probe()
+        self._render_tiles()
+        self._show_error(self._tr("page.hosts.probe.failed.title", "Не удалось проверить профили"), error)
+
+    def _probe_note(self, item: ProfileProbe, *, best: bool) -> str:
+        """Итог профиля словами — в подсказку на его значке."""
+        if item.works:
+            text = self._tr("page.hosts.probe.note.ok", "открылся: {ok} из {total}", ok=item.ok, total=item.total)
+            if item.latency_ms is not None:
+                text += self._tr("page.hosts.probe.note.latency", ", {ms} мс", ms=item.latency_ms)
+            if best:
+                text = self._tr("page.hosts.probe.note.best", "лучший по проверке, {text}", text=text)
+            return text
+        key, default = _PROBE_REASONS.get(item.reason, _PROBE_REASONS[VERDICT_DEAD])
+        return self._tr(
+            "page.hosts.probe.note.bad",
+            "не открылся ({ok} из {total}): {reason}",
+            ok=item.ok,
+            total=item.total,
+            reason=self._tr(key, default),
+        )
+
     def _set_service_profile(self, service_name: str, profile_id) -> None:
         if self._draft is not None and self._draft.set(service_name, profile_id):
             self._after_change(service_name)
@@ -683,6 +790,29 @@ class HostsPage(BasePage):
                 state = on_state if value else off_state
             else:
                 state = labels.get(value, value) if value else off_label
+            can_probe = not entry.is_direct and not entry.unavailable_reason and bool(entry.profiles)
+            probing = can_probe and (entry.name == self._probing or entry.name in self._probe_queue)
+            probe = self._probe_results.get(entry.name) if can_probe and not probing else None
+            suggested = None
+            marks: dict[str, tuple[str, str]] = {}
+            if probing:
+                done, total = self._probe_progress
+                if entry.name != self._probing:
+                    state = self._tr("page.hosts.probe.queued", "в очереди")
+                elif total:
+                    state = self._tr("page.hosts.probe.progress", "{done}/{total}", done=done, total=total)
+                else:
+                    state = self._tr("page.hosts.probe.starting", "проверяю")
+            elif probe is not None:
+                for item in probe.profiles:
+                    is_best = item.profile_id == probe.best
+                    mark = "best" if is_best else ("ok" if item.works else "bad")
+                    marks[item.profile_id] = (mark, self._probe_note(item, best=is_best))
+                if probe.best is None:
+                    state = self._tr("page.hosts.probe.none", "нет рабочих")
+                elif probe.best != value and probe.best in entry.profiles:
+                    suggested = probe.best
+                    state = self._tr("page.hosts.probe.suggest", "→ {name}", name=labels.get(probe.best, probe.best))
             accessible = f"{entry.name}: {state}" + (f", {writing_text}" if pending else "")
             grouped.setdefault(entry.category, []).append(
                 HostsTile(
@@ -695,13 +825,22 @@ class HostsPage(BasePage):
                     is_on=bool(value),
                     has_switch=entry.is_direct and not entry.unavailable_reason,
                     choices=() if entry.is_direct or entry.unavailable_reason else tuple(
-                        replace(choice, available=choice.profile_id in entry.profiles) for choice in all_choices
+                        replace(
+                            choice,
+                            available=choice.profile_id in entry.profiles,
+                            mark=marks.get(choice.profile_id, ("", ""))[0],
+                            mark_note=marks.get(choice.profile_id, ("", ""))[1],
+                        )
+                        for choice in all_choices
                     ),
                     selected=None if entry.is_direct else value,
                     state_text="" if entry.is_direct else state,
                     pending=pending,
                     enabled=not entry.unavailable_reason,
                     accessible_text=accessible,
+                    can_probe=can_probe,
+                    probing=probing,
+                    suggested=suggested,
                 )
             )
         tiles: list[HostsTile] = []

@@ -19,6 +19,7 @@ class HostsFeature:
     create_permission_restore_worker: Callable
     create_file_text_worker: Callable
     create_file_save_worker: Callable
+    create_profile_probe_worker: Callable
 
 
 def build_hosts_feature() -> HostsFeature:
@@ -95,6 +96,26 @@ def build_hosts_feature() -> HostsFeature:
             parent=parent,
         )
 
+    def _create_profile_probe_worker(request_id: int, service_name: str, rows_by_profile, parent=None):
+        """rows_by_profile: профиль -> строки (домен, адрес) из снимка страницы —
+        проверяется ровно то, что будет записано в hosts."""
+        from hosts.probe_worker import HostsProfileProbeWorker
+        from hosts.profile_probe import probe_service
+
+        service_name = str(service_name or "")
+        rows = {str(profile): tuple(items or ()) for profile, items in dict(rows_by_profile or {}).items()}
+
+        def _probe(*, progress, cancelled):
+            return probe_service(
+                service_name,
+                tuple(rows),
+                lambda profile: list(rows.get(profile, ())),
+                progress=progress,
+                cancelled=cancelled,
+            )
+
+        return HostsProfileProbeWorker(request_id, _probe, parent=parent)
+
     return HostsFeature(
         refresh_applied_selection=lambda *args, **kwargs: _public().refresh_applied_selection(*args, **kwargs),
         warm_page_data_cache=_warm_page_data_cache,
@@ -107,4 +128,5 @@ def build_hosts_feature() -> HostsFeature:
         create_permission_restore_worker=_create_permission_restore_worker,
         create_file_text_worker=_create_file_text_worker,
         create_file_save_worker=_create_file_save_worker,
+        create_profile_probe_worker=_create_profile_probe_worker,
     )

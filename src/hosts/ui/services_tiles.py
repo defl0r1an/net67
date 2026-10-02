@@ -7,6 +7,9 @@ DNS-профилем под названием ряд иконок провай�
 выбирает профиль, щелчок по выбранной — выключает, полное имя — в подсказке.
 Включённая плитка мягко подкрашена акцентом, без рамок.
 
+Сразу за названием DNS-плитки — круглая кнопка проверки: она сама обходит
+все профили сервиса и подсказывает лучший (см. hosts/profile_probe.py).
+
 Каждая плитка рисуется один раз в готовую картинку; прокрутка и перерисовка
 только копируют картинки, пока плитка не изменилась.
 """
@@ -18,7 +21,7 @@ import time
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, QVariantAnimation, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPixmap, QRadialGradient
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 from qfluentwidgets import getFont, isDarkTheme, themeColor
 
@@ -26,6 +29,7 @@ from ui.accessibility import set_control_accessibility
 from ui.animation_policy import are_live_animations_enabled
 from ui.theme import get_cached_qta_pixmap, get_theme_tokens, to_qcolor
 from ui.widgets.fluent_item_tooltip import install_fluent_hover_tooltip
+from ui.widgets.hover_row import paint_sheen
 from ui.widgets.stagger_float_in import (
     FLOAT_IN_DURATION_MS,
     FLOAT_IN_RISE_PX,
@@ -45,11 +49,15 @@ class HostsChoice:
     # Профиль есть у этого сервиса. Недоступный не рисуется, и места под
     # него нет: остальные сдвигаются влево (см. _placed_choices).
     available: bool = True
+    # Итог проверки профиля: "" — не проверялся, "best" — лучший,
+    # "ok" — сайт открылся, "bad" — не открылся. Пояснение — в подсказку.
+    mark: str = ""
+    mark_note: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class _Change:
-    """Идущая анимация смены: kind — "pick" | "drop" | "switch"."""
+    """Идущая анимация смены: kind — "pick" | "drop" | "switch" | "probe"."""
 
     kind: str
     profile_id: str
@@ -82,6 +90,11 @@ class HostsTile:
     accessible_text: str = ""
     # У заголовка группы DNS-сервисов: легенда «иконка — провайдер».
     legend: tuple[HostsChoice, ...] = ()
+    # Круглая кнопка проверки за названием: есть, идёт проверка, и профиль,
+    # который проверка советует вместо выбранного (None — советовать нечего).
+    can_probe: bool = False
+    probing: bool = False
+    suggested: str | None = None
 
     @property
     def has_choices(self) -> bool:
@@ -95,6 +108,8 @@ class HostsTilesGrid(QWidget):
     activated = pyqtSignal(str)
     # Иконка профиля: (ключ сервиса, id профиля или None — выключить).
     profile_chosen = pyqtSignal(str, object)
+    # Кнопка проверки: обойти профили сервиса и подсказать лучший.
+    probe_requested = pyqtSignal(str)
 
     TILE_MIN_WIDTH = 250
     TILE_HEIGHT = 78
@@ -123,6 +138,15 @@ class HostsTilesGrid(QWidget):
     _CHOICE_ICON = 13
     _CHOICE_GAP = 6
     _LEGEND_ICON = 13
+    # Кнопка проверки: круг чуть меньше значка профиля — она стоит в строке
+    # названия и не должна спорить с ним.
+    _PROBE = 20
+    _PROBE_ICON = 11
+    _PROBE_GAP = 8
+    # Один проход блика по кнопке при наведении.
+    PROBE_SHEEN_SECONDS = 0.55
+    _MARK_GOOD = "#3fb950"
+    _MARK_BAD = "#ff6b61"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -134,6 +158,11 @@ class HostsTilesGrid(QWidget):
         self._cursor = -1
         self._pressed = -1
         self._pressed_choice = -1
+        # Наведение и нажатие на кнопку проверки плитки _hover / _pressed.
+        self._hover_probe = False
+        self._pressed_probe = False
+        # Блик по кнопке проверки: (ключ плитки, начало).
+        self._probe_sheen: tuple[str, float] | None = None
         self._flash: dict[str, float] = {}
         self._flash_anim = QVariantAnimation(self)
         self._flash_anim.setStartValue(1.0)
@@ -183,8 +212,10 @@ class HostsTilesGrid(QWidget):
         self._tiles = tiles
         self._hover = -1
         self._hover_choice = -1
+        self._hover_probe = False
         self._pressed = -1
         self._pressed_choice = -1
+        self._pressed_probe = False
         self._relayout()
         self._cursor = self._index_of(cursor_key)
         in_use = {tile for tile in self._tiles}
@@ -256,6 +287,10 @@ class HostsTilesGrid(QWidget):
                     self._changes[tile.key] = _Change("pick", tile.selected, now)
                 elif old.selected:
                     self._changes[tile.key] = _Change("drop", old.selected, now)
+            elif tile.has_choices and old.probing and not tile.probing:
+                # Проверка закончилась: лучший профиль коротко вспыхивает.
+                best = next((choice.profile_id for choice in tile.choices if choice.mark == "best"), "")
+                self._changes[tile.key] = _Change("probe", best, now)
             elif tile.has_switch and old.is_on != tile.is_on:
                 self._changes[tile.key] = _Change("switch", "", now)
 
@@ -264,6 +299,9 @@ class HostsTilesGrid(QWidget):
         keys = set(self._changes)
         if are_live_animations_enabled():
             keys.update(tile.key for tile in self._tiles if tile.pending and tile.has_choices and tile.selected)
+            keys.update(tile.key for tile in self._tiles if tile.probing)
+            if self._probe_sheen is not None:
+                keys.add(self._probe_sheen[0])
         return keys
 
     def _change_progress(self, key: str) -> tuple[_Change | None, float]:
@@ -289,6 +327,9 @@ class HostsTilesGrid(QWidget):
         finished = [key for key, change in self._changes.items() if now - change.started >= self.CHANGE_SECONDS]
         for key in finished:
             del self._changes[key]
+        if self._probe_sheen is not None and now - self._probe_sheen[1] >= self.PROBE_SHEEN_SECONDS:
+            finished.append(self._probe_sheen[0])
+            self._probe_sheen = None
         for key in self._spinning_keys() | set(finished):
             index = self._index_of(key)
             if index >= 0:
@@ -437,6 +478,60 @@ class HostsTilesGrid(QWidget):
         left = rect.left() + self._PAD + slot * (size + self._CHOICE_GAP)
         return QRect(left, rect.bottom() - self._PAD - size + 3, size, size)
 
+    def _state_text(self, tile: HostsTile) -> str:
+        """Подпись справа от названия DNS-плитки: профиль, «Выкл.» или ход дела."""
+        if not tile.has_choices:
+            return ""
+        return self._pending_text() if tile.pending else tile.state_text
+
+    def _state_width(self, tile: HostsTile, rect: QRect) -> int:
+        state = self._state_text(tile)
+        if not state:
+            return 0
+        width = QFontMetrics(self._caption_font).horizontalAdvance(state) + 2
+        limit = (rect.width() - 2 * self._PAD) // 2
+        if tile.probing or tile.suggested:
+            # Ход и итог проверки — подписи временные: уступает подпись, а не
+            # название сервиса, иначе «ChatGPT & Sora» превращался в «ChatGP…».
+            usable = rect.width() - 2 * self._PAD - self._ICON - 10
+            font = self._title_font_on if tile.is_on else self._title_font
+            room = usable - QFontMetrics(font).horizontalAdvance(tile.title) - self._PROBE - self._PROBE_GAP - 10
+            limit = max(min(limit, room), usable // 4)
+        return min(width, limit)
+
+    def _title_right(self, tile: HostsTile, rect: QRect) -> int:
+        """Где кончается место первой строки названия."""
+        right = rect.right() - self._PAD
+        if tile.has_switch:
+            return self._switch_rect(rect).left() - 10
+        state_width = self._state_width(tile, rect)
+        if state_width:
+            right -= state_width + 10
+        if tile.can_probe:
+            right -= self._PROBE + self._PROBE_GAP
+        return right
+
+    def _probe_rect(self, tile: HostsTile, rect: QRect) -> QRect:
+        """Круглая кнопка проверки — сразу за названием, в его строке."""
+        if not tile.can_probe:
+            return QRect()
+        text_left = rect.left() + self._PAD + self._ICON + 10
+        font = self._title_font_on if tile.is_on else self._title_font
+        room = max(0, self._title_right(tile, rect) - text_left)
+        title_width = min(QFontMetrics(font).horizontalAdvance(tile.title), room)
+        size = self._PROBE
+        return QRect(text_left + title_width + self._PROBE_GAP, rect.top() + self._PAD - 2 + (22 - size) // 2, size, size)
+
+    def probe_rect(self, key: str) -> QRect:
+        """Где на сетке кнопка проверки плитки (для тестов и подсказок)."""
+        index = self._index_of(key)
+        return self._probe_rect(self._tiles[index], self._rects[index]) if index >= 0 else QRect()
+
+    def _probe_hit(self, index: int, point: QPoint) -> bool:
+        if not self._is_clickable(index):
+            return False
+        return self._probe_rect(self._tiles[index], self._rects[index]).contains(point)
+
     def _visible_slots(self, rect: QRect) -> int:
         """Сколько иконок влезает в ширину плитки."""
         room = rect.width() - 2 * self._PAD + self._CHOICE_GAP
@@ -500,6 +595,8 @@ class HostsTilesGrid(QWidget):
             index == self._pressed,
             self._hover_choice if index == self._hover else -1,
             self._pressed_choice if index == self._pressed else -1,
+            self._hover_probe and index == self._hover,
+            self._pressed_probe and index == self._pressed,
         )
 
     def _tile_pixmap(self, index: int, rect: QRect, tile: HostsTile, tokens, dark: bool, accent: str, dpr: float) -> QPixmap:
@@ -563,8 +660,8 @@ class HostsTilesGrid(QWidget):
     def _card_colors(self, index: int, tile: HostsTile, dark: bool) -> tuple[QColor, QColor, QColor | None]:
         """Фон и рамка — как у CardWidget; включённая подкрашена акцентом."""
         hovered = index == self._hover or (index == self._cursor and self.hasFocus())
-        # Нажатие по иконке профиля не «продавливает» всю карточку.
-        pressed = index == self._pressed and self._pressed_choice < 0
+        # Нажатие по иконке профиля или кнопке проверки не «продавливает» всю карточку.
+        pressed = index == self._pressed and self._pressed_choice < 0 and not self._pressed_probe
         if dark:
             fill = QColor(255, 255, 255, 8 if pressed else (21 if hovered else 13))
             border = QColor(255, 255, 255, 18 if pressed else (13 if hovered else 0))
@@ -620,18 +717,17 @@ class HostsTilesGrid(QWidget):
             painter.drawPixmap(rect.left() + pad, rect.top() + pad, icon)
 
         text_left = rect.left() + pad + self._ICON + 10
-        right_edge = rect.right() - pad
-        if tile.has_switch:
-            right_edge = self._switch_rect(rect).left() - 10
-        elif tile.has_choices:
-            # Справа от названия — выбранный профиль или «записываю…».
-            state = self._pending_text() if tile.pending else tile.state_text
+        # Место названия считает _title_right: по нему же стоит кнопка проверки.
+        right_edge = self._title_right(tile, rect)
+        if tile.has_choices:
+            # Справа от названия — выбранный профиль, «записываю…» или ход проверки.
+            state = self._state_text(tile)
             if state:
                 metrics = QFontMetrics(self._caption_font)
-                state_width = min(metrics.horizontalAdvance(state) + 2, (rect.width() - 2 * pad) // 2)
-                state_rect = QRect(right_edge - state_width, rect.top() + pad - 2, state_width, 22)
+                state_width = self._state_width(tile, rect)
+                state_rect = QRect(rect.right() - pad - state_width, rect.top() + pad - 2, state_width, 22)
                 painter.setFont(self._caption_font)
-                if tile.pending or tile.is_on:
+                if tile.pending or tile.is_on or tile.probing or tile.suggested:
                     painter.setPen(QColor(themeColor()))
                 else:
                     painter.setPen(to_qcolor(tokens.fg_muted))
@@ -640,7 +736,6 @@ class HostsTilesGrid(QWidget):
                     int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
                     metrics.elidedText(state, Qt.TextElideMode.ElideRight, state_width),
                 )
-                right_edge = state_rect.left() - 10
 
         # Название: как BodyLabel, 14 px; лишнее — многоточием (полное — в подсказке).
         title_font = self._title_font_on if tile.is_on else self._title_font
@@ -660,6 +755,8 @@ class HostsTilesGrid(QWidget):
 
         if tile.has_switch:
             self._paint_switch(painter, self._switch_rect(rect), tile, dark)
+        if tile.can_probe:
+            self._paint_probe(painter, index, rect, tile, tokens, dark)
 
         # Вторая строка: иконки профилей или пояснение (как CaptionLabel, 12 px).
         if tile.has_choices:
@@ -711,11 +808,16 @@ class HostsTilesGrid(QWidget):
             angle, glow_radius, glow_alpha, glow_color = 0.0, 0.0, 0, color
             if change is not None and change.profile_id == choice.profile_id and progress < 1.0:
                 eased = 1.0 - (1.0 - progress) ** 3
-                angle = 360.0 * eased * (1 if change.kind == "pick" else -1)
                 glow_radius = 12.0 + 12.0 * eased
                 glow_alpha = int(170 * (1.0 - progress))
-                if change.kind == "drop":
-                    glow_color = QColor(160, 160, 160)
+                if change.kind == "probe":
+                    # Проверка назвала лучший: вспышка без оборота — оборот
+                    # означает «выбрано», а тут только совет.
+                    glow_color = QColor(self._MARK_GOOD)
+                else:
+                    angle = 360.0 * eased * (1 if change.kind == "pick" else -1)
+                    if change.kind == "drop":
+                        glow_color = QColor(160, 160, 160)
             elif spinning and selected:
                 now = self._now()
                 angle = (now * 420.0) % 360.0
@@ -739,6 +841,10 @@ class HostsTilesGrid(QWidget):
             icon_color = choice.color if highlighted else muted.name(QColor.NameFormat.HexArgb)
             size = self._CHOICE_ICON
             pixmap = get_cached_qta_pixmap(choice.icon_name, color=icon_color, size=size)
+            # Не открывшийся профиль тускнеет, пока на него не навели.
+            dimmed = choice.mark == "bad" and not highlighted
+            if dimmed:
+                painter.setOpacity(painter.opacity() * 0.45)
             if angle:
                 painter.save()
                 painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -749,6 +855,83 @@ class HostsTilesGrid(QWidget):
             else:
                 offset = (self._CHOICE - size) // 2
                 painter.drawPixmap(int(area.left()) + offset, int(area.top()) + offset, pixmap)
+            if dimmed:
+                painter.setOpacity(painter.opacity() / 0.45)
+            if choice.mark:
+                self._paint_mark(painter, area, choice.mark, dark)
+
+    def _paint_mark(self, painter: QPainter, area: QRectF, mark: str, dark: bool) -> None:
+        """Итог проверки на значке профиля: точка в углу, у лучшего ещё и кольцо."""
+        color = QColor(self._MARK_BAD if mark == "bad" else self._MARK_GOOD)
+        if mark == "best":
+            pen = QPen(color)
+            pen.setWidthF(1.6)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(area.adjusted(0.8, 0.8, -0.8, -0.8))
+        # Ободок цвета карточки отделяет точку от круга значка.
+        rim = QColor(43, 43, 43) if dark else QColor(250, 250, 250)
+        center = QPointF(area.right() - 3.5, area.bottom() - 3.5)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(rim)
+        painter.drawEllipse(center, 4.5, 4.5)
+        painter.setBrush(color)
+        painter.drawEllipse(center, 3.0, 3.0)
+
+    def _paint_probe(self, painter: QPainter, index: int, rect: QRect, tile: HostsTile, tokens, dark: bool) -> None:
+        """Кнопка проверки: круг как у значков профилей, со своим значком.
+
+        Покой — полоски сигнала; идёт проверка — кольцо крутится и светится,
+        как выбранный профиль во время записи; есть совет — зелёная галочка,
+        щелчок по ней ставит лучший профиль.
+        """
+        area = QRectF(self._probe_rect(tile, rect))
+        hovered = self._hover_probe and index == self._hover
+        pressed = self._pressed_probe and index == self._pressed
+        accent = QColor(themeColor())
+        good = QColor(self._MARK_GOOD)
+        now = self._now()
+        live = are_live_animations_enabled()
+        if tile.probing and live:
+            self._paint_glow(painter, area.center(), 15.0, accent, int(70 + 45 * math.sin(now * 7.0)))
+        if tile.suggested and not tile.probing:
+            back = QColor(good)
+            back.setAlpha((110 if hovered else 80) if dark else (80 if hovered else 56))
+        elif pressed:
+            back = QColor(255, 255, 255, 10) if dark else QColor(0, 0, 0, 14)
+        elif hovered or tile.probing:
+            back = QColor(255, 255, 255, 26) if dark else QColor(0, 0, 0, 10)
+        else:
+            back = QColor(255, 255, 255, 12) if dark else QColor(0, 0, 0, 6)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(back)
+        painter.drawEllipse(area)
+
+        if tile.probing:
+            icon_name, icon_color = "fa5s.circle-notch", accent.name()
+        elif tile.suggested:
+            icon_name, icon_color = "fa5s.check", good.name()
+        else:
+            muted = QColor(255, 255, 255, 140) if dark else QColor(0, 0, 0, 120)
+            icon_name = "fa5s.signal"
+            icon_color = accent.name() if hovered else muted.name(QColor.NameFormat.HexArgb)
+        size = self._PROBE_ICON
+        pixmap = get_cached_qta_pixmap(icon_name, color=icon_color, size=size)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.translate(area.center())
+        if tile.probing and live:
+            painter.rotate((now * 420.0) % 360.0)
+        elif pressed:
+            painter.scale(0.88, 0.88)
+        painter.drawPixmap(QPointF(-size / 2, -size / 2), pixmap)
+        painter.restore()
+
+        sheen = self._probe_sheen
+        if sheen is not None and sheen[0] == tile.key and live:
+            progress = (now - sheen[1]) / self.PROBE_SHEEN_SECONDS
+            if 0.0 <= progress < 1.0:
+                paint_sheen(painter, area.toRect(), tokens, progress, radius=self._PROBE / 2)
 
     def _icon_motion(self, tile: HostsTile, now: float) -> tuple[float, int, QColor]:
         """Покачивание и свечение иконки сервиса при смене: (угол, прозрачность, цвет).
@@ -757,7 +940,7 @@ class HostsTilesGrid(QWidget):
         выключили — серое. Без идущей смены — покой.
         """
         change = self._changes.get(tile.key)
-        if change is None:
+        if change is None or change.kind == "probe":
             return 0.0, 0, QColor()
         progress = min(1.0, max(0.0, (now - change.started) / self.CHANGE_SECONDS))
         if progress >= 1.0:
@@ -846,6 +1029,18 @@ class HostsTilesGrid(QWidget):
             value = available[0]
         self.profile_chosen.emit(tile.key, value)
 
+    def _probe_click(self, index: int) -> None:
+        """Кнопка проверки: совет есть — принять его, иначе начать проверку."""
+        if not self._is_clickable(index):
+            return
+        tile = self._tiles[index]
+        if not tile.can_probe or tile.probing:
+            return
+        if tile.suggested:
+            self.profile_chosen.emit(tile.key, tile.suggested)
+        else:
+            self.probe_requested.emit(tile.key)
+
     def _activate(self, index: int) -> None:
         """Enter/Пробел: тумблер переключается, DNS-профиль — следующий."""
         if not self._is_clickable(index):
@@ -864,7 +1059,8 @@ class HostsTilesGrid(QWidget):
             index = self.index_at(point)
             if self._is_clickable(index):
                 self._pressed = index
-                self._pressed_choice = self._choice_at(index, point)
+                self._pressed_probe = self._probe_hit(index, point)
+                self._pressed_choice = -1 if self._pressed_probe else self._choice_at(index, point)
                 self.update(self._rects[index])
         super().mousePressEvent(event)
 
@@ -872,6 +1068,7 @@ class HostsTilesGrid(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             pressed, self._pressed = self._pressed, -1
             pressed_choice, self._pressed_choice = self._pressed_choice, -1
+            pressed_probe, self._pressed_probe = self._pressed_probe, False
             if 0 <= pressed < len(self._rects):
                 self.update(self._rects[pressed])
             point = event.position().toPoint()
@@ -880,7 +1077,10 @@ class HostsTilesGrid(QWidget):
                 # Щелчок мышью не прокручивает страницу к плитке.
                 self._set_cursor(index, ensure_visible=False)
                 tile = self._tiles[index]
-                if tile.has_choices:
+                if pressed_probe:
+                    if self._probe_hit(index, point):
+                        self._probe_click(index)
+                elif tile.has_choices:
                     slot = self._choice_at(index, point)
                     if slot >= 0 and slot == pressed_choice:
                         self._choose(index, slot)
@@ -894,10 +1094,11 @@ class HostsTilesGrid(QWidget):
         point = event.position().toPoint()
         index = self.index_at(point)
         hover = index if self._is_clickable(index) else -1
-        slot = self._choice_at(hover, point) if hover >= 0 else -1
-        self._set_hover(hover, slot)
+        probe = hover >= 0 and self._probe_hit(hover, point)
+        slot = self._choice_at(hover, point) if hover >= 0 and not probe else -1
+        self._set_hover(hover, slot, probe)
         tile = self._tiles[index] if index >= 0 else None
-        clickable = tile is not None and hover >= 0 and (slot >= 0 or tile.has_switch)
+        clickable = tile is not None and hover >= 0 and (slot >= 0 or tile.has_switch or (probe and not tile.probing))
         self.setCursor(Qt.CursorShape.PointingHandCursor if clickable else Qt.CursorShape.ArrowCursor)
         super().mouseMoveEvent(event)
 
@@ -906,16 +1107,24 @@ class HostsTilesGrid(QWidget):
         if index < 0:
             return ""
         tile = self._tiles[index]
+        if self._probe_hit(index, point):
+            if tile.probing:
+                return "Проверяю, через какой профиль сайт открывается…"
+            if tile.suggested:
+                label = next((choice.label for choice in tile.choices if choice.profile_id == tile.suggested), tile.suggested)
+                return f"Выбрать «{label}» — лучший по проверке"
+            return "Проверить все DNS-профили и подсказать лучший (Shift+Enter)"
         slot = self._choice_at(index, point) if self._is_clickable(index) else -1
         if slot >= 0:
             choice = tile.choices[slot]
+            label = f"{choice.label} — {choice.mark_note}" if choice.mark_note else choice.label
             if choice.profile_id == tile.selected:
-                return f"{choice.label} — выбран, щёлкните, чтобы выключить"
-            return choice.label
+                return f"{label}\nВыбран; щёлкните, чтобы выключить" if choice.mark_note else f"{label} — выбран, щёлкните, чтобы выключить"
+            return label
         return f"{tile.title}\n{tile.note}" if tile.note else tile.title
 
     def leaveEvent(self, event) -> None:  # noqa: N802
-        self._set_hover(-1, -1)
+        self._set_hover(-1, -1, False)
         super().leaveEvent(event)
 
     def focusInEvent(self, event) -> None:  # noqa: N802
@@ -935,6 +1144,11 @@ class HostsTilesGrid(QWidget):
     def keyPressEvent(self, event) -> None:  # noqa: N802
         key = event.key()
         clickable = self._clickable()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            # Shift+Enter — то же, что кнопка проверки за названием.
+            self._probe_click(self._cursor)
+            event.accept()
+            return
         if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
             self._activate(self._cursor)
             event.accept()
@@ -973,10 +1187,15 @@ class HostsTilesGrid(QWidget):
             return
         super().keyPressEvent(event)
 
-    def _set_hover(self, index: int, slot: int = -1) -> None:
-        if index == self._hover and slot == self._hover_choice:
+    def _set_hover(self, index: int, slot: int = -1, probe: bool = False) -> None:
+        if index == self._hover and slot == self._hover_choice and probe == self._hover_probe:
             return
-        old, self._hover, self._hover_choice = self._hover, index, slot
+        entered_probe = probe and not (self._hover_probe and index == self._hover)
+        old, self._hover, self._hover_choice, self._hover_probe = self._hover, index, slot, probe
+        if entered_probe and are_live_animations_enabled():
+            # Курсор вошёл на кнопку проверки: по ней проходит блик.
+            self._probe_sheen = (self._key_at(index), self._now())
+            self._sync_frames()
         for value in {old, index}:
             if 0 <= value < len(self._rects):
                 self.update(self._rects[value])
