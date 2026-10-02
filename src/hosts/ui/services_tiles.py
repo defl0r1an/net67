@@ -908,30 +908,55 @@ class HostsTilesGrid(QWidget):
         painter.drawEllipse(area)
 
         if tile.probing:
-            icon_name, icon_color = "fa5s.circle-notch", accent.name()
-        elif tile.suggested:
-            icon_name, icon_color = "fa5s.check", good.name()
+            self._paint_probe_spinner(painter, area, accent, now if live else 0.0)
         else:
-            muted = QColor(255, 255, 255, 140) if dark else QColor(0, 0, 0, 120)
-            icon_name = "fa5s.signal"
-            icon_color = accent.name() if hovered else muted.name(QColor.NameFormat.HexArgb)
-        size = self._PROBE_ICON
-        pixmap = get_cached_qta_pixmap(icon_name, color=icon_color, size=size)
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        painter.translate(area.center())
-        if tile.probing and live:
-            painter.rotate((now * 420.0) % 360.0)
-        elif pressed:
-            painter.scale(0.88, 0.88)
-        painter.drawPixmap(QPointF(-size / 2, -size / 2), pixmap)
-        painter.restore()
+            if tile.suggested:
+                icon_name, icon_color = "fa5s.check", good.name()
+            else:
+                muted = QColor(255, 255, 255, 140) if dark else QColor(0, 0, 0, 120)
+                icon_name = "fa5s.signal"
+                icon_color = accent.name() if hovered else muted.name(QColor.NameFormat.HexArgb)
+            size = self._PROBE_ICON
+            pixmap = get_cached_qta_pixmap(icon_name, color=icon_color, size=size)
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.translate(area.center())
+            if pressed:
+                painter.scale(0.88, 0.88)
+            painter.drawPixmap(QPointF(-size / 2, -size / 2), pixmap)
+            painter.restore()
 
         sheen = self._probe_sheen
         if sheen is not None and sheen[0] == tile.key and live:
             progress = (now - sheen[1]) / self.PROBE_SHEEN_SECONDS
             if 0.0 <= progress < 1.0:
                 paint_sheen(painter, area.toRect(), tokens, progress, radius=self._PROBE / 2)
+
+    @staticmethod
+    def _paint_probe_spinner(painter: QPainter, area: QRectF, color: QColor, now: float) -> None:
+        """Кольцо ожидания: дуга, нарисованная вокруг центра кнопки.
+
+        Раньше крутился значок из шрифта. Глиф в своей картинке стоит не
+        точно по центру, и при вращении его водило по кругу — «не по оси».
+        Дуга рисуется от центра кнопки, сместиться ей некуда.
+        """
+        radius = 4.6
+        ring = QRectF(area.center().x() - radius, area.center().y() - radius, radius * 2, radius * 2)
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        track = QColor(color)
+        track.setAlpha(60)
+        pen = QPen(track)
+        pen.setWidthF(1.7)
+        painter.setPen(pen)
+        painter.drawEllipse(ring)
+        pen.setColor(color)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        # Углы у drawArc — в шестнадцатых долях градуса, против часовой.
+        start = -((now * 420.0) % 360.0)
+        painter.drawArc(ring, int(start * 16), int(-110 * 16))
+        painter.restore()
 
     def _icon_motion(self, tile: HostsTile, now: float) -> tuple[float, int, QColor]:
         """Покачивание и свечение иконки сервиса при смене: (угол, прозрачность, цвет).
