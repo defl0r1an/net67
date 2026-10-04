@@ -618,6 +618,81 @@ class TechniqueIllustrationTests(unittest.TestCase):
         finally:
             host.deleteLater()
 
+    def test_still_frame_shows_settled_scene(self) -> None:
+        # Без анимаций виден один кадр STATIC_PHASE: к нему все переходы
+        # (реплика, вспышка у сайта, падение подделок и мусора) уже закончились.
+        from ui.onboarding.illustrations import FADE_FROM, SCENES, STATIC_PHASE
+
+        host = QWidget()
+        try:
+            illustration = self._illustration(host)
+            for width in (460, 532, 580):
+                illustration.resize(width, illustration.height())
+                for key in SCENES:
+                    illustration.set_scene(key)
+                    self.assertLessEqual(illustration.scene_times().settled, STATIC_PHASE, f"{key} @ {width}")
+                    illustration.set_phase(STATIC_PHASE)
+                    still = illustration.grab().toImage()
+                    illustration.set_phase(FADE_FROM - 0.001)
+                    self.assertEqual(still, illustration.grab().toImage(), f"{key} @ {width}")
+        finally:
+            host.deleteLater()
+
+    def test_tcpseg_junk_leads_one_packet_and_site_drops_it(self) -> None:
+        # seqovl: мусор приклеен в начало того же пакета. На схеме правее —
+        # значит раньше, поэтому мусор едет справа от данных, вплотную к ним,
+        # первым входит в проверку, а отбрасывает его уже сайт.
+        from ui.onboarding.illustrations import DISCARD, TRAVEL
+
+        host = QWidget()
+        try:
+            illustration = self._illustration(host)
+            illustration.set_scene("tcpseg")
+            times = illustration.scene_times()
+            junk_arrival = times.starts[0] + TRAVEL
+            data_arrival = times.starts[1] + TRAVEL
+            self.assertLess(junk_arrival, data_arrival)
+
+            # У проверки: реплика звучит, когда в середине проверки мусор, а данные ещё не дошли.
+            frames = {frame.index: frame for frame in illustration.chip_frames(times.verdict)}
+            junk, data = frames[0], frames[1]
+            self.assertAlmostEqual(junk.x, illustration.width() / 2, delta=1.0)
+            self.assertLess(data.x, junk.x)
+            # Один пакет: половины слиты без просвета, не как отдельные пакеты.
+            self.assertTrue(junk.glued)
+            self.assertEqual((junk.flat, data.flat), ("left", "right"))
+            self.assertAlmostEqual(junk.x - data.x, (junk.width + data.width) / 2)
+
+            # После проверки мусор не гаснет по дороге, как подделка.
+            frames = {frame.index: frame for frame in illustration.chip_frames(junk_arrival - TRAVEL * 0.1)}
+            self.assertAlmostEqual(frames[0].alpha, 1.0)
+            self.assertAlmostEqual(frames[0].dy, 0.0)
+
+            # У сайта: мусор падает с дорожки, данные входят следом.
+            frames = {frame.index: frame for frame in illustration.chip_frames(junk_arrival + DISCARD * 0.5)}
+            self.assertGreater(frames[0].dy, 0.0)
+            self.assertFalse(frames[0].glued)
+            self.assertEqual(frames[1].flat, "")
+            self.assertEqual(illustration.chip_frames(max(junk_arrival + DISCARD, data_arrival) + 0.01), [])
+        finally:
+            host.deleteLater()
+
+    def test_separate_packets_keep_a_gap(self) -> None:
+        # Просвет на схеме = отдельные пакеты: подделка в fake не слита с настоящим.
+        from ui.onboarding.illustrations import CHIP_GAP
+
+        host = QWidget()
+        try:
+            illustration = self._illustration(host)
+            illustration.set_scene("fake")
+            times = illustration.scene_times()
+            frames = {frame.index: frame for frame in illustration.chip_frames(times.starts[1] + 0.1)}
+            fake, real = frames[0], frames[1]
+            self.assertGreaterEqual(fake.x - real.x - (fake.width + real.width) / 2, CHIP_GAP)
+            self.assertEqual((fake.flat, real.flat, fake.glued), ("", "", False))
+        finally:
+            host.deleteLater()
+
     def test_every_illustrated_step_uses_a_known_scene(self) -> None:
         from ui.onboarding.illustrations import SCENES
         from ui.onboarding.steps import TOUR_STEPS
@@ -640,6 +715,66 @@ class TechniqueIllustrationTests(unittest.TestCase):
             self.assertTrue(illustration.is_animating())
             illustration.hide()
             self.assertFalse(illustration.is_animating())
+        finally:
+            host.close()
+            host.deleteLater()
+
+    def test_pause_button_freezes_frame_and_resumes_from_it(self) -> None:
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtTest import QTest
+
+        from ui.onboarding import illustrations
+
+        host = QWidget()
+        host.resize(600, 300)
+        host.show()
+        try:
+            illustration = self._illustration(host)
+            illustration.show()
+            with patch("ui.onboarding.illustrations.are_live_animations_enabled", return_value=True):
+                illustration.set_scene("tcpseg")
+                button = illustration.pause_button
+                self.assertTrue(button.isVisible())
+                self.assertEqual(button.geometry().topRight(), illustration.rect().topRight())
+
+                illustration.set_phase(0.3)
+                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+                self.assertTrue(illustration.is_paused())
+                self.assertFalse(illustration.is_animating())
+                self.assertEqual(illustration.phase(), 0.3)
+                self.assertEqual(button.toolTip(), "Продолжить анимацию")
+
+                # Продолжение идёт с того же кадра, а не с начала круга.
+                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+                self.assertFalse(illustration.is_paused())
+                self.assertTrue(illustration.is_animating())
+                self.assertEqual(button.toolTip(), "Остановить анимацию")
+                with patch.object(illustration._clock, "elapsed", return_value=int(0.1 * illustrations.PERIOD_MS)):
+                    illustration._on_tick()
+                self.assertAlmostEqual(illustration.phase(), 0.4, places=3)
+
+                # Следующий шаг: новая схема идёт сама, с начала.
+                illustration.set_paused(True)
+                illustration.set_scene("fake")
+                self.assertFalse(illustration.is_paused())
+                self.assertTrue(illustration.is_animating())
+                self.assertEqual(illustration.phase(), 0.0)
+        finally:
+            host.close()
+            host.deleteLater()
+
+    def test_pause_button_hidden_when_animations_are_off(self) -> None:
+        host = QWidget()
+        host.resize(600, 300)
+        host.show()
+        try:
+            illustration = self._illustration(host)
+            illustration.show()
+            with patch("ui.onboarding.illustrations.are_live_animations_enabled", return_value=False):
+                illustration.set_scene("fake")
+                self.assertFalse(illustration.pause_button.isVisible())
+                illustration.set_paused(True)
+                self.assertFalse(illustration.is_paused())
         finally:
             host.close()
             host.deleteLater()

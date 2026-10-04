@@ -1579,7 +1579,13 @@ class OnboardingOverlay(QWidget):
         ] if card.choice_host.isVisible() else []
         buttons = choice + [
             button
-            for button in (card.action_button, card.skip_button, card.back_button, card.next_button)
+            for button in (
+                card.illustration.pause_button,
+                card.action_button,
+                card.skip_button,
+                card.back_button,
+                card.next_button,
+            )
             if button.isVisible() and button.isEnabled()
         ]
         if not buttons:
