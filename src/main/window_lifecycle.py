@@ -6,12 +6,20 @@ from PyQt6.QtWidgets import QWidget
 from log.log import log
 
 from main.window_native_commands import (
+    WM_SYSCOMMAND,
     handle_minimize_request,
     handle_native_minimize_command,
 )
 from main.runtime_state import (
     log_startup_metric as emit_startup_metric,
     startup_elapsed_ms,
+)
+from ui.frame_clock import frame_clock
+from ui.windows_screen_presence import (
+    SCREEN_PRESENCE_MESSAGES,
+    handle_native_screen_presence,
+    native_message_id,
+    register_screen_presence_notifications,
 )
 
 
@@ -97,12 +105,21 @@ class WindowLifecycleMixin:
         return bool(provider())
 
     def nativeEvent(self, event_type, message):  # noqa: N802 (Qt override)
-        if handle_native_minimize_command(
-            self,
-            message,
-            minimize_to_tray_enabled=self._minimize_to_tray_enabled,
-        ):
-            return (True, 0)
+        # Сюда приходит каждое сообщение Windows для окна, включая каждое
+        # движение мыши, поэтому номер сообщения читаем один раз и дальше
+        # идём только по своим.
+        message_id = native_message_id(message)
+        if message_id == WM_SYSCOMMAND:
+            if handle_native_minimize_command(
+                self,
+                message,
+                minimize_to_tray_enabled=self._minimize_to_tray_enabled,
+            ):
+                return (True, 0)
+        elif message_id in SCREEN_PRESENCE_MESSAGES:
+            # Сеанс заблокирован, дисплей выключен — живые анимации встают
+            # (ui/frame_clock.py): рисовать кадры некому.
+            handle_native_screen_presence(message)
         return super().nativeEvent(event_type, message)
 
     def showMinimized(self) -> None:  # noqa: N802 (Qt override)
@@ -120,6 +137,10 @@ class WindowLifecycleMixin:
             try:
                 if not self.isActiveWindow():
                     self.release_input_interaction_states()
+                else:
+                    # Окно активировали — экран точно видят: снимаем паузу
+                    # анимаций, даже если уведомление Windows потерялось.
+                    frame_clock().resume_all()
             except Exception as e:
                 log(f"Не удалось сбросить состояние ввода при смене активности окна: {e}", "DEBUG")
 
@@ -157,6 +178,7 @@ class WindowLifecycleMixin:
     def showEvent(self, event):
         """Первый показ окна."""
         super().showEvent(event)
+        self._register_screen_presence()
 
         startup_state = self._get_startup_state()
         if startup_state is not None and not startup_state.ttff_logged:
@@ -179,6 +201,22 @@ class WindowLifecycleMixin:
         notification_center = self._get_window_notification_center()
         if notification_center is not None:
             notification_center.schedule_startup_notification_queue(0)
+
+    def _register_screen_presence(self) -> None:
+        """Уведомления «сеанс заблокирован» и «дисплей выключен» — на текущий HWND.
+
+        HWND у окна меняется, когда Qt пересоздаёт его (смена флагов окна),
+        и подписка на старый перестаёт приходить. Поэтому сверяем при
+        каждом показе, а подписываемся заново только на новый.
+        """
+        try:
+            hwnd = int(self.winId())
+        except Exception:
+            return
+        if self.__dict__.get("_screen_presence_hwnd") == hwnd:
+            return
+        if register_screen_presence_notifications(self):
+            self._screen_presence_hwnd = hwnd
 
     def _refresh_titlebar_layout_after_show(self) -> None:
         try:

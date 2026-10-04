@@ -18,7 +18,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation
+from PyQt6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import QSizePolicy
 from qfluentwidgets import TransparentPushButton, setCustomStyleSheet
@@ -40,6 +40,8 @@ BADGE_TEXT_LEFT = 23
 BUSY_BREATH_MS = 1200
 # «Работает»: от точки расходится кольцо, подложка в такт светлеет.
 RUNNING_PULSE_MS = 1800
+#: Кадр дыхания и пульса, мс: 30 в секунду, как у точки статуса.
+BADGE_FRAME_MS = 33
 # Кольцо дорастает до 10 px: целиком помещается в значок высотой 22 px.
 RUNNING_RING_GROWTH = 5.5
 STOPPED_DOT_COLOR = "#9aa0a6"
@@ -139,22 +141,18 @@ class LaunchTitleBadge(TransparentPushButton):
         self._uptime_timer.setInterval(UPTIME_TICK_MS)
         self._uptime_timer.timeout.connect(self._refresh_uptime)
 
+        # Дыхание и пульс идут от общего такта приложения (ui/frame_clock.py),
+        # а не каждый от своей бесконечной анимации. Пульс «Работает» крутится
+        # весь рабочий день: своя анимация будила окно 60 раз в секунду
+        # отдельно от остальных и не вставала при заблокированном сеансе.
+        # Фаза считается по времени, поэтому 30 кадров вместо 60 картинку не
+        # меняют.
+        from ui.frame_clock import frame_clock
+
         self._breath_t = 0.0
-        # QVariantAnimation, а не QPropertyAnimation: при выключенных
-        # анимациях общий fallback подменяет QPropertyAnimation.start.
-        self._breath = QVariantAnimation(self)
-        self._breath.setStartValue(0.0)
-        self._breath.setEndValue(1.0)
-        self._breath.setDuration(BUSY_BREATH_MS)
-        self._breath.setLoopCount(-1)
-        self._breath.valueChanged.connect(self._on_breath_value)
+        self._breath = frame_clock().subscribe(self._on_breath_frame, interval_ms=BADGE_FRAME_MS, owner=self)
         self._pulse_t = 0.0
-        self._pulse = QVariantAnimation(self)
-        self._pulse.setStartValue(0.0)
-        self._pulse.setEndValue(1.0)
-        self._pulse.setDuration(RUNNING_PULSE_MS)
-        self._pulse.setLoopCount(-1)
-        self._pulse.valueChanged.connect(self._on_pulse_value)
+        self._pulse = frame_clock().subscribe(self._on_pulse_frame, interval_ms=BADGE_FRAME_MS, owner=self)
         self.hide()
 
     def phase(self) -> str:
@@ -330,13 +328,13 @@ class LaunchTitleBadge(TransparentPushButton):
 
     def _sync_breath(self) -> None:
         if self._can_breathe():
-            if self._breath.state() != QVariantAnimation.State.Running:
+            if not self._breath.isActive():
                 self._breath.start()
         else:
             self._breath.stop()
             self._breath_t = 0.0
         if self._can_pulse():
-            if self._pulse.state() != QVariantAnimation.State.Running:
+            if not self._pulse.isActive():
                 self._pulse.start()
         else:
             self._pulse.stop()
@@ -349,23 +347,17 @@ class LaunchTitleBadge(TransparentPushButton):
             self._uptime_timer.stop()
 
     def is_pulsing(self) -> bool:
-        return self._pulse.state() == QVariantAnimation.State.Running
+        return self._pulse.isActive()
 
-    def _on_pulse_value(self, value) -> None:
-        try:
-            self._pulse_t = float(value)
-        except (TypeError, ValueError):
-            return
+    def _on_pulse_frame(self) -> None:
+        self._pulse_t = (self._pulse.elapsed_ms() % RUNNING_PULSE_MS) / RUNNING_PULSE_MS
         self.update()
 
     def is_breathing(self) -> bool:
-        return self._breath.state() == QVariantAnimation.State.Running
+        return self._breath.isActive()
 
-    def _on_breath_value(self, value) -> None:
-        try:
-            self._breath_t = float(value)
-        except (TypeError, ValueError):
-            return
+    def _on_breath_frame(self) -> None:
+        self._breath_t = (self._breath.elapsed_ms() % BUSY_BREATH_MS) / BUSY_BREATH_MS
         self.update()
 
     def showEvent(self, event) -> None:  # noqa: N802
