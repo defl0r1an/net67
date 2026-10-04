@@ -38,6 +38,7 @@ from hosts.profile_probe import (  # noqa: E402
     VERDICT_REGION,
     ProfileProbe,
     ServiceProbe,
+    pick_probe_domains,
     pick_sample_domains,
     probe_service,
     rank_profiles,
@@ -52,6 +53,43 @@ class SampleDomainsTests(unittest.TestCase):
 
     def test_duplicates_and_case_do_not_take_places(self) -> None:
         self.assertEqual(pick_sample_domains(["X.ai", "x.ai", "", "grok.com"], 6), ["x.ai", "grok.com"])
+
+
+
+class ProbeDomainsTests(unittest.TestCase):
+    """В hosts пишутся все домены, а проверялись шесть самых коротких."""
+
+    def test_small_service_is_checked_whole(self) -> None:
+        from hosts.profile_probe import FULL_CHECK_MAX_DOMAINS
+
+        domains = [f"d{i}.claude.ai" for i in range(FULL_CHECK_MAX_DOMAINS - 1)] + ["claude.ai"]
+        self.assertEqual(sorted(pick_probe_domains(domains)), sorted(domains))
+
+    def test_large_service_takes_login_and_api_after_main(self) -> None:
+        from hosts.profile_probe import LARGE_SAMPLE_DOMAINS, SAMPLE_DOMAINS
+
+        noise = [f"cdn{i}.oaistatic.com" for i in range(60)]
+        key = ["auth.openai.com", "api.openai.com", "chat.openai.com"]
+        main = ["openai.com", "chatgpt.com", "sora.com", "x.ai", "a.co", "b.co"]
+        picked = pick_probe_domains(noise + key + main)
+
+        self.assertEqual(len(picked), LARGE_SAMPLE_DOMAINS)
+        self.assertEqual(set(picked[:SAMPLE_DOMAINS]), set(main))
+        for domain in key:
+            self.assertIn(domain, picked)
+
+    def test_result_says_how_much_was_checked(self) -> None:
+        rows = {"a": [(f"s{i}.x.ai", "1.1.1.1") for i in range(40)]}
+        result = probe_service(
+            "X",
+            ["a"],
+            lambda profile: rows[profile],
+            prober=lambda _ip, _domain: (VERDICT_OK, 10),
+            reacher=lambda _ip: True,
+        )
+        self.assertEqual(result.domain_total, 40)
+        self.assertLess(len(result.domains), 40)
+        self.assertFalse(result.checked_all)
 
 
 class ProbeServiceTests(unittest.TestCase):

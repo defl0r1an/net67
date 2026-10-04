@@ -33,15 +33,37 @@ from dataclasses import dataclass
 #: за секунды, а профили сравниваются честно — на одних и тех же доменах.
 SAMPLE_DOMAINS = 6
 
+#: Сервис с таким числом доменов и меньше проверяется целиком.
+#:
+#: В hosts пишутся все домены сервиса, а проверялись шесть самых коротких:
+#: у Claude из двадцати не попадали ни консоль, ни вход, и профиль с
+#: молнией мог не открыть то, ради чего человек пришёл. Двадцать доменов
+#: через семь профилей — меньше полуминуты.
+FULL_CHECK_MAX_DOMAINS = 20
+
+#: Сколько доменов у большого сервиса (ChatGPT — 445 пар, JetBrains —
+#: больше тысячи): главные и домены входа и API, без которых сайт
+#: открывается, а войти или работать в нём нельзя.
+LARGE_SAMPLE_DOMAINS = 14
+
+#: Первое имя домена, по которому видно вход и API.
+_KEY_LABELS = frozenset(
+    {"api", "auth", "login", "accounts", "account", "oauth", "sso", "id", "signin", "app", "chat", "web", "www"}
+)
+
 CONNECT_TIMEOUT = 4.0
 IO_TIMEOUT = 5.0
 #: После первых байт ответа ждём продолжение недолго: сервер, который не
 #: закрыл соединение сам, иначе держал бы проверку до таймаута.
 READ_TAIL_TIMEOUT = 1.2
 READ_LIMIT = 65536
-MAX_WORKERS = 16
+MAX_WORKERS = 24
 #: Не больше стольких соединений на один адрес сразу: это чужой сервер.
-PER_IP_PARALLEL = 4
+#:
+#: У прокси профиля на один адрес приходятся все проверяемые домены
+#: сервиса. С четырьмя за раз 14 доменов шли в четыре захода, и проверка
+#: Claude тянулась 25 с; с шестью — 20 с (замер 04.10.2026).
+PER_IP_PARALLEL = 6
 
 VERDICT_OK = "ok"
 VERDICT_REGION = "region"
@@ -103,6 +125,12 @@ class ServiceProbe:
     profiles: tuple[ProfileProbe, ...]
     best: str | None
     domains: tuple[str, ...] = ()
+    #: Сколько всего доменов у сервиса в каталоге: проверено len(domains) из стольких.
+    domain_total: int = 0
+
+    @property
+    def checked_all(self) -> bool:
+        return len(self.domains) >= self.domain_total
 
     def result_for(self, profile_id: str) -> ProfileProbe | None:
         for item in self.profiles:
@@ -117,6 +145,21 @@ def pick_sample_domains(domains: Iterable[str], limit: int = SAMPLE_DOMAINS) -> 
     unique = [domain for domain in unique if domain]
     unique.sort(key=lambda domain: (domain.count("."), len(domain), domain))
     return unique[: max(1, int(limit))]
+
+
+def pick_probe_domains(domains: Iterable[str]) -> list[str]:
+    """Какие домены сервиса проверять: все у небольшого, у большого — выборку.
+
+    Выборка — главные домены (самые короткие), за ними домены входа и API
+    (api., auth., login., accounts.…), остаток добирается короткими.
+    """
+    ordered = pick_sample_domains(domains, limit=1_000_000)
+    if len(ordered) <= FULL_CHECK_MAX_DOMAINS:
+        return ordered
+    main = ordered[:SAMPLE_DOMAINS]
+    key = [domain for domain in ordered[SAMPLE_DOMAINS:] if domain.split(".", 1)[0] in _KEY_LABELS]
+    rest = [domain for domain in ordered[SAMPLE_DOMAINS:] if domain not in key]
+    return (main + key + rest)[:LARGE_SAMPLE_DOMAINS]
 
 
 def reach_ip(ip: str, *, timeout: float = CONNECT_TIMEOUT) -> bool:
@@ -251,7 +294,8 @@ def probe_service(
     """
     profile_ids = [str(profile) for profile in profiles]
     rows = {profile: list(rows_for(profile) or ()) for profile in profile_ids}
-    sample = pick_sample_domains(domain for items in rows.values() for domain, _ip in items)
+    all_domains = pick_sample_domains((domain for items in rows.values() for domain, _ip in items), limit=1_000_000)
+    sample = pick_probe_domains(all_domains)
     wanted = set(sample)
 
     # (профиль, домен, адрес). IPv6 пропускаем: без IPv6 в сети это не отказ
@@ -321,11 +365,13 @@ def probe_service(
     }
     live = opened or wanted
     results = tuple(_summarize(profile, by_profile[profile], live) for profile in profile_ids)
-    return ServiceProbe(str(service_name), results, rank_profiles(results), tuple(sample))
+    return ServiceProbe(str(service_name), results, rank_profiles(results), tuple(sample), len(all_domains))
 
 
 __all__ = [
     "REGION_MARKERS",
+    "FULL_CHECK_MAX_DOMAINS",
+    "LARGE_SAMPLE_DOMAINS",
     "SAMPLE_DOMAINS",
     "VERDICT_BADCERT",
     "VERDICT_DEAD",
@@ -335,6 +381,7 @@ __all__ = [
     "VERDICT_RESET",
     "ProfileProbe",
     "ServiceProbe",
+    "pick_probe_domains",
     "pick_sample_domains",
     "probe_pair",
     "probe_service",

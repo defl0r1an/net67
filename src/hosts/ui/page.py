@@ -617,8 +617,24 @@ class HostsPage(BasePage):
         self._render_tiles()
         self._show_error(self._tr("page.hosts.probe.failed.title", "Не удалось проверить профили"), error)
 
-    def _probe_note(self, item: ProfileProbe, *, best: bool) -> str:
+    def _probe_note(self, item: ProfileProbe, *, best: bool, probe: ServiceProbe | None = None) -> str:
         """Итог профиля словами — в подсказку на его значке."""
+        return self._probe_verdict(item, best=best) + self._probe_coverage(probe)
+
+    def _probe_coverage(self, probe: ServiceProbe | None) -> str:
+        """Сколько доменов сервиса проверено: молния на выборке — не то же, что на всём."""
+        if probe is None or not probe.domain_total:
+            return ""
+        if probe.checked_all:
+            return self._tr("page.hosts.probe.note.coverage_all", " · проверены все домены: {n}", n=probe.domain_total)
+        return self._tr(
+            "page.hosts.probe.note.coverage",
+            " · проверено {n} из {m} доменов",
+            n=len(probe.domains),
+            m=probe.domain_total,
+        )
+
+    def _probe_verdict(self, item: ProfileProbe, *, best: bool) -> str:
         if item.works:
             text = self._tr("page.hosts.probe.note.ok", "открылся: {ok} из {total}", ok=item.ok, total=item.total)
             if item.latency_ms is not None:
@@ -812,7 +828,7 @@ class HostsPage(BasePage):
                 for item in probe.profiles:
                     is_best = item.profile_id == probe.best
                     mark = "best" if is_best else ("ok" if item.works else "bad")
-                    marks[item.profile_id] = (mark, self._probe_note(item, best=is_best))
+                    marks[item.profile_id] = (mark, self._probe_note(item, best=is_best, probe=probe))
                 if probe.best is not None and probe.best in entry.profiles:
                     best = probe.best
                     caption = labels.get(best, best)
