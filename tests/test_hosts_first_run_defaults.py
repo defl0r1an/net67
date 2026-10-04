@@ -206,8 +206,10 @@ class RealCatalogTests(unittest.TestCase):
         # Там, где XBOX DNS жив, он и стоит.
         self.assertEqual(selection.get("Claude"), "xbox_dns")
         self.assertEqual(selection.get("ChatGPT & Sora (OpenAI)"), "xbox_dns")
-        # У Gemini его прокси мертвы (замер 30.09.2026).
-        self.assertNotEqual(selection.get("Gemini AI"), "xbox_dns")
+        # 30.09.2026 прокси XBOX DNS у Gemini молчали, и он стоял на Comss.
+        # 04.10 XBOX DNS перевёл Gemini на новые адреса, gemini.google.com
+        # через них открывается — снова XBOX, как у остальных нейросетей.
+        self.assertEqual(selection.get("Gemini AI"), "xbox_dns")
 
     def test_direct_hosts_group_is_enabled(self) -> None:
         """Именно эта группа была на скриншоте с просьбой включить всё."""

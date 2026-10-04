@@ -28,7 +28,7 @@
     "a-cdn.anthropic.com": {
       "astracat": "34.36.57.103",
       "dns_ai": "34.36.57.103",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.67"
     },
     "a-lemmy.fmhy.net": {
       "geohide": "193.233.112.88"
@@ -142,7 +142,7 @@
     "anthropic.com": {
       "astracat": "160.79.104.10",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.67"
+      "geohide": "159.194.200.33"
     },
     "ap-help.api.jetbrains.com": {
       "astracat": "35.228.34.253",
@@ -182,12 +182,12 @@
     "api.claude.ai": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.67"
     },
     "api.console.anthropic.com": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
-      "geohide": "159.194.200.33"
+      "geohide": "193.233.112.68"
     },
     "api.deepl.com": {
       "astracat": "194.124.204.71",
@@ -312,6 +312,21 @@
       "dns_ai": "160.79.104.10",
       "geohide": "193.233.112.68"
     },
+    "assets.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "159.194.200.33"
+    },
+    "assets.claude.ai": {
+      "astracat": "34.120.108.227",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.67"
+    },
+    "assets.claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "193.233.112.68"
+    },
     "assets.grok.com": {
       "astracat": "217.60.179.6",
       "dns_ai": "104.18.29.234",
@@ -338,6 +353,11 @@
     "auth.anthropic.com": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.88"
+    },
+    "auth.claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
       "geohide": "159.194.200.33"
     },
     "auth.deepl.com": {
@@ -583,9 +603,19 @@
     "claude.ai": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.67"
+    },
+    "claude.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "193.233.112.67"
     },
     "claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.68"
+    },
+    "claudeusercontent.com": {
       "astracat": "160.79.104.10",
       "dns_ai": "62.60.230.61",
       "geohide": "159.194.200.33"
@@ -612,6 +642,11 @@
     "code-with-me.jetbrains.com": {
       "astracat": "34.110.246.3",
       "geohide": "193.233.112.88"
+    },
+    "code.claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.68"
     },
     "code2art.jetbrains.com": {
       "astracat": "65.9.46.80",
@@ -692,7 +727,12 @@
     "console.anthropic.com": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.68"
+    },
+    "console.claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "193.233.112.67"
     },
     "console.x.ai": {
       "astracat": "8.6.112.0",
@@ -912,6 +952,16 @@
     "dl.teamviewer.com": {
       "geohide": "193.233.112.88"
     },
+    "docs.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.67"
+    },
+    "docs.claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.68"
+    },
     "docs.x.ai": {
       "astracat": "8.6.112.0",
       "dns_ai": "104.18.18.80",
@@ -945,6 +995,11 @@
       "geohide": "159.194.200.33"
     },
     "downloads.claude.ai": {
+      "astracat": "35.190.46.17",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.67"
+    },
+    "downloads.claude.com": {
       "astracat": "35.190.46.17",
       "dns_ai": "62.60.230.61",
       "geohide": "159.194.200.33"
@@ -1593,6 +1648,11 @@
       "astracat": "52.208.113.195",
       "geohide": "193.233.112.88"
     },
+    "mcp-proxy.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "159.194.200.33"
+    },
     "media.deezer.com": {
       "astracat": "34.110.218.108",
       "geohide": "159.194.200.33"
@@ -1950,7 +2010,7 @@
     "platform.claude.com": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.67"
+      "geohide": "159.194.200.33"
     },
     "platform.deezer.com": {
       "astracat": "95.100.107.144",
@@ -1996,6 +2056,11 @@
     },
     "preview.reve.art": {
       "geohide": "193.233.112.67"
+    },
+    "privacy.anthropic.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "193.233.112.68"
     },
     "proactivebackend-pa.googleapis.com": {
       "astracat": "217.60.179.6",
@@ -2145,7 +2210,7 @@
     "s-cdn.anthropic.com": {
       "astracat": "34.54.194.141",
       "dns_ai": "34.54.194.141",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.68"
     },
     "s.deepl.com": {
       "astracat": "217.60.179.6",
@@ -2353,12 +2418,17 @@
     "statsig.anthropic.com": {
       "astracat": "217.60.179.6",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.68"
     },
     "status.anthropic.com": {
       "astracat": "160.79.104.10",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.88"
+      "geohide": "193.233.112.67"
+    },
+    "status.claude.com": {
+      "astracat": "3.164.240.109",
+      "dns_ai": "62.60.230.61",
+      "geohide": "159.194.200.33"
     },
     "status.fmhy.net": {
       "geohide": "193.233.112.68"
@@ -2446,6 +2516,11 @@
     "support.broadcom.com": {
       "astracat": "162.159.140.167",
       "geohide": "193.233.112.88"
+    },
+    "support.claude.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "159.194.200.33"
     },
     "support.deepl.com": {
       "astracat": "216.198.54.11",
@@ -2840,7 +2915,7 @@
     "www.anthropic.com": {
       "astracat": "160.79.104.10",
       "dns_ai": "62.60.230.61",
-      "geohide": "193.233.112.88"
+      "geohide": "159.194.200.33"
     },
     "www.autodesk.com": {
       "astracat": "217.60.179.6",
@@ -2872,12 +2947,27 @@
     "www.claude.ai": {
       "astracat": "160.79.104.10",
       "dns_ai": "62.60.230.61",
-      "geohide": "159.194.200.33"
+      "geohide": "193.233.112.68"
     },
     "www.claude.com": {
       "astracat": "160.79.104.10",
       "dns_ai": "62.60.230.61",
-      "geohide": "159.194.200.33"
+      "geohide": "193.233.112.67"
+    },
+    "www.claude.site": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "160.79.104.10"
+    },
+    "www.claudemcpcontent.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "160.79.104.10",
+      "geohide": "160.79.104.10"
+    },
+    "www.claudeusercontent.com": {
+      "astracat": "160.79.104.10",
+      "dns_ai": "62.60.230.61",
+      "geohide": "193.233.112.67"
     },
     "www.deepl.com": {
       "astracat": "217.60.179.6",
