@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 import gc
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
+
+# Offscreen-Qt на Windows сам системных шрифтов не находит и рисует
+# запасным «Sans Serif»: латиница вдвое шире Segoe UI, кириллица —
+# квадратами. Тесты, считающие ширину текста, видели не то, что человек:
+# сцена fakedsplit в туре «не успевала» за круг только в тестах, на
+# настоящем Windows она укладывалась с запасом. Каталог задаётся до
+# первого QApplication — потом Qt его уже не перечитывает.
+if sys.platform == "win32":
+    os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
