@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections import OrderedDict
 
 
-_PATCH_MARK = "_zapretgui_icon_cache_installed"
+_PATCH_MARK = "_net67_icon_cache_installed"
 _MAX_RENDERERS = 512
 _MAX_SVG_TEXTS = 512
 _MAX_ICONS = 512

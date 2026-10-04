@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -57,13 +56,11 @@ class GeoSitesTests(unittest.TestCase):
         self.assertEqual(_GEO_SITES.service_for("ai"), "")
 
     def test_shipped_catalog_has_no_false_matches(self) -> None:
-        catalog = Path(__file__).resolve().parents[2] / "private_zapretgui/resources/system/hosts_catalog.sqlite3"
-        if not catalog.is_file():
-            self.skipTest("каталог hosts лежит в закрытом репозитории")
-        from hosts.catalog_repository import load_catalog
-        from hosts.proxy_domains import _build_services_profile_index
+        # Каталог net67 — JSON в json/hosts_catalog, читается тем же путём,
+        # что и в программе.
+        from hosts.geo_sites import load_geo_sites
 
-        geo_sites = build_geo_sites(_build_services_profile_index(load_catalog(catalog)))
+        geo_sites = load_geo_sites()
 
         self.assertEqual(geo_sites.service_for("claude.ai"), "Claude")
         self.assertTrue(geo_sites.service_for("chatgpt.com"))

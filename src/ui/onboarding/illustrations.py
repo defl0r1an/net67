@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import QSizePolicy, QWidget
 from qfluentwidgets import FluentIcon, TransparentToolButton, isDarkTheme, themeColor
 
 from ui.animation_policy import are_live_animations_enabled
+from ui.accessibility import set_control_accessibility
 from ui.fluent_widgets import set_tooltip
 
 
@@ -349,7 +350,9 @@ class TechniqueIllustration(QWidget):
         else:
             icon, text = FluentIcon.PAUSE, self._tr("onboarding.scene.pause", "Остановить анимацию")
         self.pause_button.setIcon(icon)
-        self.pause_button.setAccessibleName(text)
+        # Имя и описание для экранного диктора — тем же общим помощником,
+        # что у остальных кнопок тура: значок без текста диктор читает «кнопка».
+        set_control_accessibility(self.pause_button, name=text, description=text)
         set_tooltip(self.pause_button, text)
 
     # ── отрисовка ─────────────────────────────────────────────────────
