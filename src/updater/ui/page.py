@@ -272,6 +272,24 @@ class ServersPage(BasePage):
     def show_update_offer(self, version: str, release_notes: str) -> None:
         self.changelog_card.show_update(version, release_notes)
 
+    def ask_update_offer(self, version: str, release_notes: str) -> str:
+        """То же окно «Доступно обновление», что при запуске: install / skip / later."""
+        from config.build_info import APP_VERSION
+        from updater.server_config import GITHUB_REPO
+        from updater.ui.update_dialog import ask_update
+
+        # История пропущенных версий требует сети, а здесь поток окна:
+        # показываем найденный выпуск, как и стартовое окно без истории.
+        history = [{"version": version, "notes": str(release_notes or ""), "is_new": True}]
+        return ask_update(
+            self.window(),
+            current_version=str(APP_VERSION or ""),
+            target_version=version,
+            history=history,
+            source="GitHub",
+            release_url=f"https://github.com/{GITHUB_REPO}/releases/tag/v{version}",
+        )
+
     def hide_update_offer(self) -> None:
         self.changelog_card.hide()
 

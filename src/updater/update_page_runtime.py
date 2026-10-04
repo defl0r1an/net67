@@ -129,6 +129,7 @@ class UpdatePageView(Protocol):
     def set_update_check_enabled(self, enabled: bool) -> None: ...
     def set_auto_check_toggle_checked(self, enabled: bool) -> None: ...
     def show_update_channel_open_error(self, error: str) -> None: ...
+    def ask_update_offer(self, version: str, release_notes: str) -> str: ...
 
 
 class UpdatePageRuntime(QObject):
@@ -160,6 +161,9 @@ class UpdatePageRuntime(QObject):
         self._update_dpi_stop_runtime = OneShotWorkerRuntime()
         self._update_check_unsubscribe = None
         self._manual_check_token: int | None = None
+        # Человек сам нажал «Проверить»: найденное обновление показывается
+        # окном, как при запуске, а не только карточкой внизу страницы.
+        self._offer_dialog_pending = False
         self._cleanup_in_progress = False
         self._auto_check_load_state = UpdateLatestValueWorkerState(self._auto_check_load_runtime, empty_value=False)
         self._auto_check_save_state = UpdateLatestValueWorkerState(self._auto_check_save_runtime, empty_value=None)
@@ -712,6 +716,7 @@ class UpdatePageRuntime(QObject):
         if not self._can_start_new_check():
             return
 
+        self._offer_dialog_pending = True
         self._view.hide_update_offer()
         self._reset_found_update_state()
 
@@ -1637,8 +1642,34 @@ class UpdatePageRuntime(QObject):
             return
         self._finish_checking_workflow()
 
+        wants_dialog, self._offer_dialog_pending = self._offer_dialog_pending, False
         if self._found_state.is_available and self._can_accept_startup_present():
             self._offer_current_update()
+            if wants_dialog:
+                # После возврата из слота: окно модальное, и его цикл
+                # событий не должен идти внутри сигнала проверки.
+                QTimer.singleShot(0, self._present_update_dialog)
+
+    def _present_update_dialog(self) -> None:
+        """Окно «Доступно обновление» после ручной проверки на странице «Серверы».
+
+        Раньше ручная проверка показывала только карточку внизу страницы:
+        при запуске человек видел окно с изменениями и «Пропустить
+        версию», а здесь — строчку с кнопкой, и пропустить было нельзя.
+        Карточка остаётся: из неё можно поставить и после «Позже».
+        """
+        if self._cleanup_in_progress or not self._found_state.is_available:
+            return
+        if not self._can_start_install():
+            return
+        version = self._found_state.version
+        action = str(self._view.ask_update_offer(version, self._found_state.release_notes) or "")
+        if action == "install":
+            self.install_update()
+        elif action == "skip":
+            # Пропуск действует на предложение при запуске; на этой странице
+            # версию можно поставить и после пропуска.
+            self._updater_feature.remember_skipped_update(version)
 
     def _on_download_failed(self, error: str) -> None:
         if self._cleanup_in_progress:
