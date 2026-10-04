@@ -1,7 +1,7 @@
 {
   "name": "Claude",
   "category": "ai",
-  "icon": "fa5s.brain",
+  "icon": "simple:claude:CL",
   "icon_color": "#cc9b7a",
   "sort_order": 2,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Intel",
   "category": "other",
-  "icon": "fa5s.microchip",
+  "icon": "simple:intel:IN",
   "icon_color": "#0071C5",
   "sort_order": 55,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Destiny 2 и Marathon (ошибка TAPIR)",
   "category": "direct",
-  "icon": "fa5s.gamepad",
+  "icon": "simple:bungie:BU",
   "icon_color": "#8a6bd1",
   "sort_order": 104,
   "hosts": [

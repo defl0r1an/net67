@@ -1,7 +1,7 @@
 {
   "name": "Tailscale",
   "category": "other",
-  "icon": "fa5s.network-wired",
+  "icon": "simple:tailscale:TS",
   "icon_color": "#4A6EE0",
   "sort_order": 75,
   "domains": [

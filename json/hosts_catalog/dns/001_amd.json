@@ -1,7 +1,7 @@
 {
   "name": "AMD",
   "category": "other",
-  "icon": "fa5s.microchip",
+  "icon": "simple:amd:AM",
   "icon_color": "#ED1C24",
   "sort_order": 32,
   "domains": [

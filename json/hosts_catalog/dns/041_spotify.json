@@ -1,7 +1,7 @@
 {
   "name": "Spotify",
   "category": "other",
-  "icon": "fa5b.spotify",
+  "icon": "simple:spotify:SP",
   "icon_color": "#1db954",
   "sort_order": 11,
   "domains": [

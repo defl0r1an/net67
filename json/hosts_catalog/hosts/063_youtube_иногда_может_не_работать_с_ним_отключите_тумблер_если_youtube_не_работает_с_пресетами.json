@@ -1,7 +1,7 @@
 {
   "name": "YouTube (иногда может не работать с ним! Отключите тумблер если YouTube не работает с пресетами)",
   "category": "direct",
-  "icon": "fa5b.youtube",
+  "icon": "simple:youtube:YT",
   "icon_color": "#ff0000",
   "sort_order": 22,
   "hosts": [

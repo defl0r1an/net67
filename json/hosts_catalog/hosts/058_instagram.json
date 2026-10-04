@@ -1,7 +1,7 @@
 {
   "name": "Instagram",
   "category": "direct",
-  "icon": "fa5b.instagram",
+  "icon": "simple:instagram:IG",
   "icon_color": "#e4405f",
   "sort_order": 31,
   "hosts": [

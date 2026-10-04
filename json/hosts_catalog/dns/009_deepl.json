@@ -1,7 +1,7 @@
 {
   "name": "DeepL",
   "category": "other",
-  "icon": "fa5s.language",
+  "icon": "simple:deepl:DL",
   "icon_color": "#0f2b46",
   "sort_order": 14,
   "domains": [

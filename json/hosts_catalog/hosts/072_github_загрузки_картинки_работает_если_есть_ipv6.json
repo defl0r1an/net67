@@ -1,7 +1,7 @@
 {
   "name": "GitHub загрузки/картинки (работает если есть IPv6)",
   "category": "direct",
-  "icon": "fa5b.github",
+  "icon": "simple:github:GH",
   "icon_color": "#181717",
   "sort_order": 23,
   "hosts": [

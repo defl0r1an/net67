@@ -1,7 +1,7 @@
 {
   "name": "SketchUp",
   "category": "other",
-  "icon": "fa5s.cube",
+  "icon": "simple:sketchup:SU",
   "icon_color": "#D82B2B",
   "sort_order": 71,
   "domains": [

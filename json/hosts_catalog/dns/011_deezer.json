@@ -1,7 +1,7 @@
 {
   "name": "Deezer",
   "category": "other",
-  "icon": "fa5s.music",
+  "icon": "simple:deezer:DZ",
   "icon_color": "#A238FF",
   "sort_order": 42,
   "domains": [

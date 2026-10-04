@@ -1,7 +1,7 @@
 {
   "name": "Discord",
   "category": "direct",
-  "icon": "fa5b.discord",
+  "icon": "simple:discord:DI",
   "icon_color": "#5865f2",
   "sort_order": 21,
   "hosts": [

@@ -1,7 +1,7 @@
 {
   "name": "ElevenLabs",
   "category": "other",
-  "icon": "fa5s.microphone-alt",
+  "icon": "simple:elevenlabs:EL",
   "icon_color": "#ffffff",
   "sort_order": 16,
   "domains": [

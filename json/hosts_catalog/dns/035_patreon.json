@@ -1,7 +1,7 @@
 {
   "name": "Patreon",
   "category": "other",
-  "icon": "fa5b.patreon",
+  "icon": "simple:patreon:PA",
   "icon_color": "#FF424D",
   "sort_order": 66,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Chess",
   "category": "other",
-  "icon": "fa5s.chess-knight",
+  "icon": "simple:chessdotcom:CH",
   "icon_color": "#81B64C",
   "sort_order": 38,
   "domains": [

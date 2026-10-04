@@ -1,7 +1,7 @@
 {
   "name": "TikTok",
   "category": "other",
-  "icon": "fa5b.tiktok",
+  "icon": "simple:tiktok:TT",
   "icon_color": "#ff0050",
   "sort_order": 10,
   "domains": [

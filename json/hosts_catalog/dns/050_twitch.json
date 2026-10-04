@@ -1,7 +1,7 @@
 {
   "name": "Twitch",
   "category": "other",
-  "icon": "fa5b.twitch",
+  "icon": "simple:twitch:TW",
   "icon_color": "#9146ff",
   "sort_order": 12,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Supercell",
   "category": "direct",
-  "icon": "fa5s.gamepad",
+  "icon": "simple:supercell:SC",
   "icon_color": "#f4b400",
   "sort_order": 30,
   "hosts": [

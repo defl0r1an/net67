@@ -1,7 +1,7 @@
 {
   "name": "Tuta",
   "category": "other",
-  "icon": "fa5s.envelope",
+  "icon": "simple:tuta:TU",
   "icon_color": "#D93951",
   "sort_order": 80,
   "domains": [

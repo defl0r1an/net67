@@ -1,7 +1,7 @@
 {
   "name": "Elgato",
   "category": "other",
-  "icon": "fa5s.video",
+  "icon": "simple:elgato:EG",
   "icon_color": "#2F80ED",
   "sort_order": 46,
   "domains": [

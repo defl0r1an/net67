@@ -1,7 +1,7 @@
 {
   "name": "Strava",
   "category": "other",
-  "icon": "fa5b.strava",
+  "icon": "simple:strava:ST",
   "icon_color": "#FC4C02",
   "sort_order": 73,
   "domains": [

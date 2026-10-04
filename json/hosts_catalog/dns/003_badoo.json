@@ -1,7 +1,7 @@
 {
   "name": "Badoo",
   "category": "other",
-  "icon": "fa5s.heart",
+  "icon": "simple:badoo:BA",
   "icon_color": "#783BF9",
   "sort_order": 34,
   "domains": [

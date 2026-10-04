@@ -1,7 +1,7 @@
 {
   "name": "OpenRouter",
   "category": "ai",
-  "icon": "fa5s.route",
+  "icon": "simple:openrouter:OR",
   "icon_color": "#6566f1",
   "sort_order": 3,
   "domains": [

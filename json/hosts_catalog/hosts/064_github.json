@@ -1,7 +1,7 @@
 {
   "name": "GitHub",
   "category": "direct",
-  "icon": "fa5b.github",
+  "icon": "simple:github:GH",
   "icon_color": "#181717",
   "sort_order": 24,
   "hosts": [

@@ -1,7 +1,7 @@
 {
   "name": "Web Archive",
   "category": "other",
-  "icon": "fa5s.archive",
+  "icon": "simple:internetarchive:IA",
   "icon_color": "#9E9E9E",
   "sort_order": 84,
   "domains": [

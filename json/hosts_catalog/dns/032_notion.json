@@ -1,7 +1,7 @@
 {
   "name": "Notion",
   "category": "other",
-  "icon": "fa5s.sticky-note",
+  "icon": "simple:notion:NO",
   "icon_color": "#ffffff",
   "sort_order": 13,
   "domains": [

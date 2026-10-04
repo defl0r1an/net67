@@ -1,7 +1,7 @@
 {
   "name": "Broadcom",
   "category": "other",
-  "icon": "fa5s.broadcast-tower",
+  "icon": "simple:broadcom:BR",
   "icon_color": "#CC092F",
   "sort_order": 35,
   "domains": [

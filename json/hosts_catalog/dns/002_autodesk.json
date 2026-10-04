@@ -1,7 +1,7 @@
 {
   "name": "Autodesk",
   "category": "other",
-  "icon": "fa5s.drafting-compass",
+  "icon": "simple:autodesk:AU",
   "icon_color": "#0696D7",
   "sort_order": 33,
   "domains": [

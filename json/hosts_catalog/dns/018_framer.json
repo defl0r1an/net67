@@ -1,7 +1,7 @@
 {
   "name": "Framer",
   "category": "other",
-  "icon": "fa5s.shapes",
+  "icon": "simple:framer:FR",
   "icon_color": "#0055FF",
   "sort_order": 49,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Telegram (работает только веб-версия)",
   "category": "direct",
-  "icon": "fa5b.telegram-plane",
+  "icon": "simple:telegram:TG",
   "icon_color": "#2aabee",
   "sort_order": 20,
   "hosts": [

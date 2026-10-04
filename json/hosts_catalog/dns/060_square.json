@@ -1,7 +1,7 @@
 {
   "name": "Square",
   "category": "other",
-  "icon": "fa5s.credit-card",
+  "icon": "simple:square:SQ",
   "icon_color": "#006aff",
   "sort_order": 20,
   "domains": [

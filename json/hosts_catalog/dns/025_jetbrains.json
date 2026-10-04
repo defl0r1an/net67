@@ -1,7 +1,7 @@
 {
   "name": "JetBrains",
   "category": "other",
-  "icon": "fa5s.code",
+  "icon": "simple:jetbrains:JB",
   "icon_color": "#fe315d",
   "sort_order": 17,
   "domains": [

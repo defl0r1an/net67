@@ -1,7 +1,7 @@
 {
   "name": "Guilded",
   "category": "other",
-  "icon": "fa5s.shield-alt",
+  "icon": "simple:guilded:GU",
   "icon_color": "#F5C400",
   "sort_order": 53,
   "domains": [

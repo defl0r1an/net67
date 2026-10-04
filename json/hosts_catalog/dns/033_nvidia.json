@@ -1,7 +1,7 @@
 {
   "name": "Nvidia",
   "category": "other",
-  "icon": "fa5s.microchip",
+  "icon": "simple:nvidia:NV",
   "icon_color": "#76B900",
   "sort_order": 64,
   "domains": [

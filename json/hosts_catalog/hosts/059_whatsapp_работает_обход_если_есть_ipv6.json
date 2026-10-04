@@ -1,7 +1,7 @@
 {
   "name": "WhatsApp (работает обход если есть IPv6)",
   "category": "direct",
-  "icon": "fa5b.whatsapp",
+  "icon": "simple:whatsapp:WA",
   "icon_color": "#25d366",
   "sort_order": 25,
   "hosts": [

@@ -1,7 +1,7 @@
 {
   "name": "Imgur",
   "category": "other",
-  "icon": "fa5s.images",
+  "icon": "simple:imgur:IM",
   "icon_color": "#1BB76E",
   "sort_order": 54,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Linear.app",
   "category": "other",
-  "icon": "fa5s.tasks",
+  "icon": "simple:linear:LI",
   "icon_color": "#5E6AD2",
   "sort_order": 57,
   "domains": [

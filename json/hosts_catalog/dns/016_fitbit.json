@@ -1,7 +1,7 @@
 {
   "name": "Fitbit",
   "category": "other",
-  "icon": "fa5s.heartbeat",
+  "icon": "simple:fitbit:FB",
   "icon_color": "#00B0B9",
   "sort_order": 47,
   "domains": [

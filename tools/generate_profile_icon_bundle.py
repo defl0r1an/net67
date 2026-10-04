@@ -26,6 +26,7 @@ if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
 BUNDLE_PATH = PROJECT_SRC / "profile" / "ui" / "simple_icons_bundle.py"
+HOSTS_CATALOG_DIR = PROJECT_ROOT / "json" / "hosts_catalog"
 
 _HEADER = '''"""Бандл simple-иконок профилей. СГЕНЕРИРОВАНО — НЕ редактировать вручную.
 
@@ -49,11 +50,32 @@ __all__ = ["SIMPLE_ICON_SVGS"]
 '''
 
 
+def _simple_slug(icon_name: str) -> str:
+    if not icon_name.startswith("simple:"):
+        return ""
+    slug = icon_name.removeprefix("simple:").partition(":")[0]
+    return slug.strip().lower().replace("-", "")
+
+
+def collect_hosts_catalog_slugs() -> set[str]:
+    """Слаги логотипов сервисов hosts: поле icon в json/hosts_catalog/{dns,hosts}."""
+    import json
+
+    slugs: set[str] = set()
+    for sub in ("dns", "hosts"):
+        for path in sorted((HOSTS_CATALOG_DIR / sub).glob("*.json")):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            slug = _simple_slug(str(data.get("icon") or ""))
+            if slug:
+                slugs.add(slug)
+    return slugs
+
+
 def collect_catalog_slugs() -> list[str]:
     """Собирает уникальные simple-слаги из каталога иконок профилей."""
     import profile.icons as profile_icons
 
-    slugs: set[str] = set()
+    slugs: set[str] = collect_hosts_catalog_slugs()
     for attr_name in dir(profile_icons):
         attr = getattr(profile_icons, attr_name)
         if not isinstance(attr, dict):
@@ -110,7 +132,8 @@ def main() -> int:
         print(f"ОШИБКА: в simplepycons не найдены слаги: {', '.join(missing)}", file=sys.stderr)
         return 1
 
-    BUNDLE_PATH.write_text("".join(lines), encoding="utf-8")
+    # Байтами, а не write_text: на Windows тот пишет CRLF, а исходники в LF.
+    BUNDLE_PATH.write_bytes("".join(lines).encode("utf-8"))
     print(f"Записан {BUNDLE_PATH.relative_to(PROJECT_ROOT)}: {len(slugs)} иконок.")
     return 0
 
