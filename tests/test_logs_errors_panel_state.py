@@ -78,7 +78,7 @@ class ErrorsPanelWiringTests(unittest.TestCase):
         raise AssertionError(f"{name} не найден в странице логов")
 
     def test_adding_an_error_repaints_the_panel(self) -> None:
-        self.assertIn("_apply_errors_panel_state", self._method_source("_add_error"))
+        self.assertIn("_apply_errors_panel_state", self._method_source("_add_errors"))
 
     def test_clearing_errors_repaints_the_panel(self) -> None:
         self.assertIn("_apply_errors_panel_state", self._method_source("_clear_errors"))

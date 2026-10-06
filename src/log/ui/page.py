@@ -36,7 +36,7 @@ from ui.fluent_widgets import QuickActionsBar, SettingsCard, set_tooltip
 from ui.log_limits import MAIN_LOG_VIEW_MAX_LINES
 from log.ui.logs_build import build_logs_management_tab_ui, build_logs_primary_tab_ui, build_logs_secondary_panels_ui
 from log.ui.runtime_helpers import (
-    append_error,
+    append_errors,
     clear_errors,
     compute_errors_text_height,
     errors_count_text,
@@ -101,6 +101,23 @@ EXCLUDE_PATTERNS = [
     r'\[POOL\].*ошибка',       # Ошибки пула серверов (fallback работает)
     r'Theme error:.*NoneType', # Ошибки темы при инициализации (временные)
 ]
+
+
+# Сколько строк журнала вставляется в поле за один проход цикла Qt. При первом
+# открытии страницы приходит снимок до 1 МиБ; одним куском он заметно
+# подвешивает интерфейс.
+LOG_APPEND_CHUNK_LINES = 500
+
+
+def _split_log_append_chunk(text: str, max_lines: int) -> tuple[str, str]:
+    """Отделяет от текста первые max_lines строк вместе с переводами строк."""
+    position = 0
+    for _ in range(max(1, int(max_lines))):
+        newline = text.find("\n", position)
+        if newline < 0:
+            return text, ""
+        position = newline + 1
+    return text[:position], text[position:]
 
 
 def update_logs_tabs_accessibility(pivot, *, current: object | None = None, language: str = "ru") -> None:
@@ -1352,15 +1369,21 @@ class LogsPage(BasePage):
         QTimer.singleShot(0, self._flush_pending_log_text_append)
 
     def _flush_pending_log_text_append(self):
-        """Вставляет накопленные строки лога в поле одним обновлением GUI."""
+        """Вставляет очередную порцию накопленных строк лога в поле."""
         text = str(self.__dict__.get("_pending_log_text_append", "") or "")
-        self._pending_log_text_append = ""
-        self._log_text_append_scheduled = False
-        if self._cleanup_in_progress:
+        if self._cleanup_in_progress or not text:
+            self._pending_log_text_append = ""
+            self._log_text_append_scheduled = False
             return
-        if not text:
-            return
-        self._append_text_now(text)
+        chunk, rest = _split_log_append_chunk(text, LOG_APPEND_CHUNK_LINES)
+        self._pending_log_text_append = rest
+        if rest:
+            # Остаток вставит следующий проход цикла Qt: между порциями
+            # интерфейс успевает ответить на действия пользователя.
+            QTimer.singleShot(0, self._flush_pending_log_text_append)
+        else:
+            self._log_text_append_scheduled = False
+        self._append_text_now(chunk)
 
     def _append_text_now(self, text: str):
         """Добавляет уже собранный текст в виджет лога."""
@@ -1391,12 +1414,15 @@ class LogsPage(BasePage):
 
         # Проверяем на ошибки только по новым строкам
         try:
+            error_lines = []
             for line in text.splitlines():
                 clean_line = (line or "").rstrip()
                 if not clean_line:
                     continue
                 if self._error_pattern.search(clean_line) and not self._exclude_pattern.search(clean_line):
-                    self._add_error(clean_line)
+                    error_lines.append(clean_line)
+            if error_lines:
+                self._add_errors(error_lines)
         except Exception:
             pass
 
@@ -1442,6 +1468,8 @@ class LogsPage(BasePage):
     def _clear_log_view_silent(self) -> None:
         self.log_text.clear()
         self._log_text_cache = ""
+        # Ещё не вставленные порции относятся к очищенному виду.
+        self._pending_log_text_append = ""
 
     @property
     def _log_text_cache(self) -> str:
@@ -1637,16 +1665,16 @@ class LogsPage(BasePage):
         if self.errors_text.height() != target_height:
             self.errors_text.setFixedHeight(target_height)
             
-    def _add_error(self, text: str):
-        """Добавляет ошибку в панель ошибок"""
+    def _add_errors(self, lines: list[str]):
+        """Добавляет пачку ошибок в панель одним пересчётом счётчика и высоты"""
         if not self._ensure_logs_secondary_panels():
             return
-        self._errors_count = append_error(
+        self._errors_count = append_errors(
             errors_text=self.errors_text,
             errors_count_label=self.errors_count_label,
             tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
             current_count=self._errors_count,
-            text=text,
+            lines=lines,
         )
         # Порядок важен: рамку сначала надо показать, иначе высоту
         # считать не по чему.
