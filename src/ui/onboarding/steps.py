@@ -357,6 +357,10 @@ _TOUR_STEPS: tuple[TourStep, ...] = (
     ),
     TourStep("presets_toolbar", _page_target("presets_toolbar"), page="user_presets", branch=_PRESETS),
     TourStep("profiles_list", _page_target("profiles_list"), page="preset_setup", target_optional=True),
+    # Счётчик «3 из 5» новичок читает как недоделку и включает всё подряд.
+    # В основной ветке хватает фразы на шаге profiles_list, а подробный
+    # разбор плитки — в ветке про пресеты, рядом со строкой профиля.
+    TourStep("profile_group", _page_target("first_group"), page="preset_setup", branch=_PRESETS),
     TourStep("profile_row", _page_target("first_profile"), page="preset_setup", branch=_PRESETS),
     TourStep("profile_menu", _page_target("profile_menu"), page="preset_setup", page_state="profile_menu", branch=_PRESETS),
     TourStep("profiles_toolbar", _page_target("profiles_toolbar"), page="preset_setup", branch=_PRESETS),
