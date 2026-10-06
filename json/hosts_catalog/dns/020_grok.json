@@ -1,8 +1,8 @@
 {
   "name": "Grok",
   "category": "ai",
-  "icon": "fa5b.twitter",
-  "icon_color": "#1da1f2",
+  "icon": "own:grok:GR",
+  "icon_color": null,
   "sort_order": 5,
   "domains": [
     {

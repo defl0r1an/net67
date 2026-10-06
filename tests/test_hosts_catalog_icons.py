@@ -30,12 +30,30 @@ class CatalogIconsTests(unittest.TestCase):
         self.assertEqual(globes, [])
 
     def test_icons_have_a_colour(self) -> None:
+        # null — только у одноцветных логотипов (Grok, Manus): плитка рисует
+        # их цветом текста темы, иначе на светлой или тёмной теме они пропадут.
         colourless = []
         for path in sorted(list((CATALOG / "dns").glob("*.json")) + list((CATALOG / "hosts").glob("*.json"))):
             data = json.loads(path.read_text(encoding="utf-8"))
-            if not str(data.get("icon_color") or "").startswith("#"):
+            color = data.get("icon_color")
+            if color is None and str(data.get("icon") or "").startswith("own:"):
+                continue
+            if not str(color or "").startswith("#"):
                 colourless.append(data.get("name", path.name))
         self.assertEqual(colourless, [])
+
+    def test_every_own_logo_is_drawn(self) -> None:
+        """Логотипы, которых нет в Simple Icons (OpenAI убрали оттуда), — свои SVG."""
+        from profile.ui.own_icons import OWN_ICON_SVGS
+
+        names = {}
+        for path in sorted(list((CATALOG / "dns").glob("*.json")) + list((CATALOG / "hosts").glob("*.json"))):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            icon = str(data.get("icon") or "")
+            if icon.startswith("own:"):
+                names[data.get("name", path.name)] = icon.removeprefix("own:").partition(":")[0]
+        self.assertEqual(names.get("ChatGPT & Sora (OpenAI)"), "openai")
+        self.assertEqual({name: slug for name, slug in names.items() if slug not in OWN_ICON_SVGS}, {})
 
     def test_every_brand_logo_is_in_the_bundle(self) -> None:
         """Логотип, которого нет в бандле, рисуется квадратом с буквами.

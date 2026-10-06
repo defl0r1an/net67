@@ -1,7 +1,7 @@
 {
   "name": "Canva",
   "category": "other",
-  "icon": "fa5s.palette",
+  "icon": "own:canva:CA",
   "icon_color": "#00c4cc",
   "sort_order": 15,
   "domains": [

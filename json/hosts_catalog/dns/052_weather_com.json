@@ -1,7 +1,7 @@
 {
   "name": "Weather.com",
   "category": "other",
-  "icon": "fa5s.cloud-sun",
+  "icon": "simple:theweatherchannel:TW",
   "icon_color": "#1E6FD9",
   "sort_order": 83,
   "domains": [

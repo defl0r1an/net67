@@ -1,7 +1,7 @@
 {
   "name": "AMD",
   "category": "other",
-  "icon": "simple:amd:AM",
+  "icon": "own:amdarrow:AM",
   "icon_color": "#ED1C24",
   "sort_order": 32,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Tableau",
   "category": "other",
-  "icon": "fa5s.chart-bar",
+  "icon": "own:tableau:TB",
   "icon_color": "#E97627",
   "sort_order": 74,
   "domains": [

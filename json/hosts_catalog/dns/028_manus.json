@@ -1,8 +1,8 @@
 {
   "name": "Manus",
   "category": "ai",
-  "icon": "fa5s.robot",
-  "icon_color": "#7c3aed",
+  "icon": "own:manus:MA",
+  "icon_color": null,
   "sort_order": 6,
   "domains": [
     {

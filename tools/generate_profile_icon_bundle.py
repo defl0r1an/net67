@@ -1,8 +1,9 @@
 """Генератор бандла simple-иконок для профилей.
 
 Извлекает из пакета simplepycons ТОЛЬКО те SVG, которые реально используются
-каталогом иконок профилей (profile/icons.py), и записывает их в сгенерированный
-модуль src/profile/ui/simple_icons_bundle.py.
+каталогом иконок профилей (profile/icons.py), каталогом hosts
+(json/hosts_catalog) и списком DNS-серверов (dns/dns_providers.py), и
+записывает их в сгенерированный модуль src/profile/ui/simple_icons_bundle.py.
 
 Зачем: импорт simplepycons тянет ~3400 модулей (~2.6с и десятки МБ памяти),
 поэтому в рантайме приложения он не используется вообще. simplepycons нужен
@@ -12,8 +13,10 @@
     PYTHONPATH=src python tools/generate_profile_icon_bundle.py
 
 После добавления нового сервиса с иконкой "simple:<slug>:<fallback>" в
-profile/icons.py — перезапустить генератор. Тест
-tests/test_profile_icon_bundle.py упадёт, если бандл не покрывает каталог.
+profile/icons.py, в каталог hosts или в dns/dns_providers.py — перезапустить
+генератор. Тесты tests/test_profile_icon_bundle.py,
+tests/test_hosts_catalog_icons.py и tests/test_dns_provider_icons.py упадут,
+если бандл не покрывает каталоги.
 """
 from __future__ import annotations
 
@@ -71,11 +74,23 @@ def collect_hosts_catalog_slugs() -> set[str]:
     return slugs
 
 
+def collect_dns_provider_slugs() -> set[str]:
+    """Собирает simple-слаги DNS-серверов со страницы «Настройка DNS»."""
+    from dns.dns_providers import DNS_PROVIDERS
+
+    return {
+        slug
+        for providers in DNS_PROVIDERS.values()
+        for data in providers.values()
+        if (slug := _simple_slug(str(data.get("icon", "") or "")))
+    }
+
+
 def collect_catalog_slugs() -> list[str]:
-    """Собирает уникальные simple-слаги из каталога иконок профилей."""
+    """Собирает уникальные simple-слаги из каталогов профилей, hosts и DNS."""
     import profile.icons as profile_icons
 
-    slugs: set[str] = collect_hosts_catalog_slugs()
+    slugs: set[str] = collect_hosts_catalog_slugs() | collect_dns_provider_slugs()
     for attr_name in dir(profile_icons):
         attr = getattr(profile_icons, attr_name)
         if not isinstance(attr, dict):

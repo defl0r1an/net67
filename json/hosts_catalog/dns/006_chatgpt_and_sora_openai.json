@@ -1,7 +1,7 @@
 {
   "name": "ChatGPT & Sora (OpenAI)",
   "category": "ai",
-  "icon": "fa5s.robot",
+  "icon": "own:openai:AI",
   "icon_color": "#10a37f",
   "sort_order": 0,
   "domains": [

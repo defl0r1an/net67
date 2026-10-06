@@ -1,7 +1,7 @@
 {
   "name": "Oracle",
   "category": "other",
-  "icon": "fa5s.database",
+  "icon": "own:oracle:OR",
   "icon_color": "#F80000",
   "sort_order": 65,
   "domains": [
