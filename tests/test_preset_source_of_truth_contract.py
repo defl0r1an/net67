@@ -306,7 +306,11 @@ class SaveNormalizationTests(unittest.TestCase):
             with self.subTest(preset=name):
                 self.assertEqual(normalize_preset_source_for_save(text, ENGINE_WINWS2), text)
                 _assert_block_invariants(self, text, text)
-                self.assertIn("# BuiltinVersion: 2.42", text.split("\n")[:5])
+                version = next(
+                    (line for line in text.split("\n")[:5] if line.startswith("# BuiltinVersion: ")), ""
+                )
+                # Версия только растёт: после переименования профилей у части пресетов 2.43.
+                self.assertGreaterEqual(float(version.removeprefix("# BuiltinVersion: ") or 0), 2.42)
 
     def test_every_builtin_winws2_preset_passes_launch_validation(self) -> None:
         from winws_runtime.preset_launch_text import (

@@ -54,16 +54,22 @@ def apply_strategy_to_named_profiles(
         for profile in preset.profiles
     }
 
+    from autotune.targets import profile_name_candidates
+
     updated: list[str] = []
     for name in wanted:
-        profile = by_name.get(name)
+        # В своём пресете человека профиль может носить прежнее имя.
+        profile = next(
+            (by_name[candidate] for candidate in profile_name_candidates(name) if candidate in by_name),
+            None,
+        )
         if profile is None:
             # Не молчим: расхождение имён — это тихая потеря правки.
             log(f"Автоподбор: профиля «{name}» нет в пресете {file_name}", "⚠ WARNING")
             continue
         preset = with_profile_strategy_lines(preset, profile.index, list(lines))
         preset = with_profile_enabled(preset, profile.index, True)
-        updated.append(name)
+        updated.append(str(getattr(profile, "name", "") or name).strip())
 
     if not updated:
         return ()

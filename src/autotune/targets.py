@@ -26,6 +26,25 @@ CATCH_ALL_UDP_PROFILE = "Все сайты UDP (айпи)"
 #: Общий профиль по адресам для TCP.
 CATCH_ALL_TCP_PROFILE = "General list TCP"
 
+#: Прежние имена профилей, до схемы «Сервис · роль».
+#:
+#: Встроенные пресеты переименованы, а свои пресеты человека программа не
+#: трогает — там остались старые имена. Найденная стратегия кладётся по
+#: имени (autotune/apply.py), и без этих запасных имён у тех, кто правил
+#: пресет сам, автоподбор молча перестал бы чинить YouTube и Discord.
+PROFILE_NAME_ALIASES: dict[str, tuple[str, ...]] = {
+    "YouTube · сайт и приложение": ("youtube.com (интерфейс)",),
+    "YouTube · видео (googlevideo.com)": ("googlevideo.com (CDN сервера)",),
+    "YouTube · быстрый протокол QUIC": ("youtube.com (QUIC)",),
+    "Discord · сайт и приложение": ("discord.com",),
+}
+
+
+def profile_name_candidates(name: str) -> tuple[str, ...]:
+    """Имя профиля и его прежние имена — в таком порядке."""
+    clean = str(name or "").strip()
+    return (clean, *PROFILE_NAME_ALIASES.get(clean, ())) if clean else ()
+
 
 @dataclass(frozen=True, slots=True)
 class Target:
@@ -57,9 +76,9 @@ TARGETS: tuple[Target, ...] = (
         # YouTube правится отдельно: у него свои профили под интерфейс,
         # видео и QUIC, и общий профиль их не заменяет.
         profiles=(
-            "youtube.com (интерфейс)",
-            "googlevideo.com (CDN сервера)",
-            "youtube.com (QUIC)",
+            "YouTube · сайт и приложение",
+            "YouTube · видео (googlevideo.com)",
+            "YouTube · быстрый протокол QUIC",
             CATCH_ALL_UDP_PROFILE,
         ),
     ),
@@ -68,7 +87,7 @@ TARGETS: tuple[Target, ...] = (
         title="Discord",
         url="https://discord.com",
         scan_target="discord.com",
-        profiles=("discord.com", CATCH_ALL_TCP_PROFILE, CATCH_ALL_UDP_PROFILE),
+        profiles=("Discord · сайт и приложение", CATCH_ALL_TCP_PROFILE, CATCH_ALL_UDP_PROFILE),
     ),
     Target(
         key="rutracker",

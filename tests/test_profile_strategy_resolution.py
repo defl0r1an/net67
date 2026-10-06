@@ -18,6 +18,14 @@ from profile.strategy_catalog import load_strategy_catalogs
 from profile.strategy_shape import composite_identity, is_lua_desync_line, is_range_line, strategy_shape
 
 
+def _builtin_version(text: str) -> float:
+    """Номер из строки «# BuiltinVersion: X.YY»; 0, если строки нет."""
+    for line in text.splitlines()[:5]:
+        if line.startswith("# BuiltinVersion: "):
+            return float(line.removeprefix("# BuiltinVersion: ").strip())
+    return 0.0
+
+
 class ProfileStrategyResolutionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -30,27 +38,27 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
         )
 
     def test_default_v5_youtube_tcp_strategy_is_detected_by_lua_desync_lines(self) -> None:
-        profile = self._profile_by_name("youtube.com (интерфейс)")
+        profile = self._profile_by_name("YouTube · сайт и приложение")
 
         self.assertIn("--out-range=-d8", profile.strategy.strategy_lines)
         self.assertEqual(self._resolved_strategy_id(profile), "stock_default_v5_11")
 
     def test_default_v5_udp_strategy_is_detected_when_payload_is_in_catalog(self) -> None:
-        profile = self._profile_by_name("youtube.com (QUIC)")
+        profile = self._profile_by_name("YouTube · быстрый протокол QUIC")
 
         self.assertIn("--out-range=-n8", profile.strategy.strategy_lines)
         self.assertIn("--payload=all", profile.strategy.strategy_lines)
         self.assertEqual(self._resolved_strategy_id(profile), "fake_2_n2")
 
     def test_default_v5_discord_and_telegram_strategies_are_detected(self) -> None:
-        self.assertEqual(self._resolved_strategy_id(self._profile_by_name("discord.com")), "stock_default_v5_12")
+        self.assertEqual(self._resolved_strategy_id(self._profile_by_name("Discord · сайт и приложение")), "stock_default_v5_12")
         self.assertEqual(self._resolved_strategy_id(self._profile_by_name("Telegram")), "stock_default_v5_13")
 
     def test_duplicate_ready_strategy_args_are_still_detected_as_ready_strategy(self) -> None:
         preset = parse_preset_text(
             "\n".join(
                 (
-                    "--name=googlevideo.com (CDN сервера)",
+                    "--name=YouTube · видео (googlevideo.com)",
                     "--filter-tcp=80,443",
                     "--hostlist=lists/googlevideo.txt",
                     "",
@@ -214,7 +222,9 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                     list(expected_profiles),
                 )
                 self.assertNotIn("--name=Исключения (RU сайты)", text)
-                self.assertIn("# BuiltinVersion: 2.42", text.splitlines()[:5])
+                # Версия только растёт: переименование профилей подняло её до 2.43
+                # у затронутых пресетов, остальные остались на 2.42.
+                self.assertGreaterEqual(_builtin_version(text), 2.42)
 
                 for profile in exclusion_profiles:
                     self.assertEqual(
@@ -297,8 +307,8 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                 ),
                 "",
             )
-            if version_line != "# BuiltinVersion: 2.42":
-                offenders.append(f"{path.name}: версия набора не 2.42")
+            if _builtin_version(version_line) < 2.42:
+                offenders.append(f"{path.name}: версия набора ниже 2.42")
 
         self.assertGreater(checked_presets, 0)
         self.assertEqual(offenders, [])
@@ -307,7 +317,7 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
         path = Path("src/presets/builtin/winws2/general EXP 1.10.0 (game filter).txt")
         preset = parse_preset_text(path.read_text(encoding="utf-8"), engine="winws2", source_name=path.name)
 
-        media = next(profile for profile in preset.profiles if profile.display_name == "discord.media (voice RTC)")
+        media = next(profile for profile in preset.profiles if profile.display_name == "Discord · голос и видео (discord.media)")
         self.assertEqual(self._resolved_strategy_id(media), "flowseal_exp_1100_discord_media")
         self.assertEqual(
             profile_strategy_shape(media).payload_scopes,

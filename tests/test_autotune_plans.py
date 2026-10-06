@@ -94,8 +94,19 @@ class ApplyTargetTests(unittest.TestCase):
 
         profiles = profiles_to_update("youtube")
 
-        self.assertIn("youtube.com (интерфейс)", profiles)
+        self.assertIn("YouTube · сайт и приложение", profiles)
         self.assertIn(CATCH_ALL_UDP_PROFILE, profiles)
+
+    def test_target_profiles_exist_in_the_default_preset(self) -> None:
+        """Имя цели, которого нет во встроенном пресете, — тихая потеря правки."""
+        import re
+
+        from autotune.targets import TARGETS
+
+        names = set(re.findall(r"^--name=(.+)$", PRESET.read_text(encoding="utf-8"), re.M))
+        for target in TARGETS:
+            with self.subTest(target=target.key):
+                self.assertEqual([name for name in target.profiles if name not in names], [])
 
     def test_every_target_also_updates_a_catch_all(self) -> None:
         from autotune.targets import (
@@ -225,7 +236,7 @@ class NamedProfileApplyTests(unittest.TestCase):
         updated = apply_strategy_to_named_profiles(
             presets_feature=feature,
             strategy_lines=["--lua-desync=fake:blob=tls7"],
-            profile_names=["youtube.com (интерфейс)", "Все сайты UDP (айпи)"],
+            profile_names=["YouTube · сайт и приложение", "Все сайты UDP (айпи)"],
         )
 
         self.assertEqual(len(updated), 2)
@@ -234,6 +245,28 @@ class NamedProfileApplyTests(unittest.TestCase):
             block = next(b for b in body.split("--new") if f"--name={name}\n" in b)
             with self.subTest(profile=name):
                 self.assertIn("blob=tls7", block, "стратегия не попала в профиль")
+
+    def test_own_preset_with_old_profile_name_still_receives_the_strategy(self) -> None:
+        """Свой пресет человека программа не переименовывает: там прежнее имя."""
+        from autotune.apply import apply_strategy_to_named_profiles
+        from autotune.targets import get_target
+
+        feature, saved = self._feature()
+        old_text = PRESET.read_text(encoding="utf-8").replace(
+            "--name=YouTube · сайт и приложение\n", "--name=youtube.com (интерфейс)\n"
+        )
+        self.assertIn("--name=youtube.com (интерфейс)\n", old_text)
+        feature.read_preset_source_by_file_name = lambda mode, name: old_text
+
+        updated = apply_strategy_to_named_profiles(
+            presets_feature=feature,
+            strategy_lines=["--lua-desync=fake:blob=tls7"],
+            profile_names=get_target("youtube").profiles,
+        )
+
+        self.assertIn("youtube.com (интерфейс)", updated)
+        block = next(b for b in saved["Стандартный 1.txt"].split("--new") if "--name=youtube.com (интерфейс)\n" in b)
+        self.assertIn("blob=tls7", block)
 
     def test_unknown_profile_is_skipped_not_invented(self) -> None:
         from autotune.apply import apply_strategy_to_named_profiles
