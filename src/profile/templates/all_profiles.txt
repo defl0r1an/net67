@@ -455,19 +455,19 @@
 
 --new
 
---name=js.rbxcdn.com
+--name=Roblox · скрипты сайта (js.rbxcdn.com)
 --filter-tcp=80-65535
 --hostlist=lists/js-rbxcdn-com.txt
 
 --new
 
---name=tr.rbxcdn.com
+--name=Roblox · картинки (tr.rbxcdn.com)
 --filter-tcp=443-65535
 --hostlist=lists/tr-rbxcdn-com.txt
 
 --new
 
---name=css.rbxcdn.com
+--name=Roblox · стили сайта (css.rbxcdn.com)
 --filter-tcp=80-65535
 --hostlist=lists/css-rbxcdn-com.txt
 

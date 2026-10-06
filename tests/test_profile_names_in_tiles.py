@@ -21,7 +21,8 @@ from profile.list_view_state import build_profile_list_view_state, profile_name_
 from profile.state import ProfileListItem
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ALL_PROFILES_PATH = PROJECT_ROOT / "private_zapretgui" / "resources" / "profile" / "templates" / "all_profiles.txt"
+# У net67 шаблоны профилей лежат в самом репозитории, а не в закрытой части.
+ALL_PROFILES_PATH = Path(__file__).resolve().parents[1] / "src" / "profile" / "templates" / "all_profiles.txt"
 BUILTIN_DIR = Path(__file__).resolve().parents[1] / "src" / "presets" / "builtin"
 
 # Прежние имена: во встроенных пресетах и шаблонах их больше быть не должно.
@@ -194,7 +195,10 @@ class ShippedProfileNamesTests(unittest.TestCase):
         self.assertEqual(sorted(template_names & set(OLD_NAMES)), [])
 
         offenders = []
-        for path in sorted(BUILTIN_DIR.glob("*/*.txt")):
+        # В программу попадает только builtin/winws2 (scripts/build_local.ps1,
+        # CI). Рядом лежит winws2_before_update — снимок 0.10.67, который
+        # ничто не читает; старые имена там никому не показываются.
+        for path in sorted((BUILTIN_DIR / "winws2").glob("*.txt")):
             for line in path.read_text(encoding="utf-8").splitlines():
                 for prefix in ("--name=", "--comment="):
                     if line.startswith(prefix) and line[len(prefix) :].strip() in OLD_NAMES:

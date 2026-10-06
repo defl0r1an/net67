@@ -53,7 +53,8 @@ class WhatsAppPresetCoverageTests(unittest.TestCase):
     def test_udp_profile_covers_calls_and_media(self) -> None:
         text = self._text()
         blocks = text.split("--new")
-        udp = [b for b in blocks if "--name=WhatsApp UDP wide" in b]
+        # До схемы «Сервис · роль» профиль назывался «WhatsApp UDP wide».
+        udp = [b for b in blocks if "--name=WhatsApp · звонки (UDP)" in b]
 
         self.assertTrue(udp, "нет UDP-профиля WhatsApp — звонки не заработают")
         block = udp[0]
