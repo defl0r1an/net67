@@ -69,6 +69,13 @@ class PostStartupHost:
         )
         return str(action), history
 
+    def is_window_shown(self) -> bool:
+        """Окно сейчас на экране: не свёрнуто и не убрано в трей."""
+        window = self._window
+        if window is None:
+            return False
+        return bool(window.isVisible()) and not bool(window.isMinimized())
+
     def show_whats_new(self, version: str, history) -> None:
         """Окно «Что нового» после установки новой версии."""
         from updater.ui.update_dialog import show_whats_new

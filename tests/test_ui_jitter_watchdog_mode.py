@@ -82,5 +82,89 @@ class JitterReportTests(unittest.TestCase):
         self.assertIn("Интерфейс не отвечает 3.2с", messages[0][0])
 
 
+
+class JitterBusyThreadsTests(unittest.TestCase):
+    """Рывок без питоновского стека: видно, какой фоновый поток держал GIL."""
+
+    def test_jitter_report_names_busy_background_threads(self) -> None:
+        messages: list[str] = []
+        watchdog = UiFreezeWatchdog(
+            **build_watchdog_settings(60),
+            log_fn=lambda message, _level: messages.append(message),
+            stack_fn=lambda: "<стек>",
+            busy_threads_fn=lambda: "  StartupQueue-lists: ipsets_manager.py:74 _normalize_ip_entry",
+        )
+
+        watchdog._report_freeze_started(0.085)
+
+        self.assertIn("Занятые фоновые потоки", messages[0])
+        self.assertIn("StartupQueue-lists", messages[0])
+
+    def test_report_without_busy_threads_has_no_empty_section(self) -> None:
+        messages: list[str] = []
+        watchdog = UiFreezeWatchdog(
+            **build_watchdog_settings(60),
+            log_fn=lambda message, _level: messages.append(message),
+            stack_fn=lambda: "<стек>",
+            busy_threads_fn=lambda: "",
+        )
+
+        watchdog._report_freeze_started(0.085)
+
+        self.assertNotIn("Занятые фоновые потоки", messages[0])
+
+    def test_real_freeze_report_stays_without_thread_list(self) -> None:
+        messages: list[str] = []
+        watchdog = UiFreezeWatchdog(
+            log_fn=lambda message, _level: messages.append(message),
+            stack_fn=lambda: "<стек>",
+            busy_threads_fn=lambda: "  worker: file.py:1 run",
+            thread_dump_min_seconds=1_000.0,
+        )
+
+        watchdog._report_freeze_started(2.5)
+
+        # Для настоящих зависаний есть отдельный файл со стеками всех потоков.
+        self.assertNotIn("Занятые фоновые потоки", messages[0])
+
+    def test_busy_thread_listing_shows_working_thread_and_skips_sleeping_one(self) -> None:
+        import threading
+        import time
+
+        from ui.ui_freeze_watchdog import _format_busy_threads
+
+        stop = threading.Event()
+        started = threading.Event()
+        # Флаг списком, а не stop.is_set(): в Python 3.14 is_set — питоновская
+        # функция, и снимок мог застать поток внутри неё, а не в цикле.
+        running = [True]
+
+        def net67_busy_loop() -> None:
+            started.set()
+            while running[0]:
+                sum(range(200))
+
+        def net67_sleeper() -> None:
+            stop.wait(10)
+
+        busy = threading.Thread(target=net67_busy_loop, name="net67-busy-worker", daemon=True)
+        idle = threading.Thread(target=net67_sleeper, name="net67-idle-worker", daemon=True)
+        busy.start()
+        idle.start()
+        try:
+            started.wait(2)
+            time.sleep(0.05)
+            listing = _format_busy_threads()
+        finally:
+            running[0] = False
+            stop.set()
+            busy.join(2)
+            idle.join(2)
+
+        self.assertIn("net67-busy-worker", listing)
+        self.assertIn("net67_busy_loop", listing)
+        self.assertNotIn("net67-idle-worker", listing)
+
+
 if __name__ == "__main__":
     unittest.main()

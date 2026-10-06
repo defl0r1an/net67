@@ -18,6 +18,7 @@ def install_update_check(
     updater_feature,
     notify,
     set_status,
+    idle_tasks,
 ) -> None:
     update_bridge = _UpdateCheckBridge(QCoreApplication.instance())
     startup_check_token: int | None = None
@@ -124,10 +125,15 @@ def install_update_check(
             _on_update_check_error(str(payload.get("error") or ""))
             return
         if payload.get("has_update"):
-            _on_update_found(
-                str(payload.get("version") or ""),
-                str(payload.get("release_notes") or ""),
-                payload,
+            # Окно обновления строится в GUI-потоке и забирает фокус, поэтому
+            # ждёт паузы пользователя: не выскакивает посреди клика. При окне
+            # в трее ждать нечего — показываем, как и раньше.
+            version = str(payload.get("version") or "")
+            release_notes = str(payload.get("release_notes") or "")
+            idle_tasks.add(
+                "UpdateOfferDialog",
+                lambda: _on_update_found(version, release_notes, payload),
+                needs_shown_window=False,
             )
             return
         _on_no_update(str(payload.get("version") or ""))
@@ -188,12 +194,21 @@ def install_update_check(
     )
 
 
-def install_whats_new(startup_host, *, updater_feature) -> None:
+#: «Что нового» ждёт, пока окно программы откроется и успокоится.
+_WHATS_NEW_DELAY_MS = 2500
+
+
+def install_whats_new(startup_host, *, updater_feature, idle_tasks) -> None:
     """После обновления один раз показывает, что изменилось в новой версии.
 
     Текст сохранён окном обновления перед установкой, сеть не нужна. Окно
     появляется вскоре после готовности интерфейса — раньше, чем проверка
     обновлений, которая отложена на двенадцать секунд.
+
+    Раньше окно открывалось по таймеру через 2,5 с, что бы человек в этот
+    момент ни делал и где бы ни было окно программы. Теперь оно идёт через
+    очередь пауз: ждёт, пока окно программы на экране, а мышь и клавиатура
+    молчат.
     """
 
     def _show() -> None:
@@ -213,6 +228,6 @@ def install_whats_new(startup_host, *, updater_feature) -> None:
         return
     bind_startup_gate(
         ready_signal,
-        lambda: schedule_after(2500, _show),
+        lambda: idle_tasks.add("WhatsNewDialog", _show, delay_ms=_WHATS_NEW_DELAY_MS),
         is_ready=lambda: bool(startup_host.startup_state.post_init_ready),
     )

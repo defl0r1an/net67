@@ -275,6 +275,13 @@ class HostWindowTests(unittest.TestCase):
         self.assertEqual(ask.call_args.kwargs["history"], history)
 
 
+class _ImmediateIdleTasks:
+    """Очередь пауз пользователя, которая в тесте выполняет задачу сразу."""
+
+    def add(self, _name, callback, *, delay_ms=0, needs_shown_window=True) -> None:
+        callback()
+
+
 class StartupFlowTests(unittest.TestCase):
     """Что делает программа с ответом из окна при запуске."""
 
@@ -310,7 +317,9 @@ class StartupFlowTests(unittest.TestCase):
             patch.object(post_startup_update, "enqueue_subsystem_task", side_effect=lambda _queue, _name, target: target()),
             patch.object(post_startup_update, "log"),
         ):
-            post_startup_update.install_update_check(host, updater_feature=feature, notify=Mock(), set_status=Mock())
+            post_startup_update.install_update_check(
+                host, updater_feature=feature, notify=Mock(), set_status=Mock(), idle_tasks=_ImmediateIdleTasks()
+            )
         return feature, host, page, history
 
     def test_install_remembers_the_changes_and_starts_the_update(self) -> None:
@@ -355,7 +364,7 @@ class StartupFlowTests(unittest.TestCase):
                 patch.object(post_startup_update, "schedule_after", side_effect=lambda _delay_ms, callback: callback()),
                 patch.object(post_startup_update, "log"),
             ):
-                post_startup_update.install_whats_new(host, updater_feature=feature)
+                post_startup_update.install_whats_new(host, updater_feature=feature, idle_tasks=_ImmediateIdleTasks())
             with self.subTest(pending=pending[0]):
                 self.assertEqual(host.show_whats_new.call_count, expected_calls)
 
