@@ -89,7 +89,11 @@ def route_window_to_page(window, page_name: PageName, tab_key: str = "") -> bool
 
 
 def persist_window_geometry(window) -> None:
-    window.window_geometry_runtime.persist_now(force=True)
+    # Сворачивание в трей — обычное действие пользователя: снимок геометрии
+    # берётся сразу, а запись в settings.json делает фоновый поток (и только
+    # если окно двигали). Синхронная запись (force=True) нужна при выходе
+    # из программы — её делает main/window_lifecycle_cleanup.py.
+    window.window_geometry_runtime.persist_now()
 
 
 def release_input_interaction_states(window) -> None:
