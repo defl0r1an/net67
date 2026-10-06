@@ -240,7 +240,7 @@ def profile_row_tooltip(item: ProfileDisplayItem) -> str:
     return "\n".join(lines)
 
 
-def row_for_profile(item: ProfileDisplayItem) -> dict[str, Any]:
+def row_for_profile(item: ProfileDisplayItem, *, header_icon_name: str = "") -> dict[str, Any]:
     match_lines = tuple(item.match_lines or ())
     ports = ports_label_from_match_lines(match_lines)
     description_parts = [
@@ -276,6 +276,9 @@ def row_for_profile(item: ProfileDisplayItem) -> dict[str, Any]:
         "group_name": item.group_name,
         "icon_name": icon.icon_name,
         "icon_color": icon.color if item.in_preset else "#888888",
+        # Тот же значок уже стоит в шапке плитки — в строке вместо него
+        # рисуется точка состояния.
+        "icon_in_header": bool(header_icon_name) and icon.icon_name == header_icon_name,
         "tooltip": tooltip,
     }
 
@@ -308,17 +311,59 @@ def build_profile_rows_from(
         group_items = tuple(sorted(group_items, key=profile_display_sort_key))
         group_name = str(group_items[0].group_name or group_key.title())
         expanded = group_expanded.get(group_key, True)
+        # Профиль «работает», если он есть в пресете и не выключен через
+        # --skip. Плитка показывает это как «3 из 5» и полоской по профилям.
+        active_flags = tuple(bool(item.in_preset and item.enabled) for item in group_items)
+        shared_icon = _shared_group_icon(group_items)
         rows.append({
             "kind": "folder",
             "group": group_key,
             "group_name": group_name,
             "collapsed": not expanded,
             "count": len(group_items),
+            "active_count": sum(active_flags),
+            "active_flags": active_flags,
+            "icon_name": shared_icon.icon_name if shared_icon is not None else "",
+            "icon_color": shared_icon.color if shared_icon is not None else "",
         })
         if not expanded and not str(search_query or "").strip():
             continue
-        rows.extend(row_for_profile(item) for item in group_items)
+        header_icon_name = shared_icon.icon_name if shared_icon is not None else ""
+        rows.extend(row_for_profile(item, header_icon_name=header_icon_name) for item in group_items)
     return rows
+
+
+_SITE_ICON_PREFIXES = ("simple:", "fa5b.")
+_INITIALS_ICON_PREFIX = "profile-initials:"
+
+
+def _shared_group_icon(group_items: tuple[ProfileDisplayItem, ...]):
+    """Значок группы для шапки плитки — значок её главного сайта.
+
+    В шапку идёт только значок сайта (YouTube, Discord). Служебные значки —
+    микрофон звонков, облако хостера — и значки из первых букв имени сайт не
+    обозначают и в шапку не выносятся. Сайт считается главным, когда его
+    значок носит больше половины профилей группы; профили со служебным
+    значком в этот счёт не входят. Профили с другим значком (vencord в группе
+    Discord) оставляют его у своей строки.
+    """
+    counts: dict[str, int] = {}
+    specs: dict[str, Any] = {}
+    counted_rows = 0
+    for item in group_items:
+        icon = resolve_profile_icon(item.display_name, tuple(item.match_lines or ()))
+        if icon.icon_name.startswith(_SITE_ICON_PREFIXES):
+            counts[icon.icon_name] = counts.get(icon.icon_name, 0) + 1
+            specs.setdefault(icon.icon_name, icon)
+            counted_rows += 1
+        elif icon.icon_name.startswith(_INITIALS_ICON_PREFIX):
+            counted_rows += 1
+    if not counts:
+        return None
+    icon_name, count = max(counts.items(), key=lambda entry: entry[1])
+    if count * 2 <= counted_rows:
+        return None
+    return specs[icon_name]
 
 
 def profile_matches_filter(
