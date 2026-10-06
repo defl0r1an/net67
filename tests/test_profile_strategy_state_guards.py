@@ -76,6 +76,33 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class ProfileStrategyStateRealSettingsFileTests(unittest.TestCase):
+    """Оценка доходит до settings.json и читается обратно.
+
+    Остальные тесты здесь подменяют чтение и запись настроек, и потому
+    пропустили поломку: нормализация settings.json принимала только ключи
+    name:/sig:, а профили давно помечены uid: — каждая запись выбрасывала
+    «работает», «не работает» и избранное.
+    """
+
+    def test_rating_of_uid_profile_survives_the_settings_file(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from settings import store as settings_store
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch("settings.store.MAIN_DIRECTORY", temp_dir):
+            store = ProfileStrategyStateStore()
+            store.set_strategy_state("uid:youtube", "tls_fake", rating="work", favorite=True)
+
+            self.assertTrue(Path(temp_dir, "settings", "settings.json").is_file())
+            self.assertIn("uid:youtube", settings_store.get_profile_strategy_state_settings()["profiles"])
+            self.assertEqual(
+                store.get_strategy_state("uid:youtube", "tls_fake"),
+                ProfileStrategyState(rating="work", favorite=True),
+            )
+
+
 class ProfileStrategyStateUidMigrationTests(unittest.TestCase):
     def test_uid_keys_are_accepted(self) -> None:
         data = {"version": 1, "profiles": {}}
