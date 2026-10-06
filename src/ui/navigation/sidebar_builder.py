@@ -473,6 +473,7 @@ def add_nav_item(
     initial_visible: bool | None = None,
     insert_index: int | None = None,
     pump_ui: bool = False,
+    launch_method: str | None = None,
 ) -> None:
     session = get_window_ui_session(window)
     if session is None:
@@ -491,7 +492,12 @@ def add_nav_item(
 
     icon = session.nav_icons.get(page_name, session.default_nav_icon)
     text = get_nav_label(window, page_name)
-    eager_pages = set(get_eager_page_names_for_method(window.get_launch_method()))
+    # Режим запуска читается из настроек под общим замком. Тот, кто строит
+    # сразу несколько пунктов, передаёт его готовым: в первую секунду после
+    # запуска замок заняты фоновые задачи, и чтение на каждый пункт меню
+    # задерживало кадр на 65–100 мс.
+    method = launch_method if launch_method else window.get_launch_method()
+    eager_pages = set(get_eager_page_names_for_method(method))
 
     if insert_index is not None:
         if page_name in eager_pages:
@@ -597,6 +603,7 @@ def _install_hidden_mode_nav_items(window) -> None:
             initial_visible=False,
             insert_index=_resolve_scroll_insert_index(window, page_name, method),
             pump_ui=False,
+            launch_method=method,
         )
         if page_name in session.nav_items:
             added_count += 1
@@ -657,6 +664,7 @@ def _add_sidebar_group(window, group_plan, initial_visibility, method=None) -> N
             page_name,
             pos_scroll,
             initial_visible=bool(initial_visibility.get(page_name, True)),
+            launch_method=method,
         )
 
 
