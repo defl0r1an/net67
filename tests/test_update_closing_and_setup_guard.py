@@ -166,14 +166,28 @@ class InstallerContractTests(unittest.TestCase):
         """Без этой строки после тихого обновления программа не открывалась."""
         from startup.single_instance import AFTER_UPDATE_ARG
 
-        entry = re.search(r"^Filename:.*Parameters: \"--after-update\".*\n.*$", self.iss, re.M)
-        self.assertIsNotNone(entry)
-        text = entry.group(0)
+        entries = re.findall(r"^Filename:.*Parameters: \"--after-update\".*\n.*$", self.iss, re.M)
+        auto = [text for text in entries if "Check: IsAutoUpdate" in text]
+        self.assertEqual(len(auto), 1)
+        text = auto[0]
         self.assertIn(AFTER_UPDATE_ARG, text)
         self.assertIn("Check: IsAutoUpdate", text)
         self.assertNotIn("skipifsilent", text)
         self.assertIn("shellexec", text)
         self.assertIn("function IsAutoUpdate(): Boolean;", self.iss)
+
+    def test_launch_checkbox_waits_for_setup_instead_of_exiting(self) -> None:
+        """Галочка «Запустить» на последней странице открывала и тут же закрывала net67.
+
+        Она срабатывает, пока установщик держит мьютекс, и без --after-update
+        программа выходила, приняв запуск за ручной посреди установки.
+        """
+        from startup.single_instance import AFTER_UPDATE_ARG
+
+        entry = re.search(r"^Filename:.*Description: \"Запустить .*\n.*postinstall.*$", self.iss, re.M)
+        self.assertIsNotNone(entry)
+        self.assertIn(f'Parameters: "{AFTER_UPDATE_ARG}"', entry.group(0))
+        self.assertIn("shellexec", entry.group(0))
 
     def test_updater_passes_the_flag_the_installer_checks(self) -> None:
         source = (ROOT / "src" / "updater" / "update_pipeline.py").read_text(encoding="utf-8")

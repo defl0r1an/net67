@@ -135,7 +135,13 @@ Name: "{autodesktop}\{#AppName}";  Filename: "{app}\_internal\{#AppExeName}"; Wo
 ; такой файл запустить не может и возвращает «недостаточно прав» —
 ; именно это и видел человек сразу после установки. ShellExecute умеет
 ; поднять UAC-запрос и запустить программу как надо.
-Filename: "{app}\_internal\{#AppExeName}"; Description: "Запустить {#AppName}"; \
+;
+; --after-update нужен и здесь. Галочка срабатывает, пока установщик ещё
+; держит свой мьютекс (SetupMutex), а net67 без флага принимает такой
+; запуск за ручной посреди установки и выходит: «Идёт установка
+; обновления — этот запуск выходит». Так галочка «Запустить» с 0.13 ничего
+; не открывала. С флагом программа дожидается конца установки.
+Filename: "{app}\_internal\{#AppExeName}"; Parameters: "--after-update"; Description: "Запустить {#AppName}"; \
   WorkingDir: "{app}\_internal"; Flags: nowait postinstall skipifsilent shellexec
 
 ; Автообновление из программы идёт с /SILENT (из 0.12 — с /VERYSILENT), и
