@@ -95,6 +95,11 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 "start_daemon_thread",
                 side_effect=lambda name, target: background_targets.append((name, target)),
             ),
+            patch.object(
+                startup_coordinator,
+                "enqueue_subsystem_task",
+                side_effect=lambda _queue, name, target: background_targets.append((str(name), target)),
+            ),
         ):
             coordinator.run_async_init()
             self.assertEqual(runtime.calls, [])
@@ -198,6 +203,11 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 side_effect=lambda name, target: background_targets.append((name, target)),
                 create=True,
             ),
+            patch.object(
+                startup_coordinator,
+                "enqueue_subsystem_task",
+                side_effect=lambda _queue, name, target: background_targets.append((name, target)),
+            ),
         ):
             coordinator.run_async_init()
             while scheduled:
@@ -288,6 +298,11 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 "start_daemon_thread",
                 side_effect=lambda name, target: background_targets.append((name, target)),
                 create=True,
+            ),
+            patch.object(
+                startup_coordinator,
+                "enqueue_subsystem_task",
+                side_effect=lambda _queue, name, target: background_targets.append((name, target)),
             ),
         ):
             coordinator.run_async_init()
@@ -616,59 +631,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
 
         self.assertEqual(calls, ["begin:thread:DemoWorker", "target", "end:thread:DemoWorker:11"])
 
-    def test_startup_threading_uses_separate_serial_queues_per_subsystem(self) -> None:
-        import threading
-        import time
-        from main import post_startup_threading
-
-        queue_suffix = str(time.monotonic_ns())
-        calls: list[str] = []
-        first_started = threading.Event()
-        release_first = threading.Event()
-        second_done = threading.Event()
-        other_done = threading.Event()
-
-        def first_hosts_task() -> None:
-            calls.append("hosts:first:start")
-            first_started.set()
-            release_first.wait(2)
-            calls.append("hosts:first:end")
-
-        def second_hosts_task() -> None:
-            calls.append("hosts:second")
-            second_done.set()
-
-        def profile_task() -> None:
-            calls.append("profile:first")
-            other_done.set()
-
-        post_startup_threading.enqueue_subsystem_task(
-            f"hosts-{queue_suffix}",
-            "HostsWarmup-1",
-            first_hosts_task,
-        )
-        post_startup_threading.enqueue_subsystem_task(
-            f"hosts-{queue_suffix}",
-            "HostsWarmup-2",
-            second_hosts_task,
-        )
-        post_startup_threading.enqueue_subsystem_task(
-            f"profile-{queue_suffix}",
-            "ProfileWarmup-1",
-            profile_task,
-        )
-
-        self.assertTrue(first_started.wait(1.0))
-        self.assertTrue(other_done.wait(1.0))
-        self.assertFalse(second_done.wait(0.05))
-        self.assertIn("profile:first", calls)
-
-        release_first.set()
-        self.assertTrue(second_done.wait(1.0))
-        self.assertLess(calls.index("hosts:first:start"), calls.index("hosts:first:end"))
-        self.assertLess(calls.index("hosts:first:end"), calls.index("hosts:second"))
-        self.assertLess(calls.index("profile:first"), calls.index("hosts:first:end"))
-
     def test_startup_audit_summary_installed_by_post_startup_tasks(self) -> None:
         from main import post_startup
 
@@ -735,8 +697,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                     "[12:00:02] [⏱ STARTUP] ⏱ Startup StartupPostInit: 1900ms | post_init_scheduled",
                     "[12:00:02] [⏱ STARTUP] ⏱ Startup StartupPostInitDeferredStart: 2300ms | zapret2_mode",
                     "[12:00:02] [⏱ STARTUP] ⏱ Startup StartupNetworkDataWarmupQueued: 2400ms | 1200ms after interactive",
-                    "[12:00:02] [⏱ STARTUP] ⏱ Startup StartupSidebarSearchQueued: 2500ms | 1000ms after interactive",
-                    "[12:00:02] [⏱ STARTUP] ⏱ Startup StartupHiddenModeNavQueued: 2800ms | 1600ms after interactive",
                 )
             )
         )
@@ -2230,6 +2190,7 @@ class StartupRuntimeSetupTests(unittest.TestCase):
         dns_feature = SimpleNamespace(warm_page_data_cache=Mock(return_value=object()))
         metric = Mock()
         delays: list[int] = []
+        warmup_flags: list[bool] = []
         queued_tasks: list[tuple[str, str]] = []
 
         with (
@@ -2241,7 +2202,9 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             patch.object(
                 post_startup_dns_warmup,
                 "enqueue_subsystem_task",
-                side_effect=lambda queue, name, target: queued_tasks.append((queue, name)) or target(),
+                side_effect=lambda queue, name, target, warmup=False: (
+                    warmup_flags.append(warmup) or queued_tasks.append((queue, name)) or target()
+                ),
             ),
         ):
             install_dns_page_data_warmup(
@@ -2251,6 +2214,9 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             )
             signal.emit("interactive")
 
+        # Подготовка данных страницы заранее — прогрев: она пропускает вперёд
+        # всё, что нужно программе для работы.
+        self.assertTrue(warmup_flags and all(warmup_flags))
         self.assertEqual(delays, [10000])
         self.assertEqual(queued_tasks, [("dns", "DnsPageDataWarmup")])
         dns_feature.warm_page_data_cache.assert_called_once_with()

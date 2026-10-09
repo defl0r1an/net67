@@ -29,6 +29,7 @@ class BackendPageDataWarmupTests(unittest.TestCase):
         logs_feature = SimpleNamespace(warm_page_data_cache=Mock())
         metric = Mock()
         delays: list[int] = []
+        warmup_flags: list[bool] = []
         queued_tasks: list[tuple[str, str]] = []
 
         with (
@@ -40,7 +41,9 @@ class BackendPageDataWarmupTests(unittest.TestCase):
             patch.object(
                 post_startup_backend_warmup,
                 "enqueue_subsystem_task",
-                side_effect=lambda queue, name, target: queued_tasks.append((queue, name)) or target(),
+                side_effect=lambda queue, name, target, warmup=False: (
+                    warmup_flags.append(warmup) or queued_tasks.append((queue, name)) or target()
+                ),
             ),
             patch.object(post_startup_backend_warmup.appearance_settings, "warm_page_initial_state_cache") as warm_appearance,
         ):
@@ -58,8 +61,8 @@ class BackendPageDataWarmupTests(unittest.TestCase):
         self.assertEqual(
             queued_tasks,
             [
-                ("appearance", "BackendPageDataWarmup-Appearance"),
-                ("logs", "BackendPageDataWarmup-Logs"),
+                ("pages", "BackendPageDataWarmup-Appearance"),
+                ("pages", "BackendPageDataWarmup-Logs"),
             ],
         )
         logs_feature.warm_page_data_cache.assert_called_once_with()
@@ -94,6 +97,7 @@ class BackendPageDataWarmupTests(unittest.TestCase):
         hosts_feature = SimpleNamespace(warm_page_data_cache=Mock(return_value=True))
         metric = Mock()
         delays: list[int] = []
+        warmup_flags: list[bool] = []
         queued_tasks: list[tuple[str, str]] = []
 
         with (
@@ -105,7 +109,9 @@ class BackendPageDataWarmupTests(unittest.TestCase):
             patch.object(
                 post_startup_hosts_warmup,
                 "enqueue_subsystem_task",
-                side_effect=lambda queue, name, target: queued_tasks.append((queue, name)) or target(),
+                side_effect=lambda queue, name, target, warmup=False: (
+                    warmup_flags.append(warmup) or queued_tasks.append((queue, name)) or target()
+                ),
             ),
         ):
             install_hosts_page_warmup(
@@ -115,6 +121,9 @@ class BackendPageDataWarmupTests(unittest.TestCase):
             )
             signal.emit("interactive")
 
+        # Подготовка данных страницы заранее — прогрев: она пропускает вперёд
+        # всё, что нужно программе для работы.
+        self.assertTrue(warmup_flags and all(warmup_flags))
         self.assertEqual(delays, [0])
         self.assertEqual(queued_tasks, [("hosts", "HostsPageDataWarmup")])
         hosts_feature.warm_page_data_cache.assert_called_once_with()

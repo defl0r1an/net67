@@ -104,10 +104,13 @@ def install_profile_warmup(
 
     def _start_profile_warmup(method: str) -> None:
         log_startup_metric("StartupProfileWarmupStarted", method)
+        # Список профилей сразу виден на главной странице (плитка «Профили» и
+        # значки сервисов), поэтому идёт раньше остальных фоновых задач.
         enqueue_subsystem_task(
             "profile",
             f"ProfileWarmup-{method}",
             lambda: _run_profile_warmup_method(method),
+            on_screen=True,
         )
 
     def _schedule_profile_warmup() -> None:
