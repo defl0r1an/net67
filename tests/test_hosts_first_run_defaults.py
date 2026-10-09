@@ -36,16 +36,23 @@ class DefaultSelectionRuleTests(unittest.TestCase):
 
         self.assertEqual(selection, {})
 
-    def test_preferred_profile_is_still_xbox_dns(self) -> None:
-        """Выбор профиля — отдельное правило, оно нужно мастеру и странице."""
-        from hosts.defaults import choose_profile
+    def test_preferred_profile_is_geohide(self) -> None:
+        """Выбор профиля — отдельное правило, оно нужно мастеру и странице.
 
-        self.assertEqual(choose_profile(["comss_dns", "xbox_dns", "zapret_dns"]), "xbox_dns")
-        self.assertEqual(choose_profile(["comss_dns", "zapret_dns"]), "comss_dns")
-        # Без XBOX — не первый в каталоге (XBOX DNS old, самый слабый из
-        # живых), а следующий по замеру.
-        self.assertEqual(choose_profile(["xbox_dns_old", "geohide", "astracat"]), "astracat")
+        До 9 октября 2026 первым был XBOX DNS. 8 октября он закрыл сервисы ИИ
+        (0.0.0.0 на ChatGPT, Claude, Gemini), и у всех на умолчаниях нейросети
+        перестали открываться. GeoHide по замеру — полный у всех сервисов.
+        """
+        from hosts.defaults import choose_profile
+        from wizard import plans
+
+        self.assertEqual(choose_profile(["comss_dns", "xbox_dns", "geohide"]), "geohide")
+        self.assertEqual(choose_profile(["comss_dns", "xbox_dns", "dns_ai"]), "dns_ai")
+        # XBOX DNS — последним из живых, а не первым.
+        self.assertEqual(choose_profile(["xbox_dns", "astracat"]), "astracat")
         self.assertEqual(choose_profile(["zapret_dns"]), "zapret_dns")
+        # Мастер берёт то же умолчание, а не свою копию.
+        self.assertEqual(plans.PREFERRED_DNS_PROFILE, "geohide")
 
     def test_falls_back_to_first_profile(self) -> None:
         """Сервисы «Напрямую из hosts» поддерживают только профиль hosts."""
@@ -60,16 +67,16 @@ class DefaultSelectionRuleTests(unittest.TestCase):
 
         self.assertEqual(build_default_selection(["Пусто"], {"Пусто": []}), {})
 
-    def test_ai_service_is_enabled_on_xbox_dns(self) -> None:
-        """Нейросети — исключение, и включаются они именно на XBOX DNS."""
+    def test_ai_service_is_enabled_on_the_preferred_profile(self) -> None:
+        """Нейросети — исключение, и включаются они на первом профиле по замеру."""
         from hosts.defaults import build_default_selection
 
         names = ["Claude", "Grok", "Notion"]
-        profiles = {name: ["comss_dns", "xbox_dns", "zapret_dns"] for name in names}
+        profiles = {name: ["comss_dns", "xbox_dns", "geohide"] for name in names}
 
         selection = build_default_selection(names, profiles)
 
-        self.assertEqual(selection, {"Claude": "xbox_dns", "Grok": "xbox_dns"})
+        self.assertEqual(selection, {"Claude": "geohide", "Grok": "geohide"})
 
     def test_ai_service_without_xbox_dns_takes_the_next_one(self) -> None:
         """Обещание — «нейросети работают из коробки», а не «через XBOX».
@@ -202,14 +209,14 @@ class RealCatalogTests(unittest.TestCase):
             "GitHub Copilot",
         ):
             with self.subTest(service=expected):
-                self.assertIn(selection.get(expected), ("xbox_dns", "comss_dns", "astracat", "geohide"))
-        # Там, где XBOX DNS жив, он и стоит.
-        self.assertEqual(selection.get("Claude"), "xbox_dns")
-        self.assertEqual(selection.get("ChatGPT & Sora (OpenAI)"), "xbox_dns")
-        # 30.09.2026 прокси XBOX DNS у Gemini молчали, и он стоял на Comss.
-        # 04.10 XBOX DNS перевёл Gemini на новые адреса, gemini.google.com
-        # через них открывается — снова XBOX, как у остальных нейросетей.
-        self.assertEqual(selection.get("Gemini AI"), "xbox_dns")
+                self.assertIn(selection.get(expected), ("geohide", "dns_ai", "comss_dns", "astracat"))
+                # XBOX DNS с 8 октября 2026 отвечает 0.0.0.0 на сайты ИИ: у
+                # нейросетей его быть не должно — ни по умолчанию, ни в списке.
+                self.assertNotEqual(selection.get(expected), "xbox_dns")
+        # По замеру 9 октября GeoHide полный у всех сервисов ИИ и открывает их.
+        self.assertEqual(selection.get("Claude"), "geohide")
+        self.assertEqual(selection.get("ChatGPT & Sora (OpenAI)"), "geohide")
+        self.assertEqual(selection.get("Gemini AI"), "geohide")
 
     def test_direct_hosts_group_is_enabled(self) -> None:
         """Именно эта группа была на скриншоте с просьбой включить всё."""

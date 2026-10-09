@@ -520,8 +520,12 @@ def _catalog_rows(catalog_service: str) -> list[tuple[str, str]]:
 #: перестало работать — значит устарел он.
 #:
 #: Сервисам с прямыми записями в hosts подмена не нужна вовсе: у них
-#: xbox_dns нет, и там берётся единственный доступный профиль.
-PREFERRED_DNS_PROFILE = "xbox_dns"
+#: подменного профиля нет, и там берётся единственный доступный.
+#:
+#: Константа общая с hosts/defaults.py: своя копия здесь осталась на
+#: xbox_dns, когда умолчание сменилось, — мастер и страница hosts выбирали
+#: бы разное.
+from hosts.defaults import PREFERRED_DNS_PROFILE  # noqa: E402
 
 
 def build_hosts_service_profiles(selection) -> dict[str, str]:
