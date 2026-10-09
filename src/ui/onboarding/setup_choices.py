@@ -23,10 +23,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from log.log import log
+from ui.onboarding.setup_detect_worker import _DetectWorker
 
 __all__ = [
     "CHOICE_KEYS",
@@ -252,43 +253,6 @@ def _startup_widget(answers: SetupAnswers, parent: QWidget) -> QWidget:
         row.addWidget(switch, 0, Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(row)
     return box
-
-
-class _DetectWorker(QThread):
-    """Проверяет доступность сервисов. В потоке: DNS, TCP и HTTP занимают до минуты."""
-
-    progress = pyqtSignal(str)
-    finished_with = pyqtSignal(list)
-
-    def __init__(self, urls, parent=None):
-        super().__init__(parent)
-        self._urls = list(urls or ())
-        self._cancelled = False
-
-    def cancel(self) -> None:
-        self._cancelled = True
-
-    def run(self) -> None:
-        from urllib.parse import urlparse
-
-        results: list[tuple[str, bool, str]] = []
-        try:
-            from blockcheck.models import PreflightVerdict
-            from blockcheck.preflight import check_one_domain
-
-            for url in self._urls:
-                if self._cancelled:
-                    break
-                domain = urlparse(url).netloc or url
-                self.progress.emit(f"Проверяем {domain}…")
-                result = check_one_domain(domain, cancelled=lambda: self._cancelled)
-                ok = result.verdict is PreflightVerdict.PASSED
-                dns = getattr(result, "dns_result", None)
-                kind = "dns_timeout" if getattr(dns, "error_code", "") == "DNS_TIMEOUT" else ""
-                results.append((domain, ok, str(result.verdict_detail or ""), kind))
-        except Exception as exc:
-            log(f"Проверка доступности в туре: {exc}", "WARNING")
-        self.finished_with.emit(results)
 
 
 def describe_detect_results(results: list | None) -> tuple[str, str]:

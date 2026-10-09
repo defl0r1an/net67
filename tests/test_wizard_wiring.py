@@ -46,7 +46,7 @@ class WizardWiringTests(unittest.TestCase):
 
     def test_diagnostics_run_off_the_ui_thread(self) -> None:
         """check_one_domain делает DNS, TCP, ping и HTTP — это долго."""
-        source = _read("ui", "onboarding", "setup_choices.py")
+        source = _read("ui", "onboarding", "setup_detect_worker.py")
 
         self.assertIn("QThread", source)
         self.assertRegex(source, r"class _DetectWorker\(QThread\)")
@@ -80,7 +80,8 @@ class OneClickWiringTests(unittest.TestCase):
 
     def test_button_uses_saved_wizard_answers(self) -> None:
         """Кнопка должна включать то, что человек выбрал в мастере."""
-        source = _read("oneclick", "ui", "button.py")
+        # Работу кнопки делает её поток (oneclick/ui/oneclick_worker.py).
+        source = _read("oneclick", "ui", "oneclick_worker.py")
 
         self.assertIn("build_request_from_settings", source)
 

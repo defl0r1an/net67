@@ -40,7 +40,8 @@ if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
 DEPS = PROJECT_SRC / "oneclick" / "deps.py"
-BUTTON = PROJECT_SRC / "oneclick" / "ui" / "button.py"
+# Включение и выключение делает поток кнопки, вынесенный из ui/button.py.
+BUTTON = PROJECT_SRC / "oneclick" / "ui" / "oneclick_worker.py"
 
 
 def _function(path: Path, name: str):

@@ -107,7 +107,7 @@ class OneClickButtonWiringTests(unittest.TestCase):
 
     def test_orchestrator_runs_off_the_ui_thread(self) -> None:
         """Проверка DNS и опрос доменов блокирующие — в UI-потоке нельзя."""
-        source = (PROJECT_SRC / "oneclick" / "ui" / "button.py").read_text(encoding="utf-8")
+        source = (PROJECT_SRC / "oneclick" / "ui" / "oneclick_worker.py").read_text(encoding="utf-8")
 
         self.assertIn("QThread", source)
         self.assertRegex(source, r"class _OneClickWorker\(QThread\)")
