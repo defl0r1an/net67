@@ -4,6 +4,9 @@
   "icon": "fa5b.microsoft",
   "icon_color": "#00bcf2",
   "sort_order": 4,
+  "main": [
+    "copilot.microsoft.com"
+  ],
   "domains": [
     {
       "host": "copilot.microsoft.com",

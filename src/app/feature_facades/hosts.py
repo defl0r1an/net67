@@ -107,12 +107,18 @@ def build_hosts_feature() -> HostsFeature:
         rows = {str(profile): tuple(items or ()) for profile, items in dict(rows_by_profile or {}).items()}
 
         def _probe(*, progress, cancelled):
+            # Главный сайт — из каталога: по нему решается, рабочий ли профиль.
+            try:
+                main_domains = _public().get_service_main_domains(service_name)
+            except Exception:
+                main_domains = ()
             return probe_service(
                 service_name,
                 tuple(rows),
                 lambda profile: list(rows.get(profile, ())),
                 progress=progress,
                 cancelled=cancelled,
+                main_domains=main_domains,
             )
 
         return HostsProfileProbeWorker(request_id, _probe, parent=parent)

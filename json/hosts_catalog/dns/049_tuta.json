@@ -4,6 +4,9 @@
   "icon": "simple:tuta:TU",
   "icon_color": "#D93951",
   "sort_order": 80,
+  "main": [
+    "app.tuta.com"
+  ],
   "domains": [
     {
       "host": "app.test.tuta.com",

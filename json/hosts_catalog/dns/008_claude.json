@@ -4,6 +4,9 @@
   "icon": "simple:claude:CL",
   "icon_color": "#cc9b7a",
   "sort_order": 2,
+  "main": [
+    "claude.ai"
+  ],
   "domains": [
     {
       "host": "a-api.anthropic.com",

@@ -4,6 +4,9 @@
   "icon": "simple:twitch:TW",
   "icon_color": "#9146ff",
   "sort_order": 12,
+  "main": [
+    "gql.twitch.tv"
+  ],
   "domains": [
     {
       "host": "gql.twitch.tv",

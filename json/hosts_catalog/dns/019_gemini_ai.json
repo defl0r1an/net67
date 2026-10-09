@@ -4,6 +4,9 @@
   "icon": "simple:googlegemini:GE",
   "icon_color": "#4285f4",
   "sort_order": 1,
+  "main": [
+    "gemini.google.com"
+  ],
   "domains": [
     {
       "host": "ai.google.dev",

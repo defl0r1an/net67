@@ -4,6 +4,9 @@
   "icon": "simple:windsurf:WS",
   "icon_color": "#00a6ff",
   "sort_order": 9,
+  "main": [
+    "windsurf.com"
+  ],
   "domains": [
     {
       "host": "codeium.com",

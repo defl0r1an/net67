@@ -4,6 +4,9 @@
   "icon": "own:openai:AI",
   "icon_color": "#10a37f",
   "sort_order": 0,
+  "main": [
+    "chatgpt.com"
+  ],
   "domains": [
     {
       "host": "ab.chatgpt.com",

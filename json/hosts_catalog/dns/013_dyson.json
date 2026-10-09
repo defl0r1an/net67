@@ -4,6 +4,9 @@
   "icon": "fa5s.fan",
   "icon_color": "#8E44AD",
   "sort_order": 44,
+  "main": [
+    "www.dyson.com"
+  ],
   "domains": [
     {
       "host": "www.dyson.com",

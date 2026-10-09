@@ -4,6 +4,9 @@
   "icon": "fa5s.print",
   "icon_color": "#E3001B",
   "sort_order": 87,
+  "main": [
+    "www.xerox.com"
+  ],
   "domains": [
     {
       "host": "www.xerox.com",

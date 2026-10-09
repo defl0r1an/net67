@@ -4,6 +4,10 @@
   "icon": "simple:spotify:SP",
   "icon_color": "#1db954",
   "sort_order": 11,
+  "main": [
+    "open.spotify.com",
+    "www.spotify.com"
+  ],
   "domains": [
     {
       "host": "accounts.scdn.co",

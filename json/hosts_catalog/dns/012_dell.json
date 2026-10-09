@@ -4,6 +4,9 @@
   "icon": "simple:dell:DE",
   "icon_color": "#007DB8",
   "sort_order": 43,
+  "main": [
+    "www.dell.com"
+  ],
   "domains": [
     {
       "host": "afcs.dellcdn.com",

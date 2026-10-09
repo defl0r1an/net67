@@ -4,6 +4,9 @@
   "icon": "simple:intel:IN",
   "icon_color": "#0071C5",
   "sort_order": 55,
+  "main": [
+    "www.intel.com"
+  ],
   "domains": [
     {
       "host": "geolocation.onetrust.com",

@@ -4,6 +4,9 @@
   "icon": "fa5s.comment-dots",
   "icon_color": "#5448EE",
   "sort_order": 79,
+  "main": [
+    "truthsocial.com"
+  ],
   "domains": [
     {
       "host": "static-assets-1.truthsocial.com",

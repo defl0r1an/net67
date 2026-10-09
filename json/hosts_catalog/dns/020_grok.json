@@ -4,6 +4,9 @@
   "icon": "own:grok:GR",
   "icon_color": null,
   "sort_order": 5,
+  "main": [
+    "grok.com"
+  ],
   "domains": [
     {
       "host": "accounts.x.ai",

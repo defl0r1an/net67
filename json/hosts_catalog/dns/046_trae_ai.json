@@ -4,6 +4,9 @@
   "icon": "fa5s.code",
   "icon_color": "#7c3aed",
   "sort_order": 8,
+  "main": [
+    "api.trae.ai"
+  ],
   "domains": [
     {
       "host": "api-sg-central.trae.ai",

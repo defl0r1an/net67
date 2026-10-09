@@ -642,6 +642,15 @@ class HostsPage(BasePage):
             if best:
                 text = self._tr("page.hosts.probe.note.best", "лучший по проверке, {text}", text=text)
             return text
+        if item.main_ok is False:
+            # Служебные домены могут открываться и без обхода — важно, что
+            # сам сайт через этот профиль не открылся.
+            return self._tr(
+                "page.hosts.probe.note.main_failed",
+                "главный сайт не открылся (других доменов открылось {ok} из {total})",
+                ok=item.ok,
+                total=item.total,
+            )
         key, default = _PROBE_REASONS.get(item.reason, _PROBE_REASONS[VERDICT_DEAD])
         return self._tr(
             "page.hosts.probe.note.bad",

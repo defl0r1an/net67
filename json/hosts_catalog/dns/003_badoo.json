@@ -4,6 +4,9 @@
   "icon": "simple:badoo:BA",
   "icon_color": "#783BF9",
   "sort_order": 34,
+  "main": [
+    "badoo.com"
+  ],
   "domains": [
     {
       "host": "badoo.app",

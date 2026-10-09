@@ -4,6 +4,9 @@
   "icon": "simple:fitbit:FB",
   "icon_color": "#00B0B9",
   "sort_order": 47,
+  "main": [
+    "fitbit.google.com"
+  ],
   "domains": [
     {
       "host": "api.fitbit.com",

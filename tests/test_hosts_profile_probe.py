@@ -129,6 +129,55 @@ class ProbeServiceTests(unittest.TestCase):
         self.assertEqual((result.result_for("p1").ok, result.result_for("p1").total), (1, 2))
         self.assertTrue(result.result_for("p1").works)
 
+    def test_profile_without_main_site_does_not_work(self) -> None:
+        """Gemini через XBOX DNS: служебные домены Google открывались, сам сайт нет.
+
+        В каталоге у части доменов под профилем стоят настоящие адреса Google —
+        они открываются и без обхода страны, а прокси для gemini.google.com
+        молчал. Проверка показывала «открылся 8 из 14», и это читалось как
+        рабочий профиль.
+        """
+        rows = {
+            "xbox": [("gemini.google.com", "9.9.9.9"), ("apis.google.com", "8.8.8.8"), ("jules.google", "8.8.8.8")],
+            "geohide": [("gemini.google.com", "1.1.1.1"), ("apis.google.com", "1.1.1.1"), ("jules.google", "1.1.1.1")],
+        }
+        table = {
+            ("8.8.8.8", "apis.google.com"): (VERDICT_OK, 20),
+            ("8.8.8.8", "jules.google"): (VERDICT_OK, 20),
+            ("1.1.1.1", "gemini.google.com"): (VERDICT_OK, 90),
+            ("1.1.1.1", "apis.google.com"): (VERDICT_OK, 90),
+        }
+        self.probed = []
+
+        def prober(ip, host):
+            self.probed.append((ip, host))
+            return table.get((ip, host), (VERDICT_DEAD, None))
+
+        result = probe_service(
+            "Gemini AI",
+            list(rows),
+            lambda profile: rows[profile],
+            prober=prober,
+            reacher=lambda _ip: True,
+            main_domains=("gemini.google.com",),
+        )
+
+        xbox = result.result_for("xbox")
+        self.assertEqual(xbox.ok, 2)
+        self.assertIs(xbox.main_ok, False)
+        self.assertFalse(xbox.works)
+        self.assertEqual(result.best, "geohide")
+        # Главный сайт стоит в выборке первым, даже если он не самый короткий.
+        self.assertEqual(result.domains[0], "gemini.google.com")
+
+    def test_main_site_always_gets_into_large_sample(self) -> None:
+        domains = [f"d{i}.google" for i in range(40)] + ["gemini.google.com"]
+
+        sample = pick_probe_domains(domains, main=("gemini.google.com",))
+
+        self.assertEqual(sample[0], "gemini.google.com")
+        self.assertLessEqual(len(sample), 14)
+
     def test_equal_profiles_are_split_by_speed(self) -> None:
         rows = {"slow": [("a.com", "1.1.1.1")], "fast": [("a.com", "2.2.2.2")]}
         table = {("1.1.1.1", "a.com"): (VERDICT_OK, 900), ("2.2.2.2", "a.com"): (VERDICT_OK, 80)}

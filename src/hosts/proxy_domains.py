@@ -49,6 +49,10 @@ class HostsCatalog:
     #: сайт через них в замере не открылся. Ключ — casefold имени сервиса.
     #: См. prefer_measured_profiles.
     not_default_profiles: dict[str, frozenset[str]] = field(default_factory=dict)
+    #: Главный сайт сервиса (поле "main" каталога): по нему проверка профилей
+    #: решает, рабочий ли профиль. Без него «главными» считались самые короткие
+    #: домены, и у Gemini labs.google с opal.google обгоняли gemini.google.com.
+    service_main_domains: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 #: Сервис каталога, чьи записи в hosts ведёт другая страница.
@@ -261,6 +265,7 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
     service_modes: dict[str, str] = {}
     service_categories: dict[str, str] = {}
     service_icons: dict[str, tuple[str, str | None]] = {}
+    service_main_domains: dict[str, tuple[str, ...]] = {}
     service_sort: dict[str, int] = {}
 
     for raw_service in data.get("services") or []:
@@ -281,6 +286,11 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         category = _clean_str(raw_service.get("category")).lower()
         if category:
             service_categories[service_name.casefold()] = category
+        raw_main = raw_service.get("main")
+        if isinstance(raw_main, list):
+            main_domains = tuple(_clean_str(item).lower() for item in raw_main if _clean_str(item))
+            if main_domains:
+                service_main_domains[service_name] = main_domains
         icon_name = _clean_str(raw_service.get("icon"))
         if icon_name:
             service_icons[service_name] = (icon_name, _clean_str(raw_service.get("icon_color")) or None)
@@ -353,6 +363,7 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         service_modes=service_modes,
         service_categories=service_categories,
         service_icons=service_icons,
+        service_main_domains=service_main_domains,
         not_default_profiles=_parse_not_default(data.get("net67_not_default")),
     )
 
@@ -886,6 +897,11 @@ def prefer_measured_profiles(service_name: str, available) -> list[str]:
         return profiles
     measured = [p for p in profiles if p not in avoid]
     return measured or profiles
+
+
+def get_service_main_domains(service_name: str) -> tuple[str, ...]:
+    """Главные сайты сервиса из каталога; пусто, если не указаны."""
+    return tuple(_load_catalog().service_main_domains.get(str(service_name or "").strip(), ()))
 
 
 def get_service_available_dns_profiles(service_name: str) -> list[str]:

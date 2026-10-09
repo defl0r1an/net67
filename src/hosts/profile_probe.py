@@ -109,9 +109,16 @@ class ProfileProbe:
     latency_ms: int | None
     #: Почему не открылось (самая частая причина); пусто, если открылось всё.
     reason: str = ""
+    #: Открылся ли главный сайт сервиса; None — главный сайт в каталоге не указан.
+    main_ok: bool | None = None
 
     @property
     def works(self) -> bool:
+        # Главный сайт обязателен. У Gemini через XBOX DNS открывались 8 доменов
+        # из 14 — те, где в каталоге стоят настоящие адреса Google, а не прокси:
+        # они открываются и без обхода страны, а сам gemini.google.com молчал.
+        if self.main_ok is False:
+            return False
         # Половины хватает: среди доменов каталога попадаются служебные,
         # которые и у рабочего профиля отвечают через раз.
         return self.ok > 0 and self.ok * 2 >= self.total
@@ -147,19 +154,24 @@ def pick_sample_domains(domains: Iterable[str], limit: int = SAMPLE_DOMAINS) -> 
     return unique[: max(1, int(limit))]
 
 
-def pick_probe_domains(domains: Iterable[str]) -> list[str]:
+def pick_probe_domains(domains: Iterable[str], main: Iterable[str] = ()) -> list[str]:
     """Какие домены сервиса проверять: все у небольшого, у большого — выборку.
 
-    Выборка — главные домены (самые короткие), за ними домены входа и API
-    (api., auth., login., accounts.…), остаток добирается короткими.
+    Главные сайты из каталога (``main``) идут первыми всегда. Дальше выборка —
+    самые короткие домены, за ними домены входа и API (api., auth., login.,
+    accounts.…), остаток добирается короткими. Одних коротких мало: у Gemini
+    labs.google и opal.google короче gemini.google.com, и он в выборку не попадал.
     """
     ordered = pick_sample_domains(domains, limit=1_000_000)
+    present = set(ordered)
+    first = [domain for domain in dict.fromkeys(str(d or "").strip().lower() for d in main) if domain in present]
     if len(ordered) <= FULL_CHECK_MAX_DOMAINS:
-        return ordered
-    main = ordered[:SAMPLE_DOMAINS]
-    key = [domain for domain in ordered[SAMPLE_DOMAINS:] if domain.split(".", 1)[0] in _KEY_LABELS]
-    rest = [domain for domain in ordered[SAMPLE_DOMAINS:] if domain not in key]
-    return (main + key + rest)[:LARGE_SAMPLE_DOMAINS]
+        return first + [domain for domain in ordered if domain not in first]
+    others = [domain for domain in ordered if domain not in first]
+    short = others[:SAMPLE_DOMAINS]
+    key = [domain for domain in others[SAMPLE_DOMAINS:] if domain.split(".", 1)[0] in _KEY_LABELS]
+    rest = [domain for domain in others[SAMPLE_DOMAINS:] if domain not in key]
+    return (first + short + key + rest)[: max(LARGE_SAMPLE_DOMAINS, len(first))]
 
 
 def reach_ip(ip: str, *, timeout: float = CONNECT_TIMEOUT) -> bool:
@@ -255,8 +267,22 @@ def rank_profiles(results: Iterable[ProfileProbe]) -> str | None:
     return working[0].profile_id
 
 
-def _summarize(profile_id: str, verdicts: dict[str, list[tuple[str, int | None]]], live: set[str]) -> ProfileProbe:
-    """Домен открылся, если открылся хоть через один его адрес в профиле."""
+def _summarize(
+    profile_id: str,
+    verdicts: dict[str, list[tuple[str, int | None]]],
+    live: set[str],
+    main: tuple[str, ...] = (),
+) -> ProfileProbe:
+    """Домен открылся, если открылся хоть через один его адрес в профиле.
+
+    ``main`` — главные сайты, которые есть в выборке: профиль рабочий, только
+    если хоть один из них открылся через него.
+    """
+    main_ok: bool | None = None
+    if main:
+        main_ok = any(
+            verdict == VERDICT_OK for domain in main for verdict, _ms in (verdicts.get(domain) or [])
+        )
     ok = 0
     latencies: list[int] = []
     reasons: list[str] = []
@@ -272,7 +298,9 @@ def _summarize(profile_id: str, verdicts: dict[str, list[tuple[str, int | None]]
     if ok < len(live):
         reason = statistics.mode(reasons) if reasons else VERDICT_DEAD
     latency = int(statistics.median(latencies)) if latencies else None
-    return ProfileProbe(profile_id, ok, len(live), latency, reason)
+    if main_ok is False and not reason:
+        reason = VERDICT_DEAD
+    return ProfileProbe(profile_id, ok, len(live), latency, reason, main_ok)
 
 
 def probe_service(
@@ -284,6 +312,7 @@ def probe_service(
     reacher: Callable[[str], bool] = reach_ip,
     progress: Callable[[int, int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    main_domains: Iterable[str] = (),
 ) -> ServiceProbe:
     """Проверяет профили сервиса на одних и тех же главных доменах.
 
@@ -295,8 +324,9 @@ def probe_service(
     profile_ids = [str(profile) for profile in profiles]
     rows = {profile: list(rows_for(profile) or ()) for profile in profile_ids}
     all_domains = pick_sample_domains((domain for items in rows.values() for domain, _ip in items), limit=1_000_000)
-    sample = pick_probe_domains(all_domains)
+    sample = pick_probe_domains(all_domains, main=main_domains)
     wanted = set(sample)
+    main = tuple(domain for domain in dict.fromkeys(str(d or "").strip().lower() for d in main_domains) if domain in wanted)
 
     # (профиль, домен, адрес). IPv6 пропускаем: без IPv6 в сети это не отказ
     # профиля, а с ним такие сервисы на плитке и так недоступны.
@@ -364,7 +394,7 @@ def probe_service(
         if any(verdict == VERDICT_OK for verdict, _ms in items)
     }
     live = opened or wanted
-    results = tuple(_summarize(profile, by_profile[profile], live) for profile in profile_ids)
+    results = tuple(_summarize(profile, by_profile[profile], live, main) for profile in profile_ids)
     return ServiceProbe(str(service_name), results, rank_profiles(results), tuple(sample), len(all_domains))
 
 

@@ -4,6 +4,9 @@
   "icon": "own:manus:MA",
   "icon_color": null,
   "sort_order": 6,
+  "main": [
+    "manus.im"
+  ],
   "domains": [
     {
       "host": "api.manus.im",

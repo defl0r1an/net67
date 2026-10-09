@@ -4,6 +4,10 @@
   "icon": "simple:meta:ME",
   "icon_color": "#1877f2",
   "sort_order": 7,
+  "main": [
+    "meta.ai",
+    "www.meta.ai"
+  ],
   "domains": [
     {
       "host": "meta.ai",

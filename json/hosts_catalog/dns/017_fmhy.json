@@ -4,6 +4,9 @@
   "icon": "fa5s.book-open",
   "icon_color": "#7B68EE",
   "sort_order": 48,
+  "main": [
+    "fmhy.net"
+  ],
   "domains": [
     {
       "host": "a-lemmy.fmhy.net",

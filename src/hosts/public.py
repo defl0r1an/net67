@@ -56,3 +56,7 @@ __all__ = [
 from hosts.commands import apply_hosts_draft, load_hosts_text, load_page_snapshot, save_hosts_text  # noqa: E402
 from hosts.state import HostsApplyResult, HostsFileText  # noqa: E402
 __all__ = [*__all__, 'apply_hosts_draft', 'load_hosts_text', 'load_page_snapshot', 'save_hosts_text', 'HostsApplyResult', 'HostsFileText']
+
+# Главный сайт сервиса из каталога — для проверки профилей (фасад hosts).
+from hosts.proxy_domains import get_service_main_domains  # noqa: E402
+__all__ = [*__all__, 'get_service_main_domains']
