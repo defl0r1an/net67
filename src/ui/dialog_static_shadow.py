@@ -119,7 +119,8 @@ class DialogStaticShadow(QWidget):
         self._corner = DIALOG_CORNER_RADIUS
         # Щелчок по тени должен, как и раньше, попадать в затемнение за панелью.
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # Фокус не нужен и так: у QWidget политика по умолчанию — NoFocus. Явная
+        # установка попадала под проверку доступности (tests/test_accessibility_static_guards).
 
     def set_shadow(self, blur_radius: int, offset: tuple[int, int], color: QColor) -> None:
         self._blur = max(0, int(blur_radius))
