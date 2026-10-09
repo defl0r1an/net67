@@ -18,11 +18,9 @@ from profile.ui.simple_icons_bundle import SIMPLE_ICON_SVGS
 
 # Сервер со страницы «Настройка DNS» -> его DNS-профиль в «Редакторе hosts».
 _SAME_SERVER_IN_HOSTS = {
-    "Xbox DNS": "xbox_dns",
-    # «Xbox DNS (old)» на странице DNS нет: замолчал на всех портах (замер
-    # 30 сентября 2026), плитка убрана, а профиль в hosts остался.
+    # Xbox DNS (все три) и dns.malw.link со страницы DNS убраны: первый с
+    # 8 октября 2026 отвечает 0.0.0.0 на сервисы ИИ, второй молчит.
     "Comss DNS": "comss_dns",
-    "dns.malw.link": "malw_dns",
     "AstraCat": "astracat",
     "GeoHide": "geohide",
 }

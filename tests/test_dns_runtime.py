@@ -120,11 +120,13 @@ class DnsRuntimeTests(unittest.TestCase):
         with patch.object(runtime, "adapters_with_static_dns", return_value=adapters):
             changes = self._run(fake, migrate_outdated_dns_addresses)
 
+        # dns.malw.link не отвечает: IPv4 ведёт на GeoHide, у которого нет IPv6,
+        # поэтому IPv6 убирается — пустой список значит «автоматические DNS».
         self.assertEqual(
             fake.writes,
             [
-                (ETH, ("95.216.204.218", "80.253.249.40"), False, None),
-                (ETH, ("2a01:4f9:c014:6dac::1",), True, None),
+                (ETH, ("193.233.112.67", "193.233.112.68"), False, None),
+                (ETH, (), True, None),
             ],
         )
         self.assertEqual(len(changes), 2)
@@ -143,10 +145,13 @@ class DnsProviderCatalogTests(unittest.TestCase):
     def test_hosts_dns_services_are_available_as_dns_servers(self) -> None:
         ai = DNS_PROVIDERS["Для ИИ"]
 
-        self.assertEqual(ai["Xbox DNS"]["ipv4"], ["111.88.96.54", "111.88.96.55"])
         self.assertEqual(ai["AstraCat"]["ipv4"], ["135.106.217.200", "135.106.197.22"])
         self.assertEqual(ai["GeoHide"]["ipv4"], ["193.233.112.67", "193.233.112.68"])
-        self.assertEqual(ai["dns.malw.link"]["ipv4"], ["95.216.204.218", "80.253.249.40"])
+        # Xbox DNS с 8 октября 2026 отвечает 0.0.0.0 на сервисы ИИ, dns.malw.link
+        # молчит — их плиток в разделе «Для ИИ» быть не должно.
+        self.assertNotIn("Xbox DNS", ai)
+        self.assertNotIn("Xbox DNS v2", ai)
+        self.assertNotIn("dns.malw.link", ai)
 
 
 if __name__ == "__main__":

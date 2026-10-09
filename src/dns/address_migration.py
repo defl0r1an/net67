@@ -30,12 +30,14 @@ def plan_dns_server_migration(
     """Возвращает новый список DNS или None, если менять нечего.
 
     Порядок и чужие адреса сохраняются, старые адреса заменяются на месте,
-    повторы после замены убираются.
+    повторы после замены убираются. Пустая замена — адрес убирается: так
+    уходят адреса IPv6 закрывшихся серверов, когда у замены нет IPv6.
+    Пустой итоговый список значит «вернуть автоматические DNS».
     """
     canonical_replacements = {
-        _canonical_ip(old): str(new).strip()
+        _canonical_ip(old): str(new or "").strip()
         for old, new in dict(replacements or {}).items()
-        if str(old or "").strip() and str(new or "").strip()
+        if str(old or "").strip()
     }
     current = [str(item).strip() for item in (servers or []) if str(item or "").strip()]
     replaced_any = False
@@ -45,6 +47,8 @@ def plan_dns_server_migration(
         replacement = canonical_replacements.get(_canonical_ip(server))
         if replacement is not None:
             replaced_any = True
+            if not replacement:
+                continue
             server = replacement
         key = _canonical_ip(server)
         if key in seen:

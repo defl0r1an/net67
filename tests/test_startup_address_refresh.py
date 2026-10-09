@@ -26,21 +26,20 @@ class DnsAddressMigrationPlanTests(unittest.TestCase):
     def test_old_malw_and_xbox_addresses_are_replaced_in_place(self) -> None:
         from dns.address_migration import plan_dns_server_migration
 
-        self.assertEqual(
-            plan_dns_server_migration(["84.21.189.133", "64.188.98.242"], self.replacements),
-            ["95.216.204.218", "80.253.249.40"],
-        )
-        self.assertEqual(
-            plan_dns_server_migration(["111.88.96.50", "111.88.96.51"], self.replacements),
-            ["111.88.96.54", "111.88.96.55"],
-        )
+        # Xbox DNS закрыл сервисы ИИ, dns.malw.link не отвечает: оба ведут на GeoHide.
+        geohide = ["193.233.112.67", "193.233.112.68"]
+        self.assertEqual(plan_dns_server_migration(["84.21.189.133", "64.188.98.242"], self.replacements), geohide)
+        self.assertEqual(plan_dns_server_migration(["95.216.204.218", "80.253.249.40"], self.replacements), geohide)
+        self.assertEqual(plan_dns_server_migration(["111.88.96.50", "111.88.96.51"], self.replacements), geohide)
+        self.assertEqual(plan_dns_server_migration(["111.88.96.54", "111.88.96.55"], self.replacements), geohide)
+        self.assertEqual(plan_dns_server_migration(["87.228.47.200", "87.228.47.201"], self.replacements), geohide)
 
     def test_foreign_addresses_and_order_are_kept(self) -> None:
         from dns.address_migration import plan_dns_server_migration
 
         self.assertEqual(
             plan_dns_server_migration(["1.1.1.1", "84.21.189.133", "8.8.8.8"], self.replacements),
-            ["1.1.1.1", "95.216.204.218", "8.8.8.8"],
+            ["1.1.1.1", "193.233.112.67", "8.8.8.8"],
         )
 
     def test_nothing_to_change_returns_none(self) -> None:
@@ -48,22 +47,25 @@ class DnsAddressMigrationPlanTests(unittest.TestCase):
 
         self.assertIsNone(plan_dns_server_migration([], self.replacements))
         self.assertIsNone(plan_dns_server_migration(["1.1.1.1", "8.8.8.8"], self.replacements))
-        self.assertIsNone(plan_dns_server_migration(["111.88.96.54", "111.88.96.55"], self.replacements))
+        self.assertIsNone(plan_dns_server_migration(["193.233.112.67", "193.233.112.68"], self.replacements))
 
     def test_duplicate_after_replacement_is_removed(self) -> None:
         from dns.address_migration import plan_dns_server_migration
 
         self.assertEqual(
-            plan_dns_server_migration(["84.21.189.133", "95.216.204.218"], self.replacements),
-            ["95.216.204.218"],
+            plan_dns_server_migration(["111.88.96.54", "193.233.112.67"], self.replacements),
+            ["193.233.112.67"],
         )
 
-    def test_ipv6_is_matched_in_any_spelling(self) -> None:
+    def test_ipv6_without_replacement_is_removed_in_any_spelling(self) -> None:
         from dns.address_migration import plan_dns_server_migration
 
+        # У GeoHide нет IPv6: адрес IPv6 закрывшегося сервера просто убирается,
+        # а опустевший список возвращает адаптеру автоматические DNS.
+        self.assertEqual(plan_dns_server_migration(["2A12:BEC4:1460:D5:0:0:0:2"], self.replacements), [])
         self.assertEqual(
-            plan_dns_server_migration(["2A12:BEC4:1460:D5:0:0:0:2"], self.replacements),
-            ["2a01:4f9:c014:6dac::1"],
+            plan_dns_server_migration(["2a00:ab00:1233:26::50", "2606:4700:4700::1111"], self.replacements),
+            ["2606:4700:4700::1111"],
         )
 
     def test_old_addresses_are_not_offered_by_provider_list(self) -> None:
@@ -78,7 +80,8 @@ class DnsAddressMigrationPlanTests(unittest.TestCase):
         }
         for old, new in OUTDATED_DNS_ADDRESS_REPLACEMENTS.items():
             self.assertNotIn(old, offered)
-            self.assertIn(new, offered)
+            if new:  # пустая замена — адрес просто убирается
+                self.assertIn(new, offered)
 
 
 class HostsAppliedSelectionRefreshDecisionTests(unittest.TestCase):
