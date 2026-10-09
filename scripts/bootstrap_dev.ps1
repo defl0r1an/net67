@@ -28,7 +28,7 @@ if (-not (Test-Path $config)) {
     throw "Run from the repository root: $config not found"
 }
 
-$version = "0.15.67"
+$version = "0.16.67"
 
 $buildInfo = Join-Path $config "build_info.py"
 if (Test-Path $buildInfo) {
