@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent
-
+from PyQt6.QtGui import QColor
 from qfluentwidgets import (
     ColorDialog as _QFluentColorDialog,
     MessageBox as _QFluentMessageBox,
     MessageBoxBase as _QFluentMessageBoxBase,
 )
+
+from ui.dialog_static_shadow import DialogStaticShadow
+
+
+_PANEL_GEOMETRY_EVENTS = (QEvent.Type.Move, QEvent.Type.Resize)
 
 
 class _ManagedMaskDialogLifecycle:
@@ -71,7 +76,34 @@ class _ManagedMaskDialogLifecycle:
             # Событие пришло до полной инициализации или во время зачистки
             # диалога — базовый eventFilter обращается к обоим дочерним объектам.
             return False
+        if obj is self.widget and e.type() in _PANEL_GEOMETRY_EVENTS:
+            self._sync_static_shadow()
         return super().eventFilter(obj, e)
+
+    def setShadowEffect(self, blurRadius=60, offset=(0, 10), color=QColor(0, 0, 0, 100)):  # noqa: N802, N803
+        """Тень рисуется готовой картинкой, а не размывается на каждый кадр.
+
+        Живой QGraphicsDropShadowEffect библиотеки заново размывает всю панель
+        при перерисовке любого виджета внутри неё: диалог с анимацией внутри
+        держал ядро процессора на 47 % (замер на Windows), а с готовой
+        картинкой — около нуля при том же виде. См. ui/dialog_static_shadow.
+        """
+        self.widget.setGraphicsEffect(None)
+        shadow = getattr(self, "_static_shadow", None)
+        if shadow is None:
+            shadow = DialogStaticShadow(self, self.widget)
+            self._static_shadow = shadow
+        shadow.set_shadow(blurRadius, offset, color)
+
+    def _sync_static_shadow(self) -> None:
+        shadow = getattr(self, "_static_shadow", None)
+        if shadow is None:
+            return
+        try:
+            shadow.sync_geometry()
+        except RuntimeError:
+            # Рамка уже уничтожена вместе с диалогом.
+            pass
 
     def showEvent(self, event):  # noqa: N802 (Qt override)
         """Приводит затемнение к настоящему размеру окна.
@@ -85,6 +117,9 @@ class _ManagedMaskDialogLifecycle:
         Пересчитываем при каждом показе: диалог может открыться и на
         развёрнутом окне, и на восстановленном.
         """
+        # Панель получает размер от раскладки до того, как фильтр событий
+        # диалога готов: к показу рамку тени нужно поставить по месту явно.
+        self._sync_static_shadow()
         super().showEvent(event)
         self._sync_mask_geometry()
 
