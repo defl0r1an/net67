@@ -31,21 +31,20 @@ def _apply_application_icon(app: QApplication) -> str:
     return icon_path
 
 
-GIL_SWITCH_INTERVAL_SEC = 0.001
-
-
 def apply_gui_gil_switch_interval() -> None:
     """Даёт GUI-потоку чаще перехватывать GIL у фоновых воркеров.
 
     Дефолтные 5 мс означают, что CPU-bound фоновая загрузка удерживает GIL
     целыми кадрами: замеры джиттера показали худшие задержки кадра 48–54 мс
-    против 15–22 мс с интервалом 1 мс.
+    против 15–22 мс с интервалом 1 мс. Интервал меньше миллисекунды убирает
+    и ожидание шага системных часов — поэтому точного таймера Windows больше
+    нет. Замеры и цена — в ui.gui_thread_priority. Включается сразу, ещё до
+    окна: на запуск приходится больше всего фоновой работы; дальше интервалом
+    управляет видимость окна.
     """
-    try:
-        if sys.getswitchinterval() > GIL_SWITCH_INTERVAL_SEC:
-            sys.setswitchinterval(GIL_SWITCH_INTERVAL_SEC)
-    except (AttributeError, ValueError):
-        pass
+    from ui.gui_thread_priority import set_gui_gil_priority
+
+    set_gui_gil_priority(True)
 
 
 def preload_darkdetect_without_wmi() -> None:
@@ -176,13 +175,6 @@ def ensure_qt_runtime() -> QApplication:
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
     os.environ["QT_API"] = "pyqt6"
     apply_gui_gil_switch_interval()
-    # Интервал выше работает только вместе с точным таймером Windows: без
-    # него GUI-поток ждёт GIL у фоновых задач по 16 мс вместо 2 (ui.precise_timer).
-    # Включаем сразу — на запуск приходится больше всего фоновой работы; дальше
-    # таймером управляет видимость окна.
-    from ui.precise_timer import set_precise_timer
-
-    set_precise_timer(True)
     _set_attr_if_exists("AA_EnableHighDpiScaling")
     _set_attr_if_exists("AA_UseHighDpiPixmaps")
 

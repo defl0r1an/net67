@@ -127,6 +127,7 @@ def install_profile_warmup(
             "ProfileSetupPageWarmup",
             _run_profile_setup_page_warmup,
             delay_ms=profile_page_delay,
+            speculative=True,
         )
         page_delay = max(delay, int(preset_setup_page_delay_ms))
         log_startup_metric("StartupPresetSetupUiWarmupQueued", f"{page_delay}ms after interactive")
@@ -134,6 +135,7 @@ def install_profile_warmup(
             "PresetSetupPageWarmup",
             _run_preset_setup_page_warmup,
             delay_ms=page_delay,
+            speculative=True,
         )
 
     bind_startup_gate(
