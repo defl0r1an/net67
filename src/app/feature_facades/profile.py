@@ -65,6 +65,21 @@ class ProfileFeature:
             view_state=view_state,
         )
 
+    def warm_profile_strategy_usage(self, launch_method: str) -> None:
+        """Заранее считает частоту стратегий в готовых пресетах.
+
+        Нужна только странице настройки профиля, поэтому идёт отдельно от
+        списка профилей: список виден на главной сразу, и лишние 0,4 с
+        разбора всех готовых пресетов задерживали бы его.
+        """
+        from settings.mode import normalize_launch_method
+
+        method = normalize_launch_method(launch_method)
+        service = self._commands()._profile_preset_service(self, method)
+        started_at = time.perf_counter()
+        service.warm_strategy_usage()
+        log_ui_timing_since("warmup", method, "profile_warmup.strategy_usage", started_at, important=True)
+
     def list_preset_order_profiles(self, launch_method: str):
         return self._commands().list_preset_order_profiles(self, launch_method)
 

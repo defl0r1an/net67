@@ -214,7 +214,7 @@ class WidgetStateTests(_WidgetCase):
         self.assertEqual(twin_chip_text(head), "ещё 2")
         model = widget._list.list_model()
         index = model.index(model.row_of_key(head.key), 0)
-        chip = widget._list.itemDelegate().twin_chip_rect(widget._list.visualRect(index), head, widget._list.font())
+        chip, _badge = widget._list.itemDelegate().hit_rects(widget._list.visualRect(index), head)
         spy = QSignalSpy(widget.strategy_activated)
 
         self._click_row(widget, head.key, at=chip.center())
@@ -278,6 +278,126 @@ class SearchAndFilterTests(_WidgetCase):
         self.assertEqual(widget._plan.grouping, "series")
 
 
+class DetailsTests(_WidgetCase):
+    PLACES = {"fake-05": (("YouTube · видео", 9), ("Discord", 2))}
+
+    def _with_details(self, **kwargs):
+        widget = self._widget(**kwargs)
+        widget.set_rows(
+            entries=widget._entries,
+            states=kwargs.get("states") or {},
+            current_strategy_id=kwargs.get("current", "fake-05"),
+            places=self.PLACES,
+            experience={"fake-05": (2, 1)},
+        )
+        return widget
+
+    def _labels(self, widget) -> str:
+        from PyQt6.QtWidgets import QLabel
+
+        return "\n".join(label.text() for label in widget._details_view.findChildren(QLabel) if not label.isHidden() or label.text())
+
+    def test_click_on_badge_opens_details_and_click_on_name_applies(self) -> None:
+        widget = self._with_details(current="split-00")
+        opened = QSignalSpy(widget.details_changed)
+        applied = QSignalSpy(widget.strategy_activated)
+        widget._on_group_toggle("recommended", True)
+        row = next(row for row in self._rows(widget) if row.strategy_id == "fake-05")
+        model = widget._list.list_model()
+        index = model.index(model.row_of_key(row.key), 0)
+        _chip, badge = widget._list.itemDelegate().hit_rects(widget._list.visualRect(index), row)
+        self.assertGreater(badge.width(), 0)
+
+        self._click_row(widget, row.key, at=badge.center())
+        self.assertEqual([list(call) for call in opened], [["Alpha v5"]])
+        self.assertEqual(len(applied), 0)
+        self.assertTrue(widget.details_open())
+        self.assertIs(widget._pages.currentWidget(), widget._details_view)
+
+        widget.close_details()
+        self.assertEqual(list(opened[-1]), [""])
+        self.assertEqual(widget._list.current_row().strategy_id, "fake-05")
+        self._click_row(widget, row.key)
+        self.assertEqual([list(call) for call in applied], [["fake-05"]])
+
+    def test_details_tell_what_strategy_does_where_it_is_used_and_personal_experience(self) -> None:
+        widget = self._with_details()
+        widget.show_details("fake-05")
+        text = self._labels(widget)
+
+        self.assertIn("Alpha v5", text)
+        self.assertIn("1. Подделка", text)
+        self.assertIn("Перед настоящим запросом уходит отдельный поддельный пакет", text)
+        self.assertIn("YouTube · видео — в 9 пресетах", text)
+        self.assertIn("На других профилях отмечена рабочей: 2.", text)
+        self.assertIn("--lua-desync=fake:blob=x", text)
+        self.assertEqual(widget._details_view._apply_button.text(), "Выбрана")
+        self.assertFalse(widget._details_view._apply_button.isEnabled())
+
+    def test_details_buttons_ask_the_page_and_follow_new_state(self) -> None:
+        widget = self._with_details()
+        widget.show_details("fake-01")
+        ratings = QSignalSpy(widget.strategy_rating_requested)
+        favorites = QSignalSpy(widget.strategy_favorite_requested)
+        applied = QSignalSpy(widget.strategy_activated)
+
+        widget._details_view._works_button.click()
+        widget._details_view._favorite_button.click()
+        widget._details_view._apply_button.click()
+        self.assertEqual([list(call) for call in ratings], [["fake-01", "work"]])
+        self.assertEqual([list(call) for call in favorites], [["fake-01", True]])
+        self.assertEqual([list(call) for call in applied], [["fake-01"]])
+
+        widget.set_rows(
+            entries=widget._entries,
+            states={"fake-01": ProfileStrategyState(rating="work", favorite=True)},
+            current_strategy_id="fake-01",
+        )
+        self.assertEqual(widget._details_view._works_button.text(), "Снять «Работает»")
+        self.assertEqual(widget._details_view._favorite_button.text(), "Убрать из избранного")
+        self.assertEqual(widget._details_view._apply_button.text(), "Выбрана")
+        widget._details_view._works_button.click()
+        self.assertEqual(list(ratings[-1]), ["fake-01", ""])
+
+    def test_another_profile_closes_details(self) -> None:
+        widget = self._with_details()
+        widget.show_details("fake-05")
+
+        widget.set_rows(entries=widget._entries, states={}, current_strategy_id="fake-05", open_group_token="uid:other", open_group=None)
+
+        self.assertFalse(widget.details_open())
+        self.assertEqual(widget._pages.currentIndex(), 0)
+
+    def test_f1_and_context_menu_open_details(self) -> None:
+        widget = self._with_details()
+        widget._list.setFocus()
+        widget._list.set_current_key("i:fake-05")
+
+        QTest.keyClick(widget._list, Qt.Key.Key_F1)
+        self.assertEqual(widget._details_view.strategy_id(), "fake-05")
+        widget.close_details()
+        with patch.object(widget_module, "show_strategy_context_menu", return_value=("details", True)):
+            widget._show_strategy_menu("fake-01", QPoint(0, 0))
+        self.assertEqual(widget._details_view.strategy_id(), "fake-01")
+
+
+class LearningTests(_WidgetCase):
+    def test_strategy_that_worked_on_other_profiles_gets_personal_badge_and_goes_first(self) -> None:
+        widget = self._widget(current="fake-05", usage={})
+        widget.set_rows(entries=widget._entries, states={}, current_strategy_id="fake-05", experience={"fake-12": (2, 0), "fake-03": (0, 3)})
+        fake = [row for row in self._rows(widget) if row.kind == ROW_STRATEGY and row.group_key == "fake"]
+        omega = [row for row in fake if row.section.title == "Omega"]
+        alpha = [row for row in fake if row.section.title == "Alpha"]
+
+        # Внутри своей серии помогавшая стратегия первая, подводившая — последняя.
+        self.assertEqual(omega[0].strategy_id, "fake-12")
+        self.assertEqual((omega[0].item.badge_text, omega[0].item.badge_tone), ("у вас работает · 2", "personal"))
+        self.assertEqual(alpha[-1].strategy_id, "fake-03")
+        self.assertEqual(widget._plan.queue[0], "fake-12")
+        self.assertEqual(widget._plan.queue[-1], "fake-03")
+        self.assertIn("Вы отметили её рабочей на 2 других профилях.", omega[0].item.tooltip)
+
+
 class TryPanelTests(_WidgetCase):
     def test_panel_names_current_strategy_and_the_next_one(self) -> None:
         widget = self._widget(current="fake-05")
@@ -308,8 +428,23 @@ class TryPanelTests(_WidgetCase):
         self.assertEqual([list(call) for call in ratings], [["fake-05", "work"]])
         self.assertEqual(len(activated), 0)
 
-    def test_queue_end_leaves_plain_fails_button(self) -> None:
+    def test_when_recommended_are_over_the_queue_goes_on_through_the_catalog(self) -> None:
         states = {key: ProfileStrategyState(rating="notwork") for key in ("split-03", "fake-01")}
+        widget = self._widget(current="fake-05", states=states)
+        activated = QSignalSpy(widget.strategy_activated)
+
+        self.assertEqual(widget._try_panel.fails_button.text(), "Не работает — следующая")
+        self.assertIn("Проверено 2 из 3 советуемых", widget._try_panel.hint.text())
+        widget._try_panel.fails_button.click()
+        self.assertEqual(len(activated), 1)
+        self.assertNotIn(activated[0][0], ("fake-05", "split-03", "fake-01"))
+
+        states["fake-05"] = ProfileStrategyState(rating="notwork")
+        widget.set_rows(entries=widget._entries, states=states, current_strategy_id=activated[0][0])
+        self.assertIn("Советуемые проверены, дальше идут остальные: 3 из 38.", widget._try_panel.hint.text())
+
+    def test_queue_end_leaves_plain_fails_button(self) -> None:
+        states = {key: ProfileStrategyState(rating="notwork") for key in _entries() if key != "fake-05"}
         widget = self._widget(current="fake-05", states=states)
         activated = QSignalSpy(widget.strategy_activated)
 
@@ -374,7 +509,7 @@ class KeyboardAndMenuTests(_WidgetCase):
         text = strategy_tooltip(row)
 
         self.assertIn("Эта стратегия выбрана для профиля.", text)
-        self.assertIn("Зелёная галочка", text)
+        self.assertIn("Зелёная галочка на значке", text)
         self.assertIn("Звезда", text)
         self.assertIn("Стоит на этом сервисе в 9 готовых пресетах.", text)
         self.assertIn("--lua-desync=fake:blob=x", text)
@@ -414,6 +549,34 @@ class LayoutAndAccessibilityTests(_WidgetCase):
         self.assertIs(widget.onboarding_target("strategy_try"), widget._try_panel)
         self.assertIs(widget.onboarding_target("strategy_find"), widget._toolbar)
         self.assertIsNone(without_panel.onboarding_target("strategy_try"))
+
+    def test_strategy_icons_are_painted_without_icon_fonts_and_cached(self) -> None:
+        """Значок плитки не зависит от шрифтов значков, которые есть не в каждой сборке."""
+        import inspect
+
+        from profile.ui.strategy_list import icons
+
+        source = inspect.getsource(icons)
+        self.assertNotIn("qtawesome", source)
+        self.assertNotIn("qta", source)
+        first = icons.strategy_icon("fake_split", "#6fb8ff", "work", 28, 1.0, "#2d2d2d")
+        self.assertFalse(first.isNull())
+        self.assertIs(icons.strategy_icon("fake_split", "#6fb8ff", "work", 28, 1.0, "#2d2d2d"), first)
+        plain = icons.strategy_icon("fake_split", "#6fb8ff", "", 28, 1.0, "#2d2d2d")
+        other = icons.strategy_icon("host", "#6fb8ff", "", 28, 1.0, "#2d2d2d")
+        self.assertNotEqual(plain.toImage(), first.toImage())
+        self.assertNotEqual(plain.toImage(), other.toImage())
+        self.assertNotEqual(icons.strategy_icon("unknown-family", "#6fb8ff", "", 28, 1.0, "#2d2d2d").toImage(), plain.toImage())
+
+    def test_one_frame_asks_theme_once_not_per_tile(self) -> None:
+        from profile.ui.strategy_list import delegate as delegate_module
+
+        widget = self._widget()
+        with patch.object(delegate_module, "_build_style", wraps=delegate_module._build_style) as build:
+            widget._list.viewport().grab()
+
+        self.assertGreater(sum(row.kind == ROW_STRATEGY for row in self._rows(widget)), 2)
+        self.assertEqual(build.call_count, 1)
 
     def test_widget_has_no_background_worker_and_one_refresh_path(self) -> None:
         import inspect

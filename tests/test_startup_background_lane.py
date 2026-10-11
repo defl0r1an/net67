@@ -198,5 +198,51 @@ class StartupBackgroundLaneTests(unittest.TestCase):
         self.assertEqual(users, ["main/startup_coordinator.py"])
 
 
+    def test_strategy_usage_warmup_does_not_delay_profile_list(self) -> None:
+        """Частота стратегий (0,4 с разбора готовых пресетов) нужна только
+        странице настройки профиля: она идёт отдельной задачей прогрева, а не
+        внутри задачи списка профилей, который сразу виден на главной."""
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+
+        from main import post_startup_profile_warmup as warmup
+
+        startup_host = SimpleNamespace(
+            is_alive=lambda: True,
+            startup_interactive_ready=SimpleNamespace(connect=lambda callback: callback()),
+            startup_state=SimpleNamespace(interactive_logged=False),
+        )
+        profile_feature = SimpleNamespace(warm_profile_list=Mock(), warm_profile_strategy_usage=Mock())
+        queued: list[tuple[str, dict]] = []
+        tasks: dict[str, object] = {}
+
+        def _enqueue(queue, name, task, **kwargs):
+            queued.append((name, kwargs))
+            tasks[name] = task
+
+        with patch.object(warmup, "enqueue_subsystem_task", side_effect=_enqueue), patch.object(
+            warmup, "schedule_after", side_effect=lambda _delay, callback: callback()
+        ):
+            warmup.install_profile_warmup(
+                startup_host,
+                profile_feature=profile_feature,
+                log_startup_metric=Mock(),
+                idle_tasks=Mock(),
+                current_launch_method="zapret2_mode",
+            )
+
+        self.assertEqual(
+            queued,
+            [
+                ("ProfileWarmup-zapret2_mode", {"on_screen": True}),
+                ("ProfileStrategyUsageWarmup-zapret2_mode", {"warmup": True}),
+            ],
+        )
+        tasks["ProfileWarmup-zapret2_mode"]()
+        profile_feature.warm_profile_strategy_usage.assert_not_called()
+        tasks["ProfileStrategyUsageWarmup-zapret2_mode"]()
+        profile_feature.warm_profile_strategy_usage.assert_called_once_with("zapret2_mode")
+
+
 if __name__ == "__main__":
     unittest.main()

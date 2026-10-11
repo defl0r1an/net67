@@ -17,6 +17,7 @@
 from profile.strategy_list.facts import StrategyFacts, build_strategy_facts
 from profile.strategy_list.plan import (
     BADGE_NEUTRAL,
+    BADGE_PERSONAL,
     BADGE_RECOMMENDED,
     BADGE_WARNING,
     FILTER_ALL,
@@ -40,6 +41,7 @@ from profile.strategy_list.plan import (
     normalize_quick_filter,
     normalize_strategy_grouping,
     try_progress,
+    try_stage,
 )
 from profile.strategy_list.rows import (
     ROW_GROUP,
@@ -52,6 +54,7 @@ from profile.strategy_list.rows import (
 
 __all__ = [
     "BADGE_NEUTRAL",
+    "BADGE_PERSONAL",
     "BADGE_RECOMMENDED",
     "BADGE_WARNING",
     "FILTER_ALL",
@@ -82,5 +85,6 @@ __all__ = [
     "normalize_quick_filter",
     "normalize_strategy_grouping",
     "try_progress",
+    "try_stage",
     "visible_rows",
 ]

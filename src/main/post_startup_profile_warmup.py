@@ -65,6 +65,14 @@ def install_profile_warmup(
             except Exception as exc:
                 log(f"Не удалось обновить UI после прогрева профилей {method}: {exc}", "DEBUG")
 
+    def _run_strategy_usage_warmup(method: str) -> None:
+        if not is_startup_host_alive(startup_host):
+            return
+        try:
+            profile_feature.warm_profile_strategy_usage(method)
+        except Exception as exc:
+            log(f"Фоновый подсчёт частоты стратегий {method} не выполнен: {exc}", "DEBUG")
+
     def _run_preset_setup_page_warmup() -> None:
         if not is_startup_host_alive(startup_host):
             return
@@ -111,6 +119,14 @@ def install_profile_warmup(
             f"ProfileWarmup-{method}",
             lambda: _run_profile_warmup_method(method),
             on_screen=True,
+        )
+        # Частота стратегий нужна только странице настройки профиля: готовит
+        # её кэш заранее и пропускает вперёд всё, что нужно для работы.
+        enqueue_subsystem_task(
+            "profile",
+            f"ProfileStrategyUsageWarmup-{method}",
+            lambda: _run_strategy_usage_warmup(method),
+            warmup=True,
         )
 
     def _schedule_profile_warmup() -> None:
