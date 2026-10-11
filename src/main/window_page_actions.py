@@ -16,6 +16,7 @@ class WindowPageActions:
     open_profile_setup: Callable[..., Any]
     on_profile_setup_changed: Callable[..., Any]
     open_preset_raw_editor: Callable[..., Any]
+    open_custom_dns_server: Callable[..., Any]
     after_launch_method_changed: Callable[..., Any]
     on_background_refresh_needed: Callable[..., Any]
     on_background_preset_changed: Callable[..., Any]
@@ -74,6 +75,12 @@ def open_preset_raw_editor_for_method(window, method, preset_name, *, allow_inte
     from main.window_page_presenters import open_preset_raw_editor_for_method as _open_preset_raw_editor_for_method
 
     return bool(_open_preset_raw_editor_for_method(window, method, preset_name, allow_internal=allow_internal))
+
+
+def open_custom_dns_server(window, server=None) -> bool:
+    from main.window_page_presenters import open_custom_dns_server as _open_custom_dns_server
+
+    return bool(_open_custom_dns_server(window, server))
 
 
 def apply_launch_method_changed_ui(window, method) -> None:
@@ -172,6 +179,7 @@ def build_window_page_actions(*, window, appearance_actions) -> WindowPageAction
             preset_name,
             allow_internal=allow_internal,
         ),
+        open_custom_dns_server=lambda server=None: open_custom_dns_server(window, server),
         after_launch_method_changed=lambda method: apply_launch_method_changed_ui(window, method),
         on_background_refresh_needed=lambda: on_background_refresh_needed(window),
         on_background_preset_changed=lambda preset: on_background_preset_changed(window, preset),

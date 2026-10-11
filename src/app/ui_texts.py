@@ -1619,16 +1619,20 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Automatic (DHCP)",
     },
     "page.network.button.flush_dns_cache": {
-        "ru": "Сбросить DNS кэш",
-        "en": "Flush DNS Cache",
+        "ru": "Сбросить кэш DNS",
+        "en": "Flush DNS cache",
     },
-    "page.network.force_dns.reset.button": {
-        "ru": "Вернуть DNS автоматически",
-        "en": "Restore automatic DNS",
+    "page.network.auto_tile.title": {
+        "ru": "Автоматически",
+        "en": "Automatic",
     },
-    "page.network.force_dns.reset.confirm": {
-        "ru": "Программа вернёт автоматическое получение DNS через DHCP для выбранных адаптеров. DHCP — это обычный режим, когда DNS выдаёт роутер или провайдер. Продолжить?",
-        "en": "The app will restore automatic DNS through DHCP for selected adapters. DHCP is the normal mode where DNS is provided by the router or provider. Continue?",
+    "page.network.auto_tile.note": {
+        "ru": "DNS от роутера",
+        "en": "DNS from the router",
+    },
+    "page.network.auto_tile.tooltip": {
+        "ru": "DNS снова будет получаться автоматически от роутера или провайдера (DHCP). Помогает, если после ручной настройки интернет работает нестабильно.",
+        "en": "DNS will again be received automatically from your router or ISP (DHCP). Helps when the internet is unstable after manual setup.",
     },
     "page.network.error.title": {
         "ru": "Ошибка",
@@ -1689,10 +1693,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.network.adapters.empty": {
         "ru": "Сетевые адаптеры не найдены",
         "en": "No network adapters found",
-    },
-    "page.network.button.reset": {
-        "ru": "Вернуть автоматически",
-        "en": "Reset to automatic",
     },
     "page.network.button.measure": {
         "ru": "Замерить скорость",
@@ -1835,12 +1835,136 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Custom DNS",
     },
     "page.network.add_tile.note": {
-        "ru": "Добавить свой адрес",
-        "en": "Add your own address",
+        "ru": "Адрес DoH или IP-адреса",
+        "en": "DoH address or IP addresses",
     },
     "page.network.custom.button.description": {
-        "ru": "Открывает окно добавления нового DNS сервера.",
-        "en": "Opens a window to add a new DNS server.",
+        "ru": "Открывает страницу добавления своего DNS-сервера: по адресу DoH или по IP-адресам.",
+        "en": "Opens the page for adding your own DNS server: by DoH address or by IP addresses.",
+    },
+    "page.network.custom_server.title": {
+        "ru": "Свой DNS",
+        "en": "Custom DNS",
+    },
+    "page.network.custom_server.new": {
+        "ru": "Новый DNS",
+        "en": "New DNS",
+    },
+    "page.network.custom_server.eyebrow.new": {
+        "ru": "Новый сервер",
+        "en": "New server",
+    },
+    "page.network.custom_server.eyebrow.edit": {
+        "ru": "Свой сервер",
+        "en": "Custom server",
+    },
+    "page.network.custom_server.header.name": {
+        "ru": "Свой DNS-сервер",
+        "en": "Custom DNS server",
+    },
+    "page.network.custom_server.summary.empty": {
+        "ru": "Вставьте адрес DoH или впишите IP-адреса сервера — одного из двух достаточно.",
+        "en": "Paste a DoH address or type the server's IP addresses — either one is enough.",
+    },
+    "page.network.custom_server.summary.doh_only": {
+        "ru": "Шифрованный DNS (DoH). IP-адреса сервера программа найдёт и проверит сама.",
+        "en": "Encrypted DNS (DoH). The app finds and verifies the server's IP addresses itself.",
+    },
+    "page.network.custom_server.summary.doh": {
+        "ru": "Шифрованный DNS (DoH) · {addresses}",
+        "en": "Encrypted DNS (DoH) · {addresses}",
+    },
+    "page.network.custom_server.summary.plain": {
+        "ru": "Обычный DNS без шифрования · {addresses}",
+        "en": "Plain DNS without encryption · {addresses}",
+    },
+    "page.network.custom_server.checking.detail": {
+        "ru": "Ищу адреса сервера и проверяю каждый запросом DoH…",
+        "en": "Finding the server's addresses and checking each one with a DoH query…",
+    },
+    "page.network.custom_server.addresses.auto": {
+        "ru": "Найдутся сами",
+        "en": "Found automatically",
+    },
+    "page.network.custom_server.doh": {
+        "ru": "Адрес DoH",
+        "en": "DoH address",
+    },
+    "page.network.custom_server.doh.hint": {
+        "ru": "Шифрованный DNS, как в браузере. Одной этой строки достаточно",
+        "en": "Encrypted DNS, like in a browser. This one line is enough",
+    },
+    "page.network.custom_server.addresses": {
+        "ru": "IP-адреса",
+        "en": "IP addresses",
+    },
+    "page.network.custom_server.addresses.hint": {
+        "ru": "Через пробел, основной — первым. IPv4 и IPv6 вместе",
+        "en": "Space-separated, primary first. IPv4 and IPv6 together",
+    },
+    "page.network.custom_server.name": {
+        "ru": "Название",
+        "en": "Name",
+    },
+    "page.network.custom_server.name.hint": {
+        "ru": "Подпись плитки в списке DNS",
+        "en": "The tile caption in the DNS list",
+    },
+    "page.network.custom_server.name.placeholder": {
+        "ru": "Мой DNS",
+        "en": "My DNS",
+    },
+    "page.network.custom_server.cancel": {
+        "ru": "Отмена",
+        "en": "Cancel",
+    },
+    "page.network.custom_server.cancel.name": {
+        "ru": "Отмена: вернуться к настройке DNS",
+        "en": "Cancel: back to DNS settings",
+    },
+    "page.network.custom_server.cancel.description": {
+        "ru": "Закрывает страницу без сохранения.",
+        "en": "Closes the page without saving.",
+    },
+    "page.network.custom_server.add": {
+        "ru": "Добавить",
+        "en": "Add",
+    },
+    "page.network.custom_server.save": {
+        "ru": "Сохранить",
+        "en": "Save",
+    },
+    "page.network.custom_server.checking": {
+        "ru": "Проверяю…",
+        "en": "Checking…",
+    },
+    "page.network.custom_server.saving": {
+        "ru": "Сохраняю…",
+        "en": "Saving…",
+    },
+    "page.network.custom_server.save.description": {
+        "ru": "Сохраняет сервер и возвращает к списку DNS. Адреса сервера DoH перед этим проверяются.",
+        "en": "Saves the server and returns to the DNS list. DoH server addresses are verified first.",
+    },
+    "page.network.custom_server.error": {
+        "ru": "Ошибка: {text}",
+        "en": "Error: {text}",
+    },
+    "page.network.custom_server.added": {
+        "ru": "Сервер «{name}» добавлен",
+        "en": "Server “{name}” added",
+    },
+    "page.network.custom_server.saved": {
+        "ru": "Сервер «{name}» сохранён",
+        "en": "Server “{name}” saved",
+    },
+    "page.network.custom_server.saved.content": {
+        "ru": "Адреса: {addresses}. Чтобы включить сервер, нажмите его плитку.",
+        "en": "Addresses: {addresses}. Click the server tile to start using it.",
+    },
+    "page.network.custom_server.save_failed": {
+        "ru": "Не удалось сохранить сервер: {error}",
+        "en": "Could not save the server: {error}",
     },
     "page.network.custom.menu.edit": {
         "ru": "Редактировать",
@@ -6538,6 +6662,7 @@ TEXTS.update(TEXTS_ONBOARDING_NET67_BYPASS)
 NAV_PAGE_TEXT_KEYS: dict[PageName, str] = {
     PageName.ZAPRET2_MODE_CONTROL: "nav.page.zapret2_mode_control",
     PageName.NETWORK: "nav.page.network",
+    PageName.NETWORK_CUSTOM_DNS: "page.network.custom_server.title",
     PageName.VPN: "nav.page.vpn",
     PageName.CONFIGS: "nav.page.configs",
     PageName.HOSTS: "nav.page.hosts",

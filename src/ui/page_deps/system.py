@@ -2,16 +2,27 @@ from __future__ import annotations
 
 from app.page_names import PageName
 from ui.page_deps.types import (
+    CustomDnsServerPageDeps,
     DnsPageDeps,
     HostsFilePageDeps, HostsPageDeps,
     UpdateRuntimeActions,
 )
 
 
-def build_network_page_kwargs(*, page_name: PageName, dns_feature) -> dict:
+def build_network_page_kwargs(*, page_name: PageName, dns_feature, open_custom_dns_server) -> dict:
     _ = page_name
     return {
-        "deps": DnsPageDeps(dns_feature=dns_feature),
+        "deps": DnsPageDeps(dns_feature=dns_feature, open_custom_server=open_custom_dns_server),
+    }
+
+
+def build_custom_dns_server_page_kwargs(*, page_name: PageName, dns_feature, show_page) -> dict:
+    _ = page_name
+    return {
+        "deps": CustomDnsServerPageDeps(
+            dns_feature=dns_feature,
+            open_dns_page=lambda: show_page(PageName.NETWORK),
+        ),
     }
 
 
@@ -255,6 +266,7 @@ __all__ = [
     "build_about_page_kwargs",
     "build_autostart_page_kwargs",
     "build_blockcheck_page_kwargs",
+    "build_custom_dns_server_page_kwargs",
     "build_hosts_file_page_kwargs",
     "build_hosts_page_kwargs",
     "build_logs_page_kwargs",

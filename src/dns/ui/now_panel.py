@@ -2,8 +2,9 @@
 
 Сверху страницы: какой DNS стоит прямо сейчас на отмеченных адаптерах,
 сами адаптеры (кнопки-таблетки: отмеченные получат выбранный DNS) и
-действия — вернуть DNS автоматически, замерить скорость серверов,
-сбросить кэш DNS Windows.
+действия — замерить скорость серверов и сбросить кэш DNS Windows. Вернуть
+автоматический DNS — это плитка «Автоматически» в сетке серверов, а не
+кнопка здесь.
 
 Панель ничего не делает сама: она только показывает то, что ей передала
 страница, и сообщает о нажатиях сигналами.
@@ -67,7 +68,7 @@ class AdapterChip:
     checked: bool = True
 
 
-class _Badge(QWidget):
+class DnsBadge(QWidget):
     """Крупный значок текущего DNS в круге его цвета.
 
     Светится мягким ореолом своего цвета. Пока DNS применяется, вокруг бежит
@@ -189,7 +190,6 @@ class _Badge(QWidget):
 
 
 class DnsNowPanel(SimpleCardWidget):
-    reset_clicked = pyqtSignal()
     measure_clicked = pyqtSignal()
     flush_clicked = pyqtSignal()
     adapters_changed = pyqtSignal(list)
@@ -208,7 +208,7 @@ class DnsNowPanel(SimpleCardWidget):
         self._adapters_empty_text = "Сетевые адаптеры не найдены"
 
         # Вокруг круга значка 10 px под свечение: внешний отступ на столько же меньше.
-        glow_pad = (_Badge.BOX - _Badge.CIRCLE) // 2
+        glow_pad = (DnsBadge.BOX - DnsBadge.CIRCLE) // 2
         root = QVBoxLayout(self)
         root.setContentsMargins(20 - glow_pad, 18 - glow_pad, 20, 16)
         root.setSpacing(14 - glow_pad)
@@ -216,7 +216,7 @@ class DnsNowPanel(SimpleCardWidget):
         # ── что стоит сейчас ──
         head = QHBoxLayout()
         head.setSpacing(16 - glow_pad)
-        self.badge = _Badge(self)
+        self.badge = DnsBadge(self)
         head.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignTop)
 
         text = QVBoxLayout()
@@ -265,10 +265,9 @@ class DnsNowPanel(SimpleCardWidget):
         adapters_box.addWidget(self.adapters_host, 1)
         bottom.addLayout(adapters_box, 1)
 
-        self.reset_button = PushButton(FluentIcon.RETURN, "Вернуть автоматически", self)
         self.measure_button = PushButton(FluentIcon.SPEED_HIGH, "Замерить скорость", self)
-        self.flush_button = PushButton(FluentIcon.BROOM, "Сбросить кэш", self)
-        for button in (self.reset_button, self.measure_button, self.flush_button):
+        self.flush_button = PushButton(FluentIcon.BROOM, "Сбросить кэш DNS", self)
+        for button in (self.measure_button, self.flush_button):
             bottom.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(bottom)
 
@@ -279,20 +278,14 @@ class DnsNowPanel(SimpleCardWidget):
         self.notice_label.setContentsMargins(glow_pad, 0, 0, 0)
         root.addWidget(self.notice_label)
 
-        self.reset_button.clicked.connect(self.reset_clicked)
         self.measure_button.clicked.connect(self.measure_clicked)
         self.flush_button.clicked.connect(self.flush_clicked)
         self._describe_buttons()
 
     def _describe_buttons(self) -> None:
-        reset_text = (
-            "DNS снова будет получаться автоматически от роутера или провайдера (DHCP). "
-            "Помогает, если после ручной настройки интернет работает нестабильно."
-        )
         measure_text = "Отправляет каждому серверу DNS-запрос и показывает на плитках время ответа."
         flush_text = "Очищает кэш DNS Windows, если сайты открываются по старым адресам."
         for button, name, description in (
-            (self.reset_button, "Вернуть DNS автоматически", reset_text),
             (self.measure_button, "Замерить скорость DNS-серверов", measure_text),
             (self.flush_button, "Сбросить кэш DNS", flush_text),
         ):
@@ -422,4 +415,4 @@ class DnsNowPanel(SimpleCardWidget):
         return QSize(640, super().sizeHint().height())
 
 
-__all__ = ["AdapterChip", "DnsNowPanel", "NowState"]
+__all__ = ["AdapterChip", "DnsBadge", "DnsNowPanel", "NowState"]

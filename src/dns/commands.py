@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dns.state import DnsCommandResult, DnsState
+from dns.state import CustomServerResult, DnsCommandResult, DnsState
 
 
 def migrate_outdated_dns_addresses():
@@ -130,3 +130,87 @@ def measure_dns_latency(servers: list[str]):
     from dns.latency import measure_dns_latency as _measure_dns_latency
 
     return _measure_dns_latency(servers)
+
+
+# ── свои DNS-серверы ──────────────────────────────────────────────────────
+
+
+def load_custom_servers() -> list[dict]:
+    from dns.runtime import load_custom_servers as _load_custom_servers
+
+    return _load_custom_servers()
+
+
+def _reserved_names() -> list[str]:
+    """Названия серверов программы: свой сервер не может называться так же."""
+    from dns.dns_providers import iter_providers
+
+    return [name for _group, name, _data in iter_providers()]
+
+
+def _change_custom_servers(change) -> CustomServerResult:
+    """Меняет список своих DNS одной транзакцией; change(список) → (новый список, ошибка)."""
+    from settings.store import update_custom_dns_servers
+
+    class Rejected(Exception):
+        pass
+
+    def mutate(current: list[dict]) -> list[dict]:
+        servers, error = change(current)
+        if error:
+            raise Rejected(error)
+        return servers
+
+    try:
+        return CustomServerResult(success=True, servers=tuple(update_custom_dns_servers(mutate)))
+    except Rejected as exc:
+        return CustomServerResult(success=False, servers=tuple(load_custom_servers()), error=str(exc))
+
+
+def save_custom_server(server: dict, *, cancel=None) -> CustomServerResult:
+    """Добавляет или заменяет (по id) свой DNS-сервер.
+
+    Если задан только адрес DoH, сначала находятся и проверяются IP-адреса
+    сервера (dns.doh_lookup): без них Windows сервер не примет.
+    """
+    from dns import custom_servers as custom
+
+    record = custom.copy_server(server)
+    notice = ""
+    if record["doh"] and not record["ipv4"] and not record["ipv6"]:
+        from dns import winapi
+        from dns.doh_lookup import find_doh_addresses
+
+        template = custom.parse_doh_template(record["doh"])
+        if template is None:
+            return CustomServerResult(success=False, error="Адрес DoH записан неверно.", field=custom.FIELD_DOH)
+        try:
+            ipv6 = bool(winapi.internet_route().has_ipv6)
+        except Exception:
+            ipv6 = False
+        found = find_doh_addresses(template, ipv6=ipv6, doh_supported=winapi.is_doh_supported(), cancel=cancel)
+        if not found.found:
+            return CustomServerResult(success=False, error=found.error, field=custom.FIELD_DOH)
+        record["ipv4"], record["ipv6"], notice = list(found.ipv4), list(found.ipv6), found.notice
+
+    result = _change_custom_servers(
+        lambda current: custom.upsert_server(current, record, reserved_names=_reserved_names())
+    )
+    if not result.success:
+        return CustomServerResult(success=False, servers=result.servers, error=result.error, field=custom.FIELD_NAME)
+    saved = next((item for item in result.servers if str(item.get("id") or "") == record["id"]), record)
+    return CustomServerResult(success=True, servers=result.servers, server=dict(saved), notice=notice)
+
+
+def delete_custom_server(server_id: str) -> CustomServerResult:
+    from dns import custom_servers as custom
+
+    return _change_custom_servers(lambda current: (custom.remove_server(current, server_id), ""))
+
+
+def duplicate_custom_server(server_id: str) -> CustomServerResult:
+    from dns import custom_servers as custom
+
+    return _change_custom_servers(
+        lambda current: (custom.duplicate_server(current, server_id, reserved_names=_reserved_names()), "")
+    )

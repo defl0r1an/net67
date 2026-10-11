@@ -13,6 +13,7 @@ from ui.page_deps.presets import (
 from ui.page_deps.system import (
     build_about_page_kwargs,
     build_blockcheck_page_kwargs,
+    build_custom_dns_server_page_kwargs,
     build_configs_page_kwargs,
     build_hosts_file_page_kwargs,
     build_hosts_page_kwargs,
@@ -75,7 +76,12 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         actions=("show_page",),
         include_ui_state_store=True,
     ),
-    PageName.NETWORK: PageDepsSpec(build_network_page_kwargs, features=("dns",)),
+    PageName.NETWORK: PageDepsSpec(build_network_page_kwargs, features=("dns",), actions=("open_custom_dns_server",)),
+    PageName.NETWORK_CUSTOM_DNS: PageDepsSpec(
+        build_custom_dns_server_page_kwargs,
+        features=("dns",),
+        actions=("show_page",),
+    ),
     PageName.HOSTS: PageDepsSpec(build_hosts_page_kwargs, features=("hosts",), actions=("show_page",)),
     PageName.HOSTS_FILE: PageDepsSpec(build_hosts_file_page_kwargs, features=("hosts",), actions=("show_page",)),
     PageName.SUPPORT: PageDepsSpec(build_support_page_kwargs, features=("external_actions",)),

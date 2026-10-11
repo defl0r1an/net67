@@ -25,6 +25,7 @@ def build_window_page_deps_sources(*, features, state, page_actions) -> PageDeps
 
             "on_profile_setup_changed": page_actions.on_profile_setup_changed,
             "open_connection_test": page_actions.open_connection_test,
+            "open_custom_dns_server": page_actions.open_custom_dns_server,
             "open_folder": page_actions.open_folder,
             "open_preset_raw_editor": page_actions.open_preset_raw_editor,
             "open_profile_setup": page_actions.open_profile_setup,
