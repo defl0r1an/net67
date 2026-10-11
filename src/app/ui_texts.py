@@ -1726,6 +1726,70 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Для ИИ",
         "en": "For AI",
     },
+    "page.network.group.ai.note": {
+        "ru": "серверы сообщества — доверия к ним меньше",
+        "en": "community servers — trust them less",
+    },
+    "page.network.group.lesser_known": {
+        "ru": "Малоизвестные",
+        "en": "Lesser-known",
+    },
+    "page.network.group.lesser_known.note": {
+        "ru": "реже попадают под блокировки",
+        "en": "less likely to be blocked",
+    },
+    "page.network.status.blocked": {
+        "ru": "блокируется",
+        "en": "blocked",
+    },
+    "page.network.status.at_risk": {
+        "ru": "под угрозой",
+        "en": "at risk",
+    },
+    "page.network.status.blocked.tooltip": {
+        "ru": "В России блокируется: обычные запросы к этому серверу не доходят или подменяются по дороге.",
+        "en": "Blocked in Russia: plain queries to this server do not arrive or are replaced on the way.",
+    },
+    "page.network.status.at_risk.tooltip": {
+        "ru": "Под угрозой блокировки в России: пока работает, но может перестать отвечать.",
+        "en": "At risk of being blocked in Russia: works for now, but may stop answering.",
+    },
+    "page.network.status.blocked.chosen.title": {
+        "ru": "{name} в России блокируется",
+        "en": "{name} is blocked in Russia",
+    },
+    "page.network.status.blocked.chosen.content": {
+        "ru": "DNS поставлен, как вы выбрали. Если сайты перестанут открываться, выберите другой сервер.",
+        "en": "The DNS is set as you chose. If sites stop opening, pick another server.",
+    },
+    "page.network.tile.dnssec": {
+        "ru": "DNSSEC: сервер проверяет подписи ответов и не отдаёт подделанные.",
+        "en": "DNSSEC: the server verifies answer signatures and drops forged ones.",
+    },
+    "page.network.tile.encrypted_only": {
+        "ru": "Принимает только шифрованные запросы: Windows 11 спрашивает его по DoH, скорость обычным запросом не замерить.",
+        "en": "Accepts encrypted queries only: Windows 11 asks it over DoH, so a plain query cannot measure its speed.",
+    },
+    "page.network.tile.encrypted_only.unsupported": {
+        "ru": "Принимает только шифрованные запросы, а эта Windows сама шифровать DNS не умеет (нужна Windows 11): здесь сервер работать не будет.",
+        "en": "Accepts encrypted queries only, and this Windows cannot encrypt DNS itself (Windows 11 is required): the server will not work here.",
+    },
+    "page.network.encrypted_only.refused.title": {
+        "ru": "{name} работает только в Windows 11",
+        "en": "{name} works on Windows 11 only",
+    },
+    "page.network.encrypted_only.refused.content": {
+        "ru": "Сервер принимает только шифрованные запросы, а эта Windows сама шифровать DNS не умеет. DNS не изменён: выберите другой сервер.",
+        "en": "The server accepts encrypted queries only, and this Windows cannot encrypt DNS itself. The DNS was not changed: pick another server.",
+    },
+    "page.network.adapters.all": {
+        "ru": "Все",
+        "en": "All",
+    },
+    "page.network.adapters.all.tooltip": {
+        "ru": "Отметить все сетевые интерфейсы: выбранный DNS встанет на каждый из них. Повторное нажатие возвращает исходные отметки.",
+        "en": "Check every network interface: the chosen DNS is applied to each of them. Press again to restore the initial checks.",
+    },
     "page.network.group.custom": {
         "ru": "Свои DNS",
         "en": "Custom DNS",
