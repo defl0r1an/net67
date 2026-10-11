@@ -287,7 +287,7 @@ def apply_user_presets_language(
     if presets_info_btn is not None:
         set_widget_text_if_changed(presets_info_btn, tr_fn(f"{tr_prefix}.button.wiki", "Вики по пресетам"))
     if info_btn is not None:
-        set_widget_text_if_changed(info_btn, tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"))
+        set_tooltip(info_btn, tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"))
 
     if preset_search_input is not None:
         set_placeholder_if_changed(

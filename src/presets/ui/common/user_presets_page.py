@@ -642,7 +642,7 @@ class UserPresetsPageBase(BasePage):
 
         self.layout.removeWidget(self.title_label)
         self._title_status_header = QWidget(self.content)
-        self._title_status_header.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._title_status_header.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         title_layout = QHBoxLayout(self._title_status_header)
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(8)
@@ -650,8 +650,11 @@ class UserPresetsPageBase(BasePage):
         self._preset_status_icon = PresetStatusIcon(self._title_status_header, size=24)
         title_layout.addWidget(self._preset_status_icon, 0, Qt.AlignmentFlag.AlignVCenter)
         title_layout.addWidget(self.title_label, 0, Qt.AlignmentFlag.AlignVCenter)
-        title_layout.addStretch(1)
-        self.layout.insertWidget(title_index, self._title_status_header)
+        # Заголовок стоит в одном ряду с кнопками и поиском: отдельная строка
+        # под него отнимала высоту у списка пресетов.
+        title_layout.addSpacing(8)
+        self._toolbar_layout.set_leading_widget(self._title_status_header)
+        self._toolbar_layout.refresh_for_viewport(self.viewport().width(), self.layout.contentsMargins())
 
     def _on_info_clicked(self) -> None:
         if MessageBox:

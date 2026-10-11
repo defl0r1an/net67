@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from types import MethodType
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QListView, QSizePolicy
-from qfluentwidgets import FluentIcon, PrimaryPushButton
+from PyQt6.QtWidgets import QFrame, QListView, QSizePolicy
+from qfluentwidgets import FluentIcon
 
-from ui.fluent_widgets import SettingsCard, set_tooltip
+from ui.fluent_widgets import set_tooltip
 from ui.widgets.active_row_motion import attach_active_row_motion
 from ui.widgets.hover_row import profile_hover_row_rect
 from presets.ui.common.user_presets_accessibility import apply_user_presets_accessibility
@@ -98,7 +98,7 @@ def build_user_presets_page_shell(
     # удалена вместе с виджетами configs_card, configs_icon,
     # configs_title_label и get_configs_btn.
 
-    toolbar_layout = PresetsToolbarLayout(parent)
+    toolbar_layout = PresetsToolbarLayout(parent, row_count=6)
 
     create_btn = toolbar_layout.create_primary_tool_button(
         primary_tool_button_cls,
@@ -150,10 +150,11 @@ def build_user_presets_page_shell(
     presets_info_btn.clicked.connect(on_open_presets_info)
     presets_info_btn.hide()
 
-    info_btn = toolbar_layout.create_action_button(
-        tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"),
+    info_btn = toolbar_layout.create_icon_button(
         FluentIcon.QUESTION,
+        accessible_name=tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"),
     )
+    set_tooltip(info_btn, tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"))
     info_btn.clicked.connect(on_info_clicked)
 
     preset_search_input = line_edit_cls()
@@ -183,7 +184,7 @@ def build_user_presets_page_shell(
         reset_all_btn,
         info_btn,
     ])
-    toolbar_layout.set_trailing_widget(preset_search_input, minimum_width=280)
+    toolbar_layout.set_trailing_widget(preset_search_input, minimum_width=220)
     toolbar_layout.refresh_for_viewport(parent.viewport().width(), parent.layout.contentsMargins())
 
     presets_list = LinkedWheelListView(parent)
