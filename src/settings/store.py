@@ -1179,6 +1179,7 @@ __all__ = [
     "get_gui_autostart_enabled",
     "get_hosts_selection",
     "get_isp_dns_info_shown",
+    "get_profile_display_order_hint_shown",
     "get_kaspersky_warning_disabled",
     "get_max_blocked",
     "get_mica_enabled",
@@ -1249,6 +1250,7 @@ __all__ = [
     "set_gui_autostart_enabled",
     "set_hosts_selection",
     "set_isp_dns_info_shown",
+    "set_profile_display_order_hint_shown",
     "set_kaspersky_warning_disabled",
     "set_max_blocked",
     "set_mica_enabled",
@@ -1364,6 +1366,14 @@ def get_onboarding_tour_done() -> bool:
 
 def set_onboarding_tour_done(value: bool) -> bool:
     return _set_bool(("warnings", "onboarding_tour_done"), value)
+
+
+def get_profile_display_order_hint_shown() -> bool:
+    return _get_bool(("warnings", "profile_display_order_hint_shown"), False)
+
+
+def set_profile_display_order_hint_shown(value: bool = True) -> bool:
+    return _set_bool(("warnings", "profile_display_order_hint_shown"), value)
 
 
 def get_remote_presets_settings() -> dict[str, Any]:

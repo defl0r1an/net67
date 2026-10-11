@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt, QTimer
 
 from log.log import log
 from profile.match_filters import filter_values
@@ -22,7 +22,11 @@ from profile.ui.profile_payload_controller import (
 )
 from profile.ui.preset_write_queue import PresetWriteQueue
 from profile.ui.profile_folder_controller import ProfileFolderController
-from profile.ui.profiles_list import ProfilesList
+from profile.ui.profiles_list import (
+    DISPLAY_ORDER_NOTICE_TEXT,
+    DISPLAY_ORDER_NOTICE_TITLE,
+    ProfilesList,
+)
 from profile.ui.shell import build_profile_shell, wire_profile_search_keyboard_activation
 from profile.ui.user_profile_dialog import CreateUserProfileDialog
 from qfluentwidgets import BodyLabel, InfoBar
@@ -130,6 +134,11 @@ def _pending_kind_property(kind: str, from_operation, to_operation):
     return property(_get, _set)
 
 
+# В этом запуске программы уже выясняли, показывать ли пояснение про порядок
+# в пресете: само «показано» хранится в настройках (warnings).
+_display_order_explained = False
+
+
 class PresetSetupPageBase(BasePage):
     launch_method = ZAPRET2_MODE
     engine_label = "net67 v2"
@@ -157,6 +166,7 @@ class PresetSetupPageBase(BasePage):
         open_profile_setup,
         open_profile_order,
         ui_state_store=None,
+        create_profile_display_order_notice_worker=None,
     ):
         super().__init__(
             title=self.page_title,
@@ -172,6 +182,9 @@ class PresetSetupPageBase(BasePage):
         self._create_user_profile_delete_worker_fn = create_user_profile_delete_worker
         self._create_profile_folder_action_worker_fn = create_profile_folder_action_worker
         self._create_profile_request_form_open_worker_fn = create_profile_request_form_open_worker
+        # Без этой фабрики пояснение про порядок в пресете показывается при
+        # первом перетаскивании каждого запуска, а не один раз.
+        self._create_profile_display_order_notice_worker_fn = create_profile_display_order_notice_worker
         self._open_profile_setup = open_profile_setup
         self._open_profile_order_page = open_profile_order
 
@@ -661,6 +674,13 @@ class PresetSetupPageBase(BasePage):
         profiles_list.profile_move_after_requested.connect(self._on_profile_move_after_requested)
         profiles_list.profile_move_to_folder_requested.connect(self._on_profile_move_to_folder_requested)
         profiles_list.profile_move_to_end_requested.connect(self._on_profile_move_to_end_requested)
+        for moved in (
+            profiles_list.profile_move_requested,
+            profiles_list.profile_move_after_requested,
+            profiles_list.profile_move_to_folder_requested,
+            profiles_list.profile_move_to_end_requested,
+        ):
+            moved.connect(self._explain_display_order_once)
         profiles_list.folder_context_requested.connect(self._on_folder_context_requested)
         profiles_list.folder_toggled.connect(self._on_folder_toggled)
         profiles_list.folders_toggled.connect(self._on_folders_toggled)
@@ -1135,6 +1155,40 @@ class PresetSetupPageBase(BasePage):
             destination_group_key=destination_group_key,
         )
 
+    def _explain_display_order_once(self, *_move) -> None:
+        """После самого первого перетаскивания объясняет, что порядок в пресете прежний.
+
+        Список похож на сам пресет, и без пояснения кажется, что профили
+        переставлены в нём. Показано ли пояснение, помнят настройки, поэтому
+        оно появляется один раз; дальше об этом напоминает подсказка у курсора.
+        """
+        global _display_order_explained
+        if _display_order_explained:
+            return
+        # В этом запуске настройки больше не спрашиваем.
+        _display_order_explained = True
+        create_worker = self.__dict__.get("_create_profile_display_order_notice_worker_fn")
+        if create_worker is None:
+            self._show_display_order_notice()
+            return
+        self._worker_runtime("_profile_display_order_notice_runtime").start_qthread_worker(
+            worker_factory=lambda request_id: create_worker(request_id, parent=self),
+            on_loaded=self._on_display_order_notice_claimed,
+        )
+
+    def _on_display_order_notice_claimed(self, _request_id: int, first_time) -> None:
+        if first_time and not bool(self.__dict__.get("_cleanup_in_progress", False)):
+            self._show_display_order_notice()
+
+    def _show_display_order_notice(self) -> None:
+        InfoBar.info(
+            title=DISPLAY_ORDER_NOTICE_TITLE,
+            content=DISPLAY_ORDER_NOTICE_TEXT,
+            orient=Qt.Orientation.Vertical,
+            duration=12000,
+            parent=self.window(),
+        )
+
     def _on_profile_move_finished(
         self,
         request_id: int,
@@ -1375,6 +1429,7 @@ class PresetSetupPageBase(BasePage):
             ("_profile_item_refresh_runtime", "profile item refresh worker"),
             ("_profile_context_action_runtime", "profile context action worker"),
             ("_profile_move_runtime", "profile move worker"),
+            ("_profile_display_order_notice_runtime", "profile display order notice worker"),
             ("_profile_folder_action_runtime", "profile folder action worker"),
             ("_profile_request_form_open_runtime", "profile request form open worker"),
             ("_user_profile_create_runtime", "user profile create worker"),
