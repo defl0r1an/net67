@@ -54,7 +54,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     ),
     PageName.ZAPRET2_PROFILE_SETUP: PageDepsSpec(
         build_profile_setup_page_kwargs,
-        features=("profile",),
+        features=("profile", "hosts"),
         actions=("show_page", "on_profile_setup_changed"),
         include_ui_state_store=True,
     ),

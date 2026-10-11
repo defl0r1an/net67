@@ -22,11 +22,12 @@ from hosts.commands import (
     save_user_selection,
     write_hosts_file,
 )
-from hosts.geo_sites import GeoSites, load_geo_sites
+from hosts.geo_sites import GeoSites, load_geo_services_for_site_list, load_geo_sites
 from hosts.state import HostsCommandResult, HostsState
 
 __all__ = [
     "GeoSites",
+    "load_geo_services_for_site_list",
     "load_geo_sites",
     "HostsCommandResult",
     "HostsState",
