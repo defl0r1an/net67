@@ -148,7 +148,7 @@ class HistoryButtons(QObject):
         """Приводит кнопки к журналу: «назад» активна, «вперёд» видна — когда есть куда идти."""
         self.back_button.setEnabled(self._navigation.can_go_back())
         back_text = self._text("nav.history.back.tooltip", "Назад. Удерживайте, чтобы увидеть историю")
-        self.back_button.setToolTip(back_text)
+        set_tooltip(self.back_button, back_text)
         set_control_accessibility(self.back_button, name=back_text)
         button = self.forward_button
         if button is None:

@@ -27,7 +27,7 @@ from __future__ import annotations
 from collections import OrderedDict
 
 
-_PATCH_MARK = "_zapretgui_style_cache_installed"
+_PATCH_MARK = "_net67_style_cache_installed"
 # Свои стили виджетов (setCustomStyleSheet) бывают разными у каждого виджета,
 # поэтому запас ограничен: редко нужные тексты вытесняются.
 _MAX_RENDERED = 512

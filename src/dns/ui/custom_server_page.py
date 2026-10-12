@@ -51,7 +51,7 @@ from ui.accessibility import (
     set_control_accessibility,
     set_state_text,
 )
-from ui.fluent_widgets import style_semantic_caption_label
+from ui.fluent_widgets import set_tooltip, style_semantic_caption_label
 from ui.latest_worker_lane import LatestWorkerLane
 from ui.pages.base_page import BasePage
 from ui.widgets.win11_controls import Win11ControlRow
@@ -160,7 +160,7 @@ class _FieldRow(Win11ControlRow):
             shown = desc_label.fontMetrics().elidedText(description, Qt.TextElideMode.ElideRight, label_width)
         if desc_label.text() != shown:
             desc_label.setText(shown)
-        desc_label.setToolTip("" if shown == description else description)
+        set_tooltip(desc_label, "" if shown == description else description)
 
 
 class _FormHost(QWidget):

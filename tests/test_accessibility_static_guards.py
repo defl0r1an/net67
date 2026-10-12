@@ -84,6 +84,9 @@ ALLOWED_NO_FOCUS_SOURCES = {
     # Точка состояния из zapret 21.1.6.45: NoFocus — пока она лишь
     # украшение; выключателем (set_clickable) она берёт StrongFocus.
     "src/ui/pulsing_dot.py",
+    # Картинка появления карточки гео-сервиса: прозрачна для мыши и живёт
+    # долю секунды, пока настоящая карточка с кнопками не встанет на место.
+    "src/profile/ui/profile_geo_notice.py",
 }
 
 
@@ -100,7 +103,10 @@ ALLOWED_NO_FOCUS_SOURCES = {
 #: - button_motion.py — ловит нажатия мыши только ради анимации кнопки,
 #:   своего действия у него нет, клавиатурой кнопку жмут как раньше;
 #: - onboarding/overlay.py — обучающий тур; переделывается под net67, и
-#:   доступность для диктора добавляется вместе с ним.
+#:   доступность для диктора добавляется вместе с ним;
+#: - navigation/history_buttons.py — стрелки «назад»/«вперёд» в шапке ловят
+#:   мышь только затем, чтобы шапка не начинала перетаскивать окно; с
+#:   клавиатуры то же делают Alt+Влево и Alt+Вправо.
 UPSTREAM_KNOWN_GAPS = {
     "src/profile/winws2_language/diagnostics.py",
     "src/profile/winws2_language/hover.py",
@@ -109,6 +115,7 @@ UPSTREAM_KNOWN_GAPS = {
     "src/ui/code_editor/completion_popup.py",
     "src/ui/button_motion.py",
     "src/ui/onboarding/overlay.py",
+    "src/ui/navigation/history_buttons.py",
 }
 
 #: Свои файлы net67, где мышь включает только украшение. Действия, до

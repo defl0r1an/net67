@@ -37,6 +37,7 @@ from utils.dns_wire import (
     query_doh,
     query_udp,
 )
+from utils.net_resolve import resolve_addrinfo
 from utils.socket_cancel import SocketCancel
 
 PROBE_DOMAIN = "example.com"
@@ -81,7 +82,9 @@ def resolve_candidates(host: str, *, ipv6: bool, cancel: SocketCancel | None = N
 
     def ask_system() -> tuple[str, ...]:
         try:
-            found = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+            # Системный DNS на заблокированное имя может молчать сколько угодно:
+            # без срока поток висел бы, пока эталонные серверы давно ответили.
+            found = resolve_addrinfo(host, 443, timeout=ENCRYPTED_TIMEOUT_S, socktype=socket.SOCK_STREAM)
         except OSError:
             return ()
         return tuple(str(item[4][0]) for item in found)

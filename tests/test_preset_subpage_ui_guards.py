@@ -384,6 +384,15 @@ class PresetSubpageUiGuardTests(unittest.TestCase):
     def test_raw_preset_load_updates_active_preset_state_from_worker_result(self) -> None:
         from presets.ui.common.preset_subpage_base import PresetRawEditorPage
 
+        # Подсказка пути идёт через set_tooltip, а он ставит фильтр Fluent на
+        # настоящий виджет; у поддельной метки здесь хватает setToolTip.
+        self.enterContext(
+            patch(
+                "presets.ui.common.preset_subpage_base.set_tooltip",
+                side_effect=lambda widget, text, **_kwargs: widget.setToolTip(text),
+            )
+        )
+
         page = PresetRawEditorPage.__new__(PresetRawEditorPage)
         page._raw_load_request_id = 4
         page._cleanup_in_progress = False
