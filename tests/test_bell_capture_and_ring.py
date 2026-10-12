@@ -134,6 +134,38 @@ class InfoBarCaptureTests(unittest.TestCase):
         entry.buttons[0]["callback"]()
         self.assertEqual(pressed, [2])
 
+    def test_parentless_button_like_dns_warning_reaches_bell(self) -> None:
+        """Страница DNS создаёт кнопку без родителя и кладёт в плашку — так же доходит."""
+        from qfluentwidgets import InfoBar, PushButton
+
+        inbox, page = self._window_with_inbox()
+        pressed: list[str] = []
+        bar = InfoBar.warning(title="DNS от провайдера", content="Можно применить Quad9", parent=page, duration=100)
+        button = PushButton("Применить Quad9")
+        button.clicked.connect(lambda: pressed.append("quad9"))
+        bar.addWidget(button)
+
+        (entry,) = inbox.entries()
+        self.assertEqual([action["text"] for action in entry.buttons], ["Применить Quad9"])
+        entry.buttons[0]["callback"]()
+        self.assertEqual(pressed, ["quad9"])
+
+    def test_buttons_inside_a_row_widget_reach_bell_in_order(self) -> None:
+        from PyQt6.QtWidgets import QHBoxLayout
+
+        from qfluentwidgets import InfoBar, PushButton
+
+        inbox, page = self._window_with_inbox()
+        bar = InfoBar.error(title="Ошибка", content="что-то", parent=page, duration=100)
+        row = QWidget(bar)
+        layout = QHBoxLayout(row)
+        for text in ("Исправить", "Подробнее"):
+            layout.addWidget(PushButton(text, row))
+        bar.addWidget(row)
+
+        (entry,) = inbox.entries()
+        self.assertEqual([action["text"] for action in entry.buttons], ["Исправить", "Подробнее"])
+
     def test_capture_is_installed_once(self) -> None:
         from ui.infobar_inbox_capture import install_infobar_capture
 

@@ -153,9 +153,18 @@ def install_infobar_capture() -> bool:
 
     def addWidget(self, widget, stretch=0):
         original_add_widget(self, widget, stretch)
-        if getattr(self, "_net67_in_bell", False) and isinstance(widget, QAbstractButton):
+        if not getattr(self, "_net67_in_bell", False):
+            return
+        # Кнопку кладут и саму, и рядом с другими в общем виджете-ряду:
+        # из ряда кнопки достаются по порядку, иначе они пропали бы так же,
+        # как раньше пропадали одиночные.
+        if isinstance(widget, QAbstractButton):
+            found = [widget]
+        else:
+            found = widget.findChildren(QAbstractButton) if widget is not None else []
+        for button in found:
             try:
-                attach_button(self._net67_entry, widget)
+                attach_button(self._net67_entry, button)
             except Exception:
                 pass
 
