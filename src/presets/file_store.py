@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import os
 import re
 import time
 
@@ -412,15 +413,37 @@ class PresetFileStore:
 
     @staticmethod
     def _path_signature(path: Path) -> tuple[object, ...]:
+        """Ключ папки для кэша списка: время папки и перечень её пресетов.
+
+        Одного времени папки мало. На Windows оно идёт шагами системных часов
+        (около 16 мс), а размер папки всегда 0: два файла, записанные за один
+        шаг, оставляли ключ прежним, и список не видел второго — «Preset not
+        found» примерно в одном прогоне теста сохранения из семи, а в
+        программе — у пресета, импортированного сразу за другим. Перечень
+        берётся из scandir: на Windows время и размер файла приходят вместе с
+        именем, без отдельного обращения к диску (130 пресетов — 0,3 мс,
+        тогда как пересканирование читает заголовок каждого файла).
+        """
         try:
             stat = path.stat()
-            return (
-                True,
-                int(getattr(stat, "st_mtime_ns", 0) or 0),
-                int(getattr(stat, "st_size", 0) or 0),
-            )
         except Exception:
-            return (False, 0, 0)
+            return (False, 0, ())
+        entries: list[tuple[str, int, int]] = []
+        try:
+            with os.scandir(path) as listing:
+                for entry in listing:
+                    name = entry.name.lower()
+                    if not name.endswith(".txt"):
+                        continue
+                    try:
+                        entry_stat = entry.stat()
+                    except OSError:
+                        entries.append((name, 0, 0))
+                        continue
+                    entries.append((name, int(entry_stat.st_mtime_ns), int(entry_stat.st_size)))
+        except OSError:
+            pass
+        return (True, int(getattr(stat, "st_mtime_ns", 0) or 0), tuple(sorted(entries)))
 
     def _find_index(self, manifests: list[PresetManifest], file_name: str) -> int:
         candidate = str(file_name or "").strip().lower()

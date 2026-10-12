@@ -37,6 +37,27 @@ class PresetFileStoreGuardTests(unittest.TestCase):
 
         self.assertEqual(manifest.file_name, "Default v5.txt")
 
+    def test_file_written_in_the_same_clock_tick_is_seen(self) -> None:
+        """Время папки на Windows идёт шагами системных часов (около 16 мс), а размер
+        папки всегда 0. Два файла, записанные за один шаг, оставляли ключ кэша
+        прежним, и список пресетов не видел второго: «Preset not found» примерно
+        в одном прогоне теста сохранения из семи. Здесь тот же шаг воспроизводится
+        честно — время папки после второго файла возвращается назад."""
+        import os
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store = PresetFileStore(AppPaths(user_root=root, local_root=root))
+            builtin_dir = store._paths.engine_paths(ENGINE_WINWS2).ensure_directories().builtin_presets_dir
+            (builtin_dir / "First.txt").write_text("# Preset: First\n--new\n", encoding="utf-8")
+            before = os.stat(builtin_dir)
+            self.assertIsNotNone(store.get_manifest(ENGINE_WINWS2, "First.txt"))
+
+            (builtin_dir / "Second.txt").write_text("# Preset: Second\n--new\n", encoding="utf-8")
+            os.utime(builtin_dir, ns=(before.st_atime_ns, before.st_mtime_ns))
+
+            self.assertIsNotNone(store.get_manifest(ENGINE_WINWS2, "Second.txt"))
+
 
 if __name__ == "__main__":
     unittest.main()
