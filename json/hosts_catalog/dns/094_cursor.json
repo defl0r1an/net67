@@ -1,0 +1,140 @@
+{
+  "name": "Cursor",
+  "category": "ai",
+  "icon": "simple:cursor:CU",
+  "icon_color": "#000000",
+  "sort_order": 112,
+  "domains": [
+    {
+      "host": "agentn.api2.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "52.21.130.202",
+          "34.225.159.174",
+          "3.92.129.183"
+        ]
+      }
+    },
+    {
+      "host": "agentn.api5.cursor.sh",
+      "ips": {}
+    },
+    {
+      "host": "agentn.global.api5.cursor.sh",
+      "ips": {}
+    },
+    {
+      "host": "api2.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "api3.cursor.sh",
+      "ips": {}
+    },
+    {
+      "host": "api4.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "35.71.162.24",
+          "13.248.241.7"
+        ]
+      }
+    },
+    {
+      "host": "authenticate.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    },
+    {
+      "host": "authenticator.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "cursor-cdn.com",
+      "ips": {
+        "comss_dns": [
+          "104.26.9.156",
+          "104.26.8.156",
+          "172.67.71.187"
+        ]
+      }
+    },
+    {
+      "host": "cursor.com",
+      "ips": {
+        "comss_dns": "76.76.21.21"
+      }
+    },
+    {
+      "host": "download.todesktop.com",
+      "ips": {
+        "comss_dns": [
+          "104.18.12.243",
+          "104.18.13.243"
+        ]
+      }
+    },
+    {
+      "host": "marketplace.cursorapi.com",
+      "ips": {
+        "comss_dns": [
+          "104.20.38.66",
+          "172.66.144.201"
+        ]
+      }
+    },
+    {
+      "host": "origin.cursor.com",
+      "ips": {
+        "comss_dns": [
+          "52.70.65.227",
+          "100.61.235.197",
+          "34.239.41.192"
+        ]
+      }
+    },
+    {
+      "host": "repo42.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "98.87.193.55",
+          "44.213.28.243",
+          "34.200.87.105"
+        ]
+      }
+    },
+    {
+      "host": "us-only.gcpp.cursor.sh",
+      "ips": {
+        "comss_dns": [
+          "75.2.76.8",
+          "99.83.165.34"
+        ]
+      }
+    },
+    {
+      "host": "www.cursor.com",
+      "ips": {
+        "comss_dns": [
+          "66.33.60.34",
+          "76.76.21.164"
+        ]
+      }
+    }
+  ]
+}

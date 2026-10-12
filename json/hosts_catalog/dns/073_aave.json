@@ -1,0 +1,27 @@
+{
+  "name": "Aave",
+  "category": "other",
+  "icon": "fa5s.coins",
+  "icon_color": "#B6509E",
+  "sort_order": 91,
+  "domains": [
+    {
+      "host": "aave.com",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "www.aave.com",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "CapCut",
+  "category": "other",
+  "icon": "fa5s.cut",
+  "icon_color": "#000000",
+  "sort_order": 104,
+  "domains": [
+    {
+      "host": "capcut.com",
+      "ips": {
+        "comss_dns": [
+          "23.216.134.133",
+          "23.216.134.144"
+        ]
+      }
+    },
+    {
+      "host": "www.capcut.com",
+      "ips": {}
+    }
+  ]
+}

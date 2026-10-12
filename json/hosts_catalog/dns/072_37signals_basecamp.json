@@ -1,0 +1,45 @@
+{
+  "name": "37signals (Basecamp)",
+  "category": "other",
+  "icon": "simple:basecamp:BC",
+  "icon_color": "#1D2D35",
+  "sort_order": 90,
+  "domains": [
+    {
+      "host": "37signals.com",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "basecamp.com",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "www.37signals.com",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "www.basecamp.com",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    }
+  ]
+}

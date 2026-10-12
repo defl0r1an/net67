@@ -15,6 +15,7 @@ _PROFILE_ICONS: dict[str, tuple[str, str]] = {
     "astracat": ("fa5s.cat", "#F59E0B"),
     "geohide": ("fa5s.globe-europe", "#8B5CF6"),
     "dns_ai": ("fa5s.microchip", "#06B6D4"),
+    "zapret_dns": ("fa5s.unlock-alt", "#10B981"),
 }
 
 # Для профиля, которого ещё нет в словаре: кружок цвета по его номеру.

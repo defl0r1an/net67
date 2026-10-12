@@ -1,0 +1,45 @@
+{
+  "name": "Dola (Cici)",
+  "category": "ai",
+  "icon": "fa5s.robot",
+  "icon_color": "#3B82F6",
+  "sort_order": 114,
+  "domains": [
+    {
+      "host": "cici.com",
+      "ips": {
+        "comss_dns": [
+          "2.16.56.214",
+          "2.16.56.50"
+        ]
+      }
+    },
+    {
+      "host": "dola.com",
+      "ips": {
+        "comss_dns": [
+          "2.17.251.182",
+          "2.17.251.184"
+        ]
+      }
+    },
+    {
+      "host": "www.cici.com",
+      "ips": {
+        "comss_dns": [
+          "2.19.181.25",
+          "2.19.181.40"
+        ]
+      }
+    },
+    {
+      "host": "www.dola.com",
+      "ips": {
+        "comss_dns": [
+          "2.23.167.18",
+          "2.20.255.187"
+        ]
+      }
+    }
+  ]
+}

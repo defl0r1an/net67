@@ -1,0 +1,22 @@
+{
+  "name": "Affinity Studio",
+  "category": "other",
+  "icon": "fa5s.pen-nib",
+  "icon_color": "#7E4DD2",
+  "sort_order": 93,
+  "domains": [
+    {
+      "host": "affinity.studio",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    },
+    {
+      "host": "www.affinity.studio",
+      "ips": {}
+    }
+  ]
+}

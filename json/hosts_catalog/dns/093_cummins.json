@@ -1,0 +1,24 @@
+{
+  "name": "Cummins",
+  "category": "other",
+  "icon": "fa5s.cogs",
+  "icon_color": "#DA291C",
+  "sort_order": 111,
+  "domains": [
+    {
+      "host": "cummins.com",
+      "ips": {
+        "comss_dns": "192.124.249.180"
+      }
+    },
+    {
+      "host": "www.cummins.com",
+      "ips": {
+        "comss_dns": [
+          "172.64.154.161",
+          "104.18.33.95"
+        ]
+      }
+    }
+  ]
+}

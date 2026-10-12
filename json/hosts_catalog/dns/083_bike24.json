@@ -1,0 +1,24 @@
+{
+  "name": "Bike24",
+  "category": "other",
+  "icon": "fa5s.bicycle",
+  "icon_color": "#E30613",
+  "sort_order": 101,
+  "domains": [
+    {
+      "host": "bike-components.de",
+      "ips": {
+        "comss_dns": "18.194.224.233"
+      }
+    },
+    {
+      "host": "www.bike-components.de",
+      "ips": {
+        "comss_dns": [
+          "23.219.79.74",
+          "23.219.79.100"
+        ]
+      }
+    }
+  ]
+}

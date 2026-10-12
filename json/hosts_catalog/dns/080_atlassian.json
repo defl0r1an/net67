@@ -1,0 +1,26 @@
+{
+  "name": "Atlassian",
+  "category": "other",
+  "icon": "simple:atlassian:AT",
+  "icon_color": "#0052CC",
+  "sort_order": 98,
+  "domains": [
+    {
+      "host": "atlassian.com",
+      "ips": {
+        "comss_dns": [
+          "52.85.154.58",
+          "52.85.154.112",
+          "52.85.154.4",
+          "52.85.154.110"
+        ]
+      }
+    },
+    {
+      "host": "www.atlassian.com",
+      "ips": {
+        "comss_dns": "13.227.180.4"
+      }
+    }
+  ]
+}

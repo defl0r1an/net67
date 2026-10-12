@@ -1,0 +1,27 @@
+{
+  "name": "Corsair",
+  "category": "other",
+  "icon": "simple:corsair:CO",
+  "icon_color": "#000000",
+  "sort_order": 109,
+  "domains": [
+    {
+      "host": "corsair.com",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    },
+    {
+      "host": "www.corsair.com",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    }
+  ]
+}

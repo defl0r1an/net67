@@ -1,0 +1,29 @@
+{
+  "name": "ClickUp",
+  "category": "other",
+  "icon": "simple:clickup:CU",
+  "icon_color": "#7B68EE",
+  "sort_order": 107,
+  "domains": [
+    {
+      "host": "clickup.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "www.clickup.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Kaleido (remove.bg)",
+  "category": "ai",
+  "icon": "fa5s.magic",
+  "icon_color": "#2563EB",
+  "sort_order": 121,
+  "domains": [
+    {
+      "host": "kaleido.ai",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "www.kaleido.ai",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    }
+  ]
+}

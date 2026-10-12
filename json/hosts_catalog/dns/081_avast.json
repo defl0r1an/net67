@@ -1,0 +1,43 @@
+{
+  "name": "Avast",
+  "category": "other",
+  "icon": "simple:avast:AV",
+  "icon_color": "#FF7800",
+  "sort_order": 99,
+  "domains": [
+    {
+      "host": "avast.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "132.243.112.221",
+          "157.22.178.170"
+        ]
+      }
+    },
+    {
+      "host": "avast.ru",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "www.avast.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "www.avast.ru",
+      "ips": {}
+    }
+  ]
+}

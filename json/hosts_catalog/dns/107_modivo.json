@@ -1,0 +1,36 @@
+{
+  "name": "Modivo",
+  "category": "other",
+  "icon": "fa5s.tshirt",
+  "icon_color": "#000000",
+  "sort_order": 125,
+  "domains": [
+    {
+      "host": "img.modivo.cloud",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "modivo.pl",
+      "ips": {
+        "comss_dns": [
+          "104.17.250.184",
+          "104.17.251.184"
+        ]
+      }
+    },
+    {
+      "host": "www.modivo.pl",
+      "ips": {
+        "comss_dns": [
+          "104.17.250.184",
+          "104.17.251.184"
+        ]
+      }
+    }
+  ]
+}

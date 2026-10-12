@@ -1,0 +1,23 @@
+{
+  "name": "Genspark",
+  "category": "ai",
+  "icon": "fa5s.robot",
+  "icon_color": "#111827",
+  "sort_order": 117,
+  "domains": [
+    {
+      "host": "genspark.ai",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "www.genspark.ai",
+      "ips": {}
+    }
+  ]
+}

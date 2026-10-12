@@ -1,0 +1,34 @@
+{
+  "name": "Cerebras",
+  "category": "ai",
+  "icon": "fa5s.robot",
+  "icon_color": "#F05A28",
+  "sort_order": 105,
+  "domains": [
+    {
+      "host": "api.cerebras.ai",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "cerebras.ai",
+      "ips": {
+        "comss_dns": "76.76.21.21"
+      }
+    },
+    {
+      "host": "www.cerebras.ai",
+      "ips": {
+        "comss_dns": [
+          "76.76.21.123",
+          "66.33.60.35"
+        ]
+      }
+    }
+  ]
+}

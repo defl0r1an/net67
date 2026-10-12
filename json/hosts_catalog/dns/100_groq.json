@@ -1,0 +1,29 @@
+{
+  "name": "Groq",
+  "category": "ai",
+  "icon": "fa5s.bolt",
+  "icon_color": "#F55036",
+  "sort_order": 118,
+  "domains": [
+    {
+      "host": "api.groq.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "console.groq.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    }
+  ]
+}

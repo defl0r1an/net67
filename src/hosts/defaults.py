@@ -57,6 +57,7 @@ PROFILE_ORDER: tuple[str, ...] = (
     "dns_ai",
     "comss_dns",
     "astracat",
+    "zapret_dns",
     "xbox_dns",
 )
 

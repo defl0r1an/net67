@@ -1,0 +1,36 @@
+{
+  "name": "Camel AI",
+  "category": "ai",
+  "icon": "fa5s.robot",
+  "icon_color": "#7C3AED",
+  "sort_order": 103,
+  "domains": [
+    {
+      "host": "camelai.com",
+      "ips": {
+        "comss_dns": [
+          "8.6.112.0",
+          "8.47.69.0"
+        ]
+      }
+    },
+    {
+      "host": "stream.camelai.com",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    },
+    {
+      "host": "www.camelai.com",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.5",
+          "8.6.112.5"
+        ]
+      }
+    }
+  ]
+}

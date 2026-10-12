@@ -1,0 +1,13 @@
+{
+  "name": "ZeroSSL",
+  "category": "other",
+  "icon": "fa5s.lock",
+  "icon_color": "#1E9E5A",
+  "sort_order": 131,
+  "domains": [
+    {
+      "host": "app.zerossl.com",
+      "ips": {}
+    }
+  ]
+}

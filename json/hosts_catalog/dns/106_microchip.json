@@ -1,0 +1,15 @@
+{
+  "name": "Microchip",
+  "category": "other",
+  "icon": "fa5s.microchip",
+  "icon_color": "#E5181C",
+  "sort_order": 124,
+  "domains": [
+    {
+      "host": "microchip.com",
+      "ips": {
+        "comss_dns": "23.49.111.85"
+      }
+    }
+  ]
+}

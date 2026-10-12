@@ -1,0 +1,35 @@
+{
+  "name": "Chaos (V-Ray, Enscape)",
+  "category": "other",
+  "icon": "fa5s.cube",
+  "icon_color": "#0E7FC0",
+  "sort_order": 106,
+  "domains": [
+    {
+      "host": "accounts.chaos.com",
+      "ips": {
+        "comss_dns": "35.241.43.115"
+      }
+    },
+    {
+      "host": "chaos.com",
+      "ips": {
+        "comss_dns": "35.186.242.181"
+      }
+    },
+    {
+      "host": "enscape3d.com",
+      "ips": {}
+    },
+    {
+      "host": "my.chaos.com",
+      "ips": {}
+    },
+    {
+      "host": "www.chaos.com",
+      "ips": {
+        "comss_dns": "35.186.242.181"
+      }
+    }
+  ]
+}

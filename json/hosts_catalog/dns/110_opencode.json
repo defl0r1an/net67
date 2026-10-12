@@ -1,0 +1,29 @@
+{
+  "name": "OpenCode",
+  "category": "ai",
+  "icon": "fa5s.code",
+  "icon_color": "#111827",
+  "sort_order": 128,
+  "domains": [
+    {
+      "host": "opencode.ai",
+      "ips": {
+        "comss_dns": [
+          "172.65.90.22",
+          "172.65.90.20",
+          "172.65.90.21",
+          "172.65.90.23"
+        ]
+      }
+    },
+    {
+      "host": "www.opencode.ai",
+      "ips": {
+        "comss_dns": [
+          "8.47.69.0",
+          "8.6.112.0"
+        ]
+      }
+    }
+  ]
+}

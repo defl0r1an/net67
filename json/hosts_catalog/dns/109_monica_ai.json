@@ -1,0 +1,17 @@
+{
+  "name": "Monica AI",
+  "category": "ai",
+  "icon": "fa5s.robot",
+  "icon_color": "#6366F1",
+  "sort_order": 127,
+  "domains": [
+    {
+      "host": "monica.im",
+      "ips": {}
+    },
+    {
+      "host": "www.monica.im",
+      "ips": {}
+    }
+  ]
+}

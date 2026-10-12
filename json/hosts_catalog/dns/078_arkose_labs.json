@@ -1,0 +1,26 @@
+{
+  "name": "Arkose Labs",
+  "category": "other",
+  "icon": "fa5s.user-shield",
+  "icon_color": "#00A1E0",
+  "sort_order": 96,
+  "domains": [
+    {
+      "host": "arkoselabs.com",
+      "ips": {
+        "comss_dns": [
+          "3.164.68.91",
+          "3.164.68.79",
+          "3.164.68.13",
+          "3.164.68.58"
+        ]
+      }
+    },
+    {
+      "host": "www.arkoselabs.com",
+      "ips": {
+        "comss_dns": "198.202.211.1"
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "Best Buy",
+  "category": "other",
+  "icon": "fa5s.shopping-cart",
+  "icon_color": "#0046BE",
+  "sort_order": 100,
+  "domains": [
+    {
+      "host": "bestbuy.com",
+      "ips": {}
+    },
+    {
+      "host": "streams.bestbuy.com",
+      "ips": {
+        "comss_dns": "104.103.64.80"
+      }
+    },
+    {
+      "host": "www.bestbuy.com",
+      "ips": {}
+    }
+  ]
+}

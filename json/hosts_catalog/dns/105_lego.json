@@ -1,0 +1,29 @@
+{
+  "name": "LEGO",
+  "category": "other",
+  "icon": "fa5s.cubes",
+  "icon_color": "#D01012",
+  "sort_order": 123,
+  "domains": [
+    {
+      "host": "lego.com",
+      "ips": {
+        "comss_dns": [
+          "143.204.238.69",
+          "143.204.238.78",
+          "143.204.238.37",
+          "143.204.238.26"
+        ]
+      }
+    },
+    {
+      "host": "www.lego.com",
+      "ips": {
+        "comss_dns": [
+          "104.18.8.208",
+          "104.18.9.208"
+        ]
+      }
+    }
+  ]
+}

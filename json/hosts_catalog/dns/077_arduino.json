@@ -1,0 +1,24 @@
+{
+  "name": "Arduino",
+  "category": "other",
+  "icon": "simple:arduino:AR",
+  "icon_color": "#00878F",
+  "sort_order": 95,
+  "domains": [
+    {
+      "host": "arduino.cc",
+      "ips": {
+        "comss_dns": [
+          "13.33.235.27",
+          "13.33.235.37",
+          "13.33.235.115",
+          "13.33.235.79"
+        ]
+      }
+    },
+    {
+      "host": "www.arduino.cc",
+      "ips": {}
+    }
+  ]
+}

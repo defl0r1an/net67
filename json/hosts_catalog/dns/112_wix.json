@@ -1,0 +1,19 @@
+{
+  "name": "Wix",
+  "category": "other",
+  "icon": "simple:wix:WX",
+  "icon_color": "#0C6EFC",
+  "sort_order": 130,
+  "domains": [
+    {
+      "host": "users.wix.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    }
+  ]
+}

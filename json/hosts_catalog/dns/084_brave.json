@@ -1,0 +1,31 @@
+{
+  "name": "Brave",
+  "category": "other",
+  "icon": "simple:brave:BR",
+  "icon_color": "#FB542B",
+  "sort_order": 102,
+  "domains": [
+    {
+      "host": "brave.com",
+      "ips": {
+        "comss_dns": [
+          "3.174.230.112",
+          "3.174.230.38",
+          "3.174.230.83",
+          "3.174.230.104"
+        ]
+      }
+    },
+    {
+      "host": "www.brave.com",
+      "ips": {
+        "comss_dns": [
+          "3.164.68.49",
+          "3.164.68.113",
+          "3.164.68.54",
+          "3.164.68.34"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "Arrow Electronics",
+  "category": "other",
+  "icon": "fa5s.microchip",
+  "icon_color": "#000000",
+  "sort_order": 97,
+  "domains": [
+    {
+      "host": "arrow.com",
+      "ips": {
+        "comss_dns": [
+          "20.82.28.58",
+          "20.245.104.207",
+          "20.205.146.106"
+        ]
+      }
+    },
+    {
+      "host": "www.arrow.com",
+      "ips": {
+        "comss_dns": "96.17.4.51"
+      }
+    }
+  ]
+}

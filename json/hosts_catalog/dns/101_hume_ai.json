@@ -1,0 +1,24 @@
+{
+  "name": "Hume AI",
+  "category": "ai",
+  "icon": "fa5s.robot",
+  "icon_color": "#111827",
+  "sort_order": 119,
+  "domains": [
+    {
+      "host": "hume.ai",
+      "ips": {
+        "comss_dns": "216.150.1.1"
+      }
+    },
+    {
+      "host": "www.hume.ai",
+      "ips": {
+        "comss_dns": [
+          "216.150.1.65",
+          "216.150.16.65"
+        ]
+      }
+    }
+  ]
+}

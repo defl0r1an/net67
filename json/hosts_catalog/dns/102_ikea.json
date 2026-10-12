@@ -1,0 +1,22 @@
+{
+  "name": "IKEA",
+  "category": "other",
+  "icon": "simple:ikea:IK",
+  "icon_color": "#0058A3",
+  "sort_order": 120,
+  "domains": [
+    {
+      "host": "ikea.com",
+      "ips": {
+        "comss_dns": [
+          "104.18.13.173",
+          "104.18.12.173"
+        ]
+      }
+    },
+    {
+      "host": "www.ikea.com",
+      "ips": {}
+    }
+  ]
+}

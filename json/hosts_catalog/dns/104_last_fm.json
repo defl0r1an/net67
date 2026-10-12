@@ -1,0 +1,51 @@
+{
+  "name": "Last.fm",
+  "category": "other",
+  "icon": "simple:lastdotfm:LF",
+  "icon_color": "#D51007",
+  "sort_order": 122,
+  "domains": [
+    {
+      "host": "last.fm",
+      "ips": {
+        "comss_dns": "34.96.123.111"
+      }
+    },
+    {
+      "host": "saa.last.fm",
+      "ips": {}
+    },
+    {
+      "host": "secure.last.fm",
+      "ips": {
+        "comss_dns": "146.75.118.132"
+      }
+    },
+    {
+      "host": "shop.last.fm",
+      "ips": {
+        "comss_dns": "23.227.38.74"
+      }
+    },
+    {
+      "host": "store.last.fm",
+      "ips": {
+        "comss_dns": "23.227.38.74"
+      }
+    },
+    {
+      "host": "support.last.fm",
+      "ips": {
+        "comss_dns": "184.105.99.43"
+      }
+    },
+    {
+      "host": "ws.audioscrobbler.com",
+      "ips": {}
+    },
+    {
+      "host": "www.last.fm",
+      "ips": {}
+    }
+  ]
+}

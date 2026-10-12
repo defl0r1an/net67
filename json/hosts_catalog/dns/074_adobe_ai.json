@@ -1,0 +1,26 @@
+{
+  "name": "Adobe AI",
+  "category": "ai",
+  "icon": "fa5s.magic",
+  "icon_color": "#FA0F00",
+  "sort_order": 92,
+  "domains": [
+    {
+      "host": "adobe.io",
+      "ips": {
+        "comss_dns": [
+          "52.202.204.11",
+          "52.5.13.197",
+          "54.227.187.23",
+          "23.22.254.206"
+        ]
+      }
+    },
+    {
+      "host": "www.adobe.io",
+      "ips": {
+        "comss_dns": "199.232.174.122"
+      }
+    }
+  ]
+}

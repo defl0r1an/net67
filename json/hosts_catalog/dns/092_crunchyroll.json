@@ -1,0 +1,23 @@
+{
+  "name": "Crunchyroll",
+  "category": "other",
+  "icon": "simple:crunchyroll:CR",
+  "icon_color": "#FF5E00",
+  "sort_order": 110,
+  "domains": [
+    {
+      "host": "crunchyroll.com",
+      "ips": {}
+    },
+    {
+      "host": "www.crunchyroll.com",
+      "ips": {
+        "comss_dns": [
+          "157.22.178.170",
+          "157.22.177.90",
+          "132.243.112.221"
+        ]
+      }
+    }
+  ]
+}
