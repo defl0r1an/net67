@@ -87,6 +87,53 @@ class InfoBarCaptureTests(unittest.TestCase):
         # Окну без колокольчика плашку показывают как раньше.
         self.assertTrue(bar.isVisible())
 
+    def _window_with_inbox(self):
+        """Окно с настоящей историей колокольчика вместо Mock."""
+        from types import SimpleNamespace
+
+        from ui.notification_inbox import NotificationInbox
+
+        inbox = NotificationInbox()
+        window = QWidget()
+        window.window_notification_center = SimpleNamespace(take_infobar=inbox.add)
+        page = QWidget(window)
+        self.addCleanup(window.deleteLater)
+        return inbox, page
+
+    def test_button_of_captured_bar_moves_to_bell_entry(self) -> None:
+        """«Не удалось записать hosts» лежала в колокольчике без своей кнопки."""
+        from qfluentwidgets import InfoBar, PushButton
+
+        inbox, page = self._window_with_inbox()
+        pressed: list[str] = []
+        bar = InfoBar.error(title="Не удалось записать hosts", content="нет доступа", parent=page, duration=100)
+        button = PushButton("Восстановить права", bar)
+        button.clicked.connect(lambda: pressed.append("restore"))
+        bar.addWidget(button)
+
+        (entry,) = inbox.entries()
+        self.assertEqual([action["text"] for action in entry.buttons], ["Восстановить права"])
+        self.assertEqual(entry.buttons[0]["kind"], "invoke")
+        entry.buttons[0]["callback"]()
+        self.assertEqual(pressed, ["restore"])
+
+    def test_same_error_twice_keeps_one_button_bound_to_the_newest_bar(self) -> None:
+        from qfluentwidgets import InfoBar, PushButton
+
+        inbox, page = self._window_with_inbox()
+        pressed: list[int] = []
+        for number in (1, 2):
+            bar = InfoBar.error(title="Не удалось записать hosts", content="нет доступа", parent=page, duration=100)
+            button = PushButton("Восстановить права", bar)
+            button.clicked.connect(lambda _checked=False, n=number: pressed.append(n))
+            bar.addWidget(button)
+
+        (entry,) = inbox.entries()
+        self.assertEqual(entry.count, 2)
+        self.assertEqual(len(entry.buttons), 1)
+        entry.buttons[0]["callback"]()
+        self.assertEqual(pressed, [2])
+
     def test_capture_is_installed_once(self) -> None:
         from ui.infobar_inbox_capture import install_infobar_capture
 
@@ -245,3 +292,24 @@ class BellRingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InvokeActionTests(unittest.TestCase):
+    def test_invoke_runs_page_handler_and_closes_entry(self) -> None:
+        from ui.window_notification_actions import WindowNotificationActionHandler
+
+        handler = WindowNotificationActionHandler.__new__(WindowNotificationActionHandler)
+        called = Mock()
+        closer = Mock()
+        callback = handler.build_action_callback({"text": "Восстановить права", "kind": "invoke", "callback": called}, closer)
+
+        callback()
+
+        called.assert_called_once_with()
+        closer.close.assert_called_once_with()
+
+    def test_invoke_without_callable_gives_no_button(self) -> None:
+        from ui.window_notification_actions import WindowNotificationActionHandler
+
+        handler = WindowNotificationActionHandler.__new__(WindowNotificationActionHandler)
+        self.assertIsNone(handler.build_action_callback({"text": "x", "kind": "invoke", "callback": None}, Mock()))

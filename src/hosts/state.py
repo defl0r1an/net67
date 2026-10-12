@@ -31,6 +31,10 @@ class HostsApplyResult:
     message: str = ""
     # Свежий HostsPageSnapshot после записи (None, если перечитать не удалось).
     snapshot: object | None = None
+    # Запись не прошла, потому что файл не даёт себя менять. Снимок этого не
+    # видит: читать антивирус обычно не мешает, а атрибута «только чтение»
+    # нет, — и страница не показывала кнопку восстановления прав вовсе.
+    access_denied: bool = False
 
 
 @dataclass(frozen=True, slots=True)

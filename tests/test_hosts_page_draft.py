@@ -400,6 +400,55 @@ class HostsPageTests(unittest.TestCase):
         self.assertFalse(page._draft.has_user_changes())
         self.assertFalse(page._draft.value("Direct"))
 
+    def test_write_refused_by_file_access_offers_restore_in_error_and_on_page(self) -> None:
+        """Файл читается, а записать нельзя — кнопки восстановления прав не было нигде.
+
+        Карточка доступа смотрела только на снимок: «не читается» или
+        «только чтение». Антивирус, держащий файл, чтение не трогает, и
+        после ошибки записи человеку было нечем на неё ответить.
+        """
+        from qfluentwidgets import InfoBar, PushButton
+
+        page = self._page(_manual_snapshot())
+        page._on_tile_activated("Direct")
+        restore_text = page._tr("page.hosts.button.restore_access", "Снять защиту и восстановить права")
+
+        with patch.object(page, "_restore_permissions") as restore:
+            callback = self.write_callbacks[-1]["on_loaded"]
+            callback(
+                len(self.write_callbacks),
+                SimpleNamespace(
+                    success=False, snapshot=None, message="Файл hosts недоступен для изменения", access_denied=True
+                ),
+            )
+            QApplication.processEvents()
+            self.assertTrue(page.access_card.isVisibleTo(page))
+            buttons = [
+                button
+                for bar in page.window().findChildren(InfoBar)
+                for button in bar.findChildren(PushButton)
+                if button.text() == restore_text
+            ]
+            self.assertEqual(len(buttons), 1)
+            buttons[0].click()
+            restore.assert_called_once()
+
+        page._on_tile_activated("Direct")
+        self._finish_write(page, snapshot=_manual_snapshot(block_lines=("4.4.4.4 direct.example",), direct="hosts"))
+        self.assertFalse(page.access_card.isVisibleTo(page))
+
+    def test_other_write_errors_do_not_offer_restore(self) -> None:
+        from qfluentwidgets import InfoBar, PushButton
+
+        page = self._page(_manual_snapshot())
+        page._on_tile_activated("Direct")
+        self._finish_write(page, success=False, message="Не найдено записей hosts для выбранных сервисов")
+
+        self.assertFalse(page.access_card.isVisibleTo(page))
+        restore_text = page._tr("page.hosts.button.restore_access", "Снять защиту и восстановить права")
+        texts = [button.text() for bar in page.window().findChildren(InfoBar) for button in bar.findChildren(PushButton)]
+        self.assertNotIn(restore_text, texts)
+
     def test_turn_all_off_removes_extra_block_lines_too(self) -> None:
         page = self._page(_manual_snapshot(block_lines=("5.5.5.5 gone.example",)))
 

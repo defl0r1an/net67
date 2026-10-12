@@ -102,6 +102,21 @@ class WindowNotificationActionHandler:
         if kind == "dismiss":
             return lambda: self._close_bar(bar)
 
+        if kind == "invoke":
+            # Кнопка страничной плашки (ui/infobar_inbox_capture.py): её
+            # обработчик подключила страница, здесь он только вызывается.
+            callback = action.get("callback")
+            if not callable(callback):
+                return None
+
+            def invoke() -> None:
+                try:
+                    callback()
+                finally:
+                    self._close_bar(bar)
+
+            return invoke
+
         return None
 
     def copy_to_clipboard_with_feedback(self, text: str, *, label: str = "Текст") -> None:

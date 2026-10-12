@@ -168,6 +168,7 @@ class HostsPage(BasePage):
         )
         self._hosts = deps.hosts_feature
         self._open_file_page = deps.open_file_page
+        self._open_antigravity = getattr(deps, "open_antigravity", None)
         self._snapshot: HostsPageSnapshot | None = None
         self._draft: HostsDraft | None = None
         self._search = ""
@@ -183,6 +184,10 @@ class HostsPage(BasePage):
         self._apply_pending = False
         self._apply_force_pending = False
         self._just_written = False
+        # Последняя запись упёрлась в доступ к файлу. Снимок этого не видит
+        # (читать файл можно), поэтому флаг держит карточку с кнопкой
+        # восстановления прав до первой удачной записи.
+        self._write_denied = False
         self._restore_runtime = OneShotWorkerRuntime()
         # Проверка профилей кнопкой на плитке: по одному сервису за раз,
         # остальные нажатые ждут очереди — адреса профилей чужие серверы,
@@ -270,6 +275,16 @@ class HostsPage(BasePage):
         self._find_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
         self._find_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._find_shortcut.activated.connect(self.open_search)
+
+        if callable(self._open_antigravity):
+            self.antigravity_button = PushButton(FluentIcon.APPLICATION, "Antigravity: вход и модели", self.content)
+            self.antigravity_button.clicked.connect(self._open_antigravity)
+            set_control_accessibility(
+                self.antigravity_button,
+                name="Управление Antigravity",
+                description="Hosts выбирает адреса сайтов; вход в аккаунт и работа моделей настраиваются отдельно.",
+            )
+            self.add_widget(self.antigravity_button)
 
         self.tiles = HostsTilesGrid(self.content)
         self.tiles.activated.connect(self._on_tile_activated)
@@ -460,9 +475,16 @@ class HostsPage(BasePage):
         pending, force = self._take_pending()
         snapshot = getattr(result, "snapshot", None)
         if not getattr(result, "success", False):
-            self._fail_write(str(getattr(result, "message", "") or ""), snapshot)
+            self._fail_write(
+                str(getattr(result, "message", "") or ""),
+                snapshot,
+                access_denied=bool(getattr(result, "access_denied", False)),
+            )
             return
         self._just_written = True
+        if self._write_denied:
+            self._write_denied = False
+            self._render_access()
         if snapshot is not None:
             # Записанное уходит из черновика само; остаётся только то, что
             # пользователь поменял во время записи.
@@ -486,14 +508,19 @@ class HostsPage(BasePage):
         self._take_pending()
         self._fail_write(error, None)
 
-    def _fail_write(self, message: str, snapshot) -> None:
+    def _fail_write(self, message: str, snapshot, *, access_denied: bool = False) -> None:
         """Запись не удалась: плитки возвращаются к тому, что реально в файле."""
+        self._write_denied = bool(access_denied)
         if self._draft is not None:
             self._draft.reset()
         if snapshot is not None:
             self._set_snapshot(snapshot)
         self._render()
-        self._show_error(self._tr("page.hosts.apply_failed.title", "Не удалось записать hosts"), message)
+        self._show_error(
+            self._tr("page.hosts.apply_failed.title", "Не удалось записать hosts"),
+            message,
+            offer_restore=bool(access_denied),
+        )
         self._request_snapshot()
 
     def _restore_permissions(self) -> None:
@@ -511,6 +538,8 @@ class HostsPage(BasePage):
             return
         self.restore_button.setEnabled(True)
         if result is not None and getattr(result, "success", False):
+            self._write_denied = False
+            self._render_access()
             InfoBar.success(
                 title=self._tr("page.hosts.permissions.restored.title", "Права восстановлены"),
                 content=self._tr("page.hosts.permissions.restored.content", "Теперь сервисы снова можно включать."),
@@ -524,8 +553,18 @@ class HostsPage(BasePage):
             )
         self._request_snapshot()
 
-    def _show_error(self, title: str, content: str) -> None:
-        InfoBar.error(title=title, content=str(content or ""), duration=8000, parent=self.window())
+    def _show_error(self, title: str, content: str, *, offer_restore: bool = False) -> None:
+        bar = InfoBar.error(title=title, content=str(content or ""), duration=8000, parent=self.window())
+        if not offer_restore or bar is None:
+            return
+        # Ответ на ошибку — прямо в ней: плашка уходит в колокольчик, и
+        # кнопка переезжает туда же (ui/infobar_inbox_capture.py).
+        button = PushButton(
+            self._tr("page.hosts.button.restore_access", "Снять защиту и восстановить права"),
+            bar,
+        )
+        button.clicked.connect(self._restore_permissions)
+        bar.addWidget(button)
 
     # ── действия пользователя ────────────────────────────────
 
@@ -713,6 +752,11 @@ class HostsPage(BasePage):
             text = self._tr(
                 "page.hosts.notice.read_only",
                 "Файл hosts защищён от записи (стоит «только чтение»). Программа сама защиту не снимает — нажмите кнопку справа, если хотите менять файл.",
+            )
+        elif self._write_denied:
+            text = self._tr(
+                "page.hosts.notice.write_denied",
+                "Файл hosts читается, но не даёт себя записать. Чаще всего его держит антивирус. Кнопка справа вернёт стандартные права Windows.",
             )
         self.access_card.setVisible(bool(text))
         if text:

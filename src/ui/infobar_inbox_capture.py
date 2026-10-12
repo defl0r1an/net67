@@ -14,6 +14,11 @@
 (диалог, самый ранний старт) показывает её как раньше — потерять
 сообщение хуже, чем показать его. Плашки самого центра перехват
 пропускает: центр решает о них сам.
+
+Кнопки плашки (bar.addWidget(кнопка) после создания) переносятся в запись
+колокольчика. Раньше они пропадали вместе с невидимой плашкой: «Не удалось
+записать hosts» лежала в колокольчике без «Восстановить права», и человеку
+было нечем ответить на ошибку.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager
 
-__all__ = ["center_owned_infobar", "install_infobar_capture", "level_for_icon"]
+__all__ = ["attach_button", "center_owned_infobar", "install_infobar_capture", "level_for_icon"]
 
 _OWN = threading.local()
 
@@ -87,23 +92,38 @@ def page_name_for(widget) -> str:
     return ""
 
 
-def _take(bar, icon, title, content) -> bool:
+def _take(bar, icon, title, content):
+    """Запись колокольчика, в которую ушла плашка, или None — не забрали."""
     center = _center_for(bar)
     if center is None:
-        return False
+        return None
     parent = bar.parentWidget()
     source = f"infobar.{type(parent).__name__}" if parent is not None else "infobar"
-    return bool(
-        center.take_infobar(
-            {
-                "level": level_for_icon(icon),
-                "title": str(title or ""),
-                "content": str(content or ""),
-                "source": source,
-                "page": page_name_for(parent) if parent is not None else "",
-            }
-        )
-    )
+    return center.take_infobar(
+        {
+            "level": level_for_icon(icon),
+            "title": str(title or ""),
+            "content": str(content or ""),
+            "source": source,
+            "page": page_name_for(parent) if parent is not None else "",
+        }
+    ) or None
+
+
+def attach_button(entry, button) -> None:
+    """Кнопка плашки — действием записи колокольчика.
+
+    Плашка невидима, но жива (её родитель — окно), и её кнопка тоже: нажатие
+    в колокольчике зовёт button.click(), то есть ровно то, что подключила
+    страница. Одинаковая ошибка склеивается в одну запись «×N», поэтому
+    кнопка с той же надписью заменяет прежнюю, а не встаёт второй.
+    """
+    label = str(button.text() or "").strip()
+    if entry is None or not label or not hasattr(entry, "buttons"):
+        return
+    action = {"text": label, "kind": "invoke", "callback": button.click}
+    kept = tuple(item for item in entry.buttons if str(item.get("text") or "").strip() != label)
+    entry.buttons = (*kept, action)
 
 
 def install_infobar_capture() -> bool:
@@ -112,19 +132,32 @@ def install_infobar_capture() -> bool:
 
     if getattr(InfoBar, "_net67_inbox_capture", False):
         return False
+    from PyQt6.QtWidgets import QAbstractButton
+
     original_init = InfoBar.__init__
     original_show = InfoBar.show
+    original_add_widget = InfoBar.addWidget
 
     def __init__(self, icon, title, content, *args, **kwargs):
         original_init(self, icon, title, content, *args, **kwargs)
         self._net67_in_bell = False
+        self._net67_entry = None
         if getattr(_OWN, "active", False):
             return
         try:
-            self._net67_in_bell = _take(self, icon, title, content)
+            self._net67_entry = _take(self, icon, title, content)
         except Exception:
             # Не забрали — пусть покажется: потерять сообщение хуже.
-            self._net67_in_bell = False
+            self._net67_entry = None
+        self._net67_in_bell = self._net67_entry is not None
+
+    def addWidget(self, widget, stretch=0):
+        original_add_widget(self, widget, stretch)
+        if getattr(self, "_net67_in_bell", False) and isinstance(widget, QAbstractButton):
+            try:
+                attach_button(self._net67_entry, widget)
+            except Exception:
+                pass
 
     def show(self):
         # Забранная в колокольчик плашка не показывается. Вызывающий
@@ -136,5 +169,6 @@ def install_infobar_capture() -> bool:
 
     InfoBar.__init__ = __init__
     InfoBar.show = show
+    InfoBar.addWidget = addWidget
     InfoBar._net67_inbox_capture = True
     return True

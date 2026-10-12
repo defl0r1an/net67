@@ -70,6 +70,56 @@ class HostsFileManagerTests(unittest.TestCase):
         self.assertEqual(result.message, "Файл hosts недоступен для изменения")
         save.assert_not_called()
 
+    def test_failed_write_says_whether_file_access_was_the_reason(self) -> None:
+        """Страница по этому признаку прикладывает к ошибке «Восстановить права».
+
+        Снимок страницы не видит отказа на запись: читать файл антивирус не
+        мешает, атрибута «только чтение» нет. Признак проверяется тем же
+        открытием на дозапись, что и сама запись.
+        """
+        from hosts import commands as hosts_commands
+
+        for accessible, expected in ((False, True), (True, False)):
+            class FakeHostsManager:
+                last_status = "Файл hosts недоступен для изменения"
+
+                def apply_service_dns_selections(self, service_dns) -> bool:
+                    return False
+
+                def is_hosts_file_accessible(self, _accessible=accessible) -> bool:
+                    return _accessible
+
+            with (
+                patch.object(hosts_commands, "create_hosts_manager", return_value=FakeHostsManager()),
+                patch.object(hosts_commands, "save_user_selection"),
+                patch.object(hosts_commands, "load_page_snapshot", return_value=None),
+            ):
+                result = hosts_commands.apply_hosts_draft({"ChatGPT": "geohide"})
+            with self.subTest(accessible=accessible):
+                self.assertFalse(result.success)
+                self.assertIs(result.access_denied, expected)
+
+    def test_successful_write_does_not_probe_access(self) -> None:
+        from hosts import commands as hosts_commands
+
+        class FakeHostsManager:
+            last_status = "ok"
+
+            def apply_service_dns_selections(self, service_dns) -> bool:
+                return True
+
+            def is_hosts_file_accessible(self) -> bool:
+                raise AssertionError("после удачной записи файл не трогаем")
+
+        with (
+            patch.object(hosts_commands, "create_hosts_manager", return_value=FakeHostsManager()),
+            patch.object(hosts_commands, "save_user_selection"),
+            patch.object(hosts_commands, "load_page_snapshot", return_value=None),
+        ):
+            result = hosts_commands.apply_hosts_draft({"ChatGPT": "geohide"})
+        self.assertTrue(result.success)
+        self.assertFalse(result.access_denied)
+
     def test_apply_domain_rows_skips_write_when_content_is_unchanged(self) -> None:
         from hosts import hosts as hosts_module
 

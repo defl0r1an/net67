@@ -854,19 +854,21 @@ class WindowNotificationCenter(QObject):
         install_infobar_capture()
         self._sync_bell()
 
-    def take_infobar(self, payload: dict) -> bool:
-        """Плашка страницы — не на экран, а в колокольчик. True — забрали.
+    def take_infobar(self, payload: dict):
+        """Плашка страницы — не на экран, а в колокольчик.
 
+        Возвращает запись колокольчика (в неё перехват дописывает кнопки
+        плашки) или None — колокольчика нет, плашка покажется сама.
         См. ui/infobar_inbox_capture.py. Ошибки и предупреждения зажигают
         счётчик; «Готово» только качает колокольчик — счётчик для того,
         что требует внимания.
         """
         if self._bell is None:
-            return False
+            return None
         entry = self.inbox.add(payload)
         self._sync_bell()
         self._ring_bell(strong=bool(getattr(entry, "unread", True)))
-        return True
+        return entry
 
     def _ring_bell(self, *, strong: bool) -> None:
         bell = self._bell

@@ -327,12 +327,22 @@ def apply_hosts_draft(selection: dict[str, str], adobe: bool | None = None) -> H
         success = bool(manager.add_adobe_domains() if adobe else manager.remove_adobe_domains())
         message = str(manager.last_status or message)
 
+    # Причину смотрим тем же способом, каким её проверяет сама запись:
+    # открыть файл на дозапись. По тексту сообщения угадывать нельзя —
+    # у отказа антивируса и у ошибки каталога слова разные, а путь один.
+    access_denied = False
+    if not success:
+        try:
+            access_denied = not manager.is_hosts_file_accessible()
+        except Exception:
+            access_denied = False
+
     snapshot = None
     try:
         snapshot = load_page_snapshot()
     except Exception as exc:
         log(f"Hosts: не удалось перечитать состояние после записи: {exc}", "WARNING")
-    return HostsApplyResult(success=success, message=message, snapshot=snapshot)
+    return HostsApplyResult(success=success, message=message, snapshot=snapshot, access_denied=access_denied)
 
 
 def load_hosts_text() -> HostsFileText:

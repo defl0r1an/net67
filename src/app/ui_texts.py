@@ -1390,6 +1390,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Нет доступа к файлу hosts. Часто его блокирует антивирус. Кнопка справа вернёт стандартные права Windows.",
         "en": "No access to the hosts file. Antivirus software often locks it. The button on the right restores the standard Windows permissions.",
     },
+    "page.hosts.notice.write_denied": {
+        "ru": "Файл hosts читается, но не даёт себя записать. Чаще всего его держит антивирус. Кнопка справа вернёт стандартные права Windows.",
+        "en": "The hosts file can be read but not written. Most often antivirus software holds it. The button on the right restores the standard Windows permissions.",
+    },
     "page.hosts.search.placeholder": {
         "ru": "Найти сервис",
         "en": "Find a service",
@@ -6754,7 +6758,10 @@ TEXTS_ONBOARDING_NET67_BYPASS: dict[str, dict[str, str]] = {
 TEXTS.update(TEXTS_ONBOARDING_NET67_BYPASS)
 
 
+TEXTS["nav.page.antigravity"] = {"ru": "Antigravity", "en": "Antigravity"}
+
 NAV_PAGE_TEXT_KEYS: dict[PageName, str] = {
+    PageName.ANTIGRAVITY: "nav.page.antigravity",
     PageName.ZAPRET2_MODE_CONTROL: "nav.page.zapret2_mode_control",
     PageName.NETWORK: "nav.page.network",
     PageName.NETWORK_CUSTOM_DNS: "page.network.custom_server.title",
