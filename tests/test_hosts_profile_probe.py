@@ -219,11 +219,45 @@ class ProbeServiceTests(unittest.TestCase):
         self.assertEqual(self.probed, [])  # одно соединение на адрес, а не на пару
         self.assertEqual(result.result_for("p1").reason, VERDICT_DEAD)
 
-    def test_one_working_address_of_a_domain_is_enough(self) -> None:
+    def test_first_address_decides_because_the_browser_goes_there(self) -> None:
+        """В hosts адреса стоят строками по порядку, браузер идёт на первый. У DNS-AI
+        первый адрес ChatGPT молчал, второй отвечал — и плитка звала его лучшим."""
+        rows = {"p1": [("a.com", "1.1.1.1"), ("a.com", "1.1.1.2")], "p2": [("a.com", "2.2.2.2")]}
+        result = self._run(
+            rows,
+            {("1.1.1.2", "a.com"): (VERDICT_OK, 70), ("2.2.2.2", "a.com"): (VERDICT_OK, 90)},
+            dead_ips={"1.1.1.1"},
+        )
+
+        self.assertEqual((result.result_for("p1").ok, result.result_for("p1").total), (0, 1))
+        self.assertEqual(result.result_for("p1").reason, VERDICT_DEAD)
+        self.assertEqual(result.best, "p2")
+
+    def test_working_first_address_is_enough(self) -> None:
         rows = {"p1": [("a.com", "1.1.1.1"), ("a.com", "1.1.1.2")]}
-        result = self._run(rows, {("1.1.1.2", "a.com"): (VERDICT_OK, 70)})
+        result = self._run(rows, {("1.1.1.1", "a.com"): (VERDICT_OK, 70)}, dead_ips={"1.1.1.2"})
 
         self.assertEqual((result.result_for("p1").ok, result.result_for("p1").total), (1, 1))
+
+    def test_bare_403_is_a_refusal_but_cloudflare_check_is_not(self) -> None:
+        """Настоящий адрес chatgpt.com из России отвечает 403 без слов о стране; через
+        живого посредника — тоже 403, но это проверка «Just a moment», её проходит браузер."""
+        from hosts.profile_probe import VERDICT_DENIED, classify_response
+
+        blocked = b"HTTP/1.1 403 Forbidden\r\nServer: cloudflare\r\n\r\n<html>denied</html>"
+        challenge = (
+            b"HTTP/1.1 403 Forbidden\r\ncf-mitigated: challenge\r\n\r\n"
+            b"<title>Just a moment...</title><script src=/cdn-cgi/challenge-platform/x.js>"
+        )
+        self.assertEqual(classify_response(blocked), VERDICT_DENIED)
+        self.assertEqual(classify_response(b"HTTP/1.1 451 Unavailable\r\n\r\n"), VERDICT_DENIED)
+        self.assertEqual(classify_response(challenge), VERDICT_OK)
+        self.assertEqual(classify_response(b"HTTP/1.1 200 OK\r\n\r\n<html>"), VERDICT_OK)
+        self.assertEqual(classify_response(b"HTTP/1.1 307 Temporary Redirect\r\n\r\n"), VERDICT_OK)
+        self.assertEqual(
+            classify_response(b"HTTP/1.1 302 Found\r\nLocation: /app-unavailable-in-region\r\n\r\n"),
+            VERDICT_REGION,
+        )
 
     def test_ipv6_rows_are_skipped(self) -> None:
         rows = {"p1": [("a.com", "2001:db8::1"), ("a.com", "1.1.1.1")]}

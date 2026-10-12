@@ -71,6 +71,23 @@ VERDICT_DEAD = "dead"
 VERDICT_RESET = "reset"
 VERDICT_BADCERT = "badcert"
 VERDICT_NOHTTP = "nohttp"
+#: Сайт ответил отказом 403 или 451 — без слов о стране, но и не проверкой
+#: «вы человек?». Так закрыт от России chatgpt.com с настоящего адреса, и так
+#: же DNS-AI отвечал за Notion: его адреса оказались настоящими адресами
+#: Notion. Раньше такой ответ считался «открылось» (замер 12.10.2026, Билайн).
+VERDICT_DENIED = "denied"
+
+#: Коды, которыми сайт отказывает этому соединению.
+DENIED_STATUSES = frozenset({403, 451})
+
+#: Признаки проверки Cloudflare «Just a moment». Она тоже приходит с кодом 403,
+#: но браузер проходит её сам: через живых посредников chatgpt.com и claude.ai
+#: отвечают именно так. Это не отказ.
+CHALLENGE_MARKERS = (
+    "cf-mitigated: challenge",
+    "challenge-platform",
+    "just a moment",
+)
 
 #: Слова, которыми сервис сам сообщает, что закрыт для страны. Адрес при
 #: этом отвечает и сертификат настоящий — но профиль задачу не решает.
@@ -231,17 +248,32 @@ def probe_pair(ip: str, host: str, *, context: ssl.SSLContext | None = None) -> 
                 tls.close()
             except OSError:
                 pass
-        if not data:
-            return VERDICT_NOHTTP, latency
-        text = data.decode("utf-8", "replace").lower()
-        if any(marker in text for marker in REGION_MARKERS):
-            return VERDICT_REGION, latency
-        return VERDICT_OK, latency
+        return classify_response(data), latency
     finally:
         try:
             sock.close()
         except OSError:
             pass
+
+
+def classify_response(data: bytes) -> str:
+    """Вердикт по ответу сайта: открылся, закрыт для страны или отказал."""
+    if not data:
+        return VERDICT_NOHTTP
+    text = data.decode("utf-8", "replace").lower()
+    if any(marker in text for marker in REGION_MARKERS):
+        return VERDICT_REGION
+    if _status_code(text) in DENIED_STATUSES and not any(marker in text for marker in CHALLENGE_MARKERS):
+        return VERDICT_DENIED
+    return VERDICT_OK
+
+
+def _status_code(text: str) -> int | None:
+    """Код из строки состояния ответа («http/1.1 403 forbidden» → 403)."""
+    head = text[:32].split(" ", 2)
+    if len(head) >= 2 and head[0].startswith("http/") and head[1].isdigit():
+        return int(head[1])
+    return None
 
 
 _context_lock = threading.Lock()
@@ -273,7 +305,14 @@ def _summarize(
     live: set[str],
     main: tuple[str, ...] = (),
 ) -> ProfileProbe:
-    """Домен открылся, если открылся хоть через один его адрес в профиле.
+    """Домен открылся, если открылся первый его адрес в профиле.
+
+    В hosts адреса имени стоят строками по порядку каталога, и браузер идёт
+    на первый. Мёртвый первый адрес — это ожидание до таймаута соединения,
+    то есть «сайт не открывается», даже если запасной жив. Раньше домен
+    засчитывался по любому живому адресу: у DNS-AI первый адрес ChatGPT
+    (13.140.94.151) молчал на Билайне, второй отвечал — и плитка называла
+    DNS-AI лучшим, а ChatGPT в браузере не открывался.
 
     ``main`` — главные сайты, которые есть в выборке: профиль рабочий, только
     если хоть один из них открылся через него.
@@ -281,13 +320,13 @@ def _summarize(
     main_ok: bool | None = None
     if main:
         main_ok = any(
-            verdict == VERDICT_OK for domain in main for verdict, _ms in (verdicts.get(domain) or [])
+            verdict == VERDICT_OK for domain in main for verdict, _ms in (verdicts.get(domain) or [])[:1]
         )
     ok = 0
     latencies: list[int] = []
     reasons: list[str] = []
     for domain in live:
-        outcomes = verdicts.get(domain) or []
+        outcomes = (verdicts.get(domain) or [])[:1]
         good = [ms for verdict, ms in outcomes if verdict == VERDICT_OK]
         if good:
             ok += 1
@@ -407,6 +446,8 @@ __all__ = [
     "VERDICT_DEAD",
     "VERDICT_NOHTTP",
     "VERDICT_OK",
+    "VERDICT_DENIED",
+    "classify_response",
     "VERDICT_REGION",
     "VERDICT_RESET",
     "ProfileProbe",
