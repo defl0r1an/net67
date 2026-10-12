@@ -9,7 +9,7 @@ import math
 import time
 from collections.abc import Callable
 
-from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, pyqtSignal
+from PyQt6.QtCore import QEasingCurve, QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QFont, QPainter
 from PyQt6.QtWidgets import (
     QFrame,
@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.notification_inbox import InboxEntry, NotificationInbox
+from ui.reveal import ROW_CLOSE_MS, conceal_widgets, dismiss_row
 
 __all__ = [
     "NotificationBell",
@@ -550,6 +551,11 @@ class NotificationPanel(QFrame):
         self._scroll.setWidget(self._list_host)
         outer.addWidget(self._scroll, 1)
 
+        # Строки на экране по записям: уход по кнопке анимирует именно
+        # строку, а не пересобирает список рывком.
+        self._rows: dict[int, QWidget] = {}
+        # Высота панели едет за списком, а не прыгает — см. _fit_height.
+        self._height_animation: QVariantAnimation | None = None
         self._rebuild()
 
     def paintEvent(self, _event) -> None:  # noqa: N802 (Qt override)
@@ -573,6 +579,7 @@ class NotificationPanel(QFrame):
     # ── содержимое ────────────────────────────────────────────
 
     def _rebuild(self) -> None:
+        self._rows.clear()
         while self._list.count():
             item = self._list.takeAt(0)
             widget = item.widget()
@@ -587,14 +594,45 @@ class NotificationPanel(QFrame):
             empty.setContentsMargins(0, 8, 0, 8)
             self._list.addWidget(empty)
         for entry in entries:
-            self._list.addWidget(self._entry_widget(entry))
+            row = self._entry_widget(entry)
+            self._rows[id(entry)] = row
+            self._list.addWidget(row)
         self._list.addStretch(1)
         self._fit_height(len(entries))
 
+    def _rebuild_if_alive(self) -> None:
+        try:
+            self._rebuild()
+        except RuntimeError:
+            # Панель закрыли, пока строка уходила: пересобирать нечего.
+            pass
+
     def _fit_height(self, count: int) -> None:
         # Панель растёт с числом записей, но не выше полэкрана окна.
-        wanted = 70 + max(1, count) * 86
-        self.setFixedHeight(max(120, min(460, wanted)))
+        wanted = max(120, min(460, 70 + max(1, count) * 86))
+        animation = self._height_animation
+        if animation is not None:
+            animation.stop()
+            self._height_animation = None
+        try:
+            from ui.animation_policy import are_animations_enabled, start_managed_animation
+        except Exception:
+            are_animations_enabled = None
+        current = self.height()
+        if not self.isVisible() or are_animations_enabled is None or not are_animations_enabled() or current == wanted:
+            self.setFixedHeight(wanted)
+            return
+        # После ухода строки место в списке уже сомкнулось, и прыжок
+        # нижнего края панели на 86 точек был бы тем же рывком, от которого
+        # уход и затевался. Едем с той высоты, что на экране.
+        animation = QVariantAnimation(self)
+        animation.setStartValue(float(current))
+        animation.setEndValue(float(wanted))
+        animation.setDuration(ROW_CLOSE_MS)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.valueChanged.connect(lambda value: self.setFixedHeight(int(round(float(value)))))
+        self._height_animation = animation
+        start_managed_animation(animation)
 
     def _entry_widget(self, entry: InboxEntry) -> QWidget:
         from ui.theme import get_cached_qta_pixmap
@@ -676,14 +714,34 @@ class NotificationPanel(QFrame):
             open_entry(entry)
 
     def _dismiss(self, entry: InboxEntry) -> None:
+        """Запись убрана кнопкой: строка гаснет, место смыкается, потом пересборка.
+
+        Раньше список пересобирался сразу, и запись пропадала за кадр, а
+        соседи прыгали вверх — нажатие на «Восстановить права» выглядело
+        как сбой отрисовки. Из истории запись уходит сразу: счётчик
+        колокольчика не должен ждать анимации.
+        """
+        row = self._rows.pop(id(entry), None)
         self._inbox.remove(entry)
         self._on_changed()
+        if row is not None and dismiss_row(row, on_finished=self._rebuild_if_alive):
+            # Уходящую строку больше не нажать: второй щелчок по её кнопке
+            # повторил бы действие.
+            row.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            return
         self._rebuild()
 
     def _clear(self) -> None:
+        rows = list(self._rows.values())
+        self._rows.clear()
         self._inbox.clear()
         self._on_changed()
-        self._rebuild()
+        for row in rows:
+            row.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        # Волной снизу вверх: нижняя строка прячется первой, и верхние
+        # остаются на своих местах — смыкать нечего до самой пересборки.
+        if not conceal_widgets(rows, on_finished=self._rebuild_if_alive):
+            self._rebuild()
 
     def show_under(self, anchor: QWidget, motion=None) -> None:
         self._anchor = anchor

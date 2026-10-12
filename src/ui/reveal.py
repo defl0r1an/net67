@@ -80,6 +80,15 @@ REVEAL_RISE_PX = 14
 #: превращается в ожидание.
 CONCEAL_MS = 280
 
+#: Уход одной строки списка: сколько она гаснет и сколько смыкается её место.
+#:
+#: Смыкание идёт после того, как строка погасла, а не вместе с этим:
+#: видимая строка, сжатая по высоте, давит свои подписи друг на друга, и
+#: вместо ухода видна каша. Обе фазы короче ухода блока (CONCEAL_MS):
+#: строку человек убрал сам и смотрит уже на соседние, а не на неё.
+ROW_FADE_MS = 200
+ROW_CLOSE_MS = 180
+
 #: Наименьшая длительность подхваченного движения.
 #:
 #: Остаток пути бывает в несколько процентов, и пропорциональная
@@ -474,6 +483,91 @@ def conceal_widgets(
         except Exception:
             on_finished()
 
+    return True
+
+
+def dismiss_row(
+    widget,
+    *,
+    on_finished,
+    fade_ms: int = ROW_FADE_MS,
+    close_ms: int = ROW_CLOSE_MS,
+    distance: int = REVEAL_RISE_PX // 2,
+) -> bool:
+    """Убирает одну строку списка: гаснет с подъёмом, затем смыкается её место.
+
+    conceal_widgets для этого не годится: он прячет блок в конце пути, и
+    строки ниже прыгают на его место за один кадр. Здесь строка сначала
+    гаснет, а потом её высота плавно уходит в ноль — соседи подъезжают.
+
+    Возвращает False, если ухода не будет: строки нет или анимации
+    отключены. Тогда убирать обязан вызывающий, и сразу.
+
+    ``on_finished`` зовётся один раз, когда место сомкнулось: там
+    вызывающий пересобирает список. Удалят строку раньше (список
+    пересобрали по другой причине) — вместе с ней удалится и анимация, и
+    звать будет некого: пересборка и так уже случилась.
+    """
+    if widget is None:
+        return False
+
+    try:
+        from PyQt6.QtCore import QEasingCurve, QVariantAnimation
+
+        from ui.animation_policy import are_animations_enabled, start_managed_animation
+    except Exception:
+        return False
+
+    if not are_animations_enabled():
+        return False
+
+    if getattr(widget, "_row_dismiss_animation", None) is not None:
+        # Строка уже уходит: второе нажатие не должно начинать путь заново.
+        return True
+
+    try:
+        effect_cls = _effect_class()
+        # Строка могла ещё проявляться — гаснуть она начинает с того, что
+        # на экране, а не с полной яркости.
+        effect, start, _caught = _takeover(widget, effect_cls, dx=0, dy=-int(distance), default=1.0)
+        height = max(0, int(widget.height()))
+    except Exception as exc:
+        log(f"[REVEAL] строка не убрана: {exc}", "DEBUG")
+        return False
+
+    fade_ms = max(int(MIN_TAKEOVER_MS), int(round(int(fade_ms) * max(0.0, min(1.0, start)))))
+    close_ms = max(0, int(close_ms))
+    total = fade_ms + close_ms
+    fade_curve = QEasingCurve(QEasingCurve.Type.InCubic)
+    close_curve = QEasingCurve(QEasingCurve.Type.OutCubic)
+    # Высоту держим сами с первого кадра: иначе раскладка вольна менять её,
+    # пока строка гаснет, и смыкание начнётся не с той высоты, что на экране.
+    widget.setFixedHeight(height)
+
+    def step(value) -> None:
+        elapsed = float(value) * total
+        fade = min(1.0, elapsed / fade_ms) if fade_ms else 1.0
+        effect.setProgress(start * (1.0 - fade_curve.valueForProgress(fade)))
+        if close_ms and elapsed > fade_ms:
+            closing = min(1.0, (elapsed - fade_ms) / close_ms)
+            widget.setFixedHeight(int(round(height * (1.0 - close_curve.valueForProgress(closing)))))
+
+    def done() -> None:
+        try:
+            widget._row_dismiss_animation = None
+            widget.setVisible(False)
+        except RuntimeError:
+            return
+        on_finished()
+
+    animation = QVariantAnimation(widget)
+    animation.setStartValue(0.0)
+    animation.setEndValue(1.0)
+    animation.setDuration(total)
+    animation.valueChanged.connect(step)
+    animation.finished.connect(done)
+    widget._row_dismiss_animation = animation
+    start_managed_animation(animation)
     return True
 
 
