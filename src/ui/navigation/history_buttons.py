@@ -102,11 +102,19 @@ class HistoryButtons(QObject):
         super().__init__(window)
         self._window = window
         self._navigation = navigation_history
-        self.back_button = window.navigationInterface.panel.returnButton
+        # Стрелка «назад» есть только у боковой панели qfluentwidgets. Своя
+        # панель net67 (shell.nav_compat.NavigationCompat) её не рисует, и
+        # обращение к panel.returnButton в 0.17.67 роняло сборку окна:
+        # программа открывалась пустой. Без стрелки журнал остаётся на
+        # Alt+Влево/Вправо и Esc, а «вперёд» без «назад» не нужна.
+        panel = getattr(getattr(window, "navigationInterface", None), "panel", None)
+        self.back_button = getattr(panel, "returnButton", None)
         self.forward_button = None
-        self._take_over_back_button()
-        self._build_forward_button()
-        self._gestures = [HistoryButtonGesture(self.back_button, lambda: self.show_menu(forward=False))]
+        self._gestures = []
+        if self.back_button is not None:
+            self._take_over_back_button()
+            self._build_forward_button()
+            self._gestures.append(HistoryButtonGesture(self.back_button, lambda: self.show_menu(forward=False)))
         if self.forward_button is not None:
             self._gestures.append(HistoryButtonGesture(self.forward_button, lambda: self.show_menu(forward=True)))
         self._shortcuts = []
@@ -146,6 +154,8 @@ class HistoryButtons(QObject):
 
     def sync(self) -> None:
         """Приводит кнопки к журналу: «назад» активна, «вперёд» видна — когда есть куда идти."""
+        if self.back_button is None:
+            return
         self.back_button.setEnabled(self._navigation.can_go_back())
         back_text = self._text("nav.history.back.tooltip", "Назад. Удерживайте, чтобы увидеть историю")
         set_tooltip(self.back_button, back_text)

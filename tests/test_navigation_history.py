@@ -299,6 +299,30 @@ class HistoryButtonsTests(unittest.TestCase):
             buttons = HistoryButtons(window, host.navigation_history)
         return window, host, buttons, qrouter
 
+    def test_net67_window_without_library_back_button_builds_and_keeps_shortcuts(self) -> None:
+        """В 0.17.67 обращение к panel.returnButton роняло сборку окна: у своей
+        панели net67 (NavigationCompat) стрелки «назад» нет, и программа
+        открывалась пустой. Тесты выше собирали FluentWindow и этого не видели."""
+        from shell.app_window import AppShellWindow
+        from ui.navigation.history_buttons import HistoryButtons
+
+        window = AppShellWindow()
+        self.addCleanup(window.deleteLater)
+        host = _FakeHost()
+        host.pages = {A: _FakePage(), B: _FakePage("card"), C: _FakePage()}
+        with patch("ui.navigation.history_buttons.get_window_ui_session", return_value=None):
+            buttons = HistoryButtons(window, host.navigation_history)
+
+        self.assertIsNone(buttons.back_button)
+        self.assertIsNone(buttons.forward_button)
+        host.user_opens(A)
+        host.user_opens(B)
+        host.user_opens_inside("card")
+        # Alt+Влево по-прежнему идёт назад по журналу экранов.
+        buttons._shortcuts[0].activated.emit()
+        self.assertEqual(host.where(), (B, ""))
+        buttons.show_menu(forward=False)
+
     def test_back_button_follows_the_window_history_instead_of_the_library_one(self) -> None:
         window, host, buttons, qrouter = self._window()
         self.assertFalse(buttons.back_button.isEnabled())

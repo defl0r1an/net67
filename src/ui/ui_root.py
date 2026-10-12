@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+from log.log import log
 from ui.navigation.history_buttons import install_history_buttons
 from ui.navigation.sidebar_builder import init_navigation
 from ui.window_ui_session import get_window_ui_session
@@ -73,7 +74,12 @@ class WindowUiRoot:
 
         started_at = time.perf_counter()
         init_navigation(self._window)
-        install_history_buttons(self._window)
+        try:
+            install_history_buttons(self._window)
+        except Exception as exc:
+            # Стрелки истории — удобство, а не основа окна. Их сбой в 0.17.67
+            # оставлял человека с пустым окном; теперь окно собирается дальше.
+            log(f"Кнопки истории экранов не установлены: {exc}", "WARNING")
         _metric("StartupWindowUiRootNavigation", started_at)
         started_at = time.perf_counter()
         finalize_page_stack_bootstrap(self._window)
