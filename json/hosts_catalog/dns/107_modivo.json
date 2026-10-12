@@ -1,7 +1,7 @@
 {
   "name": "Modivo",
   "category": "other",
-  "icon": "fa5s.tshirt",
+  "icon": "img:modivo:MO",
   "icon_color": "#000000",
   "sort_order": 125,
   "domains": [

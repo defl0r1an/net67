@@ -1,7 +1,7 @@
 {
   "name": "LEGO",
   "category": "other",
-  "icon": "fa5s.cubes",
+  "icon": "img:lego:LE",
   "icon_color": "#D01012",
   "sort_order": 123,
   "domains": [

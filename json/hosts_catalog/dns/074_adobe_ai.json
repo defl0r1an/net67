@@ -1,7 +1,7 @@
 {
   "name": "Adobe AI",
   "category": "ai",
-  "icon": "fa5s.magic",
+  "icon": "own:adobe:AD",
   "icon_color": "#FA0F00",
   "sort_order": 92,
   "domains": [

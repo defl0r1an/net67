@@ -1,7 +1,7 @@
 {
   "name": "Guidedhacking",
   "category": "other",
-  "icon": "fa5s.user-secret",
+  "icon": "img:guidedhacking:GH",
   "icon_color": "#E03A3A",
   "sort_order": 52,
   "domains": [

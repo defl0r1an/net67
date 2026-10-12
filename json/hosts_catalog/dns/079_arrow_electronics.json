@@ -1,7 +1,7 @@
 {
   "name": "Arrow Electronics",
   "category": "other",
-  "icon": "fa5s.microchip",
+  "icon": "img:arrow:AR",
   "icon_color": "#000000",
   "sort_order": 97,
   "domains": [

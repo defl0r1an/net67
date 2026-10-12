@@ -1,7 +1,7 @@
 {
   "name": "Scribd",
   "category": "other",
-  "icon": "fa5s.book",
+  "icon": "own:scribd:SC",
   "icon_color": "#1A7BBA",
   "sort_order": 129,
   "domains": [

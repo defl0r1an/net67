@@ -1,7 +1,7 @@
 {
   "name": "Game8",
   "category": "other",
-  "icon": "fa5s.gamepad",
+  "icon": "img:game8:G8",
   "icon_color": "#00A0E9",
   "sort_order": 116,
   "domains": [

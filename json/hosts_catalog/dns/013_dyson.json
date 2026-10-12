@@ -1,7 +1,7 @@
 {
   "name": "Dyson",
   "category": "other",
-  "icon": "fa5s.fan",
+  "icon": "img:dyson:DY",
   "icon_color": "#8E44AD",
   "sort_order": 44,
   "main": [

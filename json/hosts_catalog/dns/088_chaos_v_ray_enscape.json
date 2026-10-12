@@ -1,7 +1,7 @@
 {
   "name": "Chaos (V-Ray, Enscape)",
   "category": "other",
-  "icon": "fa5s.cube",
+  "icon": "img:chaos:CH",
   "icon_color": "#0E7FC0",
   "sort_order": 106,
   "domains": [

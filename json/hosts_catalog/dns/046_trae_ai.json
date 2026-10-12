@@ -1,8 +1,7 @@
 {
   "name": "Trae.ai",
   "category": "ai",
-  "icon": "fa5s.code",
-  "icon_color": "#7c3aed",
+  "icon": "own:trae:TR",
   "sort_order": 8,
   "main": [
     "api.trae.ai"

@@ -1,7 +1,7 @@
 {
   "name": "Parsec",
   "category": "other",
-  "icon": "fa5s.desktop",
+  "icon": "img:parsec:PA",
   "icon_color": "#5e5ce6",
   "sort_order": 19,
   "domains": [

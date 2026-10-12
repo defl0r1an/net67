@@ -1,7 +1,7 @@
 {
   "name": "Cummins",
   "category": "other",
-  "icon": "fa5s.cogs",
+  "icon": "img:cummins:CU",
   "icon_color": "#DA291C",
   "sort_order": 111,
   "domains": [

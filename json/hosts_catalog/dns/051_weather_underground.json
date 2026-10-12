@@ -1,7 +1,7 @@
 {
   "name": "Weather Underground",
   "category": "other",
-  "icon": "fa5s.cloud-sun-rain",
+  "icon": "img:wunderground:WU",
   "icon_color": "#1E88E5",
   "sort_order": 82,
   "domains": [

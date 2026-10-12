@@ -1,8 +1,7 @@
 {
   "name": "Affinity Studio",
   "category": "other",
-  "icon": "fa5s.pen-nib",
-  "icon_color": "#7E4DD2",
+  "icon": "own:affinity:AF",
   "sort_order": 93,
   "domains": [
     {

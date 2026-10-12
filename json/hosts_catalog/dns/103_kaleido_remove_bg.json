@@ -1,7 +1,7 @@
 {
   "name": "Kaleido (remove.bg)",
   "category": "ai",
-  "icon": "fa5s.magic",
+  "icon": "img:kaleido:KA",
   "icon_color": "#2563EB",
   "sort_order": 121,
   "domains": [

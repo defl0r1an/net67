@@ -1,8 +1,7 @@
 {
   "name": "OpenCode",
   "category": "ai",
-  "icon": "fa5s.code",
-  "icon_color": "#111827",
+  "icon": "own:opencode:OC",
   "sort_order": 128,
   "domains": [
     {

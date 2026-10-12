@@ -721,7 +721,12 @@ class HostsTilesGrid(QWidget):
         # Значок сервиса: фирменный логотип («simple:<имя>:<буквы>») или
         # значок из шрифта. Шрифтовой глобус и общие картинки (чип у AMD,
         # Intel и Nvidia разом) не отличали сервисы друг от друга.
-        icon = profile_icon_pixmap(tile.icon_name or "fa5s.globe", color=icon_color, size=self._ICON)
+        icon = profile_icon_pixmap(
+            tile.icon_name or "fa5s.globe",
+            color=icon_color,
+            size=self._ICON,
+            muted=not tile.is_on,
+        )
         angle, glow_alpha, glow_color = self._icon_motion(tile, self._now())
         if glow_alpha > 0 or angle:
             # Переключили: иконка сервиса качается и светится.

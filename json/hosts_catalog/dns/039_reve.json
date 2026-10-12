@@ -1,8 +1,7 @@
 {
   "name": "Reve",
   "category": "other",
-  "icon": "fa5s.paint-brush",
-  "icon_color": "#FF6B6B",
+  "icon": "own:reve:RE",
   "sort_order": 70,
   "domains": [
     {

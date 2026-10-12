@@ -1,7 +1,7 @@
 {
   "name": "Cerebras",
   "category": "ai",
-  "icon": "fa5s.robot",
+  "icon": "own:cerebras:CE",
   "icon_color": "#F05A28",
   "sort_order": 105,
   "domains": [

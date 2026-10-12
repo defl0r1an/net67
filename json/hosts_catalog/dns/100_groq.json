@@ -1,7 +1,7 @@
 {
   "name": "Groq",
   "category": "ai",
-  "icon": "fa5s.bolt",
+  "icon": "own:groq:GQ",
   "icon_color": "#F55036",
   "sort_order": 118,
   "domains": [

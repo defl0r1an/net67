@@ -1,7 +1,7 @@
 {
   "name": "Bike24",
   "category": "other",
-  "icon": "fa5s.bicycle",
+  "icon": "img:bikecomponents:BI",
   "icon_color": "#E30613",
   "sort_order": 101,
   "domains": [

@@ -1,7 +1,7 @@
 {
   "name": "Analog Devices",
   "category": "other",
-  "icon": "fa5s.microchip",
+  "icon": "img:analogdevices:AD",
   "icon_color": "#1E4056",
   "sort_order": 94,
   "domains": [

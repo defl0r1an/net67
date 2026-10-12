@@ -1,7 +1,7 @@
 {
   "name": "ntc.party (включить обход по IPv4)",
   "category": "direct",
-  "icon": "fa5s.network-wired",
+  "icon": "img:ntcparty:NT",
   "icon_color": "#3498db",
   "sort_order": 28,
   "hosts": [

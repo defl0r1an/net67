@@ -1,7 +1,7 @@
 {
   "name": "Best Buy",
   "category": "other",
-  "icon": "fa5s.shopping-cart",
+  "icon": "img:bestbuy:BB",
   "icon_color": "#0046BE",
   "sort_order": 100,
   "domains": [

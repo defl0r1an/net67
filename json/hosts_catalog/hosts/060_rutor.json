@@ -1,7 +1,7 @@
 {
   "name": "Rutor",
   "category": "direct",
-  "icon": "fa5s.magnet",
+  "icon": "img:rutor:RU",
   "icon_color": "#e74c3c",
   "sort_order": 27,
   "hosts": [

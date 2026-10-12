@@ -1,8 +1,7 @@
 {
   "name": "CapCut",
   "category": "other",
-  "icon": "fa5s.cut",
-  "icon_color": "#000000",
+  "icon": "own:capcut:CC",
   "sort_order": 104,
   "domains": [
     {

@@ -1,7 +1,7 @@
 {
   "name": "Xerox",
   "category": "other",
-  "icon": "fa5s.print",
+  "icon": "img:xerox:XE",
   "icon_color": "#E3001B",
   "sort_order": 87,
   "main": [

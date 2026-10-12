@@ -1,7 +1,7 @@
 {
   "name": "Dola (Cici)",
   "category": "ai",
-  "icon": "fa5s.robot",
+  "icon": "own:doubao:DO",
   "icon_color": "#3B82F6",
   "sort_order": 114,
   "domains": [

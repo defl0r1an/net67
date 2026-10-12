@@ -1,7 +1,7 @@
 {
   "name": "CoreWeave",
   "category": "other",
-  "icon": "fa5s.server",
+  "icon": "img:coreweave:CW",
   "icon_color": "#2741E7",
   "sort_order": 108,
   "domains": [

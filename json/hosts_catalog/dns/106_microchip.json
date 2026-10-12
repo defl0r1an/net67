@@ -1,7 +1,7 @@
 {
   "name": "Microchip",
   "category": "other",
-  "icon": "fa5s.microchip",
+  "icon": "img:microchip:MC",
   "icon_color": "#E5181C",
   "sort_order": 124,
   "domains": [

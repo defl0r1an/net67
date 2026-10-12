@@ -1,7 +1,7 @@
 {
   "name": "Monica AI",
   "category": "ai",
-  "icon": "fa5s.robot",
+  "icon": "own:monica:MO",
   "icon_color": "#6366F1",
   "sort_order": 127,
   "domains": [

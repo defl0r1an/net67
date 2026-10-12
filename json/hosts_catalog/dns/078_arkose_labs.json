@@ -1,7 +1,7 @@
 {
   "name": "Arkose Labs",
   "category": "other",
-  "icon": "fa5s.user-shield",
+  "icon": "img:arkoselabs:AL",
   "icon_color": "#00A1E0",
   "sort_order": 96,
   "domains": [

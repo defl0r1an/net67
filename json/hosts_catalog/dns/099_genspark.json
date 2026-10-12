@@ -1,7 +1,7 @@
 {
   "name": "Genspark",
   "category": "ai",
-  "icon": "fa5s.robot",
+  "icon": "img:genspark:GS",
   "icon_color": "#111827",
   "sort_order": 117,
   "domains": [

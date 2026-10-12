@@ -1,7 +1,7 @@
 {
   "name": "ZeroSSL",
   "category": "other",
-  "icon": "fa5s.lock",
+  "icon": "img:zerossl:ZS",
   "icon_color": "#1E9E5A",
   "sort_order": 131,
   "domains": [

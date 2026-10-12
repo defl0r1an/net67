@@ -1,7 +1,7 @@
 {
   "name": "FMHY",
   "category": "other",
-  "icon": "fa5s.book-open",
+  "icon": "img:fmhy:FM",
   "icon_color": "#7B68EE",
   "sort_order": 48,
   "main": [
