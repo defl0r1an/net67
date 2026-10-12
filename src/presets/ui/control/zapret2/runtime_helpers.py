@@ -150,7 +150,7 @@ def apply_profile_language(
     internet_cleanup_desc = tr_catalog(
         "page.control.internet_cleanup.desc",
         language=language,
-        default="Очистить DNS, proxy, Winsock и сетевые параметры. Может понадобиться перезагрузка",
+        default="Сбросить TCP/IP, кэш DNS, прокси и Winsock. После этого понадобится перезагрузка",
     )
     internet_cleanup_card.setTitle(internet_cleanup_title)
     internet_cleanup_card.setContent(internet_cleanup_desc)

@@ -370,17 +370,18 @@ def build_internet_cleanup_start_plan(*, language: str) -> ControlToggleActionSt
                     default="Сброс сети Windows",
                 ),
                 content=(
-                    "Выполнить очистку сетевых настроек Windows?\n\n"
+                    "Сбросить сеть Windows?\n\n"
                     "Что будет сделано:\n"
-                    "• Сброс TCP/IP, IPv4 и IPv6\n"
-                    "• Сброс Winsock\n"
-                    "• Сброс WinHTTP proxy\n"
-                    "• Очистка DNS-кэша\n"
-                    "• Настройка динамических TCP-портов\n\n"
-                    "После сброса может понадобиться перезагрузка Windows."
+                    "• Сброс TCP/IP (IPv4 и IPv6)\n"
+                    "• Настройка динамических TCP-портов (10000–39999)\n"
+                    "• Очистка кэша DNS, адресов и маршрутов\n"
+                    "• Сброс прокси WinHTTP, если он задан\n"
+                    "• Отключение системного прокси, если программа, на которую он указывает, не отвечает\n"
+                    "• Сброс Winsock\n\n"
+                    "После сброса понадобится перезагрузка Windows."
                 ),
                 revert_checked=False,
             ),
         ),
-        start_status="Сброс сети Windows...",
+        start_status="",
     )

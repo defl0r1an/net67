@@ -244,7 +244,7 @@ def build_winws2_pages_settings_sections(
         title_text=tr_fn("page.control.internet_cleanup.title", "Сбросить сеть Windows"),
         content_text=tr_fn(
             "page.control.internet_cleanup.desc",
-            "Очистить DNS, proxy, Winsock и сетевые параметры. Может понадобиться перезагрузка",
+            "Сбросить TCP/IP, кэш DNS, прокси и Winsock. После этого понадобится перезагрузка",
         ),
         on_click=on_open_internet_cleanup,
         button_accessible_name=tr_fn("page.control.internet_cleanup.accessible_name", "Сбросить сеть Windows"),
