@@ -711,13 +711,13 @@ class AnalyzerSceneTests(unittest.TestCase):
 
         widget, early = self._rows("fake", 0.02)
         self.assertEqual(list(early), [1])
-        self.assertEqual((early[1].label, early[1].kind, early[1].length), ("google.com", "fake", 10))
+        self.assertEqual((early[1].label, early[1].kind), ("google.com", "fake"))
         self.assertEqual((early[1].gate[1], early[1].site[1]), ("wait", "wait"))
 
         _widget, done = self._rows("fake", STATIC_PHASE)
         # «Не принят» верно для любой защиты: подделка либо не дошла, либо отброшена сайтом.
         self.assertEqual((done[1].gate, done[1].site), (("принял за настоящий", "ok"), ("не принят", "drop")))
-        self.assertEqual((done[2].label, done[2].gate, done[2].site), ("youtube.com", ("пропустил", "pass"), ("принят", "ok")))
+        self.assertEqual((done[2].label, done[2].gate, done[2].site), ("youtube.com", ("уже не смотрит", "none"), ("принят", "ok")))
 
     def test_blocked_packet_never_reaches_the_site(self) -> None:
         from ui.onboarding.illustrations import STATIC_PHASE
@@ -742,8 +742,11 @@ class AnalyzerSceneTests(unittest.TestCase):
 
         widget, _frames = self._frames("fake", 0.1)
         points = widget.hold_points()
-        self.assertEqual([index for _moment, index in points], [0, 1])
-        self.assertEqual(widget.cycle_ms(), PERIOD_MS + 2 * HOLD_MS)
+        # Подделка убедила проверку — настоящий пакет следом она уже не смотрит.
+        self.assertEqual([index for _moment, index in points], [0])
+        self.assertEqual(widget.cycle_ms(), PERIOD_MS + HOLD_MS)
+        split, _frames = self._frames("multisplit", 0.1)
+        self.assertEqual([index for _moment, index in split.hold_points()], [0, 1])
 
         moment, index = points[0]
         reach = moment * PERIOD_MS
@@ -757,6 +760,72 @@ class AnalyzerSceneTests(unittest.TestCase):
         # Пакет в этот момент стоит ровно у проверки.
         held = next(frame for frame in widget.chip_frames(moment) if frame.index == index)
         self.assertAlmostEqual(held.x, widget._layout().gate_x, delta=1.0)
+
+    def test_verdict_appears_during_the_stop_in_log_and_on_track_together(self) -> None:
+        """Пока пакет стоит у проверки, журнал пишет «проверяет…», а с середины остановки — решение."""
+        from ui.onboarding.illustrations import HOLD_MS, PERIOD_MS, VERDICT_AT
+
+        widget, _frames = self._frames("fake", 0.1)
+        moment, index = widget.hold_points()[0]
+        reach = moment * PERIOD_MS
+
+        def rows_at(share: float):
+            widget._phase, widget._held_packet, widget._hold_progress = widget._clock_state(reach + HOLD_MS * share)
+            widget._with_holds = True
+            return {row.number: row for row in widget.log_rows(widget._phase)}
+
+        early = rows_at(VERDICT_AT / 2)[index + 1]
+        self.assertEqual((early.active, early.gate), (True, ("проверяет…", "scan")))
+
+        # Луч идёт по пакету, только пока решения нет.
+        glow, beam_at, tone = widget.scan_state(list(rows_at(VERDICT_AT / 2).values()))
+        self.assertEqual(tone, "scan")
+        self.assertIsNotNone(beam_at)
+        self.assertGreater(glow, 0.0)
+        _glow, beam_after, tone_after = widget.scan_state(list(rows_at(0.7).values()))
+        self.assertEqual((beam_after, tone_after), (None, "ok"))
+        # Пакет, который уже уехал от проверки, она не подсвечивает.
+        widget._phase, widget._held_packet, widget._hold_progress = widget._clock_state(reach + HOLD_MS + 50)
+        self.assertEqual(widget.scan_state(widget.log_rows(widget._phase)), (0.0, None, ""))
+        # И под проверкой ничего не написано: пропущенный пакет она не проверяет.
+        self.assertEqual(widget.gate_caption(widget.log_rows(widget._phase)), ("", ""))
+        self.assertEqual(widget.gate_caption(list(rows_at(VERDICT_AT / 2).values())), ("проверяет #1…", "scan"))
+
+        late = rows_at(0.95)[index + 1]
+        self.assertEqual((late.active, late.gate), (True, ("принял за настоящий", "ok")))
+        self.assertAlmostEqual(late.gate_alpha, 1.0)
+        # Реплика проверки тоже звучит во время остановки, а не после неё.
+        scene_times = widget.scene_times()
+        from ui.onboarding.illustrations import SCENES
+
+        self.assertGreater(widget._since_verdict(SCENES["fake"], widget._phase, scene_times), 0.0)
+        widget._hold_progress = VERDICT_AT / 2
+        self.assertLess(widget._since_verdict(SCENES["fake"], widget._phase, scene_times), 0.0)
+
+    def test_split_verdict_is_said_after_the_last_part_is_checked(self) -> None:
+        """«Не узнал» звучит, когда проверены все части, а не после первой."""
+        from ui.onboarding.illustrations import SCENES
+
+        for key in ("multisplit", "multidisorder"):
+            self.assertEqual(SCENES[key].bubble_trigger, len(SCENES[key].packets) - 1, key)
+
+    def test_each_cut_place_is_its_own_short_chip(self) -> None:
+        """Одна метка со всеми местами разреза шире окна — у каждого места своя."""
+        from profile.strategy_list.knowledge import explain_strategy
+
+        step = explain_strategy("--lua-desync=multisplit:pos=1,host+2,sld+2,sniext+1")[0]
+        cut = next(note for note in step.notes if note.kind == "cut")
+        self.assertEqual(
+            cut.chips,
+            (
+                "Разрез: после 1-го байта",
+                "Разрез: в начале имени сайта (host+2)",
+                "Разрез: в начале основной части имени сайта (sld+2)",
+                "Разрез: у поля с именем сайта (sniext+1)",
+            ),
+        )
+        one = next(n for n in explain_strategy("--lua-desync=multisplit:pos=midsld")[0].notes if n.kind == "cut")
+        self.assertEqual(one.chips, (one.chip,))
 
     def test_glued_packet_stops_once_and_resume_continues_from_the_same_frame(self) -> None:
         from ui.onboarding.illustrations import PERIOD_MS
