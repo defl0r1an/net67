@@ -1,0 +1,43 @@
+{
+  "name": "Google Antigravity",
+  "category": "ai",
+  "icon": "own:antigravity:AG",
+  "icon_color": "#4285F4",
+  "sort_order": 132,
+  "main": [
+    "antigravity.google"
+  ],
+  "domains": [
+    {
+      "host": "antigravity.google",
+      "ips": {
+        "comss_dns": [
+          "157.22.177.90",
+          "157.22.178.170",
+          "132.243.112.221"
+        ]
+      }
+    },
+    {
+      "host": "www.antigravity.google",
+      "ips": {
+        "comss_dns": "216.239.32.61"
+      }
+    },
+    {
+      "host": "daily-cloudcode-pa.googleapis.com",
+      "ips": {
+        "comss_dns": [
+          "172.217.114.4",
+          "172.217.113.4",
+          "172.217.115.4",
+          "172.217.116.4",
+          "172.217.118.4",
+          "172.217.112.4",
+          "172.217.119.4",
+          "172.217.117.4"
+        ]
+      }
+    }
+  ]
+}
