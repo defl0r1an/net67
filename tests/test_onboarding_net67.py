@@ -283,14 +283,24 @@ class FirstRunSetupTourTests(unittest.TestCase):
         steps = (TourStep("welcome", hero=True), TourStep("finish", hero=True))
         return OnboardingOverlay(window, ctx, steps)
 
-    def test_done_and_skip_write_answers_hidden_does_not(self) -> None:
+    def test_done_writes_answers_skip_only_marks_setup_passed(self) -> None:
+        """«Пропустить» не записывает ответов: человек ни на что не отвечал.
+
+        Раньше пропуск был тем же «Готово» и включал автозапуск, трей и
+        hosts за человека. Теперь он только отмечает настройку пройденной
+        (setup_choices.mark_setup_skipped); спрятанное окно не пишет ничего.
+        """
         from ui.onboarding import overlay as overlay_module
 
-        for reason, expected in (("done", 1), ("skipped", 1), ("hidden", 0)):
+        for reason, applied, marked in (("done", 1, 0), ("skipped", 0, 1), ("hidden", 0, 0)):
             overlay = self._overlay(setup=True)
-            with patch.object(overlay_module, "apply_setup_answers") as apply:
+            with (
+                patch.object(overlay_module, "apply_setup_answers") as apply,
+                patch.object(overlay_module, "mark_setup_skipped") as mark,
+            ):
                 overlay.finish(reason, immediate=True)
-            self.assertEqual(apply.call_count, expected, reason)
+            self.assertEqual(apply.call_count, applied, reason)
+            self.assertEqual(mark.call_count, marked, reason)
 
     def test_ordinary_tour_writes_nothing(self) -> None:
         from ui.onboarding import overlay as overlay_module
