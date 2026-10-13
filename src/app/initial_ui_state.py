@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from app.state_store import AppUiState
 
 
@@ -60,6 +62,13 @@ def build_initial_ui_state() -> AppUiState:
             program = {}
 
         dpi_autostart_enabled = bool(program.get("dpi_autostart", True))
+        # Перезапуск кнопкой (app/restart.py) поднимает обход, если он был
+        # включён, — даже при выключенном автозапуске обхода: человек
+        # перезапускал программу, а не выключал обход.
+        from app.restart import RESUME_BYPASS_ARG
+
+        if RESUME_BYPASS_ARG in sys.argv:
+            dpi_autostart_enabled = True
         launch_method = normalize_launch_method(program.get("strategy_launch_method"), default="")
 
         return LaunchRuntimeService.build_initial_ui_state(

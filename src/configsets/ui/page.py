@@ -1,10 +1,18 @@
 # configsets/ui/page.py
-"""Страница «Конфигурации»: наборы настроек, перенос и правка файла."""
+"""Страница «Конфигурации»: наборы настроек, перенос и правка файла.
+
+После любой записи настроек — набор, файл или редактор — страница отдаёт
+системе то, что живёт вне settings.json (hosts, автозапуск), и сообщает в
+колокольчик, что остальное вступит в силу после перезапуска, с кнопкой
+«Перезапустить» (app/restart.py).
+"""
 
 from __future__ import annotations
 
 import json
+import threading
 
+from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
@@ -24,12 +32,23 @@ from ui.accessibility import set_control_accessibility
 from ui.pages.base_page import BasePage
 from ui.theme import get_theme_tokens
 
-from configsets.plans import ExportOptions, build_export, build_import_patch, describe_export
+from configsets.plans import (
+    ExportOptions,
+    build_export,
+    build_import_patch,
+    describe_export,
+    plan_preset_import,
+    post_apply_actions,
+    validate_document,
+)
 from configsets.storage import (
     apply_config,
     delete_config,
     list_configs,
+    read_preset_files,
     save_config,
+    user_presets_dir,
+    write_preset_files,
 )
 
 
@@ -40,6 +59,16 @@ def _settings_root():
     from config.runtime_layout import APPLICATION_PATHS
 
     return APPLICATION_PATHS.settings_dir
+
+
+#: Что читается один раз при запуске и потому ждёт перезапуска.
+RESTART_NOTE = "Оформление, поведение трея и выбранный пресет вступят в силу после перезапуска net67."
+
+
+class _EffectsBridge(QObject):
+    """Доставляет итог фонового применения обратно в поток окна."""
+
+    finished = pyqtSignal(str, list)
 
 
 class ConfigsPage(BasePage):
@@ -54,6 +83,8 @@ class ConfigsPage(BasePage):
             subtitle_key="page.configs.subtitle",
         )
         self._items = []
+        self._effects_bridge = _EffectsBridge(self)
+        self._effects_bridge.finished.connect(self._on_effects_finished)
         if not CONFIGS_READY:
             # Честная надпись дешевле, чем человек, решивший, что сохранил
             # настройки, которых нет.
@@ -282,7 +313,8 @@ class ConfigsPage(BasePage):
         if item is None:
             return
 
-        result, message = apply_config(item.path, current=self._current_settings())
+        before = self._current_settings()
+        result, message = apply_config(item.path, current=before)
         if result is None:
             self._error(message)
             return
@@ -293,7 +325,7 @@ class ConfigsPage(BasePage):
             return
 
         self._load_editor()
-        self._success(f"{message}. Часть изменений применится после перезапуска.")
+        self._apply_in_system(before, message)
 
     def _on_delete(self) -> None:
         item = self._selected()
@@ -319,6 +351,7 @@ class ConfigsPage(BasePage):
         document, report = build_export(
             self._current_settings(),
             ExportOptions(include_secrets=self.secrets_box.isChecked()),
+            presets=read_preset_files(user_presets_dir()),
         )
         try:
             with open(path, "w", encoding="utf-8") as handle:
@@ -346,21 +379,39 @@ class ConfigsPage(BasePage):
             self._error(f"Не удалось прочитать файл: {exc}")
             return
 
-        result, report = build_import_patch(document, current=self._current_settings())
+        valid, message = validate_document(document)
+        if not valid:
+            self._error(message)
+            return
+
+        before = self._current_settings()
+        presets_dir = user_presets_dir()
+        plan = plan_preset_import(document, existing=read_preset_files(presets_dir))
+        result, report = build_import_patch(document, current=before, renamed_presets=plan.renamed)
         if not report.ok:
             self._error(report.message)
             return
 
+        # Пресеты — раньше настроек: настройки могут указывать на пресет из
+        # файла, и в момент записи он уже должен лежать в папке.
+        failed = write_preset_files(presets_dir, plan.writes)
         written, write_message = self._write_settings(result)
         if not written:
             self._error(write_message)
             return
 
         self._reload()
-        text = f"Применено разделов: {len(report.sections)}"
+        parts = [f"Применено разделов: {len(report.sections)}"]
+        if plan.writes:
+            parts.append(f"своих пресетов: {len(plan.writes) - len(failed)}")
+        if plan.renamed:
+            names = ", ".join(f"«{new}»" for new in plan.renamed.values())
+            parts.append(f"пресеты с теми же именами здесь не тронуты, файловые легли рядом: {names}")
+        if failed or plan.rejected:
+            parts.append(f"не записаны: {', '.join(sorted(set(failed) | set(plan.rejected)))}")
         if report.ignored:
-            text += f". Пропущено: {', '.join(report.ignored)}"
-        self._success(text + ". Часть изменений применится после перезапуска.")
+            parts.append(f"пропущено: {', '.join(report.ignored)}")
+        self._apply_in_system(before, ". ".join(parts))
 
     def _on_save_editor(self) -> None:
         raw = self.editor.toPlainText()
@@ -374,13 +425,66 @@ class ConfigsPage(BasePage):
             self._error("Настройки должны быть объектом JSON")
             return
 
+        before = self._current_settings()
         written, message = self._write_settings(data)
         if not written:
             self._error(message)
             return
 
         self._load_editor()
-        self._success("Настройки сохранены. Часть изменений применится после перезапуска.")
+        self._apply_in_system(before, "Настройки сохранены")
+
+    # ── применение в системе и перезапуск ─────────────────────────────
+
+    def _apply_in_system(self, before: dict, summary: str) -> None:
+        """Отдаёт системе то, что живёт вне settings.json, потом сообщает итог.
+
+        Запись hosts занимает заметное время, поэтому в фоне. Итог
+        приходит в поток окна сигналом.
+        """
+        actions = post_apply_actions(before, self._current_settings())
+        if not actions.any:
+            self._notify_applied(summary, [])
+            return
+
+        def run() -> None:
+            from configsets.effects import apply_post_actions
+
+            try:
+                problems = apply_post_actions(actions)
+            except Exception as exc:
+                log(f"Конфигурации: применение в системе упало: {exc}", "ERROR")
+                problems = ["Часть настроек не применилась в системе — подробности в журнале"]
+            self._effects_bridge.finished.emit(summary, list(problems))
+
+        threading.Thread(target=run, name="ConfigsApplyEffects", daemon=True).start()
+
+    def _on_effects_finished(self, summary: str, problems: list) -> None:
+        self._notify_applied(summary, problems)
+
+    def _notify_applied(self, summary: str, problems: list) -> None:
+        content = ". ".join(part for part in (summary, *problems, RESTART_NOTE) if part)
+        factory = InfoBar.warning if problems else InfoBar.success
+        bar = factory(
+            title="Настройки применены" if not problems else "Настройки применены не целиком",
+            content=content,
+            parent=self,
+            position=InfoBarPosition.TOP,
+            duration=8000,
+        )
+        if bar is None:
+            return
+        # Плашка уходит в колокольчик, кнопка — вместе с ней
+        # (ui/infobar_inbox_capture.py).
+        button = PushButton("Перезапустить", bar)
+        button.clicked.connect(self._restart)
+        bar.addWidget(button)
+
+    def _restart(self) -> None:
+        from app.restart import restart_application
+
+        if not restart_application(self.window()):
+            self._error("Не удалось перезапустить net67 — закройте программу и откройте снова.")
 
     # ──────────────────────────────────────────────────────────────────
 

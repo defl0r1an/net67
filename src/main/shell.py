@@ -13,8 +13,45 @@ from config.build_info import APP_VERSION
 
 from log.log import log
 
+from app.restart import AFTER_RESTART_ARG
 from startup.admin_check import is_admin
 from utils.subproc import run_hidden
+
+#: Сколько новый экземпляр ждёт, пока прежний закроется при перезапуске.
+#:
+#: Прежний перед выходом останавливает обход и выгружает драйвер — это
+#: секунды, а не минуты. Дольше ждать незачем: что-то пошло не так, и
+#: лучше открыться обычным вторым запуском (он покажет окно прежнего).
+RESTART_WAIT_SECONDS = 20.0
+RESTART_POLL_SECONDS = 0.25
+
+
+def wait_for_mutex_release(
+    name: str,
+    handle,
+    *,
+    create_mutex,
+    release_mutex,
+    timeout: float = RESTART_WAIT_SECONDS,
+    poll: float = RESTART_POLL_SECONDS,
+    sleep=time.sleep,
+    clock=time.monotonic,
+):
+    """Ждёт, пока мьютекс единственного экземпляра освободится. (хэндл, занят ли).
+
+    Свой хэндл перед каждой новой попыткой закрывается: именованный
+    мьютекс живёт, пока открыт хоть один хэндл, и с нашим открытым он не
+    исчез бы никогда — ожидание длилось бы до таймаута.
+    """
+    deadline = clock() + float(timeout)
+    already_running = True
+    while already_running and clock() < deadline:
+        release_mutex(handle)
+        sleep(poll)
+        handle, already_running = create_mutex(name)
+    if already_running:
+        log("Перезапуск: прежний экземпляр не закрылся вовремя", "WARNING")
+    return handle, already_running
 
 
 def handle_update_mode(argv: list[str] | None = None) -> None:
@@ -113,6 +150,16 @@ def shell_bootstrap(argv: list[str] | None = None) -> bool:
     )
 
     mutex_handle, already_running = create_mutex("net67SingleInstance")
+    if already_running and AFTER_RESTART_ARG in args:
+        # Перезапуск кнопкой (app/restart.py): прежний экземпляр запустил нас
+        # и закрывается. Обычный второй запуск тут попросил бы его показать
+        # окно и вышел — и программа не открылась бы вовсе.
+        mutex_handle, already_running = wait_for_mutex_release(
+            "net67SingleInstance",
+            mutex_handle,
+            create_mutex=create_mutex,
+            release_mutex=release_mutex,
+        )
     if already_running:
         if signal_show_event():
             log("Существующему экземпляру послан сигнал показать окно", "INFO")

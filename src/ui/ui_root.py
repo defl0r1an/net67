@@ -96,6 +96,19 @@ class WindowUiRoot:
         except Exception:
             return ""
 
+    def launch_phase(self) -> str:
+        """Фаза обхода сейчас («running», «stopped»…); пустая строка — не узнать.
+
+        Нужна перезапуску программы (app/restart.py): включённый обход
+        новый экземпляр поднимает снова.
+        """
+        try:
+            from ui.launch_control import launch_phase_from_state
+
+            return launch_phase_from_state(self._runtime_bootstrap_deps.ui_state_store.snapshot())
+        except Exception:
+            return ""
+
     def get_loaded_page(self, page_name: PageName):
         session = get_window_ui_session(self._window)
         if session is None:

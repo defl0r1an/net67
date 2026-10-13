@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from configsets.plans import ExportOptions, build_export, build_import_patch
+from configsets.plans import MAX_PRESET_BYTES, ExportOptions, build_export, build_import_patch, is_safe_preset_name
 
 CONFIGS_DIR_NAME = "configs"
 CONFIG_FILE_SUFFIX = ".net67cfg.json"
@@ -135,6 +135,62 @@ def apply_config(path: Path | str, *, current: dict) -> tuple[dict | None, str]:
     return (result, f"Применено разделов: {len(report.sections)}")
 
 
+def user_presets_dir() -> Path:
+    """Папка своих пресетов человека (presets/winws2), та же, что у списка пресетов."""
+    from config.runtime_layout import APPLICATION_PATHS
+    from core.paths import AppPaths
+
+    paths = AppPaths(user_root=APPLICATION_PATHS.root, local_root=APPLICATION_PATHS.root)
+    return paths.engine_paths("winws2").user_presets_dir
+
+
+def read_preset_files(directory: Path | str) -> dict[str, str]:
+    """Свои пресеты {имя файла: текст} для файла переноса.
+
+    Файл, который не прочитался или слишком велик, пропускается: один
+    битый пресет не должен срывать выгрузку остальных.
+    """
+    folder = Path(directory)
+    result: dict[str, str] = {}
+    if not folder.is_dir():
+        return result
+    for path in sorted(folder.glob("*.txt")):
+        if not path.is_file() or not is_safe_preset_name(path.name):
+            continue
+        try:
+            if path.stat().st_size > MAX_PRESET_BYTES:
+                continue
+            result[path.name] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return result
+
+
+def write_preset_files(directory: Path | str, writes: dict[str, str]) -> list[str]:
+    """Записывает пресеты из файла переноса. Возвращает имена, которые не записались.
+
+    Имя проверяется ещё раз здесь, у самой записи: план мог собрать кто
+    угодно, а писать мимо папки пресетов нельзя ни при каком плане.
+    """
+    folder = Path(directory)
+    failed: list[str] = []
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return sorted(writes)
+    for name, text in sorted(writes.items()):
+        target = folder / name
+        if not is_safe_preset_name(name) or target.resolve().parent != folder.resolve():
+            failed.append(name)
+            continue
+        try:
+            # LF, как у пресетов программы: write_text под Windows дал бы CRLF.
+            target.write_bytes(str(text).replace("\r\n", "\n").encode("utf-8"))
+        except OSError:
+            failed.append(name)
+    return failed
+
+
 def delete_config(path: Path | str) -> tuple[bool, str]:
     try:
         Path(path).unlink()
@@ -156,5 +212,8 @@ __all__ = [
     "list_configs",
     "load_config",
     "normalize_name",
+    "read_preset_files",
     "save_config",
+    "user_presets_dir",
+    "write_preset_files",
 ]
