@@ -40,7 +40,13 @@ VALID_TRAY_CLOSE_MODES = frozenset(
 
 def default_program() -> dict[str, Any]:
     return {
-        "dpi_autostart": True,
+        # Автозапуск обхода выключен по умолчанию (решение владельца
+        # 13.10.2026). Обход меняет, как ходит весь трафик, и включаться
+        # он должен по кнопке человека, а не сам при каждом старте
+        # программы. Кому нужно — включает тумблер в «Настройках
+        # программы». У тех, кто уже ставил net67, в settings.json своё
+        # значение, и его это не меняет.
+        "dpi_autostart": False,
         "gui_autostart_enabled": False,
         "strategy_launch_method": DEFAULT_LAUNCH_METHOD,
         SELECTED_SOURCE_PRESET_FILE_NAME_KEY_WINWS2: "",

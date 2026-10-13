@@ -47,7 +47,8 @@ class WizardApplyTests(unittest.TestCase):
 
         self.assertTrue(result.saved)
         self.assertTrue(record["gui_autostart"])
-        self.assertTrue(record["dpi_autostart"])
+        # Обход сам не включается: автозапуск обхода по умолчанию выключен.
+        self.assertFalse(record["dpi_autostart"])
         self.assertEqual(record["tray_mode"], "minimize_and_close")
         self.assertEqual(record["services"], ["messengers", "video"])
         self.assertTrue(record["completed"])

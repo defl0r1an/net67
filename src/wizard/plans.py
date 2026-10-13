@@ -658,15 +658,18 @@ def build_settings_plan(
     minimize_to_tray: bool,
     display_mode: str = "system",
 ) -> WizardSettingsPlan:
-    """Два тумблера третьего экрана превращаются в три настройки.
+    """Два тумблера превращаются в настройки программы.
 
-    Автозапуск включает и запуск приложения с Windows, и автоматический
-    старт защиты: включать программу, которая ничего не делает до нажатия
-    кнопки, смысла нет.
+    «Автозапуск» — это запуск программы вместе с Windows, и только он.
+    Раньше тот же ответ включал и автоматический старт обхода, а тумблер
+    на карточке по умолчанию стоит «Вкл.»: кто просто нажимал «Готово»,
+    получал обход, который сам включается при каждом запуске. Владелец
+    решил (13.10.2026): автозапуск обхода по умолчанию выключен, включает
+    его человек сам в «Настройках программы».
     """
     return WizardSettingsPlan(
         gui_autostart_enabled=bool(autostart_with_windows),
-        dpi_autostart=bool(autostart_with_windows),
+        dpi_autostart=False,
         tray_close_mode=TRAY_MODE_MINIMIZE if minimize_to_tray else TRAY_MODE_NORMAL,
         display_mode=normalize_display_mode(display_mode),
     )

@@ -116,14 +116,23 @@ class WizardRequestTests(unittest.TestCase):
 
 
 class WizardSettingsPlanTests(unittest.TestCase):
-    def test_autostart_enables_both_app_and_protection(self) -> None:
-        """Запускать программу, которая ничего не делает, бессмысленно."""
+    def test_autostart_starts_the_app_but_not_the_bypass(self) -> None:
+        """Автозапуск обхода по умолчанию выключен — даже при «Автозапуск: Вкл.»."""
         from wizard.plans import build_settings_plan
 
         plan = build_settings_plan(autostart_with_windows=True, minimize_to_tray=False)
 
         self.assertTrue(plan.gui_autostart_enabled)
-        self.assertTrue(plan.dpi_autostart)
+        self.assertFalse(plan.dpi_autostart)
+
+    def test_bypass_autostart_default_is_off(self) -> None:
+        from settings.normalize import normalize_settings
+        from settings.schema import default_program
+
+        self.assertIs(default_program()["dpi_autostart"], False)
+        self.assertIs(normalize_settings({})["program"]["dpi_autostart"], False)
+        # Своё значение человека остаётся своим.
+        self.assertIs(normalize_settings({"program": {"dpi_autostart": True}})["program"]["dpi_autostart"], True)
 
     def test_tray_mode_switches_with_toggle(self) -> None:
         from wizard.plans import TRAY_MODE_MINIMIZE, TRAY_MODE_NORMAL, build_settings_plan

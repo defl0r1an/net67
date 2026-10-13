@@ -61,7 +61,9 @@ def build_initial_ui_state() -> AppUiState:
         if not isinstance(program, dict):
             program = {}
 
-        dpi_autostart_enabled = bool(program.get("dpi_autostart", True))
+        from settings.schema import default_program
+
+        dpi_autostart_enabled = bool(program.get("dpi_autostart", default_program()["dpi_autostart"]))
         # Перезапуск кнопкой (app/restart.py) поднимает обход, если он был
         # включён, — даже при выключенном автозапуске обхода: человек
         # перезапускал программу, а не выключал обход.
