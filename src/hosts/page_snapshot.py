@@ -28,6 +28,12 @@ class HostsServiceEntry:
     # Что сейчас записано в блоке net67 (None — сервис выключен).
     current: str | None
     unavailable_reason: str = ""
+    # Надпись плитки, если она не совпадает с именем; имя остаётся ключом.
+    title: str = ""
+
+    @property
+    def display_name(self) -> str:
+        return self.title or self.name
 
     @property
     def is_direct(self) -> bool:
@@ -293,6 +299,7 @@ def build_page_snapshot(
                     profiles=profiles,
                     current=current,
                     unavailable_reason="ipv6" if row.unavailable_reason else "",
+                    title=str(getattr(row, "title", "") or ""),
                 )
             )
 

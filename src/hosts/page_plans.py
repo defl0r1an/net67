@@ -36,6 +36,8 @@ class HostsServiceRowPlan:
     toggle_enabled: bool
     toggle_checked: bool
     unavailable_reason: str | None = None
+    #: Надпись плитки, если она не совпадает с именем (поле "title" каталога).
+    title: str = ""
 
 
 @dataclass(slots=True)
@@ -309,6 +311,8 @@ def build_services_catalog_plan(
     raw_icons = profile_index.get("icon_by_service") or {}
     category_by_service = dict(raw_categories) if isinstance(raw_categories, dict) else {}
     icon_by_service = dict(raw_icons) if isinstance(raw_icons, dict) else {}
+    raw_titles = profile_index.get("title_by_service") or {}
+    title_by_service = dict(raw_titles) if isinstance(raw_titles, dict) else {}
 
     raw_available = profile_index.get("available_by_service") or {}
     raw_has_proxy = profile_index.get("has_proxy_by_service") or {}
@@ -424,6 +428,7 @@ def build_services_catalog_plan(
             rows.append(
                 HostsServiceRowPlan(
                     service_name=service_name,
+                    title=str(title_by_service.get(service_name) or ""),
                     icon_name=str(icon[0] or "fa5s.globe"),
                     icon_color=str(icon[1]) if icon[1] is not None else None,
                     direct_only=bool(entry.direct_only) if entry is not None else direct_only,

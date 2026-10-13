@@ -6647,8 +6647,8 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': 'Antigravity in the hosts editor',
     },
     'onboarding.step.antigravity_hosts.body': {
-        'ru': 'Кнопка «В hosts» открывает полный список сервисов, прокручивает к Google Antigravity и выделяет плитку. Профиль при переходе не меняется.\n\nВ редакторе hosts DNS-профиль выбирается значком провайдера под названием сервиса. Это отдельная настройка: она сама не включает вход в аккаунт или работу моделей Antigravity.',
-        'en': 'In hosts opens the full service list, scrolls to Google Antigravity and highlights its tile without changing the profile.\n\nIn the hosts editor, choose a DNS profile using a provider icon below the service name. This is a separate setting and does not enable Antigravity account sign-in or model access.',
+        'ru': 'Кнопка «В hosts» открывает полный список сервисов, прокручивает к «Gemini AI и Antigravity» и выделяет плитку. Профиль при переходе не меняется.\n\nВ редакторе hosts DNS-профиль выбирается значком провайдера под названием сервиса. Это отдельная настройка: она сама не включает вход в аккаунт или работу моделей Antigravity.',
+        'en': 'In hosts opens the full service list, scrolls to Gemini AI and Antigravity and highlights its tile without changing the profile.\n\nIn the hosts editor, choose a DNS profile using a provider icon below the service name. This is a separate setting and does not enable Antigravity account sign-in or model access.',
     },
     'onboarding.step.hosts.body': {
         'ru': 'Здесь выбирается, какие сервисы открывать через файл hosts и через какие серверы. Так открываются сервисы, закрытые для России сами по себе: ChatGPT, Claude и другие ИИ.\n\nТумблер включает сервис «напрямую», значок провайдера выбирает DNS-профиль. Запись происходит сразу. Повторное нажатие оставляет выбранный профиль включённым; значок питания в конце ряда выключает сервис. Подпись показывает текущий профиль. Весь файл — кнопка «Файл hosts» наверху.',

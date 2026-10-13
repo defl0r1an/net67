@@ -285,7 +285,7 @@ class HostsPage(BasePage):
             set_control_accessibility(
                 self.antigravity_button,
                 name="Найти Antigravity в hosts",
-                description="Показать плитку Google Antigravity и её DNS-профили на этой странице.",
+                description="Показать плитку «Gemini AI и Antigravity» и её DNS-профили на этой странице.",
             )
             antigravity_row.addWidget(self.antigravity_button)
             self.antigravity_manage_button = PushButton(FluentIcon.APPLICATION, "Вход и модели Antigravity", self.content)
@@ -906,11 +906,16 @@ class HostsPage(BasePage):
         )
         grouped: dict[str, list[HostsTile]] = {CATEGORY_DIRECT: [], CATEGORY_AI: [], CATEGORY_OTHER: []}
         for entry in draft.snapshot.services:
-            if self._search and self._search not in entry.name.casefold():
+            if (
+                self._search
+                and self._search not in entry.name.casefold()
+                and self._search not in entry.display_name.casefold()
+            ):
                 continue
             value = draft.value(entry.name)
             pending = draft.is_changed(entry.name) and self._applying
-            title, note = split_service_title(entry.name)
+            # Надпись — из поля title каталога, ключом остаётся имя.
+            title, note = split_service_title(entry.display_name)
             if entry.unavailable_reason:
                 note = ipv6_hint
             if entry.is_direct:

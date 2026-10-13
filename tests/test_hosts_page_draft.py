@@ -563,7 +563,7 @@ class HostsPageTests(unittest.TestCase):
 
         from hosts.hosts import _build_service_selection_rows
 
-        existing = {"Google Antigravity": "geohide", "Claude AI": "geohide"}
+        existing = {"Claude": "geohide"}
         existing_rows, _ = _build_service_selection_rows(existing)
         original = BEGIN + "\n" + "".join(f"{ip} {domain}\n" for domain, ip in existing_rows) + END + "\n"
         page = self._page(snapshot(original, existing))
@@ -583,7 +583,7 @@ class HostsPageTests(unittest.TestCase):
         self.assertIn("gemini.google.com", captured[-1])
         saved = snapshot(captured[-1], selection)
         self.assertEqual(saved.service("Gemini AI").current, "astracat")
-        self.assertEqual(saved.service("Google Antigravity").current, "geohide")
+        self.assertEqual(saved.service("Claude").current, "geohide")
         # Сохранённый выбор не выдаётся за включение при удалённых строках.
         self.assertIsNone(snapshot(original, selection).service("Gemini AI").current)
         self._finish_write(page, snapshot=saved)

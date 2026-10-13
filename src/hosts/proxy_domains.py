@@ -53,6 +53,14 @@ class HostsCatalog:
     #: решает, рабочий ли профиль. Без него «главными» считались самые короткие
     #: домены, и у Gemini labs.google с opal.google обгоняли gemini.google.com.
     service_main_domains: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Надпись плитки (поле "title" каталога), если она не совпадает с именем.
+    #:
+    #: Имя сервиса — ключ: по нему лежит сохранённый выбор людей
+    #: (settings.json, hosts.selection) и по нему сервис ищут мастер и
+    #: другие страницы. Gemini AI вобрал сайт Antigravity, и надпись стала
+    #: «Gemini AI и Antigravity»; переименуй сам сервис — у всех, кто
+    #: включал Gemini, он молча выпал бы из hosts.
+    service_titles: dict[str, str] = field(default_factory=dict)
 
 
 #: Сервис каталога, чьи записи в hosts ведёт другая страница.
@@ -266,6 +274,7 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
     service_categories: dict[str, str] = {}
     service_icons: dict[str, tuple[str, str | None]] = {}
     service_main_domains: dict[str, tuple[str, ...]] = {}
+    service_titles: dict[str, str] = {}
     service_sort: dict[str, int] = {}
 
     for raw_service in data.get("services") or []:
@@ -294,6 +303,9 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         icon_name = _clean_str(raw_service.get("icon"))
         if icon_name:
             service_icons[service_name] = (icon_name, _clean_str(raw_service.get("icon_color")) or None)
+        title = _clean_str(raw_service.get("title"))
+        if title and title != service_name:
+            service_titles[service_name] = title
         try:
             service_sort[service_name] = int(raw_service.get("sort_order"))
         except (TypeError, ValueError):
@@ -364,6 +376,7 @@ def _parse_hosts_catalog_json(text: str) -> HostsCatalog:
         service_categories=service_categories,
         service_icons=service_icons,
         service_main_domains=service_main_domains,
+        service_titles=service_titles,
         not_default_profiles=_parse_not_default(data.get("net67_not_default")),
     )
 
@@ -1073,6 +1086,11 @@ def _build_services_profile_index(cat: HostsCatalog) -> dict[str, object]:
         "icon_by_service": {
             service_name: _service_icon(cat, service_name)
             for service_name in services
+        },
+        "title_by_service": {
+            service_name: cat.service_titles[service_name]
+            for service_name in services
+            if service_name in cat.service_titles
         },
     }
 

@@ -92,7 +92,7 @@ class AntigravityPage(BasePage):
         if callable(self._open_hosts):
             self.hosts_button = self._button("В hosts", self._open_hosts)
             self.hosts_button.setIcon(FluentIcon.DOCUMENT)
-            self.hosts_button.setToolTip("Показать Google Antigravity в редакторе hosts")
+            self.hosts_button.setToolTip("Показать «Gemini AI и Antigravity» в редакторе hosts")
             set_control_accessibility(self.hosts_button, name="Показать Antigravity в hosts")
             # Переход доступен и пока движок проверяет систему.
             self._controls.remove(self.hosts_button)
