@@ -86,6 +86,16 @@ class LaunchTitleBadgeBindingTests(unittest.TestCase):
         self._set_phase(store, "stopped")
         self.assertEqual(badge.text(), "Остановлен")
 
+    def test_uptime_ignores_float_noise_at_a_whole_second_boundary(self) -> None:
+        from ui.launch_uptime import format_uptime
+
+        started = 16000.123456789
+        elapsed = (started + 605) - started
+        self.assertLess(elapsed, 605)
+        self.assertEqual(format_uptime(elapsed), "10:05")
+        self.assertEqual(format_uptime(604.9), "10:04")
+        self.assertEqual(format_uptime(-0.1), "0:00")
+
     def test_running_badge_counts_uptime_from_one_shared_clock(self) -> None:
         import time
 

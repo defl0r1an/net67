@@ -112,8 +112,8 @@ _THC_PAGE_SIZE = 100
 _THC_MAX_PAGES = 3
 _SHODAN_URL = "https://internetdb.shodan.io/{ip}"
 _HACKERTARGET_URL = "https://api.hackertarget.com/reverseiplookup/?q={ip}"
-_RIPESTAT_URL = "https://stat.ripe.net/data/prefix-overview/data.json?resource={ip}&sourceapp=zapretgui"
-_USER_AGENT = "ZapretGUI domain lookup"
+_RIPESTAT_URL = "https://stat.ripe.net/data/prefix-overview/data.json?resource={ip}&sourceapp=net67"
+_USER_AGENT = "net67 domain lookup"
 _HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z0-9-]{2,63}$")
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 

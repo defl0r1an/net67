@@ -57,7 +57,9 @@ def format_uptime(seconds: float) -> str:
     Секунды показываем всегда: без них первые минуты выглядят
     застывшими, и человек не понимает, идёт ли отсчёт.
     """
-    total = max(0, int(seconds))
+    # Вычитание monotonic может дать 604,999999999998 вместо 605.
+    # Точность до микросекунды убирает этот шум у границы целой секунды.
+    total = max(0, int(round(seconds, 6)))
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
     if hours:

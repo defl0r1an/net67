@@ -349,17 +349,16 @@ class ProbeButtonTests(unittest.TestCase):
 
         self.assertEqual(self.chosen, [("Grok", "p2")])
 
-    def test_best_name_with_a_bolt_stands_on_the_right(self) -> None:
+    def test_caption_bolt_requires_the_selected_profile_to_be_best(self) -> None:
         grid = self._grid(best="p2", choices=(_choice("p1", mark="ok"), _choice("p2", mark="best")))
         tile = grid.tiles()[0]
-        plain = HostsTile(kind="tile", title="Grok", key="Grok", choices=tile.choices, selected="p1", state_text="P1", can_probe=True)
         rect = grid.tile_rect("Grok")
 
-        self.assertTrue(grid._shows_best(tile))
-        # Под молнию перед именем отведено место.
-        self.assertGreater(grid._state_width(tile, rect), grid._state_width(plain, rect))
-        # Пока идёт запись или проверка, справа их ход, а не имя лучшего.
-        self.assertFalse(grid._shows_best(HostsTile(kind="tile", title="G", best="p2", probing=True)))
+        self.assertFalse(grid._shows_best(tile))
+        selected_best = HostsTile(kind="tile", title="Grok", key="Grok", choices=tile.choices, selected="p2", state_text="P1", can_probe=True, best="p2")
+        self.assertTrue(grid._shows_best(selected_best))
+        self.assertGreater(grid._state_width(selected_best, rect), grid._state_width(tile, rect))
+        self.assertFalse(grid._shows_best(HostsTile(kind="tile", title="G", selected="p2", best="p2", probing=True)))
 
     def test_finish_effects_play_and_end(self) -> None:
         """Конец проверки: вспышка, искры, блик — и после них обычная плитка."""
@@ -511,7 +510,7 @@ class ProbePageFlowTests(unittest.TestCase):
         self.assertFalse(tile.probing)
         self.assertEqual(marks, {"p1": "bad", "p2": "best"})
         self.assertEqual(tile.best, "p2")
-        self.assertEqual(tile.state_text, "Профиль 2")
+        self.assertEqual(tile.state_text, "Выкл.")
         self.assertIsNone(tile.selected)  # выбор проверка не трогает
         self.assertIn("Лучший по проверке — Профиль 2", tile.accessible_text)
 
@@ -547,7 +546,8 @@ class ProbePageFlowTests(unittest.TestCase):
 
         tile = self._tile(page, "Alpha")
         self.assertIsNone(tile.best)
-        self.assertEqual(tile.state_text, "нет рабочих")
+        self.assertEqual(tile.state_text, "Выкл.")
+        self.assertIn("Проверка: ни один профиль не открыл сайт", tile.accessible_text)
 
     def test_second_service_waits_for_its_turn(self) -> None:
         page = self._page()
