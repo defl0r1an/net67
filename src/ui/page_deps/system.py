@@ -32,6 +32,7 @@ def build_hosts_page_kwargs(*, page_name: PageName, hosts_feature, show_page) ->
         "deps": HostsPageDeps(
             hosts_feature=hosts_feature,
             open_file_page=lambda: show_page(PageName.HOSTS_FILE, allow_internal=True),
+            open_antigravity=lambda: show_page(PageName.ANTIGRAVITY),
         ),
     }
 
@@ -56,6 +57,11 @@ def build_vpn_page_kwargs(*, page_name: PageName) -> dict:
     _ = page_name
     # Профили и клиент AmneziaWG страница находит сама через APPLICATION_PATHS.
     return {}
+
+
+def build_antigravity_page_kwargs(*, page_name: PageName, open_hosts_service) -> dict:
+    _ = page_name
+    return {"open_hosts": lambda: open_hosts_service("Antigravity")}
 
 
 def build_configs_page_kwargs(*, page_name: PageName) -> dict:
@@ -263,6 +269,7 @@ def build_telegram_proxy_advanced_page_kwargs(*, page_name: PageName, telegram_p
 
 
 __all__ = [
+    "build_antigravity_page_kwargs",
     "build_about_page_kwargs",
     "build_autostart_page_kwargs",
     "build_blockcheck_page_kwargs",

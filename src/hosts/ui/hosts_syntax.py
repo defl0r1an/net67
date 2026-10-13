@@ -11,6 +11,7 @@ from __future__ import annotations
 from PyQt6.QtGui import QColor, QFont, QTextCharFormat
 
 from hosts.hosts_blocks import (
+    BLOCK_ANTIGRAVITY,
     BLOCK_ADOBE,
     BLOCK_MAX,
     BLOCK_STATE_MEDIA,
@@ -29,6 +30,7 @@ from ui.code_editor.syntax import BaseSyntaxHighlighter, SyntaxTheme
 # (тёмная тема, светлая тема). У net67 — акцент темы, у ваших строк —
 # обычный цвет текста.
 _OWNER_COLORS: dict[str, tuple[str, str]] = {
+    BLOCK_ANTIGRAVITY: ("#9db9ff", "#3451b2"),
     BLOCK_TELEGRAM: ("#8fa8ff", "#3451b2"),
     BLOCK_MAX: ("#ffab70", "#b54708"),
     BLOCK_STATE_MEDIA: ("#ff7a7a", "#c42b1c"),
@@ -57,7 +59,7 @@ class HostsSyntaxHighlighter(BaseSyntaxHighlighter):
         super()._rebuild_formats()
         theme = self.theme
         self._owner_formats: dict[tuple[str | None, str], QTextCharFormat] = {}
-        for kind in (BLOCK_NET67, BLOCK_TELEGRAM, BLOCK_MAX, BLOCK_STATE_MEDIA, BLOCK_ADOBE, BLOCK_USER, None):
+        for kind in (BLOCK_NET67, BLOCK_TELEGRAM, BLOCK_MAX, BLOCK_STATE_MEDIA, BLOCK_ADOBE, BLOCK_USER, BLOCK_ANTIGRAVITY, None):
             color = owner_color(kind, theme)
             entry = QTextCharFormat()
             entry.setForeground(color)

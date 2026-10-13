@@ -360,6 +360,17 @@ class HostsTilesGrid(QWidget):
         index = self._index_of(key)
         return QRect(self._rects[index]) if index >= 0 else QRect()
 
+    def focus_tile(self, key: str) -> bool:
+        """Показать найденную плитку, не меняя её переключатель или профиль."""
+        index = self._index_of(key)
+        if index < 0:
+            return False
+        self.finish_float_in()
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._set_cursor(index, ensure_visible=False)
+        self.flash(key)
+        return True
+
     def choice_rect(self, key: str, profile_id: str) -> QRect:
         """Где на сетке иконка профиля (для тестов и подсказок)."""
         index = self._index_of(key)
@@ -498,8 +509,8 @@ class HostsTilesGrid(QWidget):
 
     @staticmethod
     def _shows_best(tile: HostsTile) -> bool:
-        """Справа стоит имя лучшего профиля с молнией (а не ход записи или проверки)."""
-        return bool(tile.best) and not tile.pending and not tile.probing
+        """Молния у текущего профиля только когда он лучший по проверке."""
+        return bool(tile.best) and tile.best == tile.selected and not tile.pending and not tile.probing
 
     def _state_width(self, tile: HostsTile, rect: QRect) -> int:
         state = self._state_text(tile)
@@ -611,6 +622,7 @@ class HostsTilesGrid(QWidget):
         hovered = index == self._hover or (index == self._cursor and self.hasFocus())
         return (
             hovered,
+            index == self._cursor and self.hasFocus(),
             index == self._pressed,
             self._hover_choice if index == self._hover else -1,
             self._pressed_choice if index == self._pressed else -1,
@@ -715,6 +727,13 @@ class HostsTilesGrid(QWidget):
         painter.setPen(border)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
+        if index == self._cursor and self.hasFocus():
+            # Найденная плитка остаётся различимой после короткой вспышки;
+            # та же рамка показывает положение клавиатурного курсора.
+            focus_color = QColor(themeColor())
+            focus_color.setAlpha(190)
+            painter.setPen(QPen(focus_color, 1.5))
+            painter.drawRoundedRect(box.adjusted(1, 1, -1, -1), self._RADIUS, self._RADIUS)
 
         pad = self._PAD
         icon_color = (tile.icon_color or tokens.icon_fg) if tile.is_on else tokens.icon_fg_muted
@@ -838,7 +857,7 @@ class HostsTilesGrid(QWidget):
         for slot, position in self._placed_choices(tile, rect):
             choice = tile.choices[slot]
             area = QRectF(self._choice_rect(rect, position))
-            selected = choice.profile_id == tile.selected
+            selected = (choice.profile_id or None) == tile.selected
             color = QColor(choice.color)
             painter.setPen(Qt.PenStyle.NoPen)
             # Кручение и свечение: выбранная только что (pick), выключенная
@@ -1132,18 +1151,18 @@ class HostsTilesGrid(QWidget):
     # ── действия ─────────────────────────────────────────────
 
     def _choose(self, index: int, slot: int) -> None:
-        """Иконка профиля: выбрать; уже выбранная — выключить."""
+        """Повторное нажатие подтверждает выбор; выключение — отдельный значок."""
         tile = self._tiles[index]
         choice = tile.choices[slot]
         if not choice.available:
             return
-        value = None if choice.profile_id == tile.selected else choice.profile_id
+        value = choice.profile_id or None
         self.profile_chosen.emit(tile.key, value)
 
     def _cycle(self, index: int) -> None:
         """С клавиатуры: следующий профиль по кругу, после последнего — выкл."""
         tile = self._tiles[index]
-        available = [choice.profile_id for choice in tile.choices if choice.available]
+        available = [choice.profile_id for choice in tile.choices if choice.available and choice.profile_id]
         if not available:
             return
         if tile.selected in available:
@@ -1244,8 +1263,8 @@ class HostsTilesGrid(QWidget):
         if slot >= 0:
             choice = tile.choices[slot]
             label = f"{choice.label} — {choice.mark_note}" if choice.mark_note else choice.label
-            if choice.profile_id == tile.selected:
-                return f"{label}\nВыбран; щёлкните, чтобы выключить" if choice.mark_note else f"{label} — выбран, щёлкните, чтобы выключить"
+            if (choice.profile_id or None) == tile.selected:
+                return f"{label}\nВыбран" if choice.mark_note else f"{label} — выбран"
             return label
         return f"{tile.title}\n{tile.note}" if tile.note else tile.title
 
@@ -1335,7 +1354,7 @@ class HostsTilesGrid(QWidget):
                 self.update(self._rects[value])
         if 0 <= index < len(self._tiles):
             tile = self._tiles[index]
-            set_control_accessibility(self, name="Сервисы hosts", description=tile.accessible_text or tile.title)
+            set_control_accessibility(self, name=self.accessibleName() or "Сервисы hosts", description=tile.accessible_text or tile.title)
             if ensure_visible:
                 self._ensure_visible(index)
 

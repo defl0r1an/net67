@@ -519,10 +519,10 @@ class HostsPageTests(unittest.TestCase):
         self.assertTrue(tiles["Direct"].has_switch)
         self.assertFalse(tiles["Direct"].has_choices)
         self.assertFalse(tiles["Alpha"].has_switch)
-        # Иконки всех профилей по порядку; у Beta профиля p2 нет — место пустое.
-        self.assertEqual([c.profile_id for c in tiles["Alpha"].choices], ["p1", "p2"])
-        self.assertEqual([c.available for c in tiles["Beta"].choices], [True, False])
-        self.assertEqual([c.label for c in tiles["Alpha"].choices], ["Профиль 1", "Профиль 2"])
+        # После профилей — отдельное выключение; недоступный профиль пустой.
+        self.assertEqual([c.profile_id for c in tiles["Alpha"].choices], ["p1", "p2", ""])
+        self.assertEqual([c.available for c in tiles["Beta"].choices], [True, False, True])
+        self.assertEqual([c.label for c in tiles["Alpha"].choices], ["Профиль 1", "Профиль 2", "Выключить сервис"])
         self.assertIsNone(tiles["Alpha"].selected)
         self.assertEqual(tiles["Alpha"].state_text, "Выкл.")
         self.assertEqual(tiles["Beta"].selected, "p1")
@@ -539,7 +539,7 @@ class HostsPageTests(unittest.TestCase):
         _QTest.mouseClick(page.tiles, _Qt.MouseButton.LeftButton, _Qt.KeyboardModifier.NoModifier, point)
         QApplication.processEvents()
 
-    def test_click_on_profile_icon_writes_and_second_click_turns_off(self) -> None:
+    def test_click_on_profile_icon_writes_and_repeated_click_keeps_it_on(self) -> None:
         page = self._page(_manual_snapshot())
         icon = page.tiles.choice_rect("Alpha", "p2")
         self.assertFalse(icon.isNull())
@@ -549,7 +549,61 @@ class HostsPageTests(unittest.TestCase):
 
         self._finish_write(page, snapshot=_manual_snapshot(block_lines=("1.1.1.1 alpha.example", "2.2.2.2 alpha.example"), alpha="p2"))
         self._click(page, page.tiles.choice_rect("Alpha", "p2").center())
+        self.assertEqual(len(self.writes), 1)
+        self.assertEqual(next(tile for tile in page.tiles.tiles() if tile.key == "Alpha").selected, "p2")
+        self._click(page, page.tiles.choice_rect("Alpha", "").center())
         self.assertEqual(self.writes[-1]["selection"], {})
+
+    def test_gemini_astracat_is_written_read_back_and_not_cleared_by_repeated_click(self) -> None:
+        from hosts import hosts as hosts_module
+
+        def snapshot(text, selection=None):
+            return build_page_snapshot(hosts_text=text, hosts_path="hosts", hosts_exists=True,
+                                       readable=True, read_only=False, ipv6_available=True, saved_selection=selection)
+
+        from hosts.hosts import _build_service_selection_rows
+
+        existing = {"Google Antigravity": "geohide", "Claude AI": "geohide"}
+        existing_rows, _ = _build_service_selection_rows(existing)
+        original = BEGIN + "\n" + "".join(f"{ip} {domain}\n" for domain, ip in existing_rows) + END + "\n"
+        page = self._page(snapshot(original, existing))
+        page.focus_service("Gemini AI")
+        for _ in range(20):
+            QApplication.processEvents()
+        self._click(page, page.tiles.choice_rect("Gemini AI", "astracat").center())
+        selection = self.writes[-1]["selection"]
+        self.assertEqual(selection["Gemini AI"], "astracat")
+        captured = []
+        manager = hosts_module.HostsManager()
+        with (patch.object(manager, "is_hosts_file_accessible", return_value=True),
+              patch.object(hosts_module, "safe_read_hosts_file", return_value=original),
+              patch.object(hosts_module, "safe_write_hosts_file", side_effect=lambda text: captured.append(text) or True),
+              patch.object(hosts_module, "is_ipv6_available", return_value=True)):
+            self.assertTrue(manager.apply_service_dns_selections(selection))
+        self.assertIn("gemini.google.com", captured[-1])
+        saved = snapshot(captured[-1], selection)
+        self.assertEqual(saved.service("Gemini AI").current, "astracat")
+        self.assertEqual(saved.service("Google Antigravity").current, "geohide")
+        # Сохранённый выбор не выдаётся за включение при удалённых строках.
+        self.assertIsNone(snapshot(original, selection).service("Gemini AI").current)
+        self._finish_write(page, snapshot=saved)
+        self._click(page, page.tiles.choice_rect("Gemini AI", "astracat").center())
+        self.assertEqual(len(self.writes), 1)
+        self.assertEqual(next(tile for tile in page.tiles.tiles() if tile.key == "Gemini AI").selected, "astracat")
+
+    def test_probe_recommendation_does_not_replace_the_selected_profile_or_off_state(self) -> None:
+        page = self._page(_manual_snapshot())
+        page._probe_results["Alpha"] = SimpleNamespace(best="p2", profiles=())
+        page._render_tiles()
+        tile = next(tile for tile in page.tiles.tiles() if tile.key == "Alpha")
+        self.assertIsNone(tile.selected)
+        self.assertEqual(tile.state_text, "Выкл.")
+        self.assertFalse(page.tiles._shows_best(tile))
+        page._draft.set("Alpha", "p1")
+        page._render_tiles()
+        tile = next(tile for tile in page.tiles.tiles() if tile.key == "Alpha")
+        self.assertEqual(tile.state_text, "Профиль 1")
+        self.assertFalse(page.tiles._shows_best(tile))
 
     def test_click_on_tile_body_or_missing_profile_does_nothing(self) -> None:
         page = self._page(_manual_snapshot())

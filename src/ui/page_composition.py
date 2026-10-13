@@ -11,6 +11,7 @@ from ui.page_deps.presets import (
     build_user_presets_page_kwargs,
 )
 from ui.page_deps.system import (
+    build_antigravity_page_kwargs,
     build_about_page_kwargs,
     build_blockcheck_page_kwargs,
     build_custom_dns_server_page_kwargs,
@@ -119,6 +120,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     # Обе страницы самодостаточны: ресурсы находят через APPLICATION_PATHS
     # и settings.store, внешних зависимостей им не требуется.
     PageName.VPN: PageDepsSpec(build_vpn_page_kwargs),
+    PageName.ANTIGRAVITY: PageDepsSpec(build_antigravity_page_kwargs, actions=("open_hosts_service",)),
     PageName.CONFIGS: PageDepsSpec(build_configs_page_kwargs),
 }
 

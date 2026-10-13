@@ -6615,12 +6615,44 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': 'Tools',
     },
     'onboarding.step.menu_tools.body': {
-        'ru': 'Помощь там, где обхода мало: свои DNS-серверы, файл hosts для сервисов, закрытых для России, прокси для Telegram и VPN — когда через туннель нужен весь трафик.',
-        'en': 'Help where the bypass is not enough: your own DNS servers, the hosts file for services closed to Russia, a proxy for Telegram and a VPN for when all traffic has to go through a tunnel.',
+        'ru': 'Помощь там, где обхода мало: свои DNS-серверы, редактор hosts, прокси для Telegram, VPN и отдельные настройки Antigravity. Открытие вкладки Antigravity ничего не включает: действия запускаются вручную.',
+        'en': 'Help where the bypass is not enough: DNS servers, the hosts editor, Telegram proxy, VPN and separate Antigravity settings. Opening the Antigravity tab does not enable anything: actions are started manually.',
+    },
+    'onboarding.step.antigravity.title': {
+        'ru': 'Antigravity — отдельное управление',
+        'en': 'Antigravity — separate controls',
+    },
+    'onboarding.step.antigravity.body': {
+        'ru': 'Эта вкладка управляет входом в аккаунт и сетевым маршрутом моделей в Antigravity, IDE и CLI. Она работает отдельно от большой кнопки обхода.\n\nПри открытии вкладки и во время экскурсии ничего не запускается. Новые настройки выключены; раньше включённая служба может продолжать работать самостоятельно.',
+        'en': 'This tab controls account sign-in and model network routes in Antigravity, IDE and CLI, independently of the main bypass button.\n\nOpening the tab or taking the tour starts nothing. New settings are off; a service you enabled earlier may continue running independently.',
+    },
+    'onboarding.step.antigravity_controls.title': {
+        'ru': 'Сначала проверка, затем включение',
+        'en': 'Check first, then enable',
+    },
+    'onboarding.step.antigravity_controls.body': {
+        'ru': '«Включить всё» всегда видно в сводке. По вашему нажатию кнопка проверит установки и включит вход в аккаунт, работу моделей и автопатч. «Проверить» только читает состояние, не меняя настройки Windows.\n\nФункции можно включать отдельно. «Вход в аккаунт» изменяет клиент; Antigravity может закрыться. «Работа моделей» включает сетевой обход. «Автопатч» повторяет изменение после обновлений клиента.',
+        'en': 'Enable all is always visible in the summary. Clicking it checks installations and enables account sign-in, model access and auto-patch. Check only reads the state without changing Windows settings.\n\nYou can enable functions separately. Account sign-in modifies the client and may close Antigravity. Model access enables the network bypass. Auto-patch reapplies the change after client updates.',
+    },
+    'onboarding.step.antigravity_sections.title': {
+        'ru': 'Сеть и журнал Antigravity',
+        'en': 'Antigravity network and log',
+    },
+    'onboarding.step.antigravity_sections.body': {
+        'ru': 'В «Сети» — отдельные компоненты обхода, свой прокси и DNS-серверы. В «Журнале» — результат действий и кнопки сохранения или копирования отчёта.\n\n«Восстановить службу» появляется только при обнаруженной неисправности. Ошибка 400 «User location is not supported» означает региональный отказ Google. Ответ другой модели, например Sonnet, не подтверждает работу Gemini.',
+        'en': 'Network contains individual bypass components, your own proxy and DNS servers. Log shows action results and buttons to save or copy a report.\n\nRepair service appears only when a fault is detected. A 400 User location is not supported error is a regional refusal from Google. A reply from another model, such as Sonnet, does not confirm that Gemini works.',
+    },
+    'onboarding.step.antigravity_hosts.title': {
+        'ru': 'Antigravity в редакторе hosts',
+        'en': 'Antigravity in the hosts editor',
+    },
+    'onboarding.step.antigravity_hosts.body': {
+        'ru': 'Кнопка «В hosts» открывает полный список сервисов, прокручивает к Google Antigravity и выделяет плитку. Профиль при переходе не меняется.\n\nВ редакторе hosts DNS-профиль выбирается значком провайдера под названием сервиса. Это отдельная настройка: она сама не включает вход в аккаунт или работу моделей Antigravity.',
+        'en': 'In hosts opens the full service list, scrolls to Google Antigravity and highlights its tile without changing the profile.\n\nIn the hosts editor, choose a DNS profile using a provider icon below the service name. This is a separate setting and does not enable Antigravity account sign-in or model access.',
     },
     'onboarding.step.hosts.body': {
-        'ru': 'Здесь выбирается, какие сервисы открывать через файл hosts и через какие серверы. Так открываются сервисы, закрытые для России сами по себе: ChatGPT, Claude и другие ИИ.\n\nЩелчок по плитке пишет сразу: тумблер включает сервис, значок в ряду выбирает, через какой DNS-сервис его открывать. Весь файл целиком — кнопка «Файл hosts» наверху. Чужие строки программа не трогает.',
-        'en': "Here you choose which services to open through the hosts file and through which servers. This is how services that close themselves to Russia open: ChatGPT, Claude and other AI.\n\nA click on a tile writes right away: the switch turns a service on, an icon in the row picks which DNS service opens it. The whole file is behind the Hosts file button at the top. Lines that are not the app's are left alone.",
+        'ru': 'Здесь выбирается, какие сервисы открывать через файл hosts и через какие серверы. Так открываются сервисы, закрытые для России сами по себе: ChatGPT, Claude и другие ИИ.\n\nТумблер включает сервис «напрямую», значок провайдера выбирает DNS-профиль. Запись происходит сразу. Повторное нажатие оставляет выбранный профиль включённым; значок питания в конце ряда выключает сервис. Подпись показывает текущий профиль. Весь файл — кнопка «Файл hosts» наверху.',
+        'en': 'Here you choose which services to open through the hosts file and through which servers, including ChatGPT, Claude and other AI services.\n\nThe switch enables a direct service; a provider icon chooses a DNS profile. Changes are written immediately. Clicking the selected profile again keeps it enabled; the power icon at the end of the row disables the service. The caption shows the current profile. Hosts file at the top shows the whole file.',
     },
     'onboarding.step.menu_diagnostics.title': {
         'ru': 'Диагностика',

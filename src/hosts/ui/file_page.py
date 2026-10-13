@@ -23,6 +23,7 @@ from qfluentwidgets import (
 
 from app.ui_texts import tr as tr_catalog
 from hosts.hosts_blocks import (
+    BLOCK_ANTIGRAVITY,
     BLOCK_ADOBE,
     BLOCK_MAX,
     BLOCK_ORDER,
@@ -45,6 +46,7 @@ from ui.theme_semantic import get_semantic_palette
 
 
 _OWNER_TITLES = {
+    BLOCK_ANTIGRAVITY: ("page.hosts_file.owner.antigravity", "Antigravity"),
     BLOCK_NET67: ("page.hosts_file.owner.net67", "net67"),
     BLOCK_TELEGRAM: ("page.hosts_file.owner.telegram", "Telegram Proxy"),
     BLOCK_MAX: ("page.hosts_file.owner.max", "Блокировка MAX"),

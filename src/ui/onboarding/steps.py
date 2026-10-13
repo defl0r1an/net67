@@ -41,6 +41,7 @@ MODE_TOUR_PAGES: dict[PageName, dict[str, PageName]] = {
         "hosts": PageName.HOSTS,
         "telegram_proxy": PageName.TELEGRAM_PROXY,
         "vpn": PageName.VPN,
+        "antigravity": PageName.ANTIGRAVITY,
         "blockcheck": PageName.BLOCKCHECK,
         "log_analyzer": PageName.WINWS_LOG_ANALYZER,
         "logs": PageName.LOGS,
@@ -382,6 +383,10 @@ _TOUR_STEPS: tuple[TourStep, ...] = (
     TourStep("hosts", _page_tab(PageName.HOSTS), page="hosts", choice="hosts"),
     TourStep("telegram_proxy", _page_tab(PageName.TELEGRAM_PROXY), page="telegram_proxy"),
     TourStep("vpn", _page_tab(PageName.VPN), page="vpn"),
+    TourStep("antigravity", _page_tab(PageName.ANTIGRAVITY), page="antigravity", advanced_only=True),
+    TourStep("antigravity_controls", _page_target("controls"), page="antigravity", page_state="main", advanced_only=True),
+    TourStep("antigravity_sections", _page_target("sections"), page="antigravity", page_state="log", advanced_only=True),
+    TourStep("antigravity_hosts", _page_target("hosts"), page="antigravity", page_state="main", advanced_only=True),
     # ── «Диагностика» ────────────────────────────────────────────────
     TourStep("menu_diagnostics", _group_tab("diagnostics"), page="blockcheck", advanced_only=True),
     TourStep("blockcheck", _page_tab(PageName.BLOCKCHECK), page="blockcheck", choice="detect"),

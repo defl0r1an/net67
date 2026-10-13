@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, Qt
+from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QTimer, Qt
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QGraphicsOpacityEffect, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -172,6 +172,8 @@ class HostsPage(BasePage):
         self._snapshot: HostsPageSnapshot | None = None
         self._draft: HostsDraft | None = None
         self._search = ""
+        self._focus_service_pending = ""
+        self._focus_service_geometry = None
         self._cleanup_in_progress = False
         self._snapshot_runtime = OneShotWorkerRuntime()
         self._snapshot_pending = False
@@ -277,14 +279,21 @@ class HostsPage(BasePage):
         self._find_shortcut.activated.connect(self.open_search)
 
         if callable(self._open_antigravity):
-            self.antigravity_button = PushButton(FluentIcon.APPLICATION, "Antigravity: вход и модели", self.content)
-            self.antigravity_button.clicked.connect(self._open_antigravity)
+            antigravity_row = QHBoxLayout()
+            self.antigravity_button = PushButton(FluentIcon.SEARCH, "Найти Antigravity", self.content)
+            self.antigravity_button.clicked.connect(lambda: self.focus_service("Antigravity"))
             set_control_accessibility(
                 self.antigravity_button,
-                name="Управление Antigravity",
-                description="Hosts выбирает адреса сайтов; вход в аккаунт и работа моделей настраиваются отдельно.",
+                name="Найти Antigravity в hosts",
+                description="Показать плитку Google Antigravity и её DNS-профили на этой странице.",
             )
-            self.add_widget(self.antigravity_button)
+            antigravity_row.addWidget(self.antigravity_button)
+            self.antigravity_manage_button = PushButton(FluentIcon.APPLICATION, "Вход и модели Antigravity", self.content)
+            self.antigravity_manage_button.clicked.connect(self._open_antigravity)
+            set_control_accessibility(self.antigravity_manage_button, name="Настройка входа и моделей Antigravity")
+            antigravity_row.addWidget(self.antigravity_manage_button)
+            antigravity_row.addStretch()
+            self.layout.addLayout(antigravity_row)
 
         self.tiles = HostsTilesGrid(self.content)
         self.tiles.activated.connect(self._on_tile_activated)
@@ -346,6 +355,7 @@ class HostsPage(BasePage):
         self._render_summary()
         self._render_access()
         self.tiles.update()
+        self._render_tiles()
 
     # ── поиск по Ctrl+F ──────────────────────────────────────
 
@@ -359,12 +369,58 @@ class HostsPage(BasePage):
         self.search_edit.hide()
         self.tiles.setFocus(Qt.FocusReason.OtherFocusReason)
 
+    def focus_service(self, service: str) -> None:
+        self._focus_service_pending = str(service).strip().casefold()
+        self._focus_service_geometry = None
+        self.close_search()
+        QTimer.singleShot(0, self._show_focused_service)
+
+    def _show_focused_service(self) -> None:
+        # Команда приходит до показа страницы и загрузки каталога. Ждём
+        # настоящую геометрию, иначе прокрутка упирается в старую высоту.
+        if not self._focus_service_pending or not self.isVisible() or self._draft is None:
+            return
+        target = next((tile.key for tile in self.tiles.tiles()
+                       if tile.kind == "tile" and self._focus_service_pending in tile.key.casefold()), "")
+        if not target:
+            self._focus_service_pending = ""
+            return
+        self._sync_content_width_to_viewport()
+        self.content.layout().activate()
+        rect = self.tiles.tile_rect(target)
+        geometry = (self.viewport().size(), self.content.size(), self.tiles.geometry(), rect)
+        if geometry != self._focus_service_geometry:
+            self._focus_service_geometry = geometry
+            QTimer.singleShot(0, self._show_focused_service)
+            return
+        center = self.tiles.mapTo(self.content, rect.center())
+        self.verticalScrollBar().setValue(center.y() - self.viewport().height() // 2)
+        self.tiles.focus_tile(target)
+        self._focus_service_pending = ""
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        QTimer.singleShot(0, self._show_focused_service)
+
+    def handle_page_command(self, command: str, payload: dict) -> bool:
+        if command != "focus_service":
+            return False
+        service = str(payload.get("service") or "").strip()
+        if not service:
+            return False
+        self.focus_service(service)
+        return True
+
     def eventFilter(self, watched, event) -> bool:  # noqa: N802
         # Фильтр зовётся и во время построения базовой страницы, до поиска.
         if watched is getattr(self, "search_edit", None) and event.type() == QEvent.Type.KeyPress:
             if event.key() == Qt.Key.Key_Escape:
                 self.close_search()
                 return True
+        if (watched is getattr(self, "content", None)
+                and event.type() == QEvent.Type.LayoutRequest
+                and getattr(self, "_focus_service_pending", "")):
+            QTimer.singleShot(0, self._show_focused_service)
         return super().eventFilter(watched, event)
 
     # ── жизненный цикл ───────────────────────────────────────
@@ -864,8 +920,8 @@ class HostsPage(BasePage):
             can_probe = not entry.is_direct and not entry.unavailable_reason and bool(entry.profiles)
             probing = can_probe and (entry.name == self._probing or entry.name in self._probe_queue)
             probe = self._probe_results.get(entry.name) if can_probe and not probing else None
-            # Подпись справа от названия: обычно выбранный профиль, во время
-            # проверки — её ход, после — имя лучшего (молнию рисует плитка).
+            # Рекомендация не подменяет выбранный профиль: иначе выключенный
+            # сервис выглядел включённым. Во время проверки показываем её ход.
             caption = state
             best = None
             marks: dict[str, tuple[str, str]] = {}
@@ -886,10 +942,8 @@ class HostsPage(BasePage):
                     marks[item.profile_id] = (mark, self._probe_note(item, best=is_best, probe=probe))
                 if probe.best is not None and probe.best in entry.profiles:
                     best = probe.best
-                    caption = labels.get(best, best)
-                    accessible += ". " + self._tr("page.hosts.probe.a11y.best", "Лучший по проверке — {name}", name=caption)
+                    accessible += ". " + self._tr("page.hosts.probe.a11y.best", "Лучший по проверке — {name}", name=labels.get(best, best))
                 else:
-                    caption = self._tr("page.hosts.probe.none", "нет рабочих")
                     accessible += ". " + self._tr("page.hosts.probe.a11y.none", "Проверка: ни один профиль не открыл сайт")
             grouped.setdefault(entry.category, []).append(
                 HostsTile(
@@ -901,7 +955,7 @@ class HostsPage(BasePage):
                     icon_color=entry.icon_color,
                     is_on=bool(value),
                     has_switch=entry.is_direct and not entry.unavailable_reason,
-                    choices=() if entry.is_direct or entry.unavailable_reason else tuple(
+                    choices=() if entry.is_direct or entry.unavailable_reason else (*tuple(
                         replace(
                             choice,
                             available=choice.profile_id in entry.profiles,
@@ -909,7 +963,7 @@ class HostsPage(BasePage):
                             mark_note=marks.get(choice.profile_id, ("", ""))[1],
                         )
                         for choice in all_choices
-                    ),
+                    ), HostsChoice("", self._tr("page.hosts.profile.turn_off", "Выключить сервис"), "fa5s.power-off", get_theme_tokens().icon_fg)),
                     selected=None if entry.is_direct else value,
                     state_text="" if entry.is_direct else caption,
                     pending=pending,
@@ -955,6 +1009,8 @@ class HostsPage(BasePage):
         if not tiles:
             tiles.append(HostsTile(kind="empty", title=self._tr("page.hosts.empty", "Ничего не найдено")))
         self.tiles.set_tiles(tiles)
+        if self._focus_service_pending:
+            QTimer.singleShot(0, self._show_focused_service)
 
 
 __all__ = ["ADOBE_TILE_KEY", "HostsPage"]

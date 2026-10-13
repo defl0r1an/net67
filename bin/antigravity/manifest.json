@@ -1,0 +1,9 @@
+{
+  "version": "2.22.0",
+  "source_tag": "v2.22.0",
+  "source_commit": "94663a7",
+  "files": {
+    "net67_antigravity.exe": "ba67dd51b67592fd96507e8189a131cbe9d008b81ca368966d70aa8c87154ba8",
+    "ag_network.exe": "cb0a5c7c77a3e24dbb4e7f696c40d2b757355d51c772ea861d7471d028307f3a"
+  }
+}

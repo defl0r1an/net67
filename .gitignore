@@ -45,6 +45,10 @@ Desktop.ini
 
 # Logs
 *.log
+/.impeccable/review/
+/scratchpad/antigravity_v2_22_0/
+/scratchpad/prepare_antigravity_core.py
+/scratchpad/preview_antigravity.py
 # Но не тестовые данные: правило выше уже съело
 # tests/fixtures/winws2_debug_sample.log, из-за чего десять тестов
 # разбора логов падали в любой свежей копии репозитория.

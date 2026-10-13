@@ -15,6 +15,7 @@ BLOCK_MAX = "max"
 BLOCK_STATE_MEDIA = "state_media"
 BLOCK_ADOBE = "adobe"
 BLOCK_USER = "user"
+BLOCK_ANTIGRAVITY = "antigravity"
 
 BLOCK_ORDER = (
     BLOCK_NET67,
@@ -23,6 +24,7 @@ BLOCK_ORDER = (
     BLOCK_STATE_MEDIA,
     BLOCK_ADOBE,
     BLOCK_USER,
+    BLOCK_ANTIGRAVITY,
 )
 
 # Маркеры повторяют то, что пишут владельцы блоков:
@@ -34,6 +36,7 @@ BLOCK_ORDER = (
 # считались бы строками пользователя, и «Применить» дописал бы второй
 # блок рядом со старым.
 _BEGIN_END_MARKERS = {
+    "# AG_UNLOCKER_HOSTS_BEGIN": ("# AG_UNLOCKER_HOSTS_END", BLOCK_ANTIGRAVITY),
     "# >>> net67:hosts managed begin >>>": ("# <<< net67:hosts managed end <<<", BLOCK_NET67),
     "# >>> zapretgui:hosts managed begin >>>": ("# <<< zapretgui:hosts managed end <<<", BLOCK_NET67),
     "# MAX BLOCKED BY net67": ("# END MAX BLOCK", BLOCK_MAX),
@@ -125,6 +128,10 @@ def classify_hosts_line(line: str, state: int = STATE_NONE) -> tuple[str | None,
         return kind, (ROLE_COMMENT if stripped else ROLE_BLANK), state
 
     begin = _BEGIN_END_MARKERS.get(stripped)
+    # Движок дописывает идентификатор сборки после метки начала.
+    # Без распознавания префикса его строки считались бы ручными.
+    if begin is None and (stripped == "# AG_UNLOCKER_HOSTS_BEGIN" or stripped.startswith("# AG_UNLOCKER_HOSTS_BEGIN ")):
+        begin = _BEGIN_END_MARKERS["# AG_UNLOCKER_HOSTS_BEGIN"]
     if begin is not None:
         return begin[1], ROLE_MARKER, _kind_state(begin[1], header=False)
 
@@ -161,6 +168,7 @@ def parse_hosts_blocks(text: str) -> list[HostsBlock]:
 
 
 __all__ = [
+    "BLOCK_ANTIGRAVITY",
     "ROLE_BLANK",
     "ROLE_COMMENT",
     "ROLE_ENTRY",

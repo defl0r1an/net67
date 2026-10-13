@@ -20,6 +20,7 @@ def _get_nav_labels():
         PageName.NETWORK: "Настройка DNS",
         PageName.NETWORK_CUSTOM_DNS: "Свой DNS",
         PageName.HOSTS: "Редактор hosts",
+        PageName.ANTIGRAVITY: "Antigravity",
         PageName.BLOCKCHECK: "BlockCheck",
         PageName.LOGS: "Логи",
         PageName.ABOUT: "О программе",

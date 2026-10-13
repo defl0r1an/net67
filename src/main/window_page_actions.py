@@ -28,12 +28,22 @@ class WindowPageActions:
     on_editor_smooth_scroll_changed: Callable[..., Any]
     on_ui_language_changed: Callable[..., Any]
     on_sidebar_icon_style_changed: Callable[..., Any]
+    open_hosts_service: Callable[..., Any]
 
 
 def show_page(window, page_name, *, allow_internal: bool = False) -> bool:
     from ui.window_adapter import show_page as _show_page
 
     return bool(_show_page(window, page_name, allow_internal=allow_internal))
+
+
+def open_hosts_service(window, service: str) -> bool:
+    from app.page_names import PageName
+    from ui.window_adapter import send_page_command
+
+    if not send_page_command(window, PageName.HOSTS, "focus_service", {"service": service}, ensure=True):
+        return False
+    return show_page(window, PageName.HOSTS)
 
 
 def show_active_mode_control_page(window, *, allow_internal: bool = False) -> bool:
@@ -180,6 +190,7 @@ def build_window_page_actions(*, window, appearance_actions) -> WindowPageAction
             allow_internal=allow_internal,
         ),
         open_custom_dns_server=lambda server=None: open_custom_dns_server(window, server),
+        open_hosts_service=lambda service: open_hosts_service(window, service),
         after_launch_method_changed=lambda method: apply_launch_method_changed_ui(window, method),
         on_background_refresh_needed=lambda: on_background_refresh_needed(window),
         on_background_preset_changed=lambda preset: on_background_preset_changed(window, preset),

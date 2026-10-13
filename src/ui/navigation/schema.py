@@ -271,7 +271,20 @@ PAGE_ROUTE_SPECS: dict[PageName, PageRouteSpec] = {
     ),
 }
 
+PAGE_ROUTE_SPECS[PageName.ANTIGRAVITY] = PageRouteSpec(
+    page_name=PageName.ANTIGRAVITY,
+    module_name="antigravity.ui.page",
+    class_name="AntigravityPage",
+    route_key="AntigravityPage",
+    is_top_level=True,
+    is_hidden=False,
+    launch_modes=_COMMON,
+    breadcrumb_parent=None,
+    sidebar_group="system",
+)
+
 PAGE_CLEANUP_ORDER: tuple[PageName, ...] = (
+    PageName.ANTIGRAVITY,
     PageName.ZAPRET2_MODE_CONTROL,
     PageName.ZAPRET2_PRESET_SETUP,
     PageName.ZAPRET2_PROFILE_SETUP,

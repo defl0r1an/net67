@@ -21,6 +21,7 @@ class CustomDnsServerPageDeps:
 class HostsPageDeps:
     hosts_feature: object
     open_file_page: Callable[[], object]
+    open_antigravity: Callable[[], object] | None = None
 
 
 @dataclass(frozen=True, slots=True)

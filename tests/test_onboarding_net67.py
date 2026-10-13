@@ -31,6 +31,20 @@ def _app() -> QApplication:
 
 
 class TourStepsTests(unittest.TestCase):
+    def test_antigravity_is_explained_in_tools_without_activation_commands(self) -> None:
+        from ui.onboarding.steps import TOUR_STEPS, MODE_TOUR_PAGES
+
+        keys = [step.key for step in TOUR_STEPS]
+        names = ["antigravity", "antigravity_controls", "antigravity_sections", "antigravity_hosts"]
+        self.assertLess(keys.index("vpn"), keys.index(names[0]))
+        self.assertLess(keys.index(names[-1]), keys.index("menu_diagnostics"))
+        self.assertEqual(MODE_TOUR_PAGES[PageName.ZAPRET2_MODE_CONTROL]["antigravity"], PageName.ANTIGRAVITY)
+        for step in (step for step in TOUR_STEPS if step.key in names):
+            self.assertEqual(step.page, "antigravity")
+            self.assertTrue(step.advanced_only)
+            self.assertFalse(step.choice)
+            self.assertFalse(step.action)
+
     def test_steps_import_and_speak_about_net67_first(self) -> None:
         from ui.onboarding.steps import TOUR_STEPS
 

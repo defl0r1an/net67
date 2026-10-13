@@ -133,6 +133,42 @@ def _is_adobe_active(blocks: list[HostsBlock]) -> bool:
     )
 
 
+def _written_shared_selections(
+    rows: dict[tuple[str, str], tuple[tuple[str, str], ...]],
+    saved_selection: dict[str, str],
+    block_keys: set[tuple[str, str]],
+    *,
+    ipv6_available: bool,
+) -> set[str]:
+    """Проверяет записанный выбор с учётом общих доменов сервисов."""
+    if not saved_selection:
+        return set()
+    from hosts.hosts import _build_service_selection_rows
+
+    written_rows, _ = _build_service_selection_rows(saved_selection)
+    expected_by_domain: dict[str, set[tuple[str, str]]] = {}
+    for domain, ip in _row_keys(written_rows, ipv6_available=ipv6_available):
+        expected_by_domain.setdefault(domain, set()).add((domain, ip))
+    result = set()
+    for service, profile in saved_selection.items():
+        own_by_domain = {}
+        for domain, ip in _row_keys(rows.get((service, profile), ()), ipv6_available=ipv6_available):
+            own_by_domain.setdefault(domain, set()).add((domain, ip))
+        if not own_by_domain:
+            continue
+        # Последний сервис каталога владеет общим именем. Gemini остаётся
+        # включённым, если его остальные строки и адрес владельца записаны.
+        # Одного сохранённого выбора без собственных строк недостаточно.
+        has_own_domain = any(keys == expected_by_domain.get(domain) for domain, keys in own_by_domain.items())
+        has_shared_override = any(keys != expected_by_domain.get(domain) for domain, keys in own_by_domain.items())
+        if has_own_domain and has_shared_override and all(
+            expected_by_domain.get(domain) and expected_by_domain[domain] <= block_keys
+            for domain in own_by_domain
+        ):
+            result.add(service)
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class _CatalogPart:
     """Всё, что зависит только от каталога: считается один раз на его версию."""
@@ -212,6 +248,8 @@ def build_page_snapshot(
         for domain, ips in _managed_domain_ip_map(blocks).items()
         for ip in ips
     }
+    shared_written = _written_shared_selections(catalog.rows, saved_selection, block_keys,
+                                               ipv6_available=ipv6_available)
 
     # Выбор выводится только из блока net67: сохранённый, но не записанный
     # выбор не показывается включённым.
@@ -234,7 +272,9 @@ def build_page_snapshot(
             else:
                 profiles = tuple(row.available_profiles)
                 current = row.selected_profile if row.selected_profile in profiles else None
-                if current is not None:
+                if row.service_name in shared_written and saved_selection.get(row.service_name) in profiles:
+                    current = saved_selection[row.service_name]
+                elif current is not None:
                     current = _written_profile(
                         row.service_name,
                         current,

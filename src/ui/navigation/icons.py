@@ -15,6 +15,7 @@ _WINDOWS11_SIDEBAR_ICON_FILES: dict[PageName, str] = {
     PageName.TELEGRAM_PROXY: "share.svg",
     PageName.TELEGRAM_PROXY_ADVANCED: "settings.svg",
     PageName.VPN: "shield.svg",
+    PageName.ANTIGRAVITY: "application.svg",
     PageName.CONFIGS: "folder.svg",
     PageName.HOSTS: "document.svg",
     PageName.HOSTS_FILE: "document.svg",
@@ -68,6 +69,7 @@ def build_standard_nav_icons() -> dict[PageName, Any]:
         PageName.TELEGRAM_PROXY: FluentIcon.SEND,
         PageName.TELEGRAM_PROXY_ADVANCED: FluentIcon.SETTING,
         PageName.VPN: FluentIcon.VPN,
+        PageName.ANTIGRAVITY: FluentIcon.APPLICATION,
         PageName.CONFIGS: FluentIcon.SAVE_AS,
     }
 
