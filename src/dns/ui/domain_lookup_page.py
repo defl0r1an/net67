@@ -36,6 +36,9 @@ from ui.theme_semantic import get_semantic_palette
 from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips
 
 
+_HOSTS_WRITERS: set = set()
+
+
 def _tone_color(tone: str) -> str:
     tokens = get_theme_tokens()
     semantic = get_semantic_palette()
@@ -170,6 +173,14 @@ class DomainLookupPage(BasePage):
             log_fn=log,
         )
         self._build_ui()
+        self._hosts_lane = LatestWorkerLane(
+            name="domain_hosts",
+            create_worker=self._create_hosts_worker,
+            on_result=self._on_hosts_written,
+            on_error=self._on_hosts_error,
+            result_signal="loaded",
+            log_fn=log,
+        )
         if embedded:
             self.hide_page_header()
         self._apply_texts()
@@ -282,8 +293,8 @@ class DomainLookupPage(BasePage):
             self.external_check,
             self._t(
                 "external.description",
-                "Список доменов на том же адресе дают сторонние сервисы. Без галочки наружу ничего не уходит: "
-                "остаются обратное имя, сертификат и владелец сети.",
+                "Разрешает отправить IP внешним сервисам поиска. Без галочки остаются DNS, "
+                "пинг, подключение к адресу и чтение сертификата.",
             ),
         )
         self.ping_title.setText(self._t("section.ping", "Пинг и сеть"))
@@ -291,7 +302,7 @@ class DomainLookupPage(BasePage):
         self.add_to_hosts_btn.setText(self._t("button.add_to_hosts", "Добавить в Hosts"))
         set_tooltip(
             self.add_to_hosts_btn,
-            self._t("button.add_to_hosts.description", "Записать пару «домен -> чистый IP» в файл Hosts в один клик."),
+            self._t("button.add_to_hosts.description", "Сохранить показанные домен и IP в hosts."),
         )
         self.neighbors_title.setText(self._t("section.neighbors", "Кто ещё на этом адресе"))
 
@@ -416,7 +427,7 @@ class DomainLookupPage(BasePage):
         can_add_hosts = bool(report.primary_ip and getattr(report, "kind", "") == "domain")
         self.add_to_hosts_btn.setVisible(can_add_hosts)
         if can_add_hosts:
-            self.add_to_hosts_btn.setEnabled(True)
+            self.add_to_hosts_btn.setEnabled(not self._hosts_lane.is_busy())
             self.add_to_hosts_btn.setText(self._t("button.add_to_hosts", "Добавить в Hosts"))
         if rows:
             self.dns_summary.set_lines((plans.build_dns_summary(report),))
@@ -432,36 +443,43 @@ class DomainLookupPage(BasePage):
         set_state_text(self.neighbors_text, f"Домены на том же адресе: найдено {plans.count_neighbors(report)}")
 
     def _on_add_to_hosts(self) -> None:
-        if not self._report or not self._report.primary_ip:
+        if self._closed or self._hosts_lane.is_busy() or not self._report or not self._report.primary_ip:
             return
         domain = str(self._report.target or "").strip()
         ip = str(self._report.primary_ip or "").strip()
         if not domain or not ip:
             return
-        try:
-            from app.feature_facades.hosts import add_domain_to_hosts
+        self.add_to_hosts_btn.setEnabled(False)
+        self._hosts_lane.request((domain, ip))
 
-            result = add_domain_to_hosts(domain, ip)
-            if result.success:
-                self.add_to_hosts_btn.setText(self._t("button.added_to_hosts", "✓ Добавлено в Hosts"))
+    def _create_hosts_worker(self, request_id: int, payload):
+        from app.feature_facades.hosts import create_domain_hosts_worker
+
+        worker = create_domain_hosts_worker(request_id, *payload)
+        # Запись нельзя прерывать удалением страницы: она держит общий замок hosts.
+        _HOSTS_WRITERS.add(worker)
+        worker.finished.connect(lambda w=worker: _HOSTS_WRITERS.discard(w))
+        return worker
+
+    def _on_hosts_written(self, payload, result) -> None:
+        from ui.fluent_widgets import InfoBarHelper
+
+        domain, ip = payload
+        if result.success:
+            if self._report and (self._report.target, self._report.primary_ip) == payload:
+                self.add_to_hosts_btn.setText(self._t("button.added_to_hosts", "Добавлено в hosts"))
                 self.add_to_hosts_btn.setEnabled(False)
-                from ui.fluent_widgets import InfoBarHelper
-
-                InfoBarHelper.success(
-                    self,
-                    self._t("infobar.hosts_added.title", "Запись добавлена"),
-                    f"{domain} → {ip}",
-                )
             else:
-                from ui.fluent_widgets import InfoBarHelper
+                self.add_to_hosts_btn.setEnabled(bool(self._report and self._report.primary_ip))
+            InfoBarHelper.success(self, self._t("infobar.hosts_added.title", "Запись добавлена"), f"{domain} → {ip}")
+        else:
+            self._on_hosts_error(payload, result.message or "Не удалось записать в hosts")
 
-                InfoBarHelper.error(
-                    self,
-                    self._t("infobar.hosts_error.title", "Ошибка Hosts"),
-                    result.message or "Не удалось записать в Hosts",
-                )
-        except Exception as exc:
-            log(f"Ошибка добавления {domain} -> {ip} в Hosts: {exc}", "WARNING")
+    def _on_hosts_error(self, payload, error: str) -> None:
+        from ui.fluent_widgets import InfoBarHelper
+
+        self.add_to_hosts_btn.setEnabled(True)
+        InfoBarHelper.error(self, self._t("infobar.hosts_error.title", "Ошибка hosts"), error)
 
     def _open_report(self) -> None:
 
@@ -486,6 +504,7 @@ class DomainLookupPage(BasePage):
 
     def cleanup(self) -> None:
         self._closed = True
+        self._hosts_lane.close()
         self._lane.close()
         super().cleanup()
 

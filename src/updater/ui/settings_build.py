@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ui.accessibility import enable_keyboard_click, set_control_accessibility, set_state_text
+from ui.accessibility import set_control_accessibility, set_state_text
 from ui.theme import get_themed_qta_icon
 
 
@@ -121,27 +121,27 @@ def build_servers_telegram_section(
 ) -> ServersTelegramWidgets:
     tg_info_label = None
     tg_card = push_setting_card_cls(
-        tr_fn("page.servers.telegram.button.open_channel", "Открыть Telegram канал"),
+        tr_fn("page.servers.telegram.button.open_channel", "Пока нету :3"),
         get_themed_qta_icon("fa5b.telegram-plane", color=accent_hex),
-        tr_fn("page.servers.telegram.title", "Проблемы с обновлением?"),
+        tr_fn("page.servers.telegram.title", "Обновления в Telegram"),
         tr_fn(
             "page.servers.telegram.info",
-            "Если возникают трудности с автоматическим обновлением, все версии программы выкладываются в Telegram канале.",
+            "Канал ещё готовим.",
         ),
     )
-    tg_card.clicked.connect(on_open_channel)
     tg_btn = tg_card.button
+    # Канал ещё не создан: нажатие не должно выдавать ошибку открытия.
+    tg_btn.setEnabled(False)
     telegram_action_name = tr_fn(
         "page.servers.telegram.accessible_name",
-        "Открыть Telegram канал обновлений",
+        "Канал обновлений пока не создан",
     )
     telegram_action_description = tr_fn(
         "page.servers.telegram.accessible_description",
-        "Открывает Telegram канал, где публикуются версии программы и новости обновлений.",
+        "Канал пока недоступен. Обновления можно установить через эту страницу или GitHub.",
     )
     set_control_accessibility(tg_card, name=telegram_action_name, description=telegram_action_description)
     set_state_text(tg_card, telegram_action_name)
-    enable_keyboard_click(tg_card)
     set_control_accessibility(tg_btn, name=telegram_action_name, description=telegram_action_description)
     set_state_text(tg_btn, telegram_action_name)
 

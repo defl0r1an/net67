@@ -187,6 +187,30 @@ class PresetRowQuietActionsTests(unittest.TestCase):
         self.model.update_preset_row("b.txt", name="Ещё одно " + "очень длинное имя пресета " * 3)
         self.assertLess(self.delegate.column_layout()[0], count)
 
+    def test_replacing_model_invalidates_layout_at_the_same_view_width(self) -> None:
+        self.view.resize(1400, 400)
+        self.view.show()
+        QApplication.processEvents()
+        self.model.set_rows([{"kind": "preset", "name": "Короткий", "file_name": "a.txt"}])
+        before = self.delegate.column_layout()[1]
+        replacement = PresetListModel(self.view)
+        replacement.set_rows([{"kind": "preset", "name": "Очень длинное название " * 5, "file_name": "b.txt"}])
+        self.view.setModel(replacement)
+        after = self.delegate.column_layout()[1]
+        self.assertGreater(after, before)
+        self.assertIs(self.delegate._bound_model, replacement)
+
+    def test_font_change_recalculates_column_width(self) -> None:
+        self.view.resize(1400, 400)
+        self.view.show()
+        QApplication.processEvents()
+        self.model.set_rows([{"kind": "preset", "name": "Стандартный", "file_name": "a.txt"}])
+        before = self.delegate.column_layout()[1]
+        font = self.view.font()
+        font.setPointSize(font.pointSize() + 10)
+        self.view.setFont(font)
+        self.assertGreater(self.delegate.column_layout()[1], before)
+
 
 if __name__ == "__main__":
     unittest.main()

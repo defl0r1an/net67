@@ -1,5 +1,6 @@
 import os
 import unittest
+import time
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -52,6 +53,23 @@ class NetworkPulseTests(unittest.TestCase):
         monitor._on_check_finished(False, 0.0)
         self.assertFalse(monitor.is_connected)
         self.assertEqual(events[-1], (False, 0.0))
+
+    def test_completed_worker_is_cleared_before_cleanup(self) -> None:
+        from shell.network_pulse import NetworkPulseMonitor
+
+        monitor = NetworkPulseMonitor(initial_delay_ms=0)
+        self.addCleanup(monitor.deleteLater)
+        with patch("shell.network_pulse.measure_network_pulse", return_value=(True, 5.0)):
+            monitor.check_now()
+            deadline = time.monotonic() + 2
+            while monitor._checking and time.monotonic() < deadline:
+                QApplication.processEvents()
+                time.sleep(0.005)
+            self.assertFalse(monitor._checking)
+            self.assertIsNone(monitor._thread)
+            monitor.cleanup()
+            monitor.check_now()
+            self.assertIsNone(monitor._thread)
 
 
 class MeasureNetworkPulseTests(unittest.TestCase):

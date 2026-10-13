@@ -627,16 +627,16 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Open the full text of the check — it can be copied.",
     },
     "page.domain_lookup.button.add_to_hosts": {
-        "ru": "Добавить чистый IP в Hosts",
-        "en": "Add clean IP to Hosts",
+        "ru": "Добавить в hosts",
+        "en": "Add to hosts",
     },
     "page.domain_lookup.button.add_to_hosts.description": {
-        "ru": "Записать пару «домен -> чистый IP» в файл Hosts в один клик.",
-        "en": "Write domain -> clean IP pair to the Hosts file in one click.",
+        "ru": "Сохранить показанные домен и IP в hosts. Запись останется при переключении профилей; адрес не гарантирует обход блокировки.",
+        "en": "Save the displayed domain and IP in hosts. The entry persists across profile changes; the address does not guarantee access.",
     },
     "page.domain_lookup.button.added_to_hosts": {
-        "ru": "✓ Добавлено в Hosts",
-        "en": "✓ Added to Hosts",
+        "ru": "Добавлено в hosts",
+        "en": "Added to hosts",
     },
     "page.domain_lookup.infobar.hosts_added.title": {
         "ru": "Запись добавлена",
@@ -652,8 +652,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Look up neighbours via external services (the address is sent to their sites)",
     },
     "page.domain_lookup.external.description": {
-        "ru": "Список доменов на том же адресе дают сторонние сервисы. Без галочки наружу ничего не уходит: остаются обратное имя, сертификат и владелец сети.",
-        "en": "The list of domains on the same address comes from third-party services. Without this option nothing is sent out: reverse name, certificate and network owner remain.",
+        "ru": "Разрешает отправить IP внешним сервисам поиска. Без галочки остаются сетевые запросы DNS, пинг, подключение к адресу и чтение сертификата.",
+        "en": "Allows sending the IP to external lookup services. DNS, ping, connections to the address and certificate retrieval still run when unchecked.",
     },
     "page.domain_lookup.section.ping": {
         "ru": "Пинг и сеть",
@@ -2832,16 +2832,16 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "v{version} · {channel}",
     },
     "page.servers.telegram.title": {
-        "ru": "Проблемы с обновлением?",
-        "en": "Update problems?",
+        "ru": "Обновления в Telegram",
+        "en": "Updates on Telegram",
     },
     "page.servers.telegram.info": {
-        "ru": "Если возникают трудности с автоматическим обновлением, все версии программы выкладываются в Telegram канале.",
-        "en": "If automatic update is difficult to use, all app versions are published in the Telegram channel.",
+        "ru": "Канал ещё готовим.",
+        "en": "The channel is on its way.",
     },
     "page.servers.telegram.button.open_channel": {
-        "ru": "Открыть Telegram канал",
-        "en": "Open Telegram Channel",
+        "ru": "Пока нету :3",
+        "en": "Not yet :3",
     },
     "page.servers.table.status.online": {
         "ru": "● Онлайн",

@@ -264,24 +264,6 @@ def prepare_start_preflight(
         log("Запуск отменён на разборе конфликтующих процессов", "INFO")
         return False
 
-    # Автоочистка зависшего драйвера WinDivert: если служба осталась в нештатном
-    # состоянии (например, после аварийного закрытия winws), тихо восстанавливаем её.
-    try:
-        from winws_runtime.runtime.system_ops import (
-            ensure_windivert_driver_startable_runtime,
-            recover_windivert_runtime,
-        )
-
-        driver_preflight = ensure_windivert_driver_startable_runtime(wait_seconds=0.0)
-        if not driver_preflight.ok:
-            log(f"Служба драйвера WinDivert требует восстановления: {driver_preflight.message}. Запуск автоочистки...", "WARNING")
-            if recover_windivert_runtime():
-                log("Служба драйвера WinDivert успешно освобождена перед запуском", "INFO")
-            else:
-                log("Автоочистка драйвера WinDivert завершена; продолжаем запуск", "DEBUG")
-    except Exception as e:
-        log(f"Автоочистка драйвера WinDivert перед запуском: {e}", "DEBUG")
-
     runtime_owner._pending_launch_warnings = []
     return True
 

@@ -228,8 +228,12 @@ def ping_ipv6_winapi(ip: str, *, count: int, timeout_ms: int, cancelled=None) ->
             ok=False, sent=sent, received=0, error_code="UNSUPPORTED", detail="Windows ICMPv6 API unavailable"
         )
     try:
-        packed = socket.inet_pton(socket.AF_INET6, ip.split("%", 1)[0])
-    except OSError:
+        address, separator, zone = ip.partition("%")
+        packed = socket.inet_pton(socket.AF_INET6, address)
+        scope_id = (int(zone) if zone.isdigit() else socket.if_nametoindex(zone)) if separator else 0
+        if not 0 <= scope_id <= 0xFFFFFFFF:
+            raise ValueError("неверный номер интерфейса")
+    except (OSError, ValueError):
         return WindowsPingResult(ok=False, sent=sent, received=0, error_code="RESOLVE_ERR", detail="Bad IPv6 address")
 
     handle = _Icmp6CreateFile()
@@ -243,6 +247,7 @@ def ping_ipv6_winapi(ip: str, *, count: int, timeout_ms: int, cancelled=None) ->
     source.sin6_family = _AF_INET6_WINDOWS
     destination = SOCKADDR_IN6()
     destination.sin6_family = _AF_INET6_WINDOWS
+    destination.sin6_scope_id = scope_id
     ctypes.memmove(destination.sin6_addr, packed, 16)
 
     request_data = b"net67"

@@ -42,7 +42,7 @@ class DriverPreflightStartFlowTests(unittest.TestCase):
             start_flow.handle_conflicting_processes_before_start,
         ) = self._saved
 
-    def test_when_driver_not_startable_recovers_automatically(self) -> None:
+    def test_gui_preflight_does_not_run_blocking_driver_recovery(self) -> None:
         owner = _Owner()
         not_ok = DriverPreflight(ok=False, message="Служба зависла в stop_pending")
         mock_recover = Mock(return_value=True)
@@ -52,4 +52,20 @@ class DriverPreflightStartFlowTests(unittest.TestCase):
                 accepted = start_flow.prepare_start_preflight(owner, selected_mode="test", launch_method="winws2")
 
         self.assertTrue(accepted)
-        mock_recover.assert_called_once()
+        mock_recover.assert_not_called()
+
+    def test_driver_recovery_runs_in_start_worker_before_launch(self) -> None:
+        from winws_runtime.runtime.start_workers import PresetLaunchStartWorker
+        from types import SimpleNamespace
+
+        calls = []
+        worker = PresetLaunchStartWorker("preset", "winws2", runtime_feature=Mock(), runtime_api=Mock(), prepare_request=True)
+        request = SimpleNamespace(selected_mode="preset", launch_method="winws2", mode_name="test", method_name="test")
+        service = Mock()
+        service.run.side_effect = lambda: calls.append("launch") or SimpleNamespace(success=True, error_message="", selected_mode="preset", pid=12)
+        with patch("winws_runtime.runtime.system_ops.ensure_windivert_driver_startable_runtime", return_value=DriverPreflight(ok=False)), \
+             patch("winws_runtime.runtime.system_ops.recover_windivert_runtime", side_effect=lambda: calls.append("recover") or True), \
+             patch("winws_runtime.flow.start_preparation.prepare_start_request", return_value=(request, [])), \
+             patch.object(worker, "_build_launch_service", return_value=service):
+            worker.run()
+        self.assertEqual(calls, ["recover", "launch"])

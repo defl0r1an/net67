@@ -87,9 +87,10 @@ class PresetListDelegate(QStyledItemDelegate):
         self._bound_model = None
         self._wanted_tile_width: int | None = None
         self._cached_view_width: int = -1
+        self._cached_font_key = ""
         self._cached_layout_columns: tuple[int, int] = (1, PRESET_TILE_MAX_WIDTH)
         self._cached_sizes: dict[str, QSize] = {}
-        self._cached_elided_names: dict[tuple[str, int, bool], str] = {}
+        self._cached_elided_names: dict[tuple[str, int, bool, str], str] = {}
         self._tooltip = FluentItemToolTipController(view.viewport())
         attach_row_hover_motion(view, row_filter=_is_preset_row)
         self.set_ui_language("ru")
@@ -146,8 +147,16 @@ class PresetListDelegate(QStyledItemDelegate):
     def _bind_model(self, model) -> None:
         if model is self._bound_model:
             return
+        previous = self._bound_model
+        if previous is not None:
+            try:
+                for signal in (previous.modelReset, previous.rowsInserted, previous.rowsRemoved, previous.rowsMoved, previous.layoutChanged):
+                    signal.disconnect(self._forget_tile_width)
+                previous.dataChanged.disconnect(self._on_model_data_changed)
+            except (RuntimeError, TypeError):
+                pass
         self._bound_model = model
-        self._wanted_tile_width = None
+        self._forget_tile_width()
         if model is None:
             return
         for signal in (model.modelReset, model.rowsInserted, model.rowsRemoved, model.rowsMoved, model.layoutChanged):
@@ -203,6 +212,11 @@ class PresetListDelegate(QStyledItemDelegate):
 
     def column_layout(self) -> tuple[int, int]:
         """Число столбцов пресетов и ширина одного столбца."""
+        self._bind_model(self._view.model())
+        font_key = self._view.font().key()
+        if font_key != self._cached_font_key:
+            self._forget_tile_width()
+            self._cached_font_key = font_key
         width = self._view_width()
         if width == self._cached_view_width and self._wanted_tile_width is not None and self._cached_sizes:
             return self._cached_layout_columns
@@ -225,9 +239,7 @@ class PresetListDelegate(QStyledItemDelegate):
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         # Быстрый возврат предрассчитанного размера из кэша O(1).
         kind = str(index.data(PresetListModel.KindRole) or "preset")
-        width = self._view_width()
-        if width != self._cached_view_width or kind not in self._cached_sizes:
-            self.column_layout()
+        self.column_layout()
         size = self._cached_sizes.get(kind)
         return size if size is not None else QSize(self._cached_layout_columns[1], self._ROW_HEIGHT)
 
@@ -634,7 +646,7 @@ class PresetListDelegate(QStyledItemDelegate):
         name_font.setBold(is_active)
         painter.setFont(name_font)
         name_width = name_rect.width()
-        cache_key = (name, name_width, is_active)
+        cache_key = (name, name_width, is_active, name_font.key())
         elided_name = self._cached_elided_names.get(cache_key)
         if elided_name is None:
             name_metrics = QFontMetrics(name_font)

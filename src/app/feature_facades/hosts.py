@@ -7,6 +7,12 @@ from typing import Callable
 from ui.performance_metrics import log_ui_timing_since
 
 
+def create_domain_hosts_worker(request_id: int, domain: str, ip: str):
+    from hosts.call_worker import HostsCallWorker
+
+    return HostsCallWorker(request_id, lambda: add_domain_to_hosts(domain, ip), name="domain_entry")
+
+
 @dataclass(frozen=True, slots=True)
 class HostsFeature:
     refresh_applied_selection: Callable

@@ -4,6 +4,8 @@ import stat
 import os
 import subprocess
 import threading
+import re
+import ipaddress
 from pathlib import Path
 from .proxy_domains import (
     get_dns_profiles,
@@ -958,6 +960,18 @@ class HostsManager:
         target_domain = str(domain or "").strip().lower()
         target_ip = str(ip or "").strip()
         if not target_domain or not target_ip:
+            return False
+
+        try:
+            target_ip = str(ipaddress.ip_address(target_ip))
+            target_domain = target_domain.rstrip(".").encode("idna").decode("ascii")
+            labels = target_domain.split(".")
+            if len(target_domain) > 253 or any(
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in labels
+            ):
+                raise ValueError
+        except (ValueError, UnicodeError):
+            self.set_status("Укажите одно корректное имя домена и один IP-адрес")
             return False
 
         if not self.is_hosts_file_accessible():

@@ -75,15 +75,18 @@ def measure_network_pulse(
     return False, 0.0
 
 
-class _PingWorker(QObject):
-    finished = pyqtSignal(bool, float)
+_RUNNING_PULSE_WORKERS: set = set()
+
+
+class _PingWorker(QThread):
+    measured = pyqtSignal(bool, float)
 
     def run(self) -> None:
         try:
             ok, latency = measure_network_pulse()
         except Exception:
             ok, latency = False, 0.0
-        self.finished.emit(ok, latency)
+        self.measured.emit(ok, latency)
 
 
 class NetworkPulseMonitor(QObject):
@@ -96,6 +99,7 @@ class NetworkPulseMonitor(QObject):
         self._connected: bool | None = None
         self._latency_ms: float = 0.0
         self._checking = False
+        self._closed = False
 
         self._timer = QTimer(self)
         self._timer.setInterval(max(5000, int(interval_ms)))
@@ -105,7 +109,10 @@ class NetworkPulseMonitor(QObject):
         self._worker: _PingWorker | None = None
 
         if initial_delay_ms > 0:
-            QTimer.singleShot(int(initial_delay_ms), self.check_now)
+            self._initial_timer = QTimer(self)
+            self._initial_timer.setSingleShot(True)
+            self._initial_timer.timeout.connect(self.check_now)
+            self._initial_timer.start(int(initial_delay_ms))
         self._timer.start()
 
     @property
@@ -117,35 +124,40 @@ class NetworkPulseMonitor(QObject):
         return self._latency_ms
 
     def check_now(self) -> None:
-        if self._checking:
+        if self._closed or self._checking:
             return
         self._checking = True
 
-        thread = QThread(self)
         worker = _PingWorker()
-        worker.moveToThread(thread)
-
-        thread.started.connect(worker.run)
-        worker.finished.connect(self._on_check_finished)
-        worker.finished.connect(thread.quit)
-        thread.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-
-        self._thread = thread
+        worker.measured.connect(self._on_check_finished)
+        worker.finished.connect(self._on_worker_finished)
+        worker.finished.connect(worker.deleteLater)
+        _RUNNING_PULSE_WORKERS.add(worker)
+        worker.finished.connect(lambda w=worker: _RUNNING_PULSE_WORKERS.discard(w))
+        self._thread = worker
         self._worker = worker
-        thread.start()
+        worker.start()
+
+    def _on_worker_finished(self) -> None:
+        if self.sender() is self._worker:
+            self._thread = None
+            self._worker = None
+            self._checking = False
 
     def _on_check_finished(self, ok: bool, latency: float) -> None:
-        self._checking = False
+        if self._closed:
+            return
         self._connected = bool(ok)
         self._latency_ms = float(latency)
         self.statusChanged.emit(ok, latency)
 
     def cleanup(self) -> None:
+        self._closed = True
         self._timer.stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(500)
+        if hasattr(self, "_initial_timer"):
+            self._initial_timer.stop()
+        # Сокет имеет ограниченный таймаут. Поток доживает независимо от трея,
+        # чтобы закрытие окна не уничтожало QThread посреди сетевого запроса.
 
 
 class NetworkPulseWidget(QWidget):
@@ -180,18 +192,9 @@ class NetworkPulseWidget(QWidget):
         self._label.setStyleSheet(f"color: {fg_color}; font-size: 11px; font-weight: 500;")
         layout.addWidget(self._label)
 
-        self._timer = QTimer(self)
-        self._timer.setInterval(30_000)  # каждые 30 секунд
-        self._timer.timeout.connect(self.check_now)
-
-        self._thread: QThread | None = None
-        self._worker: _PingWorker | None = None
-
+        self._monitor = NetworkPulseMonitor(self)
+        self._monitor.statusChanged.connect(self._on_check_finished)
         self._update_ui(True, 0.0, initial=True)
-
-        # Первый замер через 1.5 секунды после старта окна, чтобы не тормозить запуск GUI
-        QTimer.singleShot(1500, self.check_now)
-        self._timer.start()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
@@ -205,23 +208,7 @@ class NetworkPulseWidget(QWidget):
         super().keyPressEvent(event)
 
     def check_now(self) -> None:
-        if self._checking:
-            return
-        self._checking = True
-
-        thread = QThread(self)
-        worker = _PingWorker()
-        worker.moveToThread(thread)
-
-        thread.started.connect(worker.run)
-        worker.finished.connect(self._on_check_finished)
-        worker.finished.connect(thread.quit)
-        thread.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-
-        self._thread = thread
-        self._worker = worker
-        thread.start()
+        self._monitor.check_now()
 
     def _on_check_finished(self, ok: bool, latency: float) -> None:
         self._checking = False
@@ -260,10 +247,7 @@ class NetworkPulseWidget(QWidget):
         self.update()
 
     def cleanup(self) -> None:
-        self._timer.stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(500)
+        self._monitor.cleanup()
 
 
 class _DotWidget(QWidget):

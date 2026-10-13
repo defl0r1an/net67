@@ -17,6 +17,26 @@ from winws_runtime.runtime.preset_launch_service import (
 from app.performance_metrics import log_ui_timing_since
 
 
+def prepare_driver_for_start(progress) -> None:
+    # Выгрузка драйвера и ожидание службы могут занять секунды. Этот шаг
+    # выполняется worker-ом, после принятия команды, чтобы не держать GUI.
+    from log.log import log
+    from winws_runtime.runtime.system_ops import (
+        ensure_windivert_driver_startable_runtime,
+        recover_windivert_runtime,
+    )
+
+    try:
+        preflight = ensure_windivert_driver_startable_runtime(wait_seconds=0.0)
+        if not preflight.ok:
+            progress("Восстановление службы драйвера…")
+            log(f"Драйвер требует восстановления: {preflight.message}", "WARNING")
+            if not recover_windivert_runtime():
+                log("Восстановление драйвера не подтверждено; результат покажет запуск движка", "WARNING")
+    except Exception as exc:
+        log(f"Проверка драйвера перед запуском: {exc}", "DEBUG")
+
+
 @dataclass(frozen=True)
 class PreparedDpiStartRequest:
     launch_method: str
@@ -69,6 +89,7 @@ class PresetLaunchStartWorker(QObject):
         try:
             try:
                 if self._prepare_request:
+                    prepare_driver_for_start(self.progress.emit)
                     # Вся подготовка читает preset/settings и поэтому обязана
                     # выполняться здесь, а не в обработчике команды GUI.
                     from winws_runtime.flow.start_preparation import prepare_start_request

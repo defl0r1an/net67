@@ -92,10 +92,10 @@ def apply_servers_page_language(
     set_state_text(version_info_label, f"Версия net67: {_label_text(version_info_label)}")
 
     if telegram_card is not None:
-        telegram_title = tr_fn("page.servers.telegram.title", "Проблемы с обновлением?")
+        telegram_title = tr_fn("page.servers.telegram.title", "Обновления в Telegram")
         telegram_info = tr_fn(
             "page.servers.telegram.info",
-            "Если возникают трудности с автоматическим обновлением, все версии программы выкладываются в Telegram канале.",
+            "Канал ещё готовим.",
         )
         try:
             telegram_card.setTitle(telegram_title)
@@ -113,11 +113,11 @@ def apply_servers_page_language(
                 pass
         telegram_action_name = tr_fn(
             "page.servers.telegram.accessible_name",
-            "Открыть Telegram канал обновлений",
+            "Канал обновлений пока не создан",
         )
         telegram_action_description = tr_fn(
             "page.servers.telegram.accessible_description",
-            "Открывает Telegram канал, где публикуются версии программы и новости обновлений.",
+            "Канал пока недоступен. Обновления можно установить через эту страницу или GitHub.",
         )
         set_control_accessibility(
             telegram_card,
@@ -128,15 +128,15 @@ def apply_servers_page_language(
 
     if telegram_button is not None:
         telegram_button.setText(
-            tr_fn("page.servers.telegram.button.open_channel", "Открыть Telegram канал")
+            tr_fn("page.servers.telegram.button.open_channel", "Пока нету :3")
         )
         telegram_action_name = tr_fn(
             "page.servers.telegram.accessible_name",
-            "Открыть Telegram канал обновлений",
+            "Канал обновлений пока не создан",
         )
         telegram_action_description = tr_fn(
             "page.servers.telegram.accessible_description",
-            "Открывает Telegram канал, где публикуются версии программы и новости обновлений.",
+            "Канал пока недоступен. Обновления можно установить через эту страницу или GitHub.",
         )
         set_control_accessibility(
             telegram_button,
