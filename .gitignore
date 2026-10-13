@@ -45,7 +45,7 @@ Desktop.ini
 
 # Logs
 *.log
-/.impeccable/review/
+/.impeccable/
 /scratchpad/antigravity_v2_22_0/
 /scratchpad/prepare_antigravity_core.py
 /scratchpad/preview_antigravity.py

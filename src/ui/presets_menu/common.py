@@ -216,6 +216,10 @@ def contrast_ratio(foreground: QColor, background: QColor) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+_contrast_color_cache: dict[tuple, str] = {}
+_to_qcolor_cache: dict[tuple[str, str], QColor] = {}
+
+
 def pick_contrast_color(
     preferred_color: str,
     background_color: QColor,
@@ -223,6 +227,12 @@ def pick_contrast_color(
     *,
     minimum_ratio: float = 2.4,
 ) -> str:
+    bg_rgba = background_color.rgba() if isinstance(background_color, QColor) else str(background_color)
+    cache_key = (preferred_color, bg_rgba, tuple(fallback_colors), minimum_ratio)
+    cached = _contrast_color_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     bg = QColor(background_color)
     if not bg.isValid():
         bg = QColor("#000000")
@@ -243,14 +253,19 @@ def pick_contrast_color(
         color.setAlpha(255)
         ratio = contrast_ratio(color, bg)
         if ratio >= minimum_ratio:
-            return color.name(QColor.NameFormat.HexRgb)
+            res = color.name(QColor.NameFormat.HexRgb)
+            _contrast_color_cache[cache_key] = res
+            return res
         if ratio > best_ratio:
             best_ratio = ratio
             best_color = color
 
     if best_color is not None:
-        return best_color.name(QColor.NameFormat.HexRgb)
-    return "#f5f5f5" if relative_luminance(bg) < 0.45 else "#111111"
+        res = best_color.name(QColor.NameFormat.HexRgb)
+    else:
+        res = "#f5f5f5" if relative_luminance(bg) < 0.45 else "#111111"
+    _contrast_color_cache[cache_key] = res
+    return res
 
 
 def to_qcolor(value, fallback_hex: str = "#000000") -> QColor:
@@ -260,6 +275,10 @@ def to_qcolor(value, fallback_hex: str = "#000000") -> QColor:
             return color
 
     text = str(value or "").strip()
+    if text:
+        cached = _to_qcolor_cache.get((text, fallback_hex))
+        if cached is not None:
+            return QColor(cached)
     if text:
         match = _CSS_RGBA_COLOR_RE.fullmatch(text)
         if match:
@@ -278,17 +297,21 @@ def to_qcolor(value, fallback_hex: str = "#000000") -> QColor:
                     else:
                         a = int(round(max(0.0, min(255.0, alpha_float))))
 
-                return QColor(r, g, b, a)
+                res = QColor(r, g, b, a)
+                _to_qcolor_cache[(text, fallback_hex)] = res
+                return QColor(res)
             except Exception:
                 pass
 
         color = QColor(text)
         if color.isValid():
-            return color
+            _to_qcolor_cache[(text, fallback_hex)] = color
+            return QColor(color)
 
     fallback = QColor(fallback_hex)
     if fallback.isValid():
-        return fallback
+        _to_qcolor_cache[(text, fallback_hex)] = fallback
+        return QColor(fallback)
     return QColor(0, 0, 0)
 
 

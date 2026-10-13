@@ -280,6 +280,14 @@ class StrategySearch:
                 if result.success:
                     working.append(result)
                     confirmed_ids.append(candidate.strategy_id)
+                    # Экспресс останавливается на первой подтверждённой: лучшую
+                    # из нескольких он не ищет, и в журнале так и сказано.
+                    if self._request.mode == "smart":
+                        self._events.log(
+                            f"  Экспресс: первая рабочая — {candidate.name}, остальные не проверяем"
+                        )
+                        index += 1
+                        break
                 else:
                     failed.append(result)
                     if run.verdict == rules.VERDICT_FAILED:

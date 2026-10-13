@@ -384,9 +384,6 @@ _TOUR_STEPS: tuple[TourStep, ...] = (
     TourStep("telegram_proxy", _page_tab(PageName.TELEGRAM_PROXY), page="telegram_proxy"),
     TourStep("vpn", _page_tab(PageName.VPN), page="vpn"),
     TourStep("antigravity", _page_tab(PageName.ANTIGRAVITY), page="antigravity", advanced_only=True),
-    TourStep("antigravity_controls", _page_target("controls"), page="antigravity", page_state="main", advanced_only=True),
-    TourStep("antigravity_sections", _page_target("sections"), page="antigravity", page_state="log", advanced_only=True),
-    TourStep("antigravity_hosts", _page_target("hosts"), page="antigravity", page_state="main", advanced_only=True),
     # ── «Диагностика» ────────────────────────────────────────────────
     TourStep("menu_diagnostics", _group_tab("diagnostics"), page="blockcheck", advanced_only=True),
     TourStep("blockcheck", _page_tab(PageName.BLOCKCHECK), page="blockcheck", choice="detect"),

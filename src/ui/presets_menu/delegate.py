@@ -86,6 +86,10 @@ class PresetListDelegate(QStyledItemDelegate):
         self._activation_timer.timeout.connect(self._emit_pending_activation)
         self._bound_model = None
         self._wanted_tile_width: int | None = None
+        self._cached_view_width: int = -1
+        self._cached_layout_columns: tuple[int, int] = (1, PRESET_TILE_MAX_WIDTH)
+        self._cached_sizes: dict[str, QSize] = {}
+        self._cached_elided_names: dict[tuple[str, int, bool], str] = {}
         self._tooltip = FluentItemToolTipController(view.viewport())
         attach_row_hover_motion(view, row_filter=_is_preset_row)
         self.set_ui_language("ru")
@@ -152,10 +156,16 @@ class PresetListDelegate(QStyledItemDelegate):
 
     def _forget_tile_width(self, *args) -> None:
         self._wanted_tile_width = None
+        self._cached_view_width = -1
+        self._cached_sizes.clear()
+        self._cached_elided_names.clear()
 
     def _on_model_data_changed(self, top_left, bottom_right, roles=()) -> None:
         if not roles or PresetListModel.NameRole in roles:
             self._wanted_tile_width = None
+            self._cached_view_width = -1
+            self._cached_sizes.clear()
+            self._cached_elided_names.clear()
 
     def _shown_name(self, index: QModelIndex) -> str:
         """Имя без начала, которое повторяет заголовок папки над плиткой."""
@@ -193,24 +203,33 @@ class PresetListDelegate(QStyledItemDelegate):
 
     def column_layout(self) -> tuple[int, int]:
         """Число столбцов пресетов и ширина одного столбца."""
-        return preset_columns_for_width(self._view_width(), self._tile_width_for_longest_name())
+        width = self._view_width()
+        if width == self._cached_view_width and self._wanted_tile_width is not None and self._cached_sizes:
+            return self._cached_layout_columns
+        wanted_w = self._tile_width_for_longest_name()
+        cols = preset_columns_for_width(width, wanted_w)
+        self._cached_view_width = width
+        self._cached_layout_columns = cols
+        full_width = preset_full_row_width(width)
+        self._cached_sizes = {
+            "folder": QSize(full_width, FOLDER_HEADER_HEIGHT),
+            "section": QSize(full_width, self._SECTION_HEIGHT),
+            "empty": QSize(full_width, self._EMPTY_HEIGHT),
+            "preset": QSize(cols[1], self._ROW_HEIGHT),
+        }
+        return cols
 
     def _side_by_side(self) -> bool:
         return self.column_layout()[0] > 1
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
-        # Ширина строки и есть раскладка: список переносит строки слева
-        # направо, поэтому плитки шириной в столбец встают в ряд, а заголовок
-        # папки шириной во весь список всегда занимает отдельную линию.
-        full_width = preset_full_row_width(self._view_width())
-        kind = index.data(PresetListModel.KindRole)
-        if kind == "folder":
-            return QSize(full_width, FOLDER_HEADER_HEIGHT)
-        if kind == "section":
-            return QSize(full_width, self._SECTION_HEIGHT)
-        if kind == "empty":
-            return QSize(full_width, self._EMPTY_HEIGHT)
-        return QSize(self.column_layout()[1], self._ROW_HEIGHT)
+        # Быстрый возврат предрассчитанного размера из кэша O(1).
+        kind = str(index.data(PresetListModel.KindRole) or "preset")
+        width = self._view_width()
+        if width != self._cached_view_width or kind not in self._cached_sizes:
+            self.column_layout()
+        size = self._cached_sizes.get(kind)
+        return size if size is not None else QSize(self._cached_layout_columns[1], self._ROW_HEIGHT)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
         kind = index.data(PresetListModel.KindRole)
@@ -593,6 +612,7 @@ class PresetListDelegate(QStyledItemDelegate):
         right_cursor = rect.right() - self._TILE_PADDING
         rating_rect = QRect()
         pin_mark_rect = QRect()
+
         if revealed:
             right_cursor = actions[0][1].left() - self._MARK_GAP
         else:
@@ -613,12 +633,22 @@ class PresetListDelegate(QStyledItemDelegate):
         name_font = painter.font()
         name_font.setBold(is_active)
         painter.setFont(name_font)
-        name_metrics = QFontMetrics(name_font)
-        elided_name = name_metrics.elidedText(name, Qt.TextElideMode.ElideRight, name_rect.width())
+        name_width = name_rect.width()
+        cache_key = (name, name_width, is_active)
+        elided_name = self._cached_elided_names.get(cache_key)
+        if elided_name is None:
+            name_metrics = QFontMetrics(name_font)
+            elided_name = name_metrics.elidedText(name, Qt.TextElideMode.ElideRight, name_width)
+            if len(self._cached_elided_names) < 2000:
+                self._cached_elided_names[cache_key] = elided_name
+        else:
+            name_metrics = None
         painter.setPen(to_qcolor(tokens.fg, "#f5f5f5"))
         painter.drawText(name_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), elided_name)
 
         if bool(index.data(PresetListModel.RemoteRole)):
+            if name_metrics is None:
+                name_metrics = QFontMetrics(name_font)
             remote_state = str(index.data(PresetListModel.RemoteStateRole) or "")
             cloud_left = name_rect.left() + name_metrics.horizontalAdvance(elided_name) + 6
             if cloud_left + 14 <= name_rect.right():
@@ -635,6 +665,7 @@ class PresetListDelegate(QStyledItemDelegate):
 
         meta_font.setBold(False)
         painter.setFont(meta_font)
+
         if rating_rect.isValid():
             star_rect = QRect(
                 rating_rect.left(),

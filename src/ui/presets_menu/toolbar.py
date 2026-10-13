@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import PrimaryPushButton, PushButton, ToolButton
 
@@ -38,6 +39,7 @@ class PresetsToolbarLayout:
             row_layout = QHBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(self._button_spacing)
+            row_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             row_widget.setVisible(False)
             self._layout.addWidget(row_widget)
             self._rows.append((row_widget, row_layout))
@@ -73,7 +75,7 @@ class PresetsToolbarLayout:
         button_cls,
         icon_arg,
         *,
-        size: int = 36,
+        size: int = 32,
         accessible_name: str | None = None,
         accessible_description: str | None = None,
     ):
@@ -139,7 +141,7 @@ class PresetsToolbarLayout:
                 if has_trailing and self._trailing_widget is not None:
                     if row_buttons:
                         row_layout.addStretch(1)
-                    row_layout.addWidget(self._trailing_widget, 1)
+                    row_layout.addWidget(self._trailing_widget, 0)
                 else:
                     row_layout.addStretch(1)
                 row_widget.setVisible(True)

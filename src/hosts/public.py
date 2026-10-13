@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from hosts.commands import (
     add_adobe_domains,
+    add_domain_ip_entry,
     apply_domain_ip_entries,
     apply_service_profiles,
     clear_hosts,
@@ -32,6 +33,7 @@ __all__ = [
     "HostsCommandResult",
     "HostsState",
     "add_adobe_domains",
+    "add_domain_ip_entry",
     "apply_domain_ip_entries",
     "apply_service_profiles",
     "clear_hosts",
@@ -61,3 +63,6 @@ __all__ = [*__all__, 'apply_hosts_draft', 'load_hosts_text', 'load_page_snapshot
 # Главный сайт сервиса из каталога — для проверки профилей (фасад hosts).
 from hosts.proxy_domains import get_service_main_domains  # noqa: E402
 __all__ = [*__all__, 'get_service_main_domains']
+
+from hosts.commands import enable_hosts_services, disable_hosts_services  # noqa: E402
+__all__ = [*__all__, 'enable_hosts_services', 'disable_hosts_services']

@@ -48,7 +48,7 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
         self.assertIn("для чего подобрать стратегию", page._protocol_combo.accessibleDescription())
         self.assertEqual(page._games_scope_combo.accessibleName(), "Адреса игр, выбрано: Все списки адресов (по умолчанию)")
         self.assertIn("онлайн-игр", page._games_scope_combo.accessibleDescription())
-        self.assertEqual(page._mode_combo.accessibleName(), "Тщательность подбора, выбрано: Быстро · 30")
+        self.assertEqual(page._mode_combo.accessibleName(), "Тщательность подбора, выбрано: Экспресс · 5")
         self.assertIn("сколько стратегий", page._mode_combo.accessibleDescription())
         self.assertEqual(page._target_input.accessibleName(), "Цель подбора стратегии")
         self.assertIn("домен или STUN-цель", page._target_input.accessibleDescription())
@@ -220,7 +220,7 @@ class StrategyScanPageAccessibilityTests(unittest.TestCase):
             log_btn=expand_btn,
             protocol_label=protocol_label,
             mode_label=CaptionLabel(),
-            mode_combo=_ComboStub(3),
+            mode_combo=_ComboStub(4),
             target_label=CaptionLabel(),
             start_btn=start_btn,
             stop_btn=PushButton(),

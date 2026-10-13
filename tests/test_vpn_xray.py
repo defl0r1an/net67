@@ -24,6 +24,7 @@ import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 
 PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
@@ -121,6 +122,11 @@ class ConfigTests(unittest.TestCase):
 
 
 class WaitTests(unittest.TestCase):
+    def test_dead_core_is_not_replaced_by_another_process_on_the_port(self) -> None:
+        from vpn.xray import wait_until_listening
+
+        self.assertFalse(wait_until_listening(probe=lambda: True, alive=lambda: False))
+
     def test_returns_as_soon_as_the_port_answers(self) -> None:
         from vpn.xray import wait_until_listening
 
@@ -229,6 +235,29 @@ class RuntimeTests(unittest.TestCase):
 
     def test_stop_without_start_is_not_an_error(self) -> None:
         self._runtime().stop()
+
+
+class PortChoiceTests(unittest.TestCase):
+    def test_reserved_udp_port_moves_to_a_port_available_for_both_protocols(self) -> None:
+        from vpn.xray import choose_proxy_port
+
+        with patch("vpn.xray.can_bind_proxy_port", side_effect=lambda port: port == 18082) as probe:
+            self.assertEqual(choose_proxy_port(10808), 18082)
+        self.assertEqual([call.args[0] for call in probe.call_args_list], [10808, 18080, 18081, 18082])
+
+    def test_working_port_is_preserved(self) -> None:
+        from vpn.xray import choose_proxy_port
+
+        with patch("vpn.xray.can_bind_proxy_port", return_value=True) as probe:
+            self.assertEqual(choose_proxy_port(18085), 18085)
+        probe.assert_called_once_with(18085)
+
+    def test_no_available_port_is_an_explicit_error(self) -> None:
+        from vpn.xray import choose_proxy_port, XrayError
+
+        with patch("vpn.xray.can_bind_proxy_port", return_value=False):
+            with self.assertRaises(XrayError):
+                choose_proxy_port()
 
 
 class AvailabilityTests(unittest.TestCase):

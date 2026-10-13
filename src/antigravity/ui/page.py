@@ -2,32 +2,127 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer, Qt, QRect
 from PyQt6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel, CaptionLabel, CheckBox, ComboBox, FluentIcon, InfoBar, LineEdit,
     PasswordLineEdit, PrimaryPushButton, PushButton, SegmentedWidget, StrongBodyLabel, TransparentPushButton,
+    setCustomStyleSheet,
 )
 
 from antigravity.controller import AntigravityController
+from antigravity.model_hosts import MODEL_HOSTS_SERVICES
 from ui.accessibility import set_control_accessibility
-from hosts.ui.services_tiles import HostsTile, HostsTilesGrid
-from ui.fluent_widgets import SettingsCard
+from ui.fluent_dialog import MessageBoxBase
+from ui.fluent_widgets import SettingsCard, set_tooltip
+from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 from ui.pages.base_page import BasePage, ScrollBlockingPlainTextEdit
-from ui.theme import get_cached_qta_pixmap, get_theme_tokens
+from ui.segmented_accessibility import set_segmented_items_accessibility
+from ui.theme import get_cached_qta_pixmap, get_theme_tokens, get_themed_qta_icon
 from ui.theme_semantic import get_semantic_palette
 from ui.widgets.stagger_float_in import attach_stagger_float_in
+from ui.widgets.win11_controls import Win11ToggleRow
+
+
+MODEL_HOSTS_LABELS = {"Gemini AI": "Gemini и Antigravity", "Claude": "Claude", "ChatGPT & Sora (OpenAI)": "ChatGPT"}
+
+
+class _DisableAllDialog(MessageBoxBase):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.remove_hosts = None
+        heading = QHBoxLayout()
+        heading.setSpacing(12)
+        icon = QLabel(self)
+        icon.setFixedSize(22, 22)
+        icon.setPixmap(get_cached_qta_pixmap("fa5s.exclamation-circle", size=22, color=get_theme_tokens().fg))
+        heading.addWidget(icon)
+        title = StrongBodyLabel("Убрать адреса нейросетей из hosts?", self)
+        title.setWordWrap(True)
+        heading.addWidget(title, 1)
+        self.viewLayout.addLayout(heading)
+        detail = BodyLabel("Функции Antigravity будут выключены. Адреса Gemini, Claude и ChatGPT можно убрать или оставить для работы в браузере. Antigravity может закрыться для восстановления клиента.", self)
+        detail.setWordWrap(True)
+        self.viewLayout.addWidget(detail)
+        self.yesButton.setText("Убрать из hosts")
+        self.cancelButton.setText("Оставить в hosts")
+        self.yesButton.clicked.disconnect()
+        self.cancelButton.clicked.disconnect()
+        self.yesButton.clicked.connect(lambda: self._choose(True))
+        self.cancelButton.clicked.connect(lambda: self._choose(False))
+        self.cancelButton.setFocus()
+        self.closeButton = PushButton("Отмена", self)
+        self.closeButton.clicked.connect(self.reject)
+        self.buttonLayout.addWidget(self.closeButton)
+        self.widget.setMinimumWidth(480)
+
+    def _choose(self, remove):
+        self.remove_hosts = remove
+        self.accept()
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        QTimer.singleShot(0, self.cancelButton.setFocus)
+
+
+class _CapRow(Win11ToggleRow):
+    """Неизвестное состояние не выдаётся за выключенную функцию."""
+
+    def __init__(self, icon, title, description, parent):
+        super().__init__(icon, title, description, parent=parent)
+        self.setMaximumHeight(16777215)
+        self._title_label.setWordWrap(True)
+        self._desc_label.setWordWrap(True)
+        self._title_label.setMinimumWidth(0)
+        self._desc_label.setMinimumWidth(0)
+        # У стандартной строки растягивался пустой spacer, а колонка текста
+        # сжималась до длинного столбика и обрезалась по высоте.
+        self.hBoxLayout.setStretch(2, 1)
+        self.hBoxLayout.setStretch(4, 0)
+        for label in (self._title_label, self._desc_label):
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            self.vBoxLayout.setAlignment(label, Qt.AlignmentFlag(0))
+        self._state_label = CaptionLabel("Не проверено", self)
+        self.hBoxLayout.addWidget(self._state_label, 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addSpacing(16)
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        # Раскладка строки заканчивается после resizeEvent. Смена высоты
+        # прямо в нём оставляла колонку текста в геометрии прежней высоты.
+        QTimer.singleShot(0, self._fit_text)
+
+    def _fit_text(self):
+        width = max(120, self.width() - 190)
+        text_height = 0
+        for label in (self._title_label, self._desc_label):
+            height = label.fontMetrics().boundingRect(QRect(0, 0, width, 1000),
+                                                     Qt.TextFlag.TextWordWrap, label.text()).height()
+            label.setFixedHeight(height)
+            text_height += height
+        height = max(70, text_height + 26)
+        if self.minimumHeight() != height:
+            self.setFixedHeight(height)
+        self.hBoxLayout.setGeometry(self.rect())
+
+    def show_state(self, state, *, ready, busy, pending):
+        known = ready and bool(state)
+        self.setChecked(bool(state.get("on")), block_signals=True)
+        self._switch_button.setVisible(known and not pending)
+        self._state_label.setVisible(not known or pending)
+        self._state_label.setText("Выполняю…" if pending else "Не проверено")
+        self.setEnabled(known and not busy and state.get("kind") != "blocked")
 
 
 class _SectionPanel(QWidget):
-    """Сетка рисует свой вход; обычные блоки используют общую волну net67."""
+    """Строки настроек появляются общей последовательностью net67."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._motion = attach_stagger_float_in(self)
 
     def play_float_in(self, delay_ms=0):
-        # Эффект на всей длинной странице заставлял бы перерисовывать сетку.
+        # Эффект на всей длинной странице заставлял бы перерисовывать её целиком.
         self._motion.play()
 
     def finish_float_in(self):
@@ -49,9 +144,20 @@ CAPS = (
 
 
 class AntigravityPage(BasePage):
-    def __init__(self, parent=None, *, open_hosts=None, controller=None):
+    def __init__(self, parent=None, *, open_model_hosts=None, hosts_feature=None, controller=None):
         super().__init__("Antigravity", "Вход в аккаунт и работа моделей в Antigravity, IDE и CLI", parent)
-        self._open_hosts = open_hosts
+        self._open_model_hosts = open_model_hosts
+        self._hosts_feature = hosts_feature
+        self._hosts_snapshot = None
+        self._hosts_busy = False
+        self._hosts_writing = False
+        self._hosts_runtime = OneShotWorkerRuntime()
+        self._checking = False
+        self._stopping = False
+        self._disable_waiting = False
+        self._disable_request_id = None
+        self._remove_hosts_on_stop = False
+        self._hosts_disabling = False
         self.controller = controller if controller is not None else AntigravityController(self)
         self.controller.received.connect(self._received)
         self.controller.failed.connect(self._failed)
@@ -73,31 +179,15 @@ class AntigravityPage(BasePage):
 
     def _button(self, title, callback, *, primary=False, parent=None):
         button = (PrimaryPushButton if primary else PushButton)(title, parent or self.content)
+        button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         button.clicked.connect(lambda _checked=False: callback())
         set_control_accessibility(button, name=title)
         self._controls.append(button)
         return button
 
     def _build_ui(self):
-        # Заголовок, сводка и сетка используют те же компоненты, что hosts.
-        header_host = QWidget(self.content)
-        header = QHBoxLayout(header_host)
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(8)
-        self.layout.removeWidget(self.title_label)
-        self.title_label.setParent(header_host)
-        header.addWidget(self.title_label, 1)
         self.refresh_button = self._button("Проверить", self._refresh)
         self.refresh_button.setIcon(FluentIcon.SYNC)
-        if callable(self._open_hosts):
-            self.hosts_button = self._button("В hosts", self._open_hosts)
-            self.hosts_button.setIcon(FluentIcon.DOCUMENT)
-            self.hosts_button.setToolTip("Показать «Gemini AI и Antigravity» в редакторе hosts")
-            set_control_accessibility(self.hosts_button, name="Показать Antigravity в hosts")
-            # Переход доступен и пока движок проверяет систему.
-            self._controls.remove(self.hosts_button)
-            header.addWidget(self.hosts_button)
-        self.layout.insertWidget(0, header_host)
         self.state_card = SettingsCard(parent=self.content)
         state_layout = self.state_card.main_layout
         state_layout.setSpacing(6)
@@ -110,15 +200,16 @@ class AntigravityPage(BasePage):
         state_text.setSpacing(4)
         self.state_title = StrongBodyLabel("Проверка ещё не запускалась", self.state_card)
         self.state_title.setWordWrap(True)
-        self.state_detail = CaptionLabel("«Включить всё» проверит состояние и включит функции. «Проверить» только прочитает состояние.", self.state_card)
+        self.state_detail = CaptionLabel("Состояние функций ещё не прочитано. «Проверить» покажет, что уже включено, и не изменит настройки.", self.state_card)
         self.state_detail.setWordWrap(True)
         state_text.addWidget(self.state_title)
         state_text.addWidget(self.state_detail)
         state_row.addLayout(state_text, 1)
         state_layout.addLayout(state_row)
         buttons = QHBoxLayout()
-        self.enable_button = self._button("Включить всё", self._enable_all, primary=True)
+        self.enable_button = self._button("Включить всё", self._toggle_all, primary=True)
         self.enable_button.setIcon(FluentIcon.POWER_BUTTON)
+        self.enable_button.setMinimumWidth(self.enable_button.fontMetrics().horizontalAdvance("Выключить всё") + 48)
         self.repair_button = self._button("Восстановить службу", lambda: self._send("repair"))
         self.repair_button.setIcon(FluentIcon.SYNC)
         self.repair_button.hide()
@@ -126,23 +217,27 @@ class AntigravityPage(BasePage):
             buttons.addWidget(button)
         buttons.addStretch()
         state_layout.addLayout(buttons)
-        self.enable_scope = CaptionLabel("Вход в аккаунт · работа моделей · автопатч. При изменении клиента Antigravity может закрыться.", self.state_card)
+        self.enable_scope = CaptionLabel("Вход · работа моделей · автопатч · Gemini, Claude и ChatGPT в hosts. Antigravity может закрыться для изменения клиента.", self.state_card)
         self.enable_scope.setWordWrap(True)
         state_layout.addWidget(self.enable_scope)
         self.activity = BodyLabel("", self.state_card)
         self.activity.setWordWrap(True)
         self.activity.hide()
         state_layout.addWidget(self.activity)
+        self.check_note = CaptionLabel("", self.state_card)
+        self.check_note.setWordWrap(True)
+        self.check_note.hide()
+        state_layout.addWidget(self.check_note)
         self.verify_button = self._button("Пройти верификацию Google", self._verify)
         self.verify_button.hide()
-        state_layout.addWidget(self.verify_button)
+        state_layout.addWidget(self.verify_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.add_widget(self.state_card)
 
         section_row = QWidget(self.content)
         section_layout = QHBoxLayout(section_row)
         section_layout.setContentsMargins(0, 0, 0, 0)
         self.sections = SegmentedWidget(section_row)
-        set_control_accessibility(self.sections, name="Раздел Antigravity")
+        set_segmented_items_accessibility(self.sections, name="Раздел Antigravity")
         section_layout.addWidget(self.sections, 0, Qt.AlignmentFlag.AlignLeft)
         section_layout.addStretch(1)
         self.add_widget(section_row)
@@ -150,10 +245,30 @@ class AntigravityPage(BasePage):
         main_layout = QVBoxLayout(self.main_card)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(16)
-        self.main_tiles = HostsTilesGrid(self.main_card)
-        set_control_accessibility(self.main_tiles, name="Основные настройки Antigravity")
-        self.main_tiles.activated.connect(self._toggle_cap)
-        main_layout.addWidget(self.main_tiles)
+        self.cap_rows = {}
+        self._add_cap_rows(main_layout, CAPS[:3], "Основные функции", self.main_card)
+
+        models = SettingsCard(parent=self.main_card)
+        models.main_layout.addWidget(StrongBodyLabel("ИИ в hosts", models))
+        hint = CaptionLabel("Для работы без VPN проверьте профили всех трёх сервисов. «Включить всё» добавит выключенные, сохранив ваш выбор.", models)
+        hint.setWordWrap(True)
+        models.main_layout.addWidget(hint)
+        self.model_hosts_labels = {}
+        for name in MODEL_HOSTS_SERVICES:
+            model_row = QHBoxLayout()
+            model_row.addWidget(BodyLabel(MODEL_HOSTS_LABELS[name], models), 1)
+            label = CaptionLabel("Не проверено", models)
+            model_row.addWidget(label)
+            self.model_hosts_labels[name] = label
+            models.main_layout.addLayout(model_row)
+        if callable(self._open_model_hosts):
+            self.model_hosts_button = self._button("Настроить ИИ в hosts", self._open_model_hosts, parent=models)
+            set_tooltip(self.model_hosts_button, "Показать Gemini и Antigravity, Claude и ChatGPT в редакторе hosts")
+            set_control_accessibility(self.model_hosts_button, name="Настроить ИИ в hosts",
+                                      description="Открыть редактор и выделить все три сервиса: Gemini и Antigravity, Claude и ChatGPT.")
+            self._controls.remove(self.model_hosts_button)
+            models.main_layout.addWidget(self.model_hosts_button, 0, Qt.AlignmentFlag.AlignLeft)
+        main_layout.addWidget(models)
 
         installations = SettingsCard(parent=self.main_card)
         installations_layout = installations.main_layout
@@ -178,7 +293,7 @@ class AntigravityPage(BasePage):
             row.addLayout(text, 1)
             forget = TransparentPushButton(FluentIcon.CLOSE, "", installations)
             forget.clicked.connect(lambda _checked=False, kind=name: self._forget_install(kind))
-            forget.setToolTip("Убрать указанный вручную путь")
+            set_tooltip(forget, "Убрать указанный вручную путь")
             set_control_accessibility(forget, name=f"Убрать путь {name}")
             self._controls.append(forget)
             forget.hide()
@@ -192,10 +307,8 @@ class AntigravityPage(BasePage):
         advanced_layout = QVBoxLayout(self.advanced_card)
         advanced_layout.setContentsMargins(0, 0, 0, 0)
         advanced_layout.setSpacing(14)
-        self.advanced_tiles = HostsTilesGrid(self.advanced_card)
-        set_control_accessibility(self.advanced_tiles, name="Сетевые настройки Antigravity")
-        self.advanced_tiles.activated.connect(self._toggle_cap)
-        advanced_layout.addWidget(self.advanced_tiles)
+        self._add_cap_rows(advanced_layout, CAPS[3:8], "Компоненты сетевого обхода", self.advanced_card)
+        self._add_cap_rows(advanced_layout, CAPS[8:], "DNS и сертификат", self.advanced_card)
         self.add_widget(self.advanced_card)
         self.advanced_card.hide()
         routes = SettingsCard(parent=self.advanced_card)
@@ -218,8 +331,9 @@ class AntigravityPage(BasePage):
         route_row.addWidget(self.route_code, 1)
         route_row.addWidget(self._button("Подключить маршрут", lambda: self._send("group_proxy", value=self.route_code.text())))
         routes_layout.addLayout(route_row)
-        self.route_request_button = self._button("Скопировать запрос для дополнительного маршрута", self._copy_route_request)
-        routes_layout.addWidget(self.route_request_button)
+        self.route_request_button = self._button("Скопировать запрос", self._copy_route_request)
+        set_tooltip(self.route_request_button, "Скопировать запрос для подключения дополнительного маршрута")
+        routes_layout.addWidget(self.route_request_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.network_label = CaptionLabel("Состояние сети ещё не проверено", routes)
         self.network_label.setWordWrap(True)
         routes_layout.addWidget(self.network_label)
@@ -265,6 +379,19 @@ class AntigravityPage(BasePage):
         self._set_section("main")
         self._apply_page_theme()
 
+    def _add_cap_rows(self, layout, caps, title, parent):
+        layout.addWidget(StrongBodyLabel(title, parent))
+        short = {"client_patch": "Вход в аккаунт", "bypass": "Работа моделей", "watchdog": "Автопатч"}
+        icons = {"client_patch": "fa5s.user-check", "bypass": "fa5s.globe", "watchdog": "fa5s.sync-alt",
+                 "local_proxy": "fa5s.plug", "dns": "fa5s.server", "builtin_exits": "fa5s.random",
+                 "own_proxy": "fa5s.route", "group_proxy": "fa5s.network-wired",
+                 "dns_rotation": "fa5s.exchange-alt", "verify_tls": "fa5s.shield-alt"}
+        for name, full_title, hint in caps:
+            row = _CapRow(icons[name], short.get(name, full_title), hint, parent)
+            row.toggled.connect(lambda on, cap=name: self._toggle_cap(cap, on))
+            self.cap_rows[name] = row
+            layout.addWidget(row)
+
     def _set_section(self, section):
         self._section = section
         self.sections.setCurrentItem(section)
@@ -296,6 +423,22 @@ class AntigravityPage(BasePage):
             "Action": (semantic.warning_text, "fa5s.exclamation-circle"),
         }.get(tone, (get_theme_tokens().fg_muted, "fa5s.info-circle"))
         self.state_icon.setPixmap(get_cached_qta_pixmap(icon, color=color, size=28))
+        self._style_all_button()
+
+    def _style_all_button(self):
+        stop = self._stopping or self._all_enabled()
+        self.enable_button.setProperty("antigravityStop", stop)
+        tokens = get_theme_tokens()
+        qss = f'''
+PrimaryPushButton[antigravityStop="true"] {{color: {tokens.fg}; background: {tokens.surface_bg}; border: 1px solid {tokens.surface_border};}}
+PrimaryPushButton[antigravityStop="true"]:hover {{background: {tokens.surface_bg_hover}; border-color: {tokens.surface_border_hover};}}
+PrimaryPushButton[antigravityStop="true"]:pressed {{background: {tokens.surface_bg_pressed};}}
+PrimaryPushButton[antigravityStop="true"]:disabled {{color: {tokens.fg_muted}; background: {tokens.surface_bg_disabled}; border-color: {tokens.surface_border_disabled};}}
+'''
+        if getattr(self, "_all_button_style", None) != (qss, stop):
+            self._all_button_style = (qss, stop)
+            setCustomStyleSheet(self.enable_button, qss, qss)
+        self.enable_button.setIcon(get_themed_qta_icon("fa5s.stop", color=tokens.fg) if stop else FluentIcon.POWER_BUTTON)
 
     def on_page_activated(self):
         # Переходы из hosts и экскурсии не выражают намерения запускать движок.
@@ -303,8 +446,8 @@ class AntigravityPage(BasePage):
 
     def onboarding_target(self, name):
         return {
-            "controls": [self.enable_button, self.refresh_button, self.main_tiles],
-            "hosts": getattr(self, "hosts_button", None),
+            "controls": [self.enable_button, self.refresh_button, *[self.cap_rows[name] for name in ("client_patch", "bypass", "watchdog")]],
+            "hosts": getattr(self, "model_hosts_button", None),
             "sections": self.sections,
         }.get(name)
 
@@ -319,33 +462,173 @@ class AntigravityPage(BasePage):
             self._set_section(state)
 
     def _refresh(self):
+        if self.controller.busy or self._hosts_busy or self._stopping:
+            return
+        # Отдельная проверка никогда не исполняет оставшееся намерение включить.
+        self._requested_action = None
+        self._pending_cap = ""
+        self._checking = True
+        self.check_note.setText("Проверка только читает состояние приложений, службы и hosts.")
+        self.check_note.show()
         if not self._ready:
             self.controller.start()
         else:
             if not self.controller.send("refresh"):
                 self.controller.start()
+        self._read_model_hosts()
 
     def _all_enabled(self):
         caps = self._status.get("caps", {})
-        return self._ready and all(caps.get(name, {}).get("on") and caps.get(name, {}).get("kind") != "partial"
+        return self._ready and self._hosts_all_on() and all(caps.get(name, {}).get("on") and caps.get(name, {}).get("kind") != "partial"
                                    for name in ("client_patch", "watchdog", "dns", "local_proxy", "builtin_exits", "group_proxy"))
 
     def _install_missing(self):
         return "installs" in self._status and not any(install.get("path") for install in self._status["installs"])
 
     def _enable_all(self):
-        if self.controller.busy:
+        if self.controller.busy or self._hosts_busy or self._stopping:
             return
+        self._checking = False
+        self.check_note.hide()
+        self._requested_action = "enable_all"
+        self._pending_cap = "all"
         if not self._ready:
-            self._requested_action = "enable_all"
-            self._pending_cap = "all"
             if not self.controller.start():
                 self._requested_action = None
                 self._pending_cap = ""
                 self._busy_changed(False, "")
-        elif not self._all_enabled() and not self._install_missing():
-            self._pending_cap = "all"
-            self._send("enable_all")
+                return
+        self._read_model_hosts()
+        self._maybe_enable_all()
+
+    def _toggle_all(self):
+        if self._all_enabled():
+            self._confirm_disable_all()
+        else:
+            self._enable_all()
+
+    def _confirm_disable_all(self):
+        if self.controller.busy or self._hosts_busy or self._stopping:
+            return
+        dialog = _DisableAllDialog(self.window())
+        if not dialog.exec() or dialog.remove_hosts is None:
+            return
+        self._requested_action = None
+        self._checking = False
+        self.check_note.hide()
+        self._remove_hosts_on_stop = dialog.remove_hosts
+        self._stopping = self._disable_waiting = True
+        self._pending_cap = "all_off"
+        if self._send("disable_all"):
+            self._disable_request_id = getattr(self.controller, "active_request_id", None)
+            self._busy_changed(self.controller.busy, "Выключаю функции Antigravity…")
+        else:
+            self._stopping = self._disable_waiting = False
+            self._busy_changed(self.controller.busy, "")
+
+    def _finish_disable_all(self):
+        self._stopping = self._disable_waiting = False
+        self._pending_cap = ""
+        self.check_note.setText("Отключение завершено. Текущее состояние показано в переключателях. " +
+                               ("Адреса нейросетей убраны из hosts." if self._remove_hosts_on_stop else "Адреса нейросетей сохранены в hosts."))
+        self.check_note.show()
+        self._busy_changed(self.controller.busy, "")
+
+    def _engine_disable_completed(self, verified):
+        self._disable_waiting = False
+        if verified is not True:
+            self._stopping = False
+            self._pending_cap = ""
+            self.check_note.setText("Полное выключение не подтверждено. Проверьте журнал; адреса нейросетей из hosts не удалялись.")
+            self.check_note.show()
+            self._busy_changed(self.controller.busy, "")
+            return
+        if self._remove_hosts_on_stop and self._hosts_feature is not None:
+            self._hosts_busy = self._hosts_writing = self._hosts_disabling = True
+            self._busy_changed(False, "Убираю адреса нейросетей из hosts…")
+            self._hosts_runtime.start_qthread_worker(
+                worker_factory=lambda request_id: self._hosts_feature.create_services_disable_worker(request_id, MODEL_HOSTS_SERVICES, self),
+                on_loaded=self._model_hosts_loaded, on_failed=self._model_hosts_failed)
+        else:
+            self._finish_disable_all()
+
+    def _hosts_all_on(self):
+        if self._hosts_feature is None:
+            return True
+        return self._hosts_snapshot is not None and all(
+            self._hosts_snapshot.service(name) and self._hosts_snapshot.service(name).current
+            for name in MODEL_HOSTS_SERVICES)
+
+    def _read_model_hosts(self):
+        if self._hosts_feature is None:
+            return
+        self._hosts_busy = True
+        self._busy_changed(self.controller.busy, "Читаю профили ИИ в hosts…")
+        self._hosts_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._hosts_feature.create_snapshot_worker(request_id, self),
+            on_loaded=self._model_hosts_loaded, on_failed=self._model_hosts_failed)
+
+    def _render_model_hosts(self):
+        labels = dict(self._hosts_snapshot.dns_profiles) if self._hosts_snapshot else {}
+        for name, label in self.model_hosts_labels.items():
+            entry = self._hosts_snapshot.service(name) if self._hosts_snapshot else None
+            label.setText(labels.get(entry.current, entry.current) if entry and entry.current else
+                          "Выкл." if entry else "Не проверено")
+
+    def _model_hosts_loaded(self, request_id, result):
+        if not self._hosts_runtime.is_current(request_id):
+            return
+        writing = self._hosts_writing
+        disabling = self._hosts_disabling
+        self._hosts_busy = self._hosts_writing = False
+        self._hosts_disabling = False
+        if writing:
+            self._hosts_snapshot = getattr(result, "snapshot", None)
+            if not getattr(result, "success", False) or self._hosts_snapshot is None or not self._hosts_snapshot.readable:
+                message = getattr(result, "message", "Не удалось записать hosts") if not getattr(result, "success", False) else "Не удалось перечитать hosts после записи"
+                self._model_hosts_failed(request_id, message)
+                return
+        else:
+            if result is None or not result.readable:
+                self._model_hosts_failed(request_id, "Не удалось прочитать текущий hosts. Включение отменено")
+                return
+            self._hosts_snapshot = result
+        self._render_model_hosts()
+        if disabling:
+            self._finish_disable_all()
+            return
+        self._busy_changed(self.controller.busy, "")
+        self._maybe_enable_all()
+
+    def _model_hosts_failed(self, request_id, message):
+        if not self._hosts_runtime.is_current(request_id):
+            return
+        self._hosts_busy = self._hosts_writing = False
+        self._stopping = self._disable_waiting = self._hosts_disabling = False
+        self._requested_action = None
+        self._pending_cap = ""
+        if self._checking:
+            self._checking = False
+            self.check_note.setText("Не удалось прочитать профили ИИ в hosts. Откройте редактор hosts.")
+        self._busy_changed(self.controller.busy, "")
+        self._action_failed(f"Профили ИИ в hosts: {message}. Откройте редактор hosts.")
+
+    def _maybe_enable_all(self):
+        if self._requested_action != "enable_all" or not self._ready or self.controller.busy or self._hosts_busy:
+            return
+        if self._install_missing() or self._all_enabled():
+            self._requested_action = None
+            self._busy_changed(False, "")
+            return
+        if not self._hosts_all_on():
+            self._hosts_busy = self._hosts_writing = True
+            self._busy_changed(False, "Включаю Gemini, Claude и ChatGPT в hosts…")
+            self._hosts_runtime.start_qthread_worker(
+                worker_factory=lambda request_id: self._hosts_feature.create_services_enable_worker(request_id, MODEL_HOSTS_SERVICES, self),
+                on_loaded=self._model_hosts_loaded, on_failed=self._model_hosts_failed)
+            return
+        self._requested_action = None
+        self._send("enable_all")
 
     def _send(self, command, **values):
         if not self.controller.send(command, **values):
@@ -355,6 +638,7 @@ class AntigravityPage(BasePage):
         return True
 
     def _busy_changed(self, busy, message):
+        busy = bool(busy or self._hosts_busy or self._stopping)
         self.activity.setText(message)
         self.activity.setVisible(bool(message))
         for control in self._controls:
@@ -368,43 +652,41 @@ class AntigravityPage(BasePage):
         self.report_button.setEnabled(self._ready and not busy and not self._report_pending)
         self.copy_button.setEnabled(self._ready and not busy and not self._report_pending)
         self.repair_button.setEnabled(self._ready and not busy and self._headline.get("action") == "Repair")
-        self.enable_button.setEnabled(not busy and not self._all_enabled() and not self._install_missing())
-        self.enable_button.setText("Подготовка…" if busy and self._requested_action else "Включаю…" if busy and self._pending_cap == "all" else "Включить всё")
+        stop = self._all_enabled()
+        self.enable_button.setEnabled(not busy and (stop or not self._install_missing()))
+        self.enable_button.setText("Выключаю…" if self._stopping else "Включаю…" if self._hosts_writing or (busy and self._pending_cap == "all" and not self._requested_action) else "Подготовка…" if busy and self._requested_action else "Выключить всё" if stop else "Включить всё")
         set_control_accessibility(self.enable_button, name=self.enable_button.text(),
-                                  description="Включает вход в аккаунт, работу моделей и автопатч. Может закрыть Antigravity для изменения клиента.")
-        self.enable_button.setToolTip("Укажите папку установленного Antigravity" if self._install_missing() else
-                                     "Все функции уже включены" if self._all_enabled() else "Включить вход, модели и автопатч")
-        self.enable_scope.setText("Все функции включены. Проверьте ответ выбранной модели." if self._all_enabled() else
-                                 "Вход в аккаунт · работа моделей · автопатч. При изменении клиента Antigravity может закрыться.")
+                                  description="Выключает функции Antigravity и спрашивает, убрать ли адреса нейросетей из hosts." if stop or self._stopping else "Включает вход, модели, автопатч и профили Gemini, Claude и ChatGPT в hosts. Может закрыть Antigravity.")
+        set_tooltip(
+            self.enable_button,
+            "Выключить функции и выбрать, сохранить ли адреса в hosts" if stop else
+            "Укажите папку установленного Antigravity" if self._install_missing() else "Включить вход, модели и автопатч",
+        )
+        self.enable_scope.setText("Все функции включены. При выключении выберите, оставить ли адреса нейросетей в hosts." if stop else
+                                 "Вход · работа моделей · автопатч · Gemini, Claude и ChatGPT в hosts. Antigravity может закрыться для изменения клиента.")
         if not busy:
             if self._requested_action is None:
                 self._pending_cap = ""
         self._sync_switches()
+        self._style_all_button()
+        if not busy and self._checking and self._ready:
+            self.check_note.setText("Состояние прочитано. Проверка не включала функции и не меняла hosts; показан ранее сохранённый выбор.")
 
     def _sync_switches(self):
-        short_titles = {"client_patch": "Вход в аккаунт", "bypass": "Работа моделей", "watchdog": "Автопатч"}
-        icons = {"client_patch": "own:antigravity:AG", "bypass": "fa5s.globe", "watchdog": "fa5s.sync-alt",
-                 "local_proxy": "fa5s.plug", "dns": "fa5s.server", "builtin_exits": "fa5s.random",
-                 "own_proxy": "fa5s.route", "group_proxy": "fa5s.network-wired", "dns_rotation": "fa5s.exchange-alt",
-                 "verify_tls": "fa5s.shield-alt"}
-        tiles = []
         for name, title, hint in CAPS:
             state = self._status.get("caps", {}).get(name, {})
             note = state.get("note") or hint
-            tiles.append(HostsTile(kind="tile", key=name, title=short_titles.get(name, title), note=note,
-                                   icon_name=icons[name], is_on=bool(state.get("on")), has_switch=True,
-                                   enabled=self._ready and not self.controller.busy and state.get("kind") != "blocked",
-                                   pending=self._pending_cap == name or (self._pending_cap == "all" and name in {"client_patch", "bypass", "watchdog"}),
-                                   accessible_text=f"{title}. {note}"))
-        self.main_tiles.set_tiles([HostsTile(kind="group", title="Разблокировка"), *tiles[:3]])
-        self.advanced_tiles.set_tiles([HostsTile(kind="group", title="Сетевой обход"), *tiles[3:8],
-                                      HostsTile(kind="group", title="DNS и безопасность"), *tiles[8:]])
+            row = self.cap_rows[name]
+            row.set_texts(row._accessible_title, note)
+            QTimer.singleShot(0, row._fit_text)
+            row.show_state(state, ready=self._ready, busy=self.controller.busy or self._hosts_busy or self._stopping,
+                           pending=self._pending_cap in {name, "all", "all_off"})
 
-    def _toggle_cap(self, name):
+    def _toggle_cap(self, name, on=None):
         state = self._status.get("caps", {}).get(name, {})
-        if self._ready and not self.controller.busy and state.get("kind") != "blocked":
+        if self._ready and not self.controller.busy and not self._hosts_busy and state.get("kind") != "blocked":
             self._pending_cap = name
-            self._send("set", cap=name, on=not bool(state.get("on")))
+            self._send("set", cap=name, on=not bool(state.get("on")) if on is None else bool(on))
             self._sync_switches()
 
     def _received(self, event):
@@ -427,12 +709,7 @@ class AntigravityPage(BasePage):
                 self.own_proxy.setText(self._status.get("own_proxy", ""))
             self._render_providers(self._status.get("providers", []))
             self._busy_changed(self.controller.busy, self.activity.text() if self.controller.busy else "")
-            if self._requested_action is not None and not self.controller.busy:
-                action, self._requested_action = self._requested_action, None
-                if self._install_missing() or self._all_enabled():
-                    self._busy_changed(False, "")
-                else:
-                    self._send(action)
+            self._maybe_enable_all()
         elif kind == "headline":
             self._headline = event
             self._apply_page_theme()
@@ -440,7 +717,8 @@ class AntigravityPage(BasePage):
             self.state_detail.setText(event.get("detail", ""))
             self.verify_button.setVisible(event.get("action") == "Verify")
             self.repair_button.setVisible(event.get("action") == "Repair")
-            self.repair_button.setEnabled(self._ready and not self.controller.busy and event.get("action") == "Repair")
+            self.repair_button.setEnabled(self._ready and not (self.controller.busy or self._hosts_busy or self._stopping)
+                                          and event.get("action") == "Repair")
             relay = event.get("relay") or {}
             route = relay.get("route") or "ещё не определён"
             vpn = {
@@ -461,11 +739,15 @@ class AntigravityPage(BasePage):
                 InfoBar.warning(title="Antigravity", content=text, parent=self)
         elif kind == "error":
             self._requested_action = None
+            self._stopping = self._disable_waiting = False
             self._busy_changed(self.controller.busy, "")
             message = str(event.get("message", "Не удалось выполнить действие"))
             self.state_detail.setText(message)
             self.journal.appendPlainText(message)
             InfoBar.error(title="Antigravity", content=message, parent=self)
+        elif kind == "completed" and self._disable_waiting:
+            if self._disable_request_id is None or event.get("request_id") == self._disable_request_id:
+                self._engine_disable_completed(event.get("shutdown_verified"))
         elif kind == "report":
             self._accept_report(str(event.get("text", "")))
 
@@ -570,6 +852,8 @@ class AntigravityPage(BasePage):
 
     def _failed(self, message):
         self._requested_action = None
+        self._checking = False
+        self._stopping = self._disable_waiting = False
         self._ready = False
         self._headline = {"tone": "Action"}
         self._apply_page_theme()
@@ -582,5 +866,8 @@ class AntigravityPage(BasePage):
         InfoBar.error(title="Antigravity", content=str(message), parent=self)
 
     def cleanup(self):
+        self._requested_action = None
+        self._hosts_runtime.stop(blocking=False, warning_prefix="Antigravity hosts")
+        self._hosts_runtime.cancel()
         self.controller.stop()
         super().cleanup()

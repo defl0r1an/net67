@@ -37,11 +37,13 @@ def show_page(window, page_name, *, allow_internal: bool = False) -> bool:
     return bool(_show_page(window, page_name, allow_internal=allow_internal))
 
 
-def open_hosts_service(window, service: str) -> bool:
+def open_hosts_service(window, service: str | tuple[str, ...]) -> bool:
     from app.page_names import PageName
     from ui.window_adapter import send_page_command
 
-    if not send_page_command(window, PageName.HOSTS, "focus_service", {"service": service}, ensure=True):
+    command, payload = ("focus_service", {"service": service}) if isinstance(service, str) else (
+        "focus_services", {"services": list(service)})
+    if not send_page_command(window, PageName.HOSTS, command, payload, ensure=True):
         return False
     return show_page(window, PageName.HOSTS)
 

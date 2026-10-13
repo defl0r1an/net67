@@ -114,6 +114,7 @@ class OneClickButton(QWidget):
         self._get_runtime_phase = get_runtime_phase
         self._runtime_phase = ""
         self._state = OneClickState.OFF
+        self._stopping = False
         self._worker: _OneClickWorker | None = None
 
         # Главный экран: круг по центру, состояние крупной строкой под
@@ -473,9 +474,15 @@ class OneClickButton(QWidget):
         was_running = self._state is OneClickState.RUNNING
         self._state = state
 
-        self.button.setText(_BUTTON_TEXT.get(state, "Включить обход"))
+        if state not in _BUSY:
+            self._stopping = False
+
+        button_text = "Остановка..." if self._stopping and state is OneClickState.PREPARING else _BUTTON_TEXT.get(state, "Включить обход")
+        state_text = "Останавливаем..." if self._stopping and state is OneClickState.PREPARING else _STATE_TEXT.get(state, "")
+
+        self.button.setText(button_text)
         self.button.setEnabled(state not in _BUSY)
-        self.state_label.setText(_STATE_TEXT.get(state, ""))
+        self.state_label.setText(state_text)
         self.detail_label.setText(str(detail or ""))
         self.detail_label.setVisible(bool(detail))
 
@@ -486,12 +493,11 @@ class OneClickButton(QWidget):
         self._apply_button_colour(state, tokens)
         self._sync_uptime_for_state(state)
 
-        # Дыхание круга живёт ровно на работающем обходе. Статичная
-        # кнопка выглядит одинаково и когда обход поднят, и когда
-        # запуск застрял на полпути; медленное движение — самый
-        # дешёвый способ показать, что всё идёт само.
+        # Дыхание круга живёт на работающем обходе и во время фаз
+        # запуска/остановки («Останавливаем…», «Запускаем…»). Пульсация даёт
+        # визуальное подтверждение, что команда принята и система работает.
         try:
-            if state is OneClickState.RUNNING:
+            if state is OneClickState.RUNNING or state in _BUSY:
                 self.button.start_pulse()
             else:
                 self.button.stop_pulse()
@@ -517,11 +523,11 @@ class OneClickButton(QWidget):
         # выключенной защите и с «паузой» при работающей.
         _refresh_hero_icon(self.button, state)
 
-        label = f"{_STATE_TEXT.get(state, '')}. {detail}".strip()
+        label = f"{state_text}. {detail}".strip()
         set_state_text(self, label)
         set_control_accessibility(
             self.button,
-            name=_BUTTON_TEXT.get(state, "Включить обход"),
+            name=button_text,
             description=label,
         )
         self.stateChanged.emit(state)
@@ -542,7 +548,11 @@ class OneClickButton(QWidget):
         if state is OneClickState.ERROR:
             ink = "#ffffff"
 
-        ring = colors.accent if state is OneClickState.RUNNING else colors.border_strong
+        ring = (
+            colors.accent
+            if (state is OneClickState.RUNNING or (self._stopping and state in _BUSY))
+            else colors.border_strong
+        )
         if state is OneClickState.ERROR:
             ring = "#ff6b6b"
 
@@ -597,6 +607,7 @@ class OneClickButton(QWidget):
         if self._worker is not None and self._worker.isRunning():
             return
 
+        self._stopping = not bool(enable)
         self._apply_state(OneClickState.PREPARING, "")
 
         worker = _OneClickWorker(enable=bool(enable), runtime_feature=feature, parent=self)

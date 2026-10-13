@@ -92,7 +92,7 @@ def build_user_presets_page_shell(
     on_folder_context_requested,
     on_background_context_requested,
     on_preset_list_action,
-    ui_language: str,
+    ui_language: str = "ru",
 ):
     # Карточка со ссылкой на GitHub Discussions автора исходного проекта
     # удалена вместе с виджетами configs_card, configs_icon,
@@ -100,9 +100,16 @@ def build_user_presets_page_shell(
 
     toolbar_layout = PresetsToolbarLayout(parent, row_count=6)
 
-    create_btn = toolbar_layout.create_primary_tool_button(
-        primary_tool_button_cls,
+    create_btn = toolbar_layout.create_icon_button(
         fluent_icon.ADD if fluent_icon else None,
+        accessible_name=tr_fn(f"{tr_prefix}.tooltip.create", "Создать новый пресет"),
+        size=32,
+    )
+    create_btn.setFixedSize(32, 32)
+    create_btn.setStyleSheet(
+        "ToolButton { background-color: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 5px; } "
+        "ToolButton:hover { background-color: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.2); } "
+        "ToolButton:pressed { background-color: rgba(255, 255, 255, 0.05); }"
     )
     set_tooltip(
         create_btn,
@@ -153,6 +160,7 @@ def build_user_presets_page_shell(
     info_btn = toolbar_layout.create_icon_button(
         FluentIcon.QUESTION,
         accessible_name=tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"),
+        size=32,
     )
     set_tooltip(info_btn, tr_fn(f"{tr_prefix}.button.what_is_this", "Что это такое?"))
     info_btn.clicked.connect(on_info_clicked)
@@ -162,7 +170,8 @@ def build_user_presets_page_shell(
         tr_fn(f"{tr_prefix}.search.placeholder", "Поиск пресетов по имени...")
     )
     preset_search_input.setClearButtonEnabled(True)
-    preset_search_input.setFixedHeight(34)
+    preset_search_input.setFixedHeight(32)
+    preset_search_input.setMaximumWidth(320)
     preset_search_input.setProperty("noDrag", True)
     preset_search_input.textChanged.connect(on_preset_search_text_changed)
     apply_user_presets_accessibility(

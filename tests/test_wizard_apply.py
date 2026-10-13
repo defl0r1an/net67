@@ -132,7 +132,9 @@ class WizardNeededTests(unittest.TestCase):
         from oneclick.plans import OneClickRequest
         from wizard.apply import build_request_from_settings
 
-        self.assertIsInstance(build_request_from_settings(), OneClickRequest)
+        req = build_request_from_settings()
+        self.assertIsInstance(req, OneClickRequest)
+        self.assertIsNone(req.hosts_entries)
 
 
 if __name__ == "__main__":

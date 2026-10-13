@@ -50,6 +50,109 @@ class AntigravityTests(unittest.TestCase):
         controller.feed_output(b'null\nnot-json\n')
         self.assertEqual(events[-1]["message"], "not-json")
 
+    def _hosts_page(self):
+        from types import SimpleNamespace
+        from antigravity.ui.page import AntigravityPage
+
+        controller = FakeController()
+        feature = SimpleNamespace(create_snapshot_worker=Mock(), create_services_enable_worker=Mock(), create_services_disable_worker=Mock())
+        page = AntigravityPage(controller=controller, hosts_feature=feature)
+        self.addCleanup(page.cleanup)
+        calls = []
+
+        def start(**kwargs):
+            calls.append(kwargs)
+            kwargs["worker_factory"](len(calls))
+
+        page._hosts_runtime.start_qthread_worker = Mock(side_effect=start)
+        page._hosts_runtime.is_current = Mock(return_value=True)
+        return page, controller, feature, calls
+
+    def _model_snapshot(self, enabled=False):
+        from antigravity.ui.page import MODEL_HOSTS_SERVICES
+        from hosts.page_snapshot import HostsPageSnapshot, HostsServiceEntry, CATEGORY_AI
+
+        return HostsPageSnapshot(tuple(HostsServiceEntry(name, CATEGORY_AI, "fa5s.globe", None,
+                                 ("geohide",), "geohide" if enabled else None) for name in MODEL_HOSTS_SERVICES),
+                                 (("geohide", "GeoHide"),), None)
+
+    def test_check_reads_hosts_and_cancels_any_old_enable_intent(self):
+        page, controller, feature, calls = self._hosts_page()
+        self.assertTrue(page.cap_rows["bypass"]._switch_button.isHidden())
+        self.assertEqual(page.cap_rows["bypass"]._state_label.text(), "Не проверено")
+        page._requested_action = "enable_all"
+        page.refresh_button.click()
+        controller.start.assert_called_once_with()
+        calls[-1]["on_loaded"](1, self._model_snapshot())
+        controller.received.emit({"event": "status", "status": {"caps": {"bypass": {"on": True}},
+                                                                 "installs": [{"path": "C:/Antigravity"}]}})
+        controller.send.assert_not_called()
+        feature.create_services_enable_worker.assert_not_called()
+        self.assertTrue(page.cap_rows["bypass"].isChecked())
+        self.assertIn("не включала", page.check_note.text())
+        page.refresh_button.click()
+        controller.send.assert_called_once_with("refresh")
+        calls[-1]["on_loaded"](2, self._model_snapshot())
+        feature.create_services_enable_worker.assert_not_called()
+
+    def test_enable_all_waits_for_explicit_hosts_write_and_then_enables_once(self):
+        from types import SimpleNamespace
+        from antigravity.ui.page import MODEL_HOSTS_SERVICES
+
+        page, controller, feature, calls = self._hosts_page()
+        page.enable_button.click()
+        controller.start.assert_called_once_with()
+        calls[-1]["on_loaded"](1, self._model_snapshot())
+        feature.create_services_enable_worker.assert_not_called()
+        controller.received.emit({"event": "status", "status": {"installs": [{"path": "C:/Antigravity"}]}})
+        feature.create_services_enable_worker.assert_called_once_with(2, MODEL_HOSTS_SERVICES, page)
+        controller.send.assert_not_called()
+        calls[-1]["on_loaded"](2, SimpleNamespace(success=True, snapshot=self._model_snapshot(True)))
+        controller.send.assert_called_once_with("enable_all")
+        controller.received.emit({"event": "status", "status": {}})
+        controller.send.assert_called_once_with("enable_all")
+
+    def test_hosts_write_failure_cancels_enable_all(self):
+        from types import SimpleNamespace
+
+        page, controller, feature, calls = self._hosts_page()
+        controller.received.emit({"event": "status", "status": {"installs": [{"path": "C:/Antigravity"}]}})
+        page.enable_button.click()
+        calls[-1]["on_loaded"](1, self._model_snapshot())
+        with patch("antigravity.ui.page.InfoBar"):
+            calls[-1]["on_loaded"](2, SimpleNamespace(success=False, snapshot=self._model_snapshot(), message="нет прав"))
+        controller.send.assert_not_called()
+        self.assertIsNone(page._requested_action)
+        self.assertFalse(page._hosts_busy)
+        self.assertTrue(page.enable_button.isEnabled())
+
+    def test_missing_readback_after_hosts_write_does_not_repeat_write_or_enable(self):
+        from types import SimpleNamespace
+
+        page, controller, feature, calls = self._hosts_page()
+        controller.received.emit({"event": "status", "status": {"installs": [{"path": "C:/Antigravity"}]}})
+        page.enable_button.click()
+        calls[-1]["on_loaded"](1, self._model_snapshot())
+        with patch("antigravity.ui.page.InfoBar"):
+            calls[-1]["on_loaded"](2, SimpleNamespace(success=True, snapshot=None))
+        controller.send.assert_not_called()
+        self.assertEqual(feature.create_services_enable_worker.call_count, 1)
+        self.assertIsNone(page._requested_action)
+
+    def test_missing_or_unreadable_initial_hosts_snapshot_cancels_enable(self):
+        from dataclasses import replace
+
+        for snapshot in (None, replace(self._model_snapshot(), readable=False)):
+            with self.subTest(snapshot=snapshot):
+                page, controller, feature, calls = self._hosts_page()
+                controller.received.emit({"event": "status", "status": {"installs": [{"path": "C:/Antigravity"}]}})
+                page.enable_button.click()
+                with patch("antigravity.ui.page.InfoBar"):
+                    calls[-1]["on_loaded"](1, snapshot)
+                feature.create_services_enable_worker.assert_not_called()
+                controller.send.assert_not_called()
+                self.assertIsNone(page._requested_action)
+
     def test_intermediate_snapshot_does_not_unlock_action(self):
         from antigravity.controller import AntigravityController
 
@@ -78,13 +181,11 @@ class AntigravityTests(unittest.TestCase):
         status = {"caps": {"bypass": {"on": True}, "dns_rotation": {"on": False, "note": "только первый сервер"}},
                   "providers": [{"name": "DNS A", "enabled": True}, {"name": "DNS B", "enabled": False}]}
         controller.received.emit({"event": "status", "status": status})
-        main = {tile.key: tile for tile in page.main_tiles._tiles}
-        extra = {tile.key: tile for tile in page.advanced_tiles._tiles}
-        self.assertTrue(main["bypass"].is_on)
-        self.assertFalse(extra["dns_rotation"].is_on)
-        self.assertEqual(extra["dns_rotation"].note, "только первый сервер")
+        self.assertTrue(page.cap_rows["bypass"].isChecked())
+        self.assertFalse(page.cap_rows["dns_rotation"].isChecked())
+        self.assertEqual(page.cap_rows["dns_rotation"]._desc_label.text(), "только первый сервер")
         controller.send.assert_not_called()
-        page.advanced_tiles.activated.emit("dns_rotation")
+        page.cap_rows["dns_rotation"].toggled.emit(True)
         controller.send.assert_called_once_with("set", cap="dns_rotation", on=True)
         controller.send.reset_mock()
         controller.received.emit({"event": "status", "status": status})
@@ -105,7 +206,7 @@ class AntigravityTests(unittest.TestCase):
         from antigravity.ui.page import AntigravityPage
 
         controller = FakeController()
-        page = AntigravityPage(controller=controller, open_hosts=lambda: None)
+        page = AntigravityPage(controller=controller, open_model_hosts=lambda: None)
         self.addCleanup(page.cleanup)
         page.on_page_activated()
         page.on_page_activated()
@@ -183,9 +284,113 @@ class AntigravityTests(unittest.TestCase):
             "installs": [{"path": "C:/Antigravity"}],
         }})
         controller.send.assert_not_called()
-        self.assertFalse(page.enable_button.isEnabled())
+        self.assertTrue(page.enable_button.isEnabled())
+        self.assertEqual(page.enable_button.text(), "Выключить всё")
+        self.assertTrue(page.enable_button.property("antigravityStop"))
         self.assertIsNone(page._requested_action)
         self.assertEqual(page._pending_cap, "")
+
+    def test_all_button_stop_mode_asks_about_hosts_and_waits_for_engine(self):
+        from types import SimpleNamespace
+        from antigravity.ui.page import MODEL_HOSTS_SERVICES
+
+        for remove in (False, True):
+            with self.subTest(remove=remove):
+                page, controller, feature, calls = self._hosts_page()
+                page._hosts_snapshot = self._model_snapshot(True)
+                controller.received.emit({"event": "status", "status": {
+                    "caps": {name: {"on": True} for name in ("client_patch", "watchdog", "dns", "local_proxy", "builtin_exits", "group_proxy")},
+                    "installs": [{"path": "C:/Antigravity"}],
+                }})
+                self.assertEqual(page.enable_button.text(), "Выключить всё")
+                self.assertTrue(page.enable_button.property("antigravityStop"))
+                with patch("antigravity.ui.page._DisableAllDialog") as dialog:
+                    dialog.return_value.exec.return_value = True
+                    dialog.return_value.remove_hosts = remove
+                    page.enable_button.click()
+                controller.send.assert_called_once_with("disable_all")
+                feature.create_services_disable_worker.assert_not_called()
+                self.assertEqual(page.enable_button.text(), "Выключаю…")
+                self.assertFalse(page.enable_button.isEnabled())
+                controller.received.emit({"event": "status", "status": {
+                    "caps": {name: {"on": False} for name in ("client_patch", "watchdog", "dns", "local_proxy", "own_proxy", "builtin_exits", "group_proxy")},
+                    "installs": [{"path": "C:/Antigravity"}]}})
+                controller.received.emit({"event": "completed", "request_id": 5, "shutdown_verified": True})
+                if remove:
+                    feature.create_services_disable_worker.assert_called_once_with(1, MODEL_HOSTS_SERVICES, page)
+                    self.assertTrue(page._stopping)
+                    calls[-1]["on_loaded"](1, SimpleNamespace(success=True, snapshot=self._model_snapshot()))
+                else:
+                    feature.create_services_disable_worker.assert_not_called()
+                    self.assertTrue(page._hosts_all_on())
+                self.assertEqual(page.enable_button.text(), "Включить всё")
+                self.assertFalse(page.enable_button.property("antigravityStop"))
+                self.assertTrue(page.enable_button.isEnabled())
+
+    def test_canceling_stop_question_does_not_send_commands(self):
+        page, controller, feature, calls = self._hosts_page()
+        page._hosts_snapshot = self._model_snapshot(True)
+        controller.received.emit({"event": "status", "status": {
+            "caps": {name: {"on": True} for name in ("client_patch", "watchdog", "dns", "local_proxy", "builtin_exits", "group_proxy")},
+            "installs": [{"path": "C:/Antigravity"}]}})
+        with patch("antigravity.ui.page._DisableAllDialog") as dialog:
+            dialog.return_value.exec.return_value = False
+            page.enable_button.click()
+        controller.send.assert_not_called()
+        feature.create_services_disable_worker.assert_not_called()
+        self.assertFalse(page._stopping)
+
+    def test_incomplete_engine_stop_does_not_remove_hosts(self):
+        page, controller, feature, calls = self._hosts_page()
+        page._hosts_snapshot = self._model_snapshot(True)
+        controller.received.emit({"event": "status", "status": {
+            "caps": {name: {"on": True} for name in ("client_patch", "watchdog", "dns", "local_proxy", "builtin_exits", "group_proxy")},
+            "installs": [{"path": "C:/Antigravity"}]}})
+        with patch("antigravity.ui.page._DisableAllDialog") as dialog:
+            dialog.return_value.exec.return_value = True
+            dialog.return_value.remove_hosts = True
+            page.enable_button.click()
+        controller.received.emit({"event": "completed", "request_id": 1})
+        feature.create_services_disable_worker.assert_not_called()
+        self.assertFalse(page._stopping)
+        self.assertIn("не подтверждено", page.check_note.text())
+
+    def test_off_switches_without_verified_stop_do_not_remove_hosts(self):
+        for verified in (None, False):
+            with self.subTest(verified=verified):
+                page, controller, feature, calls = self._hosts_page()
+                page._hosts_snapshot = self._model_snapshot(True)
+                page._ready = True
+                with patch("antigravity.ui.page._DisableAllDialog") as dialog:
+                    dialog.return_value.exec.return_value = True
+                    dialog.return_value.remove_hosts = True
+                    page._confirm_disable_all()
+                controller.received.emit({"event": "status", "status": {
+                    "caps": {name: {"on": False} for name in ("client_patch", "watchdog", "dns", "local_proxy", "own_proxy", "builtin_exits", "group_proxy")}}})
+                controller.received.emit({"event": "completed", "request_id": 1, "shutdown_verified": verified})
+                feature.create_services_disable_worker.assert_not_called()
+                self.assertIn("не подтверждено", page.check_note.text())
+
+    def test_headline_keeps_repair_disabled_during_hosts_write_and_stop(self):
+        page, controller, feature, calls = self._hosts_page()
+        page._ready = True
+        for field in ("_hosts_busy", "_stopping"):
+            with self.subTest(field=field):
+                setattr(page, field, True)
+                controller.received.emit({"event": "headline", "action": "Repair"})
+                self.assertFalse(page.repair_button.isEnabled())
+                setattr(page, field, False)
+
+    def test_escape_cancels_native_stop_dialog(self):
+        from PyQt6.QtCore import QTimer, Qt
+        from PyQt6.QtTest import QTest
+        from antigravity.ui.page import _DisableAllDialog
+
+        page, controller, feature, calls = self._hosts_page()
+        dialog = _DisableAllDialog(page)
+        QTimer.singleShot(0, lambda: QTest.keyClick(dialog, Qt.Key.Key_Escape))
+        self.assertFalse(dialog.exec())
+        self.assertIsNone(dialog.remove_hosts)
 
     def test_hosts_link_focuses_service_before_showing_page(self):
         from main.window_page_actions import open_hosts_service
@@ -248,10 +453,10 @@ class AntigravityTests(unittest.TestCase):
 
         controller = FakeController()
         open_hosts = Mock()
-        page = AntigravityPage(controller=controller, open_hosts=open_hosts)
+        page = AntigravityPage(controller=controller, open_model_hosts=open_hosts)
         self.addCleanup(page.cleanup)
         page._busy_changed(True, "Проверяю…")
-        page.hosts_button.click()
+        page.model_hosts_button.click()
         open_hosts.assert_called_once_with()
         page._set_section("network")
         self.assertTrue(page.main_card.isHidden())
@@ -286,16 +491,19 @@ with patch('hosts.ui.page.HostsPage._request_snapshot'):
         window.show()
         show_page(window, PageName.ANTIGRAVITY)
         for _ in range(20): app.processEvents()
-        antigravity.hosts_button.click()
+        antigravity.model_hosts_button.click()
         if hosts._snapshot is None:
             for _ in range(10): app.processEvents()
-            assert hosts._focus_service_pending == 'antigravity'
+            assert hosts._focus_service_pending == 'gemini ai'
+            assert hosts._focus_services_pending == ('gemini ai', 'claude', 'chatgpt & sora (openai)')
             hosts._set_snapshot(snapshot)
         for _ in range(40): app.processEvents()
-        rect = hosts.tiles.tile_rect('Google Antigravity')
-        center = hosts.tiles.mapTo(hosts.viewport(), rect.center())
-        assert hosts.viewport().rect().contains(center), (width, center, hosts.verticalScrollBar().value())
-        assert hosts.tiles.tiles()[hosts.tiles._cursor].key == 'Google Antigravity'
+        for name in ('Gemini AI', 'Claude', 'ChatGPT & Sora (OpenAI)'):
+            rect = hosts.tiles.tile_rect(name)
+            center = hosts.tiles.mapTo(hosts.viewport(), rect.center())
+            assert hosts.viewport().rect().contains(center), (width, name, center, hosts.verticalScrollBar().value())
+        assert set(hosts.tiles._focus_values) == {'Gemini AI', 'Claude', 'ChatGPT & Sora (OpenAI)'}
+        assert hosts.tiles.tiles()[hosts.tiles._cursor].key == 'Gemini AI'
         assert hosts.search_edit.text() == ''
         assert not hosts._draft.has_user_changes()
 print('JUMP-OK', flush=True)
@@ -364,8 +572,9 @@ os._exit(0)
         self.assertEqual(get_page_spec(PageName.ANTIGRAVITY).sidebar_group, "system")
         self.assertIn(PageName.ANTIGRAVITY, get_sidebar_pages_for_method("zapret2", sidebar_group="system", advanced=True))
         validate_page_deps_builder_coverage(PageName)
-        catalog = json.loads((ROOT / "json/hosts_catalog/dns/114_google_antigravity.json").read_text(encoding="utf-8"))
-        self.assertIn("antigravity.google", catalog["main"])
+        catalog = json.loads((ROOT / "json/hosts_catalog/dns/019_gemini_ai.json").read_text(encoding="utf-8"))
+        self.assertEqual(catalog["name"], "Gemini AI")
+        self.assertIn("gemini.google.com", catalog["main"])
 
     def test_pinned_binaries_and_readonly_backend_startup(self):
         directory = ROOT / "bin/antigravity"
@@ -393,6 +602,17 @@ os._exit(0)
             self.assertFalse(snapshots[0]["caps"]["group_proxy"]["on"])
             self.assertEqual([event["request_id"] for event in events if event.get("event") == "completed"], [11])
             self.assertFalse((Path(temporary) / "AGUnlocker/settings.json").exists())
+            # Проверка показывает старые включённые настройки, но не меняет их.
+            settings_file = Path(temporary) / "AGUnlocker/settings.json"
+            settings_file.parent.mkdir(exist_ok=True)
+            settings_file.write_text(json.dumps({name: True for name in
+                                     ("client_patch", "auto_patch", "dns", "local_proxy", "builtin_exits", "group_proxy")}), encoding="utf-8")
+            before = settings_file.read_bytes()
+            result = subprocess.run([str(directory / "net67_antigravity.exe")],
+                                    input=b'{"command":"refresh","request_id":12}\n{"command":"stop"}\n', capture_output=True,
+                                    env=env, timeout=90, cwd=str(directory))
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(settings_file.read_bytes(), before)
 
     def test_hosts_marks_separate_antigravity_block(self):
         from hosts.hosts_blocks import BLOCK_ANTIGRAVITY, BLOCK_USER, parse_hosts_blocks

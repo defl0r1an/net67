@@ -32,7 +32,6 @@ def build_hosts_page_kwargs(*, page_name: PageName, hosts_feature, show_page) ->
         "deps": HostsPageDeps(
             hosts_feature=hosts_feature,
             open_file_page=lambda: show_page(PageName.HOSTS_FILE, allow_internal=True),
-            open_antigravity=lambda: show_page(PageName.ANTIGRAVITY),
         ),
     }
 
@@ -59,9 +58,11 @@ def build_vpn_page_kwargs(*, page_name: PageName) -> dict:
     return {}
 
 
-def build_antigravity_page_kwargs(*, page_name: PageName, open_hosts_service) -> dict:
+def build_antigravity_page_kwargs(*, page_name: PageName, open_hosts_service, hosts_feature) -> dict:
+    from antigravity.model_hosts import MODEL_HOSTS_SERVICES
+
     _ = page_name
-    return {"open_hosts": lambda: open_hosts_service("Antigravity")}
+    return {"open_model_hosts": lambda: open_hosts_service(MODEL_HOSTS_SERVICES), "hosts_feature": hosts_feature}
 
 
 def build_configs_page_kwargs(*, page_name: PageName) -> dict:

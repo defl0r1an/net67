@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from settings.mode import EXE_NAME_WINWS1
+from settings.mode import EXE_NAME_WINWS2
 from presets.ui.control import control_runtime
 from presets.ui.control.control_runtime import ControlStatusPlan, ControlStopButtonPlan
 from app.ui_texts import tr as tr_catalog
@@ -40,7 +38,7 @@ def build_stop_button_plan(*, language: str) -> ControlStopButtonPlan:
             text=tr_catalog(
                 "page.winws2_control.button.stop_only_winws",
                 language=language,
-                default=f"Остановить только {EXE_NAME_WINWS1}",
+                default=f"Остановить только {EXE_NAME_WINWS2}",
             )
         )
 

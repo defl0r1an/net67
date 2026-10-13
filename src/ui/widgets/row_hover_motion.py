@@ -227,6 +227,11 @@ class RowHoverMotion(HoverMotion):
         self._row_filter = row_filter
         self._model = None
 
+        self._wheel_timer = QTimer(self)
+        self._wheel_timer.setSingleShot(True)
+        self._wheel_timer.setInterval(50)
+        self._wheel_timer.timeout.connect(self._recheck_under_cursor)
+
         viewport = view.viewport()
         viewport.setMouseTracking(True)
         viewport.installEventFilter(self)
@@ -284,7 +289,9 @@ class RowHoverMotion(HoverMotion):
             self.set_hover_item(-1)
         elif kind == QEvent.Type.Wheel:
             # Под неподвижным курсором строки уезжают при прокрутке.
-            QTimer.singleShot(0, self._recheck_under_cursor)
+            # Не запускаем анимации на каждой пролетающей мимо строке —
+            # проверяем элемент только после короткой паузы прокрутки.
+            self._wheel_timer.start(50)
         return False
 
     def _repaint_items(self, items: set[int]) -> None:

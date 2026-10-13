@@ -121,9 +121,8 @@ class ServerCheckWorker(QThread):
                         "dev_version": dev_version,
                         "stable_notes": stable_notes,
                         "dev_notes": dev_notes,
-                        "is_current": True,
+                        "is_current": False,
                     }
-                    self._first_online_server_id = "telegram"
 
                     from updater.update_cache import get_cached_all_versions, set_cached_all_versions
 
@@ -287,11 +286,13 @@ class ServerCheckWorker(QThread):
                 "response_time": 0.5,
                 "rate_limit": rate_info["remaining"],
                 "rate_limit_max": rate_info["limit"],
+                "is_current": (self._first_online_server_id is None),
             }
         except Exception as e:
             github_status = {
                 "status": "error",
                 "error": str(e)[:50],
+                "is_current": (self._first_online_server_id is None),
             }
 
         self.server_checked.emit("GitHub API", github_status)

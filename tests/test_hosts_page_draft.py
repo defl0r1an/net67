@@ -194,6 +194,17 @@ class HostsLineClassifierTests(unittest.TestCase):
 
 
 class HostsPageSnapshotTests(unittest.TestCase):
+    def test_shared_domain_override_keeps_only_profiles_with_real_own_rows(self):
+        from hosts.page_snapshot import _written_shared_selections
+
+        rows = {("Gemini AI", "astracat"): (("gemini.google.com", "192.0.2.1"), ("daily-cloudcode-pa.googleapis.com", "192.0.2.2")),
+                ("Прежняя отдельная плитка", "geohide"): (("daily-cloudcode-pa.googleapis.com", "192.0.2.3"),)}
+        composed = [("gemini.google.com", "192.0.2.1"), ("daily-cloudcode-pa.googleapis.com", "192.0.2.3")]
+        selection = {"Gemini AI": "astracat", "Прежняя отдельная плитка": "geohide"}
+        with patch("hosts.hosts._build_service_selection_rows", return_value=(composed, True)):
+            self.assertEqual(_written_shared_selections(rows, selection, set(composed), ipv6_available=True), {"Gemini AI"})
+            self.assertEqual(_written_shared_selections(rows, selection, {composed[1]}, ipv6_available=True), set())
+
     def test_every_written_selection_is_read_back_the_same(self) -> None:
         for selection in (
             {"Alpha": "p1"},
@@ -519,10 +530,10 @@ class HostsPageTests(unittest.TestCase):
         self.assertTrue(tiles["Direct"].has_switch)
         self.assertFalse(tiles["Direct"].has_choices)
         self.assertFalse(tiles["Alpha"].has_switch)
-        # После профилей — отдельное выключение; недоступный профиль пустой.
-        self.assertEqual([c.profile_id for c in tiles["Alpha"].choices], ["p1", "p2", ""])
-        self.assertEqual([c.available for c in tiles["Beta"].choices], [True, False, True])
-        self.assertEqual([c.label for c in tiles["Alpha"].choices], ["Профиль 1", "Профиль 2", "Выключить сервис"])
+        # Иконки всех профилей по порядку; недоступный профиль пустой.
+        self.assertEqual([c.profile_id for c in tiles["Alpha"].choices], ["p1", "p2"])
+        self.assertEqual([c.available for c in tiles["Beta"].choices], [True, False])
+        self.assertEqual([c.label for c in tiles["Alpha"].choices], ["Профиль 1", "Профиль 2"])
         self.assertIsNone(tiles["Alpha"].selected)
         self.assertEqual(tiles["Alpha"].state_text, "Выкл.")
         self.assertEqual(tiles["Beta"].selected, "p1")
@@ -539,7 +550,7 @@ class HostsPageTests(unittest.TestCase):
         _QTest.mouseClick(page.tiles, _Qt.MouseButton.LeftButton, _Qt.KeyboardModifier.NoModifier, point)
         QApplication.processEvents()
 
-    def test_click_on_profile_icon_writes_and_repeated_click_keeps_it_on(self) -> None:
+    def test_click_on_profile_icon_writes_and_repeated_click_turns_it_off(self) -> None:
         page = self._page(_manual_snapshot())
         icon = page.tiles.choice_rect("Alpha", "p2")
         self.assertFalse(icon.isNull())
@@ -549,12 +560,9 @@ class HostsPageTests(unittest.TestCase):
 
         self._finish_write(page, snapshot=_manual_snapshot(block_lines=("1.1.1.1 alpha.example", "2.2.2.2 alpha.example"), alpha="p2"))
         self._click(page, page.tiles.choice_rect("Alpha", "p2").center())
-        self.assertEqual(len(self.writes), 1)
-        self.assertEqual(next(tile for tile in page.tiles.tiles() if tile.key == "Alpha").selected, "p2")
-        self._click(page, page.tiles.choice_rect("Alpha", "").center())
         self.assertEqual(self.writes[-1]["selection"], {})
 
-    def test_gemini_astracat_is_written_read_back_and_not_cleared_by_repeated_click(self) -> None:
+    def test_gemini_astracat_stays_on_after_write_and_preserves_claude_geohide(self) -> None:
         from hosts import hosts as hosts_module
 
         def snapshot(text, selection=None):
@@ -588,8 +596,9 @@ class HostsPageTests(unittest.TestCase):
         self.assertIsNone(snapshot(original, selection).service("Gemini AI").current)
         self._finish_write(page, snapshot=saved)
         self._click(page, page.tiles.choice_rect("Gemini AI", "astracat").center())
-        self.assertEqual(len(self.writes), 1)
-        self.assertEqual(next(tile for tile in page.tiles.tiles() if tile.key == "Gemini AI").selected, "astracat")
+        self.assertEqual(len(self.writes), 2)
+        self.assertNotIn("Gemini AI", self.writes[-1]["selection"])
+        self.assertEqual(self.writes[-1]["selection"]["Claude"], "geohide")
 
     def test_probe_recommendation_does_not_replace_the_selected_profile_or_off_state(self) -> None:
         page = self._page(_manual_snapshot())

@@ -36,7 +36,6 @@ from PyQt6.QtWidgets import (
 )
 
 from qframelesswindow import TitleBar as FramelessTitleBar
-
 from shell.theme import (
     RAIL_ITEM_GAP,
     RAIL_PADDING_BOTTOM,
@@ -46,6 +45,7 @@ from shell.theme import (
     shell_qss,
 )
 from ui.accessibility import enable_keyboard_click, set_control_accessibility
+
 
 
 #: Высота своей полосы заголовка.
@@ -177,6 +177,7 @@ class TitleBar(FramelessTitleBar):
             (WINDOW_BUTTON_SIZE + 12) * len(self.window_buttons), TITLE_BAR_HEIGHT
         )
         layout.addWidget(self.buttons_host)
+
 
 
 class NavigationRail(QWidget):

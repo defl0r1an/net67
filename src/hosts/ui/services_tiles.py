@@ -122,6 +122,8 @@ class HostsTilesGrid(QWidget):
     # Место справа под полосу прокрутки, чтобы она не лежала на плитках.
     SCROLLBAR_GUTTER = 14
     FLASH_MS = 520
+    FOCUS_MS = 1200
+    FOCUS_LIFT_PX = 6.0
     # Смена выбора: оборот иконки и расходящееся свечение.
     CHANGE_SECONDS = 0.65
     FRAME_MS = 16
@@ -179,6 +181,17 @@ class HostsTilesGrid(QWidget):
         self._flash_anim.setDuration(self.FLASH_MS)
         self._flash_anim.valueChanged.connect(self._on_flash_value)
         self._flash_anim.finished.connect(self._on_flash_finished)
+        self._focus_values: dict[str, tuple[float, float]] = {}
+        self._focus_origins: dict[str, tuple[float, float]] = {}
+        self._focus_static_timer = QTimer(self)
+        self._focus_static_timer.setSingleShot(True)
+        self._focus_static_timer.timeout.connect(self._clear_focus)
+        self._focus_anim = QVariantAnimation(self)
+        self._focus_anim.setStartValue(0.0)
+        self._focus_anim.setEndValue(1.0)
+        self._focus_anim.setDuration(self.FOCUS_MS)
+        self._focus_anim.valueChanged.connect(self._on_focus_value)
+        self._focus_anim.finished.connect(self._clear_focus)
         # Готовые картинки плиток: ключ — всё, от чего зависит вид плитки.
         self._pixmaps: dict[tuple, QPixmap] = {}
         # Сколько плиток нарисовано заново (а не взято готовыми) — для тестов.
@@ -362,14 +375,72 @@ class HostsTilesGrid(QWidget):
 
     def focus_tile(self, key: str) -> bool:
         """Показать найденную плитку, не меняя её переключатель или профиль."""
-        index = self._index_of(key)
-        if index < 0:
+        return self.focus_tiles((key,))
+
+    def focus_tiles(self, keys: tuple[str, ...]) -> bool:
+        keys = tuple(dict.fromkeys(key for key in keys if self._index_of(key) >= 0))
+        if not keys:
             return False
         self.finish_float_in()
         self.setFocus(Qt.FocusReason.OtherFocusReason)
-        self._set_cursor(index, ensure_visible=False)
-        self.flash(key)
+        self._set_cursor(self._index_of(keys[0]), ensure_visible=False)
+        self._focus_anim.stop()
+        self._focus_static_timer.stop()
+        # Повторный переход продолжает с текущей высоты, без скачка к нулю.
+        self._focus_origins = {key: self._focus_values.get(key, (0.0, 0.0))
+                               for key in sorted(keys, key=self._index_of)}
+        previous = tuple(self._focus_values)
+        self._focus_values = dict(self._focus_origins)
+        for key in previous:
+            self._update_focus_tile(key)
+        if are_live_animations_enabled():
+            self._focus_anim.start()
+        else:
+            # Подсветка подтверждает переход и при отключённом движении.
+            self._focus_values = {key: (1.0, 0.0) for key in keys}
+            for key in keys:
+                self._update_focus_tile(key)
+            self._focus_static_timer.start(self.FOCUS_MS)
         return True
+
+    def _update_focus_tile(self, key: str) -> None:
+        index = self._index_of(key)
+        if index >= 0:
+            # Прежняя и новая позиции входят в область перерисовки: иначе
+            # поднятая плитка оставляет полосу пикселей после возвращения.
+            self.update(self._rects[index].adjusted(0, -8, 0, 1))
+
+    def _on_focus_value(self, value) -> None:
+        ease = lambda p: 1.0 - (1.0 - max(0.0, min(1.0, p))) ** 3
+        moving = are_live_animations_enabled()
+        for rank, (key, (initial_light, initial_lift)) in enumerate(self._focus_origins.items()):
+            p = max(0.0, min(1.0, (float(value) * self.FOCUS_MS - min(rank, 2) * 45) / 1100.0))
+            light = initial_light + (1.0 - initial_light) * ease(p / 0.12) if p < 0.12 else (
+                1.0 if p < 0.55 else 1.0 - ease((p - 0.55) / 0.45))
+            if p < 0.16:
+                lift = initial_lift + (self.FOCUS_LIFT_PX - initial_lift) * ease(p / 0.16)
+            elif p < 0.37:
+                lift = self.FOCUS_LIFT_PX * (1.0 - ease((p - 0.16) / 0.21))
+            elif p < 0.50:
+                lift = 2.0 * ease((p - 0.37) / 0.13)
+            else:
+                lift = 2.0 * (1.0 - ease((p - 0.50) / 0.16))
+            self._focus_values[key] = (light, lift if moving else 0.0)
+            self._update_focus_tile(key)
+
+    def _clear_focus(self) -> None:
+        self._focus_static_timer.stop()
+        keys = tuple(self._focus_values)
+        self._focus_values.clear()
+        self._focus_origins.clear()
+        for key in keys:
+            self._update_focus_tile(key)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        if hasattr(self, "_focus_anim"):
+            self._focus_anim.stop()
+            self._clear_focus()
+        super().hideEvent(event)
 
     def choice_rect(self, key: str, profile_id: str) -> QRect:
         """Где на сетке иконка профиля (для тестов и подсказок)."""
@@ -509,7 +580,12 @@ class HostsTilesGrid(QWidget):
 
     @staticmethod
     def _shows_best(tile: HostsTile) -> bool:
-        """Молния у текущего профиля только когда он лучший по проверке."""
+        """Молния у текущего профиля только когда он лучший по проверке.
+
+        Подпись справа — текущий профиль или «Выкл.». Молния у неё при любом
+        найденном лучшем читалась как «выбранный и есть лучший», хотя лучший
+        мог быть соседним значком; его и так отмечает молния на значке.
+        """
         return bool(tile.best) and tile.best == tile.selected and not tile.pending and not tile.probing
 
     def _state_width(self, tile: HostsTile, rect: QRect) -> int:
@@ -587,34 +663,66 @@ class HostsTilesGrid(QWidget):
             placed.append((slot, len(placed)))
         return placed
 
+    def _visible_rect_in_viewport(self) -> QRect:
+        """Определяет видимую область сетки внутри родительского скролла (Lazy Rendering).
+
+        Не тратит время и память на отрисовку сотен плиток, находящихся за
+        пределами экрана. Буфер в 120 px сверху и снизу страхует от мигания при
+        быстром скролле колесом мыши.
+        """
+        parent = self.parent()
+        viewport = None
+        while parent is not None:
+            if hasattr(parent, "viewport") and callable(parent.viewport):
+                viewport = parent.viewport()
+                break
+            parent = parent.parent()
+
+        if viewport is not None:
+            try:
+                vp_rect = viewport.rect()
+                top_left = self.mapFromGlobal(viewport.mapToGlobal(vp_rect.topLeft()))
+                bottom_right = self.mapFromGlobal(viewport.mapToGlobal(vp_rect.bottomRight()))
+                visible = QRect(top_left, bottom_right)
+                return visible.adjusted(-40, -120, 40, 120)
+            except Exception:
+                pass
+        return self.rect()
+
     # ── отрисовка ────────────────────────────────────────────
 
     def paintEvent(self, event) -> None:  # noqa: N802
+        visible_clip = self._visible_rect_in_viewport()
+        dirty = event.rect().intersected(visible_clip)
+        if dirty.isEmpty():
+            return
+
         tokens = get_theme_tokens()
         dark = isDarkTheme()
         accent = QColor(themeColor()).name()
         dpr = self.devicePixelRatioF()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        dirty = event.rect()
         self._live_keys = self._spinning_keys()
         now = self._now()
         for index, rect in enumerate(self._rects):
-            if not rect.adjusted(0, 0, 0, int(FLOAT_IN_RISE_PX)).intersects(dirty):
+            if not rect.adjusted(0, -8, 0, int(FLOAT_IN_RISE_PX)).intersects(dirty):
                 continue
             entrance = self._entrance_progress(index, now)
             if entrance <= 0.0:
                 continue
-            if entrance < 1.0:
+            lift = self._focus_values.get(self._tiles[index].key, (0.0, 0.0))[1]
+            transformed = entrance < 1.0 or lift > 0.0
+            if transformed:
                 painter.save()
                 painter.setOpacity(entrance)
-                painter.translate(0.0, FLOAT_IN_RISE_PX * (1.0 - entrance))
+                painter.translate(0.0, FLOAT_IN_RISE_PX * (1.0 - entrance) - lift)
             tile = self._tiles[index]
             if tile.kind == "tile":
                 painter.drawPixmap(rect.topLeft(), self._tile_pixmap(index, rect, tile, tokens, dark, accent, dpr))
             else:
                 self._paint_header(painter, rect, tile, tokens)
-            if entrance < 1.0:
+            if transformed:
                 painter.restore()
         painter.end()
 
@@ -622,7 +730,6 @@ class HostsTilesGrid(QWidget):
         hovered = index == self._hover or (index == self._cursor and self.hasFocus())
         return (
             hovered,
-            index == self._cursor and self.hasFocus(),
             index == self._pressed,
             self._hover_choice if index == self._hover else -1,
             self._pressed_choice if index == self._pressed else -1,
@@ -633,7 +740,7 @@ class HostsTilesGrid(QWidget):
     def _tile_pixmap(self, index: int, rect: QRect, tile: HostsTile, tokens, dark: bool, accent: str, dpr: float) -> QPixmap:
         flash = self._flash.get(tile.key, 0.0)
         # Во время вспышки и кручения плитка рисуется по кадрам, без кэша.
-        live = flash > 0 or tile.key in self._live_keys
+        live = flash > 0 or tile.key in self._live_keys or tile.key in self._focus_values
         key = (tile, rect.width(), rect.height(), self._tile_state(index), dark, accent, dpr)
         cached = None if live else self._pixmaps.get(key)
         if cached is not None:
@@ -706,6 +813,7 @@ class HostsTilesGrid(QWidget):
         flash = self._flash.get(tile.key, 0.0)
         if flash > 0:
             tint_alpha += int(60 * flash)
+        tint_alpha += int(72 * self._focus_values.get(tile.key, (0.0, 0.0))[0])
         tint = None
         if tint_alpha:
             tint = QColor(themeColor())
@@ -727,13 +835,12 @@ class HostsTilesGrid(QWidget):
         painter.setPen(border)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
-        if index == self._cursor and self.hasFocus():
-            # Найденная плитка остаётся различимой после короткой вспышки;
-            # та же рамка показывает положение клавиатурного курсора.
-            focus_color = QColor(themeColor())
-            focus_color.setAlpha(190)
-            painter.setPen(QPen(focus_color, 1.5))
-            painter.drawRoundedRect(box.adjusted(1, 1, -1, -1), self._RADIUS, self._RADIUS)
+        focus = self._focus_values.get(tile.key, (0.0, 0.0))[0]
+        if focus > 0.0:
+            outline = to_qcolor(tokens.fg)
+            outline.setAlpha(round(190 * focus))
+            painter.setPen(QPen(outline, 1.6))
+            painter.drawPath(path)
 
         pad = self._PAD
         icon_color = (tile.icon_color or tokens.icon_fg) if tile.is_on else tokens.icon_fg_muted
@@ -1151,12 +1258,12 @@ class HostsTilesGrid(QWidget):
     # ── действия ─────────────────────────────────────────────
 
     def _choose(self, index: int, slot: int) -> None:
-        """Повторное нажатие подтверждает выбор; выключение — отдельный значок."""
+        """Иконка профиля: выбрать; уже выбранная — выключить."""
         tile = self._tiles[index]
         choice = tile.choices[slot]
         if not choice.available:
             return
-        value = choice.profile_id or None
+        value = None if choice.profile_id == tile.selected else choice.profile_id
         self.profile_chosen.emit(tile.key, value)
 
     def _cycle(self, index: int) -> None:
@@ -1264,7 +1371,7 @@ class HostsTilesGrid(QWidget):
             choice = tile.choices[slot]
             label = f"{choice.label} — {choice.mark_note}" if choice.mark_note else choice.label
             if (choice.profile_id or None) == tile.selected:
-                return f"{label}\nВыбран" if choice.mark_note else f"{label} — выбран"
+                return f"{label}\nВыбран; щёлкните, чтобы выключить" if choice.mark_note else f"{label} — выбран, щёлкните, чтобы выключить"
             return label
         return f"{tile.title}\n{tile.note}" if tile.note else tile.title
 

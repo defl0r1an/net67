@@ -89,6 +89,14 @@ def apply_domain_ip_entries(hosts_manager, domain_ip: dict[str, str]) -> HostsCo
     return HostsCommandResult(success=success, message=message)
 
 
+def add_domain_ip_entry(hosts_manager, domain: str, ip: str) -> HostsCommandResult:
+    manager = hosts_manager or create_hosts_manager()
+    success = bool(manager.add_domain_ip_entry(domain, ip))
+    message = f"Запись {domain} -> {ip} добавлена" if success else getattr(manager, "last_status", None) or "Ошибка"
+    return HostsCommandResult(success=success, message=message)
+
+
+
 def clear_hosts(hosts_manager) -> HostsCommandResult:
     success = bool(hosts_manager.clear_hosts_file())
     message = "Записи net67 очищены" if success else getattr(hosts_manager, "last_status", None) or "Ошибка"
@@ -343,6 +351,44 @@ def apply_hosts_draft(selection: dict[str, str], adobe: bool | None = None) -> H
     except Exception as exc:
         log(f"Hosts: не удалось перечитать состояние после записи: {exc}", "WARNING")
     return HostsApplyResult(success=success, message=message, snapshot=snapshot, access_denied=access_denied)
+
+
+def enable_hosts_services(service_names: tuple[str, ...]) -> HostsApplyResult:
+    """Добавляет явно запрошенные сервисы, сохраняя весь текущий выбор."""
+    from hosts.defaults import choose_profile
+    from hosts.hosts import HOSTS_EDIT_LOCK
+
+    # Снимок и запись под одним замком: другая страница не должна потерять
+    # своё переключение между чтением и добавлением трёх сервисов.
+    with HOSTS_EDIT_LOCK:
+        snapshot = load_page_snapshot()
+        if not snapshot.readable:
+            return HostsApplyResult(False, "Не удалось прочитать текущий hosts. Включение отменено", snapshot)
+        selection = {entry.name: entry.current for entry in snapshot.services if entry.current}
+        for name in service_names:
+            entry = snapshot.service(name)
+            if entry is None or entry.unavailable_reason or not entry.profiles:
+                return HostsApplyResult(False, f"Для {name} нет доступного профиля hosts", snapshot)
+            if not entry.current:
+                selection[name] = choose_profile(entry.profiles)
+        if all(snapshot.service(name).current for name in service_names):
+            return HostsApplyResult(True, "Профили ИИ уже включены", snapshot)
+        return apply_hosts_draft(selection, None)
+
+
+def disable_hosts_services(service_names: tuple[str, ...]) -> HostsApplyResult:
+    """Выключает запрошенные сервисы, сохраняя остальные записи и профили."""
+    from hosts.hosts import HOSTS_EDIT_LOCK
+
+    with HOSTS_EDIT_LOCK:
+        snapshot = load_page_snapshot()
+        if not snapshot.readable:
+            return HostsApplyResult(False, "Не удалось прочитать текущий hosts. Выключение профилей отменено", snapshot)
+        selection = {entry.name: entry.current for entry in snapshot.services
+                     if entry.current and entry.name not in service_names}
+        if not any(entry.current for entry in snapshot.services if entry.name in service_names):
+            return HostsApplyResult(True, "Профили ИИ уже выключены", snapshot)
+        return apply_hosts_draft(selection, None)
 
 
 def load_hosts_text() -> HostsFileText:

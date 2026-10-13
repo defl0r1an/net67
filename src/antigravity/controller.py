@@ -58,9 +58,16 @@ class AntigravityController(QObject):
         self._active_request = None
         self._generation += 1
         generation = self._generation
+        from log.log import log
+
+        log("Antigravity: запуск контроллера для чтения состояния", "INFO")
         self._set_busy(True, "Проверяю установки и настройки…")
         threading.Thread(target=self._run, args=(generation, executable), name="antigravity-pipe", daemon=True).start()
         return True
+
+    @property
+    def active_request_id(self):
+        return self._active_request
 
     def _run(self, generation: int, executable: Path) -> None:
         try:
@@ -117,6 +124,10 @@ class AntigravityController(QObject):
             self._process_error(self._generation, "Управление Antigravity остановилось. Нажмите «Проверить».")
             return False
         if command not in {"report"}:
+            from log.log import log
+
+            # Только имя действия: адреса прокси и коды доступа в журнал не попадают.
+            log(f"Antigravity: отправлена команда {command}", "INFO")
             self._active_request = request_id
             self._set_busy(True, "Выполняю…")
         return True

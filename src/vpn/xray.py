@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import socket
+from contextlib import ExitStack
 import subprocess
 import time
 from pathlib import Path
@@ -262,11 +263,34 @@ def is_port_open(port: int = LOCAL_PORT, *, host: str = "127.0.0.1") -> bool:
             pass
 
 
+def can_bind_proxy_port(port: int) -> bool:
+    """Hyper-V может запретить UDP-порт даже при свободном TCP-порту."""
+    try:
+        with ExitStack() as stack:
+            for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+                sock = stack.enter_context(socket.socket(socket.AF_INET, kind))
+                if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                sock.bind(("127.0.0.1", int(port)))
+        return True
+    except OSError:
+        return False
+
+
+def choose_proxy_port(preferred: int = LOCAL_PORT) -> int:
+    candidates = dict.fromkeys((preferred, *range(18080, 18100)))
+    for port in candidates:
+        if can_bind_proxy_port(port):
+            return port
+    raise XrayError("Нет свободного локального порта для Xray (TCP и UDP)")
+
+
 def wait_until_listening(
     port: int = LOCAL_PORT,
     *,
     timeout_s: float = STARTUP_TIMEOUT_S,
     probe=None,
+    alive=None,
 ) -> bool:
     """Ждёт, пока ядро поднимет слушателя.
 
@@ -276,10 +300,12 @@ def wait_until_listening(
     check = probe or (lambda: is_port_open(port))
     deadline = time.monotonic() + float(timeout_s)
     while time.monotonic() < deadline:
+        if alive is not None and not alive():
+            return False
         if check():
             return True
         time.sleep(POLL_INTERVAL_S)
-    return bool(check())
+    return bool((alive is None or alive()) and check())
 
 
 def write_config(profile, directory: Path, *, port: int = LOCAL_PORT) -> Path:
@@ -326,12 +352,21 @@ class XrayRuntime:
                 "рядом с программой."
             )
 
+        if spawn is None:
+            self._port = choose_proxy_port(self._port)
         config = write_config(profile, Path(settings_dir), port=self._port)
         launcher = spawn or self._spawn
         self._process = launcher(core, config)
 
-        if not wait_until_listening(self._port, probe=None if spawn is None else (lambda: True)):
+        if not wait_until_listening(
+            self._port,
+            probe=None if spawn is None else (lambda: True),
+            alive=lambda: self.is_running,
+        ):
+            exit_code = self._process.poll() if self._process is not None else None
             self.stop()
+            if exit_code is not None:
+                raise XrayError(f"Ядро Xray завершилось при запуске (код {exit_code})")
             raise XrayError("Ядро Xray не начало слушать порт за полторы секунды")
 
     def stop(self) -> None:

@@ -704,12 +704,45 @@ pub fn remove_proxy_if_ours(url: &str, ca_path: &str) -> Result<bool, String> {
 
 #[cfg(target_os = "windows")]
 fn current_env_in(name: &str, scope: &str) -> Option<String> {
-    let out = powershell(&format!(
-        "[Environment]::GetEnvironmentVariable('{}','{}')",
-        name, scope
-    ))?;
-    let value = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!value.is_empty()).then_some(value)
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn RegGetValueW(key: usize, subkey: *const u16, value: *const u16, flags: u32,
+                        kind: *mut u32, data: *mut u8, size: *mut u32) -> i32;
+    }
+    let (root, subkey) = match scope {
+        "User" => (-2147483647isize as usize, "Environment"),
+        "Machine" => (-2147483646isize as usize, "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"),
+        _ => return None,
+    };
+    let wide = |text: &str| text.encode_utf16().chain(std::iter::once(0)).collect::<Vec<_>>();
+    let subkey = wide(subkey);
+    let name = wide(name);
+    // Чтение того же постоянного значения напрямую: три запуска PowerShell
+    // на один снимок занимали секунды. Кэша нет, чужие изменения видны сразу.
+    let flags = 0x00000002 | 0x00000004; // REG_SZ и REG_EXPAND_SZ, как в прежнем чтении .NET.
+    for _ in 0..3 {
+        let mut size = 0u32;
+        if unsafe { RegGetValueW(root, subkey.as_ptr(), name.as_ptr(), flags,
+                                std::ptr::null_mut(), std::ptr::null_mut(), &mut size) } != 0 {
+            return None;
+        }
+        if size == 0 || size > 1024 * 1024 {
+            return None;
+        }
+        let mut data = vec![0u16; (size as usize + 1) / 2];
+        let result = unsafe { RegGetValueW(root, subkey.as_ptr(), name.as_ptr(), flags,
+                                          std::ptr::null_mut(), data.as_mut_ptr().cast(), &mut size) };
+        if result == 234 { // Значение успело вырасти между двумя чтениями.
+            continue;
+        }
+        if result != 0 {
+            return None;
+        }
+        let end = data.iter().position(|c| *c == 0).unwrap_or(data.len());
+        let value = String::from_utf16_lossy(&data[..end]).trim().to_string();
+        return (!value.is_empty()).then_some(value);
+    }
+    None
 }
 
 /// Whether an `HTTPS_PROXY` value is one this tool wrote.
@@ -798,12 +831,7 @@ fn set_env(name: &str, value: Option<&str>) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn current_env(name: &str) -> Option<String> {
-    let out = powershell(&format!(
-        "[Environment]::GetEnvironmentVariable('{}','User')",
-        name
-    ))?;
-    let value = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!value.is_empty()).then_some(value)
+    current_env_in(name, "User")
 }
 
 /// On Linux reads the process environment, the systemd user manager session,
@@ -882,6 +910,18 @@ pub fn proxy_env_is_ours() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn native_registry_environment_matches_windows_user_environment() {
+        let output = powershell("[Environment]::GetEnvironmentVariable('TEMP','User')").unwrap();
+        let expected = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert_eq!(current_env_in("TEMP", "User"), (!expected.is_empty()).then_some(expected));
+        let output = powershell("[Environment]::GetEnvironmentVariable('Path','Machine')").unwrap();
+        let expected = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert_eq!(current_env_in("Path", "Machine"), (!expected.is_empty()).then_some(expected));
+        assert_eq!(current_env_in("net67_missing_env_test_73", "User"), None);
+        assert_eq!(current_env_in("TEMP", "Unknown"), None);
+    }
 
     /// The user's own `http.proxy` is read as intent: set means set, empty or
     /// commented out means nothing, and a URL's own `//` is not a comment.

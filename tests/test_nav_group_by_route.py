@@ -46,7 +46,7 @@ class NavGroupByRouteTests(unittest.TestCase):
 
         self.assertEqual(
             tools,
-            {"NetworkPage", "HostsPage", "TelegramProxyPage", "VpnPage"},
+            {"NetworkPage", "HostsPage", "TelegramProxyPage", "VpnPage", "AntigravityPage"},
         )
 
     def test_appearance_pages_are_shown_inside_diagnostics(self) -> None:

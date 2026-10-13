@@ -168,11 +168,11 @@ class HostsPage(BasePage):
         )
         self._hosts = deps.hosts_feature
         self._open_file_page = deps.open_file_page
-        self._open_antigravity = getattr(deps, "open_antigravity", None)
         self._snapshot: HostsPageSnapshot | None = None
         self._draft: HostsDraft | None = None
         self._search = ""
         self._focus_service_pending = ""
+        self._focus_services_pending = ()
         self._focus_service_geometry = None
         self._cleanup_in_progress = False
         self._snapshot_runtime = OneShotWorkerRuntime()
@@ -278,23 +278,6 @@ class HostsPage(BasePage):
         self._find_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._find_shortcut.activated.connect(self.open_search)
 
-        if callable(self._open_antigravity):
-            antigravity_row = QHBoxLayout()
-            self.antigravity_button = PushButton(FluentIcon.SEARCH, "Найти Antigravity", self.content)
-            self.antigravity_button.clicked.connect(lambda: self.focus_service("Antigravity"))
-            set_control_accessibility(
-                self.antigravity_button,
-                name="Найти Antigravity в hosts",
-                description="Показать плитку «Gemini AI и Antigravity» и её DNS-профили на этой странице.",
-            )
-            antigravity_row.addWidget(self.antigravity_button)
-            self.antigravity_manage_button = PushButton(FluentIcon.APPLICATION, "Вход и модели Antigravity", self.content)
-            self.antigravity_manage_button.clicked.connect(self._open_antigravity)
-            set_control_accessibility(self.antigravity_manage_button, name="Настройка входа и моделей Antigravity")
-            antigravity_row.addWidget(self.antigravity_manage_button)
-            antigravity_row.addStretch()
-            self.layout.addLayout(antigravity_row)
-
         self.tiles = HostsTilesGrid(self.content)
         self.tiles.activated.connect(self._on_tile_activated)
         self.tiles.profile_chosen.connect(self._set_service_profile)
@@ -370,7 +353,11 @@ class HostsPage(BasePage):
         self.tiles.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def focus_service(self, service: str) -> None:
-        self._focus_service_pending = str(service).strip().casefold()
+        self.focus_services((service,))
+
+    def focus_services(self, services: tuple[str, ...]) -> None:
+        self._focus_services_pending = tuple(dict.fromkeys(str(name).strip().casefold() for name in services if str(name).strip()))
+        self._focus_service_pending = next(iter(self._focus_services_pending), "")
         self._focus_service_geometry = None
         self.close_search()
         QTimer.singleShot(0, self._show_focused_service)
@@ -380,14 +367,23 @@ class HostsPage(BasePage):
         # настоящую геометрию, иначе прокрутка упирается в старую высоту.
         if not self._focus_service_pending or not self.isVisible() or self._draft is None:
             return
-        target = next((tile.key for tile in self.tiles.tiles()
-                       if tile.kind == "tile" and self._focus_service_pending in tile.key.casefold()), "")
-        if not target:
+        tiles = [tile for tile in self.tiles.tiles() if tile.kind == "tile"]
+        targets = []
+        for name in self._focus_services_pending:
+            target = next((tile.key for tile in tiles if name == tile.key.casefold()), "")
+            if not target:
+                target = next((tile.key for tile in tiles if name in tile.key.casefold() or name in tile.title.casefold()), "")
+            if target and target not in targets:
+                targets.append(target)
+        if not targets:
             self._focus_service_pending = ""
+            self._focus_services_pending = ()
             return
         self._sync_content_width_to_viewport()
         self.content.layout().activate()
-        rect = self.tiles.tile_rect(target)
+        rect = self.tiles.tile_rect(targets[0])
+        for target in targets[1:]:
+            rect = rect.united(self.tiles.tile_rect(target))
         geometry = (self.viewport().size(), self.content.size(), self.tiles.geometry(), rect)
         if geometry != self._focus_service_geometry:
             self._focus_service_geometry = geometry
@@ -395,14 +391,21 @@ class HostsPage(BasePage):
             return
         center = self.tiles.mapTo(self.content, rect.center())
         self.verticalScrollBar().setValue(center.y() - self.viewport().height() // 2)
-        self.tiles.focus_tile(target)
+        self.tiles.focus_tiles(tuple(targets))
         self._focus_service_pending = ""
+        self._focus_services_pending = ()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         QTimer.singleShot(0, self._show_focused_service)
 
     def handle_page_command(self, command: str, payload: dict) -> bool:
+        if command == "focus_services":
+            services = payload.get("services")
+            if not isinstance(services, (list, tuple)) or not services or not all(isinstance(name, str) and name.strip() for name in services):
+                return False
+            self.focus_services(tuple(services))
+            return True
         if command != "focus_service":
             return False
         service = str(payload.get("service") or "").strip()
@@ -960,7 +963,7 @@ class HostsPage(BasePage):
                     icon_color=entry.icon_color,
                     is_on=bool(value),
                     has_switch=entry.is_direct and not entry.unavailable_reason,
-                    choices=() if entry.is_direct or entry.unavailable_reason else (*tuple(
+                    choices=() if entry.is_direct or entry.unavailable_reason else tuple(
                         replace(
                             choice,
                             available=choice.profile_id in entry.profiles,
@@ -968,7 +971,7 @@ class HostsPage(BasePage):
                             mark_note=marks.get(choice.profile_id, ("", ""))[1],
                         )
                         for choice in all_choices
-                    ), HostsChoice("", self._tr("page.hosts.profile.turn_off", "Выключить сервис"), "fa5s.power-off", get_theme_tokens().icon_fg)),
+                    ),
                     selected=None if entry.is_direct else value,
                     state_text="" if entry.is_direct else caption,
                     pending=pending,

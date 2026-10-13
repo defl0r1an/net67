@@ -214,3 +214,57 @@ def duplicate_custom_server(server_id: str) -> CustomServerResult:
     return _change_custom_servers(
         lambda current: (custom.duplicate_server(current, server_id, reserved_names=_reserved_names()), "")
     )
+
+
+def build_domain_lookup_servers():
+    """Серверы для вкладки «Проверка домена»: системные, шифрованные, из списка программы и свои."""
+    from dns.custom_servers import build_dns_providers_with_custom, CUSTOM_DNS_CATEGORY
+    from dns.dns_providers import DNS_PROVIDERS
+    from dns.domain_lookup import (
+        DOH_SERVERS,
+        EXTRA_SERVERS,
+        SERVER_CUSTOM,
+        SERVER_DOH,
+        SERVER_PROVIDER,
+        SERVER_SYSTEM,
+        DnsServer,
+    )
+
+
+    servers: list = []
+    try:
+        from utils.windows_dns_query import system_dns_servers
+
+        servers.extend(DnsServer(label=address, address=address, kind=SERVER_SYSTEM) for address in system_dns_servers())
+    except Exception:
+        pass
+    servers.extend(DnsServer(label=label, address=address, kind=SERVER_DOH) for label, address in DOH_SERVERS)
+
+    try:
+        from settings.store import get_custom_dns_servers
+
+        custom_servers = get_custom_dns_servers()
+    except Exception:
+        custom_servers = []
+    providers = build_dns_providers_with_custom(DNS_PROVIDERS, custom_servers)
+    for category, group in providers.items():
+        kind = SERVER_CUSTOM if category == CUSTOM_DNS_CATEGORY else SERVER_PROVIDER
+        for name, data in group.items():
+            addresses = list(data.get("ipv4") or ()) or list(data.get("ipv6") or ())
+            if addresses:
+                servers.append(DnsServer(label=str(name), address=str(addresses[0]), kind=kind))
+    servers.extend(DnsServer(label=label, address=address, kind=SERVER_PROVIDER) for label, address in EXTRA_SERVERS)
+    return tuple(servers)
+
+
+def run_domain_lookup(target: str, *, use_external: bool = True, on_stage=None, should_stop=None):
+    from dns.domain_lookup import run_domain_lookup as _run_domain_lookup
+
+    return _run_domain_lookup(
+        target,
+        servers=build_domain_lookup_servers(),
+        use_external=use_external,
+        on_stage=on_stage,
+        should_stop=should_stop,
+    )
+

@@ -23,7 +23,7 @@ PASS_FUNCTION = "pass"
 # Сколько помнить «не сработала»: сеть и DPI провайдера со временем меняются.
 FAILED_MEMORY_SECONDS = 14 * 24 * 3600
 
-MODE_BATCH_SIZES = {"quick": 30, "standard": 80}
+MODE_BATCH_SIZES = {"smart": 5, "quick": 30, "standard": 80}
 
 
 @dataclass(frozen=True, slots=True)

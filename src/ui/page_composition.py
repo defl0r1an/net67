@@ -117,10 +117,10 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         features=("telegram_proxy",),
         actions=("show_page",),
     ),
-    # Обе страницы самодостаточны: ресурсы находят через APPLICATION_PATHS
-    # и settings.store, внешних зависимостей им не требуется.
+    # VPN находит ресурсы сама; запись профилей ИИ из Antigravity проходит
+    # через тот же фасад hosts, что и редактор.
     PageName.VPN: PageDepsSpec(build_vpn_page_kwargs),
-    PageName.ANTIGRAVITY: PageDepsSpec(build_antigravity_page_kwargs, actions=("open_hosts_service",)),
+    PageName.ANTIGRAVITY: PageDepsSpec(build_antigravity_page_kwargs, features=("hosts",), actions=("open_hosts_service",)),
     PageName.CONFIGS: PageDepsSpec(build_configs_page_kwargs),
 }
 

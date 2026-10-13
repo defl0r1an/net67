@@ -35,7 +35,8 @@ class TourStepsTests(unittest.TestCase):
         from ui.onboarding.steps import TOUR_STEPS, MODE_TOUR_PAGES
 
         keys = [step.key for step in TOUR_STEPS]
-        names = ["antigravity", "antigravity_controls", "antigravity_sections", "antigravity_hosts"]
+        names = [step.key for step in TOUR_STEPS if step.page == "antigravity"]
+        self.assertEqual(names, ["antigravity"])
         self.assertLess(keys.index("vpn"), keys.index(names[0]))
         self.assertLess(keys.index(names[-1]), keys.index("menu_diagnostics"))
         self.assertEqual(MODE_TOUR_PAGES[PageName.ZAPRET2_MODE_CONTROL]["antigravity"], PageName.ANTIGRAVITY)
@@ -44,6 +45,7 @@ class TourStepsTests(unittest.TestCase):
             self.assertTrue(step.advanced_only)
             self.assertFalse(step.choice)
             self.assertFalse(step.action)
+            self.assertIsNone(step.page_state)
 
     def test_steps_import_and_speak_about_net67_first(self) -> None:
         from ui.onboarding.steps import TOUR_STEPS

@@ -134,12 +134,16 @@ PROTOCOL_TILE_DETAILS = (
     ("page.strategy_scan.protocol_games.hint", "Roblox, Steam, Amazon и другие", "fa5s.gamepad"),
 )
 MODE_ITEMS = (
+    ("page.strategy_scan.mode_smart", "Экспресс · 5", "smart"),
     ("page.strategy_scan.mode_quick", "Быстро · 30", "quick"),
     ("page.strategy_scan.mode_standard", "Тщательно · 80", "standard"),
     ("page.strategy_scan.mode_full", "Все стратегии", "full"),
 )
 # Подсказка о времени для каждого пункта MODE_ITEMS (по порядку).
 MODE_HINTS = (
+    # Без обещания секунд: время экспресса не замерено, а каждая проба —
+    # это запуск winws2 и запрос, и на медленной линии они дольше.
+    ("page.strategy_scan.mode_smart.hint", "Первая рабочая из пяти"),
     ("page.strategy_scan.mode_quick.hint", "≈ 1–3 минуты"),
     ("page.strategy_scan.mode_standard.hint", "≈ 3–7 минут"),
     # С заглавной и без ☕: подсказка стоит отдельно, а эмодзи Windows

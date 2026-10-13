@@ -85,6 +85,7 @@ pub fn command(v: &Value) -> Result<Cmd, String> {
     match text("command")? {
         "refresh" => Ok(Cmd::DeepRefresh),
         "enable_all" => Ok(Cmd::EnableAll),
+        "disable_all" => Ok(Cmd::DisableAll),
         "repair" => Ok(Cmd::Repair),
         "set" => {
             let name = text("cap")?;
@@ -134,7 +135,8 @@ pub fn run() {
     let printer = std::thread::spawn(move || {
         for e in rx {
             match e {
-                Event::Completed(id) => output(json!({"event":"completed", "request_id":id})),
+                Event::Completed(id, shutdown_verified) => output(json!({"event":"completed", "request_id":id,
+                    "shutdown_verified":shutdown_verified})),
                 Event::Log(level, message) => output(json!({"event":"log", "level":format!("{level:?}"), "message":message})),
                 Event::Busy(message) => output(json!({"event":"busy","message":message})),
                 Event::Status(s) => {
@@ -200,6 +202,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn disable_all_has_a_separate_protocol_command() {
+        assert!(matches!(command(&json!({"command":"disable_all"})), Ok(Cmd::DisableAll)));
+    }
     #[test]
     fn rejects_invalid_switch_and_missing_boolean() {
         assert!(command(&json!({"command":"set","cap":"unknown","on":true})).is_err());

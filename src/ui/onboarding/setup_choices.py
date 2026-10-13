@@ -271,7 +271,7 @@ def _startup_widget(answers: SetupAnswers, parent: QWidget) -> QWidget:
     layout.setContentsMargins(0, 2, 0, 0)
     layout.setSpacing(10)
     rows = (
-        ("autostart", "Запускать вместе с Windows", "Обход включится сам после входа в систему"),
+        ("autostart", "Запускать вместе с Windows", "Запускать программу в трее при входе в систему"),
         ("tray", "Сворачивать в трей", "Крестик прячет окно к часам, а не выключает обход"),
     )
     for attr, title, hint in rows:

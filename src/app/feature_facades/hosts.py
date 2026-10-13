@@ -15,6 +15,8 @@ class HostsFeature:
     get_hosts_path_str: Callable
     create_snapshot_worker: Callable
     create_apply_worker: Callable
+    create_services_enable_worker: Callable
+    create_services_disable_worker: Callable
     create_open_hosts_file_worker: Callable
     create_permission_restore_worker: Callable
     create_file_text_worker: Callable
@@ -72,6 +74,14 @@ def build_hosts_feature() -> HostsFeature:
             name="open",
             parent=parent,
         )
+
+    def _create_services_enable_worker(request_id: int, service_names: tuple[str, ...], parent=None):
+        return _call_worker(request_id, lambda: _public().enable_hosts_services(service_names),
+                            name="enable_services", parent=parent)
+
+    def _create_services_disable_worker(request_id: int, service_names: tuple[str, ...], parent=None):
+        return _call_worker(request_id, lambda: _public().disable_hosts_services(service_names),
+                            name="disable_services", parent=parent)
 
     def _create_permission_restore_worker(request_id: int, parent=None):
         return _call_worker(
@@ -132,6 +142,8 @@ def build_hosts_feature() -> HostsFeature:
         get_hosts_path_str=lambda *args, **kwargs: _public().get_hosts_path_str(*args, **kwargs),
         create_snapshot_worker=_create_snapshot_worker,
         create_apply_worker=_create_apply_worker,
+        create_services_enable_worker=_create_services_enable_worker,
+        create_services_disable_worker=_create_services_disable_worker,
         create_open_hosts_file_worker=_create_open_hosts_file_worker,
         create_permission_restore_worker=_create_permission_restore_worker,
         create_file_text_worker=_create_file_text_worker,
@@ -142,3 +154,12 @@ def build_hosts_feature() -> HostsFeature:
         # Гео-сервисы, которым посвящён список сайтов. Тоже читает каталог с диска.
         load_geo_services_for_site_list=lambda text: _public().load_geo_services_for_site_list(text),
     )
+
+
+def add_domain_to_hosts(domain: str, ip: str):
+    """Шлюз фичи hosts для добавления чистой пары домен-IP."""
+    from hosts.public import add_domain_ip_entry, create_hosts_runtime
+
+    manager = create_hosts_runtime()
+    return add_domain_ip_entry(manager, domain, ip)
+

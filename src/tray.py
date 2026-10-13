@@ -310,6 +310,12 @@ class SystemTrayManager:
         self._show_window_action = None
         self._tg_proxy_action = None
         self._exit_stop_action = None
+        self._network_status_action = None
+        self._network_pulse_monitor = None
+        # None — замера ещё не было. Начальное True показывало «Сеть: 1 мс»
+        # в подсказке и меню раньше первого пинга.
+        self._network_ok: bool | None = None
+        self._network_latency_ms = 0.0
         self._tray_menu_min_width = 336
         self._tray_submenu_min_width = 252
         self._toggle_request_pending = False
@@ -319,11 +325,55 @@ class SystemTrayManager:
         self._taskbar_created_message = None
         self._class_name = f"{APP_SLUG}TrayWindow_{os.getpid()}_{id(self):x}"
 
+        self._init_network_pulse()
+
         if sys.platform != "win32":
             log("Native Windows tray backend недоступен вне Windows", "DEBUG")
             return
 
         self._create_native_backend()
+
+    def _init_network_pulse(self) -> None:
+        try:
+            from shell.network_pulse import NetworkPulseMonitor
+
+            self._network_pulse_monitor = NetworkPulseMonitor(initial_delay_ms=2000)
+            self._network_pulse_monitor.statusChanged.connect(self._on_network_status_changed)
+        except Exception as e:
+            log(f"Не удалось инициализировать NetworkPulse в трее: {e}", "WARNING")
+
+    def _on_network_status_changed(self, ok: bool, latency: float) -> None:
+        self._network_ok = bool(ok)
+        self._network_latency_ms = float(latency)
+        self._update_tray_tooltip()
+        if self._menu is not None:
+            self._sync_menu_network_status()
+
+    def _update_tray_tooltip(self) -> None:
+        if sys.platform != "win32" or not self._hwnd or not self._icon_visible:
+            return
+        try:
+            data = self._build_notify_icon_data(NIF_TIP)
+            shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(data))
+        except Exception:
+            pass
+
+    def _network_status_text(self) -> str:
+        from shell.network_pulse import NO_ANSWER_TEXT
+
+        state = getattr(self, "_network_ok", None)
+        if state is None:
+            return "Сеть: проверка…"
+        if state:
+            ms = max(1, int(round(getattr(self, "_network_latency_ms", 0.0))))
+            return f"Сеть: {ms} мс"
+        return f"Сеть: {NO_ANSWER_TEXT}"
+
+    def _sync_menu_network_status(self) -> None:
+        # Без эмодзи: Windows рисует их чужим цветным шрифтом, и знак
+        # выпадает из строки меню.
+        if self._network_status_action is not None:
+            self._network_status_action.setText(self._network_status_text())
 
     def _create_native_backend(self) -> None:
         self._icon_handle = self._load_icon_handle(self.icon_path)
@@ -366,7 +416,10 @@ class SystemTrayManager:
         data.uFlags = flags
         data.uCallbackMessage = TRAY_CALLBACK_MESSAGE
         data.hIcon = self._icon_handle
-        data.szTip = _truncate_text(f"{APP_NAME} v{self.app_version}", 128)
+        tip_title = f"{APP_NAME} v{self.app_version}"
+        if getattr(self, "_network_ok", None) is not None:
+            tip_title = f"{tip_title} • {self._network_status_text()}"
+        data.szTip = _truncate_text(tip_title, 128)
         return data
 
     @property
@@ -400,6 +453,13 @@ class SystemTrayManager:
         self._icon_visible = False
 
     def cleanup(self) -> None:
+        if getattr(self, "_network_pulse_monitor", None) is not None:
+            try:
+                self._network_pulse_monitor.cleanup()
+            except Exception:
+                pass
+            self._network_pulse_monitor = None
+
         self.hide_icon()
 
         window = self._message_window
@@ -504,6 +564,18 @@ class SystemTrayManager:
         except Exception:
             pass
 
+        network_status_action = _make_menu_action(
+            "Сеть: проверка...",
+            icon=_fluent_icon("WIFI"),
+            parent=menu,
+        )
+        network_status_action.setEnabled(False)
+        menu.addAction(network_status_action)
+        self._network_status_action = network_status_action
+        self._sync_menu_network_status()
+
+        menu.addSeparator()
+
         show_window_action = _make_menu_action(
             "Показать",
             icon=_fluent_icon("PLAY"),
@@ -554,6 +626,8 @@ class SystemTrayManager:
         return menu
 
     def _sync_menu_state(self, state: dict) -> None:
+        self._sync_menu_network_status()
+
         if self._show_window_action is not None:
             self._show_window_action.setText("Скрыть в трей" if state["is_visible"] else "Показать")
 

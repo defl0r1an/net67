@@ -566,7 +566,165 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "DNS подмена",
         "en": "DNS Spoofing",
     },
+    "page.blockcheck.tab.domain_lookup": {
+        "ru": "Проверка домена",
+        "en": "Domain Lookup",
+    },
+    "page.domain_lookup.title": {
+        "ru": "Проверка домена",
+        "en": "Domain Lookup",
+    },
+    "page.domain_lookup.subtitle": {
+        "ru": "Пинг, адреса с разных DNS-серверов и домены на том же адресе",
+        "en": "Ping, addresses from different DNS servers and domains on the same address",
+    },
+    "page.domain_lookup.placeholder": {
+        "ru": "Домен или IP-адрес: example.com, 1.2.3.4",
+        "en": "Domain or IP address: example.com, 1.2.3.4",
+    },
+    "page.domain_lookup.input.name": {
+        "ru": "Домен или IP-адрес для проверки",
+        "en": "Domain or IP address to check",
+    },
+    "page.domain_lookup.input.description": {
+        "ru": "Введите домен, адрес или ссылку и нажмите «Проверить».",
+        "en": "Enter a domain, address or link and press Check.",
+    },
+    "page.domain_lookup.button.start": {
+        "ru": "Проверить",
+        "en": "Check",
+    },
+    "page.domain_lookup.button.start.name": {
+        "ru": "Проверить домен",
+        "en": "Check domain",
+    },
+    "page.domain_lookup.button.start.description": {
+        "ru": "Пропинговать адрес, спросить его у разных DNS-серверов и найти домены на том же адресе.",
+        "en": "Ping the address, ask different DNS servers for it and find domains on the same address.",
+    },
+    "page.domain_lookup.button.stop": {
+        "ru": "Остановить",
+        "en": "Stop",
+    },
+    "page.domain_lookup.button.stop.name": {
+        "ru": "Остановить проверку домена",
+        "en": "Stop domain check",
+    },
+    "page.domain_lookup.button.stop.description": {
+        "ru": "Прервать проверку; останется то, что уже успели узнать.",
+        "en": "Interrupt the check; what was already found stays.",
+    },
+    "page.domain_lookup.button.report": {
+        "ru": "Отчёт",
+        "en": "Report",
+    },
+    "page.domain_lookup.button.report.name": {
+        "ru": "Открыть отчёт проверки домена",
+        "en": "Open domain check report",
+    },
+    "page.domain_lookup.button.report.description": {
+        "ru": "Открыть полный текст проверки — его можно скопировать.",
+        "en": "Open the full text of the check — it can be copied.",
+    },
+    "page.domain_lookup.button.add_to_hosts": {
+        "ru": "Добавить чистый IP в Hosts",
+        "en": "Add clean IP to Hosts",
+    },
+    "page.domain_lookup.button.add_to_hosts.description": {
+        "ru": "Записать пару «домен -> чистый IP» в файл Hosts в один клик.",
+        "en": "Write domain -> clean IP pair to the Hosts file in one click.",
+    },
+    "page.domain_lookup.button.added_to_hosts": {
+        "ru": "✓ Добавлено в Hosts",
+        "en": "✓ Added to Hosts",
+    },
+    "page.domain_lookup.infobar.hosts_added.title": {
+        "ru": "Запись добавлена",
+        "en": "Entry Added",
+    },
+    "page.domain_lookup.infobar.hosts_error.title": {
+        "ru": "Ошибка Hosts",
+        "en": "Hosts Error",
+    },
+    "page.domain_lookup.external": {
+
+        "ru": "Искать соседей по адресу через внешние сервисы (адрес будет отправлен на их сайты)",
+        "en": "Look up neighbours via external services (the address is sent to their sites)",
+    },
+    "page.domain_lookup.external.description": {
+        "ru": "Список доменов на том же адресе дают сторонние сервисы. Без галочки наружу ничего не уходит: остаются обратное имя, сертификат и владелец сети.",
+        "en": "The list of domains on the same address comes from third-party services. Without this option nothing is sent out: reverse name, certificate and network owner remain.",
+    },
+    "page.domain_lookup.section.ping": {
+        "ru": "Пинг и сеть",
+        "en": "Ping and network",
+    },
+    "page.domain_lookup.section.dns": {
+        "ru": "Адреса с разных DNS-серверов",
+        "en": "Addresses from different DNS servers",
+    },
+    "page.domain_lookup.section.neighbors": {
+        "ru": "Кто ещё на этом адресе",
+        "en": "Who else is on this address",
+    },
+    "page.domain_lookup.column.server": {
+        "ru": "DNS-сервер",
+        "en": "DNS server",
+    },
+    "page.domain_lookup.column.address": {
+        "ru": "Адрес сервера",
+        "en": "Server address",
+    },
+    "page.domain_lookup.column.answer": {
+        "ru": "Ответ",
+        "en": "Answer",
+    },
+    "page.domain_lookup.column.time": {
+        "ru": "Время",
+        "en": "Time",
+    },
+    "page.domain_lookup.table.name": {
+        "ru": "Ответы DNS-серверов",
+        "en": "DNS server answers",
+    },
+    "page.domain_lookup.table.description": {
+        "ru": "Для каждого сервера: какие адреса он назвал и за сколько.",
+        "en": "For each server: which addresses it returned and how fast.",
+    },
+    "page.domain_lookup.neighbors.name": {
+        "ru": "Домены на том же адресе",
+        "en": "Domains on the same address",
+    },
+    "page.domain_lookup.neighbors.description": {
+        "ru": "Списки доменов по источникам.",
+        "en": "Domain lists grouped by source.",
+    },
+    "page.domain_lookup.status.ready": {
+        "ru": "Введите домен или IP-адрес и нажмите «Проверить».",
+        "en": "Enter a domain or IP address and press Check.",
+    },
+    "page.domain_lookup.status.empty": {
+        "ru": "Введите домен или IP-адрес.",
+        "en": "Enter a domain or IP address.",
+    },
+    "page.domain_lookup.status.failed": {
+        "ru": "Проверка не удалась",
+        "en": "Check failed",
+    },
+    "page.domain_lookup.report.title": {
+        "ru": "Отчёт проверки домена",
+        "en": "Domain check report",
+    },
+    "page.domain_lookup.report.empty": {
+        "ru": "Проверка ещё не запускалась.",
+        "en": "The check has not been run yet.",
+    },
+    "page.domain_lookup.report.description": {
+        "ru": "Полный текст проверки: пинг, ответы DNS-серверов и домены на адресе.",
+        "en": "Full text of the check: ping, DNS server answers and domains on the address.",
+    },
     "page.blockcheck.start": {
+
         "ru": "Проверить",
         "en": "Check",
     },
@@ -3472,10 +3630,9 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.winws1_user_presets.info.body": {
         "ru": (
             "Пресет, или конфиг, — это один или несколько .txt-файлов со списком флагов net67. "
-            "Формат такой же, как у winws2.exe или winws.exe, поэтому GUI может быстро читать и менять настройки.\n\n"
-            "Пресеты доступны с версии 20.3 для режимов net67 v1 и net67 v2. "
-            "Они нужны, чтобы быстрее делать новые настройки, проще обмениваться ими и держать GUI и консольный net67 в одном формате.\n\n"
-            "При запуске активный пресет передаётся в winws2.exe для net67 v2 или в winws.exe для net67 v1 через @<config_file>. "
+            "Формат такой же, как у winws2.exe, поэтому GUI может быстро читать и менять настройки.\n\n"
+            "Пресеты нужны, чтобы быстрее делать новые настройки, проще обмениваться ими и держать GUI и консольный net67 в одном формате.\n\n"
+            "При запуске активный пресет передаётся в winws2.exe через @<config_file>. "
             "Это значит: прочитать параметры командной строки из файла. Остальные параметры командной строки при таком запуске не используются.\n\n"
             "Файл preset-zapret2.txt в папке настроек хранит только активный пресет. "
             "Сам по себе он не считается пользовательским пресетом. Ваши пресеты лежат в папке presets. "
@@ -3487,8 +3644,8 @@ TEXTS: dict[str, dict[str, str]] = {
         ),
         "en": (
             "A preset, or config, is one or more .txt files with net67 flags. "
-            "It uses the same format as winws2.exe or winws.exe, so the GUI can read and edit these settings.\n\n"
-            "The active preset is passed to winws2.exe for net67 v2 or winws.exe for net67 v1 through @<config_file>, "
+            "It uses the same format as winws2.exe, so the GUI can read and edit these settings.\n\n"
+            "The active preset is passed to winws2.exe through @<config_file>, "
             "which means: read command-line options from a file. Other command-line options are not used in this launch mode.\n\n"
             "The preset-zapret2.txt file in the settings folder only stores the active preset copy. "
             "User presets are stored in the presets folder. More details are available from the button below."
@@ -3571,8 +3728,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Start net67",
     },
     "page.winws2_control.button.stop_only_winws": {
-        "ru": f"Остановить только {EXE_NAME_WINWS1}",
-        "en": f"Stop only {EXE_NAME_WINWS1}",
+        "ru": f"Остановить только {EXE_NAME_WINWS2}",
+        "en": f"Stop only {EXE_NAME_WINWS2}",
     },
     "page.winws2_control.button.stop_only_template": {
         "ru": "Остановить только {exe_name}",
@@ -4081,10 +4238,9 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.winws2_user_presets.info.body": {
         "ru": (
             "Пресет, или конфиг, — это один или несколько .txt-файлов со списком флагов net67. "
-            "Формат такой же, как у winws2.exe или winws.exe, поэтому GUI может быстро читать и менять настройки.\n\n"
-            "Пресеты доступны с версии 20.3 для режимов net67 v1 и net67 v2. "
-            "Они нужны, чтобы быстрее делать новые настройки, проще обмениваться ими и держать GUI и консольный net67 в одном формате.\n\n"
-            "При запуске активный пресет передаётся в winws2.exe для net67 v2 или в winws.exe для net67 v1 через @<config_file>. "
+            "Формат такой же, как у winws2.exe, поэтому GUI может быстро читать и менять настройки.\n\n"
+            "Пресеты нужны, чтобы быстрее делать новые настройки, проще обмениваться ими и держать GUI и консольный net67 в одном формате.\n\n"
+            "При запуске активный пресет передаётся в winws2.exe через @<config_file>. "
             "Это значит: прочитать параметры командной строки из файла. Остальные параметры командной строки при таком запуске не используются.\n\n"
             "Файл preset-zapret2.txt в папке настроек хранит только активный пресет. "
             "Сам по себе он не считается пользовательским пресетом. Ваши пресеты лежат в папке presets. "
@@ -4096,8 +4252,8 @@ TEXTS: dict[str, dict[str, str]] = {
         ),
         "en": (
             "A preset, or config, is one or more .txt files with net67 flags. "
-            "It uses the same format as winws2.exe or winws.exe, so the GUI can read and edit these settings.\n\n"
-            "The active preset is passed to winws2.exe for net67 v2 or winws.exe for net67 v1 through @<config_file>, "
+            "It uses the same format as winws2.exe, so the GUI can read and edit these settings.\n\n"
+            "The active preset is passed to winws2.exe through @<config_file>, "
             "which means: read command-line options from a file. Other command-line options are not used in this launch mode.\n\n"
             "The preset-zapret2.txt file in the settings folder only stores the active preset copy. "
             "User presets are stored in the presets folder. More details are available from the button below."
@@ -4355,6 +4511,10 @@ TEXTS_EXTRA: dict[str, dict[str, str]] = {
         "ru": "Тщательность:",
         "en": "Thoroughness:",
     },
+    "page.strategy_scan.mode_smart": {
+        "ru": "Экспресс · 5",
+        "en": "Express · 5",
+    },
     "page.strategy_scan.mode_quick": {
         "ru": "Быстро · 30",
         "en": "Quick · 30",
@@ -4474,6 +4634,10 @@ TEXTS_EXTRA: dict[str, dict[str, str]] = {
     "page.strategy_scan.protocol_games.hint": {
         "ru": "Roblox, Steam, Amazon и другие",
         "en": "Roblox, Steam, Amazon and more",
+    },
+    "page.strategy_scan.mode_smart.hint": {
+        "ru": "Первая рабочая из пяти",
+        "en": "First working of five",
     },
     "page.strategy_scan.mode_quick.hint": {
         "ru": "≈ 1–3 минуты",
@@ -4997,7 +5161,7 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
             "Провайдер следит за трафиком с помощью фильтра — DPI. Фильтр читает начало каждого "
             "соединения, видит в нём адрес сайта и, если сайт в чёрном списке, обрывает соединение "
             "или замедляет его.\n\n"
-            "net67 запускает у вас на компьютере движок winws2 (в режиме net67 v1 — winws). Движок "
+            "net67 запускает у вас на компьютере движок winws2. Движок "
             "пропускает через себя сетевые пакеты и для нужных сайтов слегка их меняет: делит на части, "
             "переставляет, отправляет перед настоящим пакетом поддельный — фейк. Фильтр путается и "
             "пропускает соединение, а сайт получает обычный запрос.\n\n"
@@ -5007,7 +5171,7 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
             "Your provider watches traffic with a filter called DPI. It reads the start of every "
             "connection, sees the site address there and, if the site is blacklisted, drops or slows "
             "the connection.\n\n"
-            "net67 runs the winws2 engine on your computer (winws in net67 v1 mode). The engine passes "
+            "net67 runs the winws2 engine on your computer. The engine passes "
             "network packets through itself and slightly changes them for selected sites: splits them, "
             "reorders them, sends a fake packet before the real one. The filter gets confused and lets "
             "the connection through, while the site receives a normal request.\n\n"
@@ -5843,19 +6007,13 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
     },
     "onboarding.step.dpi_mode.body": {
         "ru": (
-            "Здесь выбирается движок:\n"
+            "Здесь выбирается режим работы:\n"
             "• net67 v2 (winws2) — основной режим с готовыми пресетами, поддерживает свои стратегии "
-            "на Lua;\n"
-            "• net67 v1 (winws) — более старый и простой движок;\n"
-            "• Оркестратор — сам подбирает рабочие стратегии для каждого сайта и запоминает удачные.\n\n"
-            "Если не знаете, что выбрать, оставьте net67 v2."
+            "на Lua."
         ),
         "en": (
-            "Choose the engine here:\n"
-            "• net67 v2 (winws2) — the main mode with ready presets, supports custom Lua strategies;\n"
-            "• net67 v1 (winws) — an older and simpler engine;\n"
-            "• Orchestra — picks working strategies for each site by itself and remembers good ones.\n\n"
-            "If unsure, keep net67 v2."
+            "Choose operating mode here:\n"
+            "• net67 v2 (winws2) — the main mode with ready presets, supports custom Lua strategies."
         ),
     },
     "onboarding.step.program_settings.title": {
@@ -5968,14 +6126,12 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
         "ru": (
             "Запустите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или другую "
             "стратегию в профилях.\n\n"
-            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» на главной странице режимов "
-            "net67 v1 и net67 v2."
+            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» на главной странице программы."
         ),
         "en": (
             "Start the bypass and open the site you need. If it does not open, try another preset or "
             "another strategy in the profiles.\n\n"
-            "You can take this tour again with the Show button on the main page in net67 v1 and "
-            "net67 v2 modes."
+            "You can take this tour again with the Show button on the main page."
         ),
     },
     "page.control.onboarding_tour.title": {
@@ -6615,44 +6771,20 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': 'Tools',
     },
     'onboarding.step.menu_tools.body': {
-        'ru': 'Помощь там, где обхода мало: свои DNS-серверы, редактор hosts, прокси для Telegram, VPN и отдельные настройки Antigravity. Открытие вкладки Antigravity ничего не включает: действия запускаются вручную.',
-        'en': 'Help where the bypass is not enough: DNS servers, the hosts editor, Telegram proxy, VPN and separate Antigravity settings. Opening the Antigravity tab does not enable anything: actions are started manually.',
+        'ru': 'Помощь там, где обхода мало: свои DNS-серверы, редактор hosts, прокси для Telegram, VPN и отдельные настройки Antigravity.',
+        'en': 'Help where the bypass is not enough: DNS servers, the hosts editor, Telegram proxy, VPN and separate Antigravity settings.',
     },
     'onboarding.step.antigravity.title': {
-        'ru': 'Antigravity — отдельное управление',
-        'en': 'Antigravity — separate controls',
+        'ru': 'Antigravity — вход и работа моделей',
+        'en': 'Antigravity — sign-in and model access',
     },
     'onboarding.step.antigravity.body': {
-        'ru': 'Эта вкладка управляет входом в аккаунт и сетевым маршрутом моделей в Antigravity, IDE и CLI. Она работает отдельно от большой кнопки обхода.\n\nПри открытии вкладки и во время экскурсии ничего не запускается. Новые настройки выключены; раньше включённая служба может продолжать работать самостоятельно.',
-        'en': 'This tab controls account sign-in and model network routes in Antigravity, IDE and CLI, independently of the main bypass button.\n\nOpening the tab or taking the tour starts nothing. New settings are off; a service you enabled earlier may continue running independently.',
-    },
-    'onboarding.step.antigravity_controls.title': {
-        'ru': 'Сначала проверка, затем включение',
-        'en': 'Check first, then enable',
-    },
-    'onboarding.step.antigravity_controls.body': {
-        'ru': '«Включить всё» всегда видно в сводке. По вашему нажатию кнопка проверит установки и включит вход в аккаунт, работу моделей и автопатч. «Проверить» только читает состояние, не меняя настройки Windows.\n\nФункции можно включать отдельно. «Вход в аккаунт» изменяет клиент; Antigravity может закрыться. «Работа моделей» включает сетевой обход. «Автопатч» повторяет изменение после обновлений клиента.',
-        'en': 'Enable all is always visible in the summary. Clicking it checks installations and enables account sign-in, model access and auto-patch. Check only reads the state without changing Windows settings.\n\nYou can enable functions separately. Account sign-in modifies the client and may close Antigravity. Model access enables the network bypass. Auto-patch reapplies the change after client updates.',
-    },
-    'onboarding.step.antigravity_sections.title': {
-        'ru': 'Сеть и журнал Antigravity',
-        'en': 'Antigravity network and log',
-    },
-    'onboarding.step.antigravity_sections.body': {
-        'ru': 'В «Сети» — отдельные компоненты обхода, свой прокси и DNS-серверы. В «Журнале» — результат действий и кнопки сохранения или копирования отчёта.\n\n«Восстановить службу» появляется только при обнаруженной неисправности. Ошибка 400 «User location is not supported» означает региональный отказ Google. Ответ другой модели, например Sonnet, не подтверждает работу Gemini.',
-        'en': 'Network contains individual bypass components, your own proxy and DNS servers. Log shows action results and buttons to save or copy a report.\n\nRepair service appears only when a fault is detected. A 400 User location is not supported error is a regional refusal from Google. A reply from another model, such as Sonnet, does not confirm that Gemini works.',
-    },
-    'onboarding.step.antigravity_hosts.title': {
-        'ru': 'Antigravity в редакторе hosts',
-        'en': 'Antigravity in the hosts editor',
-    },
-    'onboarding.step.antigravity_hosts.body': {
-        'ru': 'Кнопка «В hosts» открывает полный список сервисов, прокручивает к «Gemini AI и Antigravity» и выделяет плитку. Профиль при переходе не меняется.\n\nВ редакторе hosts DNS-профиль выбирается значком провайдера под названием сервиса. Это отдельная настройка: она сама не включает вход в аккаунт или работу моделей Antigravity.',
-        'en': 'In hosts opens the full service list, scrolls to Gemini AI and Antigravity and highlights its tile without changing the profile.\n\nIn the hosts editor, choose a DNS profile using a provider icon below the service name. This is a separate setting and does not enable Antigravity account sign-in or model access.',
+        'ru': 'Здесь настраивают вход в аккаунт и работу моделей в Antigravity, IDE и CLI: включают нужные функции, выбирают сетевой маршрут и смотрят журнал.\n\nФункции включаются вручную и работают отдельно от большой кнопки обхода.',
+        'en': 'Here you configure sign-in and model access in Antigravity, IDE and CLI: enable the features you need, choose a network route and view the log.\n\nFeatures are enabled manually and work independently of the main bypass button.',
     },
     'onboarding.step.hosts.body': {
-        'ru': 'Здесь выбирается, какие сервисы открывать через файл hosts и через какие серверы. Так открываются сервисы, закрытые для России сами по себе: ChatGPT, Claude и другие ИИ.\n\nТумблер включает сервис «напрямую», значок провайдера выбирает DNS-профиль. Запись происходит сразу. Повторное нажатие оставляет выбранный профиль включённым; значок питания в конце ряда выключает сервис. Подпись показывает текущий профиль. Весь файл — кнопка «Файл hosts» наверху.',
-        'en': 'Here you choose which services to open through the hosts file and through which servers, including ChatGPT, Claude and other AI services.\n\nThe switch enables a direct service; a provider icon chooses a DNS profile. Changes are written immediately. Clicking the selected profile again keeps it enabled; the power icon at the end of the row disables the service. The caption shows the current profile. Hosts file at the top shows the whole file.',
+        'ru': 'Здесь выбирается, какие сервисы открывать через файл hosts и через какие серверы. Так открываются сервисы, закрытые для России сами по себе: ChatGPT, Claude и другие ИИ.\n\nТумблер включает сервис «напрямую», значок провайдера выбирает DNS-профиль. Запись происходит сразу. Повторное нажатие на выбранный профиль выключает сервис. Подпись показывает текущий профиль. Весь файл — кнопка «Файл hosts» наверху.',
+        'en': 'Here you choose which services to open through the hosts file and through which servers, including ChatGPT, Claude and other AI services.\n\nThe switch enables a direct service; a provider icon chooses a DNS profile. Changes are written immediately. Clicking the selected profile again disables the service. The caption shows the current profile. Hosts file at the top shows the whole file.',
     },
     'onboarding.step.menu_diagnostics.title': {
         'ru': 'Диагностика',

@@ -137,6 +137,8 @@ pub struct InstallRow {
     /// `None` while it has not been inspected yet — inspecting reads the whole
     /// Language Server binary, so it is not done on the drawing thread.
     pub patched: Option<bool>,
+    /// Отдельно от «полностью пропатчено»: частичный патч ещё не означает снятый.
+    pub clean: Option<bool>,
     /// Added by hand through the pencil, rather than found by the scan.
     pub manual: bool,
 }
@@ -228,6 +230,14 @@ pub struct Status {
 }
 
 impl Status {
+    fn shutdown_confirmed(&self, process_running: bool) -> bool {
+        !process_running && !self.relay_running && !self.rules
+            && [Cap::ClientPatch, Cap::Watchdog, Cap::Dns, Cap::LocalProxy,
+                Cap::OwnProxy, Cap::BuiltinExits, Cap::GroupProxy]
+                .iter().all(|cap| *self.get(*cap) == State::Off)
+            && self.installs.iter().all(|row| row.path.is_none() || row.clean == Some(true))
+    }
+
     pub fn get(&self, cap: Cap) -> &State {
         match cap {
             Cap::ClientPatch => &self.client_patch,
@@ -285,7 +295,7 @@ pub enum Level {
 
 /// Worker → UI.
 pub enum Event {
-    Completed(u64),
+    Completed(u64, Option<bool>),
     Log(Level, String),
     Status(Box<Status>),
     /// `Some(what)` while an action runs, `None` when the queue drains. The UI
@@ -338,6 +348,8 @@ pub enum Cmd {
     /// Everything on, in the order that works: the patch, auto-patch, then the
     /// bypass. The one button a user who is not a programmer needs.
     EnableAll,
+    /// Отключение всего сначала запрещает автопатч, затем снимает компоненты.
+    DisableAll,
     /// Puts the service back the way the switches say it should be: reinstalls
     /// the relay when it is missing, stopped or older than this build, rewrites
     /// the rules, restores the proxy variable.
@@ -491,6 +503,7 @@ fn run_worker(
             Cmd::Request { id, command } => (*command, Some(id)),
             other => (other, None),
         };
+        let mut shutdown_verified = None;
         match cmd {
             Cmd::Request { .. } => unreachable!("вложенная команда"),
             Cmd::Stop => return,
@@ -635,6 +648,21 @@ fn run_worker(
                 push_status(&mut ctx, Scan::Deep);
                 ctx.busy(None);
             }
+            Cmd::DisableAll => {
+                ctx.busy(Some("Выключаю все функции"));
+                let attempted = disable_all(&mut ctx);
+                ctx.settings.save();
+                push_status(&mut ctx, Scan::Deep);
+                let verified = attempted && ctx.last.as_ref()
+                    .is_some_and(|s| s.shutdown_confirmed(background::is_running()));
+                shutdown_verified = Some(verified);
+                ctx.log(if verified { Level::Ok } else { Level::Warn }, if verified {
+                    "Отключение Antigravity завершено."
+                } else {
+                    "Полное выключение не подтверждено. Проверьте журнал; адреса нейросетей сохраняются."
+                });
+                ctx.busy(None);
+            }
             Cmd::Repair => {
                 ctx.busy(Some("Чиню службу обхода"));
                 repair(&mut ctx);
@@ -703,7 +731,7 @@ fn run_worker(
         // Фоновое измерение и промежуточный снимок не завершают команду окна.
         // Номер возвращается только после всей операции и её записи настроек.
         if let Some(id) = request_id {
-            let _ = ctx.events.send(Event::Completed(id));
+            let _ = ctx.events.send(Event::Completed(id, shutdown_verified));
         }
     }
 }
@@ -902,11 +930,9 @@ fn on_off(v: bool) -> State {
 fn read_status(ctx: &mut Ctx, deep: bool) -> Status {
     let admin = is_admin();
 
-    // Every probe below spawns a helper process — two scheduled-task queries, a
-    // tasklist, up to three reads of the user environment — and they are
-    // independent of one another. Run in series they added up to seconds per
-    // switch; run at once the refresh costs the slowest one. They only read, so
-    // there is nothing here for them to race over.
+    // Независимые чтения выполняются параллельно: снимок ждёт самый медленный
+    // системный запрос, а не сумму задержек всех запросов. Переменные среды
+    // читаются прямо из реестра, без запуска PowerShell.
     let settings = &ctx.settings;
     let patched_seen = &ctx.patched_seen;
     let (installs, watchdog, dns_probe, local_proxy, own_proxy, own_proxy_text, relay_outdated) =
@@ -1184,12 +1210,14 @@ fn collect_installs(
             Some((path, manual)) => InstallRow {
                 label,
                 patched: None,
+                clean: None,
                 manual,
                 path: Some(path),
             },
             None => InstallRow {
                 label,
                 patched: None,
+                clean: None,
                 manual: false,
                 path: None,
             },
@@ -1205,6 +1233,7 @@ fn collect_installs(
         rows.push(InstallRow {
             label: crate::install_label(&path),
             patched: None,
+            clean: None,
             manual: true,
             path: Some(path),
         });
@@ -1216,6 +1245,8 @@ fn collect_installs(
         };
         if deep {
             let state = patch_binary::inspect_install(&path);
+            row.clean = Some(!state.is_empty() && state.files.iter()
+                .all(|(_, file)| *file == patch_binary::FileState::Unpatched));
             row.patched = if state.is_empty() {
                 None
             } else {
@@ -1447,6 +1478,40 @@ fn patch_is_on(ctx: &Ctx) -> bool {
     ctx.last
         .as_ref()
         .is_some_and(|s| s.client_patch == State::On)
+}
+
+fn mark_all_disabled(settings: &mut Settings) {
+    settings.auto_patch = false;
+    settings.patch_declined = true;
+    settings.client_patch = false;
+    settings.dns = false;
+    settings.local_proxy = false;
+    settings.own_proxy_enabled = false;
+    settings.builtin_exits = false;
+    settings.group_proxy = false;
+}
+
+fn disable_all(ctx: &mut Ctx) -> bool {
+    if cfg!(target_os = "windows") && !is_admin() {
+        ctx.log(Level::Err, "Для выключения всех функций нужны права администратора.");
+        return false;
+    }
+    // Желаемое выключение записывается целиком до остановки процессов:
+    // живой сторож не должен вернуть патч, а снятие патча — поднять DNS.
+    let previous = ctx.settings.clone();
+    mark_all_disabled(&mut ctx.settings);
+    if !ctx.save_before_service() {
+        ctx.settings = previous;
+        return false;
+    }
+    // Поочерёдные Set для маршрутов останавливали одну службу пять раз.
+    // Прокси снимаются раньше DNS; снятие патча само один раз останавливает
+    // сторож и службу перед изменением файлов. Обратно их уже ничто не поднимет.
+    disable_local_proxy(ctx);
+    upstream::clear();
+    remove_dns_rules(ctx);
+    unpatch_client(ctx, false);
+    true
 }
 
 /// «Починить». The service is the part that can stop on its own - a crash the
@@ -1703,6 +1768,10 @@ fn enable_client_patch(ctx: &mut Ctx) -> bool {
 }
 
 fn disable_client_patch(ctx: &mut Ctx) {
+    unpatch_client(ctx, true);
+}
+
+fn unpatch_client(ctx: &mut Ctx, remove_proxy: bool) {
     ctx.log(Level::Step, "Снятие патча клиента");
 
     // I20: a live watchdog treats an unpatch as an update and puts the patch
@@ -1775,7 +1844,9 @@ fn disable_client_patch(ctx: &mut Ctx) {
     // The proxy variable is only read by a patched binary, so an unpatched
     // machine must not keep it: it would sit in the user environment forever,
     // naming a port nothing listens on.
-    disable_local_proxy(ctx);
+    if remove_proxy {
+        disable_local_proxy(ctx);
+    }
     ctx.proxy_var_carried = Some(false);
 
     if want_relay {
@@ -1868,6 +1939,12 @@ fn enable_dns(ctx: &mut Ctx) {
     }
 }
 
+fn remove_dns_rules(ctx: &mut Ctx) {
+    dns::remove_dns_nrpt();
+    dns::invalidate_cache();
+    ctx.log(Level::Ok, "Правила DNS сняты.");
+}
+
 fn disable_dns(ctx: &mut Ctx) {
     ctx.log(Level::Step, "Отключение обхода через DNS");
 
@@ -1886,9 +1963,7 @@ fn disable_dns(ctx: &mut Ctx) {
     }
 
     // I45: both steps run regardless of what the first one did.
-    dns::remove_dns_nrpt();
-    dns::invalidate_cache();
-    ctx.log(Level::Ok, "Правила DNS сняты.");
+    remove_dns_rules(ctx);
     if keep_relay {
         ctx.log(
             Level::Info,
@@ -2003,6 +2078,9 @@ fn routes_want_relay_without_proxy_var(s: &Settings) -> bool {
 /// Returns whether it actually went near the system — the caller uses that to
 /// decide whether the following refresh has anything new to read.
 fn reapply_dns_rules(ctx: &mut Ctx) -> bool {
+    if !ctx.settings.dns {
+        return false;
+    }
     if !dns::is_nrpt_applied() {
         return false;
     }
@@ -2200,6 +2278,25 @@ pub fn resolve_manual_path(raw: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn disable_all_disarms_watchdog_and_routes_but_preserves_preferences() {
+        let mut settings = super::Settings::default();
+        settings.client_patch = true;
+        settings.auto_patch = true;
+        settings.dns = true;
+        settings.local_proxy = true;
+        settings.own_proxy_enabled = true;
+        settings.builtin_exits = true;
+        settings.group_proxy = true;
+        settings.own_proxy = "http://example.test:8080".into();
+        super::mark_all_disabled(&mut settings);
+        assert!(!settings.auto_patch_wanted());
+        assert!(settings.patch_declined);
+        assert!(!settings.client_patch && !settings.auto_patch && !settings.dns && !settings.local_proxy
+                && !settings.own_proxy_enabled && !settings.builtin_exits && !settings.group_proxy);
+        assert!(settings.verify_tls && settings.rotate_providers);
+        assert_eq!(settings.own_proxy, "http://example.test:8080");
+    }
     use super::*;
 
     #[test]
@@ -2397,10 +2494,15 @@ mod tests {
         ctx.last = Some(full);
 
         let t = std::time::Instant::now();
+        let _ = read_status(&mut ctx, false);
+        let warm_system = t.elapsed();
+
+        let t = std::time::Instant::now();
         let _ = settings_only_status(&ctx, ctx.last.clone().unwrap());
         let settings = t.elapsed();
 
         println!("Scan::System   {:?}", system);
+        println!("Scan::System warm {:?}", warm_system);
         println!("Scan::Settings {:?}", settings);
         assert!(
             settings < system,
@@ -2431,6 +2533,29 @@ mod tests {
             providers: Vec::new(),
             relay_egress: None,
         }
+    }
+
+    #[test]
+    fn shutdown_confirmation_rejects_residual_routes_and_unknown_patch() {
+        let mut s = blank_status();
+        assert!(s.shutdown_confirmed(false));
+        assert!(!s.shutdown_confirmed(true));
+        s.relay_running = true;
+        assert!(!s.shutdown_confirmed(false));
+        s.relay_running = false;
+        s.rules = true;
+        assert!(!s.shutdown_confirmed(false));
+        s.rules = false;
+        s.local_proxy = State::OffNote("переменная ещё не снята".into());
+        assert!(!s.shutdown_confirmed(false));
+        s.local_proxy = State::Off;
+        s.installs.push(InstallRow { path: Some(PathBuf::from("C:/example")),
+            label: "Antigravity", patched: Some(false), clean: None, manual: false });
+        assert!(!s.shutdown_confirmed(false));
+        s.installs[0].clean = Some(false);
+        assert!(!s.shutdown_confirmed(false));
+        s.installs[0].clean = Some(true);
+        assert!(s.shutdown_confirmed(false));
     }
 
     /// The regression the `Unmeasured` variant exists for: a tunnel is up and

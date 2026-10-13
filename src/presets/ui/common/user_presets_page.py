@@ -643,9 +643,11 @@ class UserPresetsPageBase(BasePage):
         self.layout.removeWidget(self.title_label)
         self._title_status_header = QWidget(self.content)
         self._title_status_header.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._title_status_header.setFixedHeight(32)
         title_layout = QHBoxLayout(self._title_status_header)
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(8)
+        title_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self._preset_status_icon = PresetStatusIcon(self._title_status_header, size=24)
         title_layout.addWidget(self._preset_status_icon, 0, Qt.AlignmentFlag.AlignVCenter)

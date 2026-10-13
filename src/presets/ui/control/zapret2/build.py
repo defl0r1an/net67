@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from settings.mode import EXE_NAME_WINWS1
+from settings.mode import EXE_NAME_WINWS2
 from presets.ui.control.shared_builders import (
     build_mode_management_section_common,
     build_mode_status_section_common,
@@ -81,7 +81,7 @@ def build_winws2_pages_management_section(
             start_key="page.winws2_control.button.start",
             start_default="Запустить net67",
             stop_key="page.winws2_control.button.stop_only_winws",
-            stop_default=f"Остановить только {EXE_NAME_WINWS1}",
+            stop_default=f"Остановить только {EXE_NAME_WINWS2}",
             stop_exit_key="page.winws2_control.button.stop_and_exit",
             stop_exit_default="Остановить и закрыть программу",
             on_start=on_start,

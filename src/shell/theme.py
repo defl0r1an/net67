@@ -480,7 +480,18 @@ def shell_qss(colors: ShellPalette) -> str:
 #net67Content {{ background: transparent; }}
 #net67Window {{ background: {colors.content}; }}
 
+#net67NetworkPulse {{
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 13px;
+}}
+#net67NetworkPulse:hover {{
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+}}
+
 QLabel#net67Title {{ color: {colors.text}; }}
+
 QLabel#net67SectionLabel {{ color: {colors.text_faint}; }}
 
 QPushButton#net67NavItem {{

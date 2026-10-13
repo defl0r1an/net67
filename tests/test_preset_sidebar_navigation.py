@@ -52,6 +52,7 @@ class PresetSidebarNavigationTests(unittest.TestCase):
                 PageName.HOSTS,
                 PageName.TELEGRAM_PROXY,
                 PageName.VPN,
+                PageName.ANTIGRAVITY,
             ),
         )
         self.assertEqual(
