@@ -31,13 +31,13 @@ class CatalogIconsTests(unittest.TestCase):
         self.assertEqual(globes, [])
 
     def test_icons_have_a_colour(self) -> None:
-        # null — только у одноцветных логотипов (Grok, Manus): плитка рисует
-        # их цветом текста темы, иначе на светлой или тёмной теме они пропадут.
+        # null — только у одноцветных знаков (own: и img:): плитка рисует их
+        # цветом темы или сервиса, иначе на светлой или тёмной теме пропадут.
         colourless = []
         for path in sorted(list((CATALOG / "dns").glob("*.json")) + list((CATALOG / "hosts").glob("*.json"))):
             data = json.loads(path.read_text(encoding="utf-8"))
             color = data.get("icon_color")
-            if color is None and str(data.get("icon") or "").startswith("own:"):
+            if color is None and str(data.get("icon") or "").startswith(("own:", "img:")):
                 continue
             if not str(color or "").startswith("#"):
                 colourless.append(data.get("name", path.name))
@@ -120,49 +120,52 @@ class CatalogIconsTests(unittest.TestCase):
             self.assertEqual((image.width(), image.height()), (20, 20), key)
             self.assertNotEqual(image, fallback, key)
 
-    def test_muted_brand_image_is_grey_and_keeps_transparency(self) -> None:
-        """Выключенный сервис с цветной картинкой должен выглядеть выключенным.
+    def test_every_brand_image_is_a_one_colour_mask(self) -> None:
+        """Все знаки img: — одноцветные маски, без цветной плитки.
 
-        Одноцветный значок выключенной плитки приходит серым цветом, а
-        картинка цвет не берёт: без серого варианта красный логотип LEGO
-        выглядел одинаково и во включённом, и в выключенном виде.
+        Первая версия держала значки цветными, и в сетке они стояли
+        кирпичами: чёрный квадрат под Camel AI, жёлтый под Kaleido. Теперь
+        из картинки берётся только прозрачность, цвет даёт каталог.
         """
+        from profile.ui.brand_images import BRAND_IMAGE_MASKS, BRAND_IMAGE_PNGS
+
+        self.assertEqual(set(BRAND_IMAGE_MASKS), set(BRAND_IMAGE_PNGS))
+
+    def test_mask_takes_the_requested_colour_and_keeps_transparency(self) -> None:
+        """Знак красится цветом сервиса (на тёмной теме не пропадает), поле прозрачно."""
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PyQt6.QtGui import QGuiApplication
 
         from profile.ui.profile_icon import profile_icon_pixmap
 
         _app = QGuiApplication.instance() or QGuiApplication([])
-        bright = profile_icon_pixmap("img:lego:LE", color="#999999", size=20).toImage()
-        muted = profile_icon_pixmap("img:lego:LE", color="#999999", size=20, muted=True).toImage()
-        coloured = 0
+        for key, target in (("img:aave:AA", (0xB6, 0x50, 0x9E)), ("img:camelai:CA", (0x7C, 0x3A, 0xED))):
+            color = "#%02X%02X%02X" % target
+            image = profile_icon_pixmap(key, color=color, size=20).toImage()
+            opaque = [image.pixelColor(x, y) for y in range(20) for x in range(20)
+                      if image.pixelColor(x, y).alpha() > 200]
+            with self.subTest(key=key):
+                self.assertGreater(len(opaque), 20)
+                # ±3 на канал — округление при умножении на прозрачность в QPixmap.
+                for c in opaque:
+                    self.assertLessEqual(max(abs(a - b) for a, b in zip(c.getRgb()[:3], target)), 3, c.name())
+                self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
+
+    def test_disabled_service_icon_is_grey(self) -> None:
+        """Выключенная плитка просит серый цвет — знак и приходит серым."""
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt6.QtGui import QGuiApplication
+
+        from profile.ui.profile_icon import profile_icon_pixmap
+
+        _app = QGuiApplication.instance() or QGuiApplication([])
+        image = profile_icon_pixmap("img:lego:LE", color="#8A8A8A", size=20).toImage()
         for y in range(20):
             for x in range(20):
-                before, after = bright.pixelColor(x, y), muted.pixelColor(x, y)
-                self.assertEqual(before.alpha(), after.alpha(), (x, y))
-                if after.alpha():
-                    self.assertEqual(after.red(), after.green(), (x, y))
-                    self.assertEqual(after.green(), after.blue(), (x, y))
-                if before.alpha() and abs(before.red() - before.green()) > 40:
-                    coloured += 1
-        self.assertGreater(coloured, 20)
-
-    def test_dark_silhouette_takes_the_catalog_colour(self) -> None:
-        """Чёрный призрак Aave на тёмной теме пропадал: силуэт красится цветом каталога."""
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-        from PyQt6.QtGui import QGuiApplication
-
-        from profile.ui.profile_icon import profile_icon_pixmap
-
-        _app = QGuiApplication.instance() or QGuiApplication([])
-        image = profile_icon_pixmap("img:aave:AA", color="#B6509E", size=20).toImage()
-        opaque = [image.pixelColor(x, y) for y in range(20) for x in range(20) if image.pixelColor(x, y).alpha() > 200]
-        self.assertGreater(len(opaque), 20)
-        # ±2 на канал — округление при умножении на прозрачность в QPixmap.
-        target = (0xB6, 0x50, 0x9E)
-        for c in opaque:
-            self.assertLessEqual(max(abs(a - b) for a, b in zip(c.getRgb()[:3], target)), 2, c.name())
-        self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
+                c = image.pixelColor(x, y)
+                if c.alpha() > 200:
+                    self.assertEqual(c.red(), c.green(), (x, y))
+                    self.assertEqual(c.green(), c.blue(), (x, y))
 
 
 if __name__ == "__main__":

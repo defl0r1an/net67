@@ -2,7 +2,6 @@
   "name": "Hume AI",
   "category": "ai",
   "icon": "img:hume:HU",
-  "icon_color": "#111827",
   "sort_order": 119,
   "domains": [
     {

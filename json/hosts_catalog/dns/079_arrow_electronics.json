@@ -2,7 +2,6 @@
   "name": "Arrow Electronics",
   "category": "other",
   "icon": "img:arrow:AR",
-  "icon_color": "#000000",
   "sort_order": 97,
   "domains": [
     {
