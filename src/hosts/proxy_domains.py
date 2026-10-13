@@ -57,9 +57,8 @@ class HostsCatalog:
     #:
     #: Имя сервиса — ключ: по нему лежит сохранённый выбор людей
     #: (settings.json, hosts.selection) и по нему сервис ищут мастер и
-    #: другие страницы. Gemini AI вобрал сайт Antigravity, и надпись стала
-    #: «Gemini AI и Antigravity»; переименуй сам сервис — у всех, кто
-    #: включал Gemini, он молча выпал бы из hosts.
+    #: другие страницы. Переименуешь сам сервис — у всех, кто его включал,
+    #: он молча выпадет из hosts. Надпись отделена от имени ради этого.
     service_titles: dict[str, str] = field(default_factory=dict)
 
 

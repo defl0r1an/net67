@@ -1,6 +1,5 @@
 {
   "name": "Gemini AI",
-  "title": "Gemini AI и Antigravity",
   "category": "ai",
   "icon": "simple:googlegemini:GE",
   "icon_color": "#4285f4",
@@ -118,16 +117,6 @@
         ],
         "malw_dns": "62.133.62.97",
         "malw_dns_v2": "45.95.233.23"
-      }
-    },
-    {
-      "host": "antigravity.google",
-      "ips": {
-        "comss_dns": [
-          "157.22.177.90",
-          "157.22.178.170",
-          "132.243.112.221"
-        ]
       }
     },
     {
@@ -890,12 +879,6 @@
         ],
         "malw_dns": "62.133.62.97",
         "malw_dns_v2": "45.95.233.23"
-      }
-    },
-    {
-      "host": "www.antigravity.google",
-      "ips": {
-        "comss_dns": "216.239.32.61"
       }
     }
   ]
