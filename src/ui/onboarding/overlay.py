@@ -59,6 +59,7 @@ from ui.onboarding.setup_choices import (
     apply_provider_answer,
     apply_setup_answers,
     build_choice_widget,
+    mark_setup_skipped,
     stop_choice_widget,
 )
 from ui.onboarding.steps import (
@@ -746,12 +747,15 @@ class OnboardingOverlay(QWidget):
         self._finish_reason = reason
         self._leave_page_state()
         self._drop_choice_widget()
-        if self._answers is not None and reason in ("done", "skipped"):
-            # «Пропустить» — то же «Готово» мастера с тем, что стоит на
-            # экране: без записи настройка открывалась бы на каждом запуске.
-            # Окно спрятали в трей посреди тура — не пишем ничего: человек
-            # не ответил, и в следующий раз тур начнётся заново.
+        if self._answers is not None and reason == "done":
             apply_setup_answers(self._window, self._answers, select_preset=self._ctx.select_preset)
+        elif self._answers is not None and reason == "skipped":
+            # «Пропустить» — не «Готово» с тем, что стоит на карточках:
+            # человек не отвечал, и включать за него автозапуск и hosts
+            # нельзя. Запоминается только, что настройка пройдена.
+            mark_setup_skipped(self._answers)
+        # Окно спрятали в трей посреди тура — не пишем ничего: человек
+        # не ответил, и в следующий раз тур начнётся заново.
         self._opacity_target = 0.0
         self._blur_timer.stop()
         if immediate or not self._animated:
