@@ -571,6 +571,36 @@ def dismiss_row(
     return True
 
 
+def cancel_dismiss(widget, *, keep_hidden: bool = False) -> None:
+    """Снимает незаконченный уход строки (dismiss_row) и отдаёт ей высоту обратно.
+
+    dismiss_row держит высоту строки сам, через фиксированную высоту. Не
+    отдай её обратно — показанная снова строка осталась бы сжатой до
+    нуля: видимой, но без места. Слой прозрачности при прерывании не
+    снимается: проявление (reveal_widgets) подхватит строку с того, что на
+    экране. ``keep_hidden`` — строка уже ушла: вернуть высоту и убрать слой.
+    """
+    if widget is None:
+        return
+    animation = getattr(widget, "_row_dismiss_animation", None)
+    try:
+        widget._row_dismiss_animation = None
+    except Exception:
+        pass
+    if animation is not None:
+        try:
+            animation.stop()
+        except Exception:
+            pass
+    try:
+        widget.setMinimumHeight(0)
+        widget.setMaximumHeight(16777215)
+        if keep_hidden:
+            widget.setGraphicsEffect(None)
+    except RuntimeError:
+        pass
+
+
 def _finish_conceal(widget) -> None:
     """Убирает слой и прячет блок, доехавший до конца."""
     if widget is None:

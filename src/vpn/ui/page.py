@@ -416,6 +416,12 @@ class VpnPage(BasePage):
         )
         self.profile_list.currentRowChanged.connect(self._on_profile_changed)
         self.profile_list.itemClicked.connect(self._on_list_item_clicked)
+        # Строки приходят и уходят движением, наведение плавное — см.
+        # vpn/ui/server_list_motion.py. Раньше список при каждом
+        # сворачивании группы пересобирался за кадр, и строки прыгали.
+        from vpn.ui.server_list_motion import attach_server_list_motion
+
+        self._list_motion = attach_server_list_motion(self.profile_list)
         set_control_accessibility(
             self.profile_list,
             name="Серверы",
@@ -585,6 +591,10 @@ class VpnPage(BasePage):
         """
         self._visible_profiles = profiles_for_tab(self._profiles, self._tab)
 
+        motion = getattr(self, "_list_motion", None)
+        if motion is not None:
+            # Номера строк после пересборки указывают уже на другие строки.
+            motion.reset()
         self.profile_combo.blockSignals(True)
         self.profile_list.blockSignals(True)
         self.profile_combo.clear()
@@ -734,8 +744,40 @@ class VpnPage(BasePage):
             return  # строка сервера, а не заголовок
 
         key = str(key)
+        collapsing = key not in self._collapsed_groups
+        # Состояние меняем сразу, а не в конце движения: пересоберись список
+        # по другой причине посреди ухода — он соберётся уже свёрнутым.
         self._collapsed_groups.symmetric_difference_update({key})
+        motion = getattr(self, "_list_motion", None)
+        if collapsing:
+            header_row = self.profile_list.row(item)
+            item.setText(item.text().replace("▾", "▸", 1))
+            if motion is not None and motion.leave(self._group_member_rows(header_row), on_finished=self._refill_combo):
+                return
+            self._refill_combo()
+            return
         self._refill_combo()
+        if motion is not None:
+            motion.appear(self._group_member_rows(self._group_header_row(key)))
+
+    def _group_header_row(self, key: str) -> int:
+        """Строка заголовка группы с этим ключом; -1 — такой нет."""
+        for row in range(self.profile_list.count()):
+            item = self.profile_list.item(row)
+            if item is not None and item.data(_GROUP_KEY_ROLE) == key:
+                return row
+        return -1
+
+    def _group_member_rows(self, header_row: int) -> list[int]:
+        """Строки серверов под заголовком — до следующего заголовка."""
+        if header_row < 0:
+            return []
+        rows = []
+        for row in range(header_row + 1, len(self._row_profiles)):
+            if self._row_profiles[row] < 0:
+                break
+            rows.append(row)
+        return rows
 
     def _grouped_profiles(self):
         """Делит видимые профили на группы по подпискам."""
@@ -836,19 +878,55 @@ class VpnPage(BasePage):
         self._sync_warning_label(tab)
         self._sync_refresh_button()
         self._refill_combo()
+        # Новая вкладка — новое содержимое: оно приходит волной, а не
+        # подменяется за кадр (ui/reveal.py, vpn/ui/server_list_motion.py).
+        motion = getattr(self, "_list_motion", None)
+        if motion is not None and self.isVisible():
+            motion.appear(range(self.profile_list.count()))
+        if self.isVisible():
+            from ui.reveal import reveal_widgets
+
+            reveal_widgets([w for w in (getattr(self, "add_section", None), note) if w is not None and w.isVisible()])
 
     def _sync_warning_label(self, tab: str) -> None:
         """Показывает предупреждение только на вкладке, где оно есть.
 
         Пустая подпись всё равно занимает высоту строки и оставляет
-        зазор посреди страницы — поэтому виджет прячется целиком.
+        зазор посреди страницы — поэтому виджет прячется целиком. Прячется
+        и показывается движением: раньше строка пропадала за кадр, и всё,
+        что ниже, прыгало на её место.
         """
         label = getattr(self, "warning_label", None)
         if label is None:
             return
         text = str(TAB_WARNINGS.get(tab, "") or "")
-        label.setText(text)
-        label.setVisible(bool(text))
+        if text:
+            label.setText(text)
+            self._show_block(label)
+        else:
+            # Текст не стираем: уходящая строка должна гаснуть со своими
+            # словами, а не пустой.
+            self._hide_block(label)
+
+    def _show_block(self, widget) -> None:
+        from ui.reveal import cancel_dismiss, reveal_widgets
+
+        cancel_dismiss(widget)
+        # Слой движения есть — строка как раз уходила: проявляем её с того
+        # места, где застали, а не с нуля.
+        moving = widget.isHidden() or widget.graphicsEffect() is not None
+        widget.setVisible(True)
+        if moving and self.isVisible():
+            reveal_widgets([widget])
+
+    def _hide_block(self, widget) -> None:
+        from ui.reveal import cancel_dismiss, dismiss_row
+
+        if widget.isHidden():
+            return
+        if self.isVisible() and dismiss_row(widget, on_finished=lambda w=widget: cancel_dismiss(w, keep_hidden=True)):
+            return
+        widget.setVisible(False)
 
     def _sync_refresh_button(self) -> None:
         """Подписки бывают только у серверов по ссылке.
@@ -858,8 +936,23 @@ class VpnPage(BasePage):
         отвечает «нет сохранённых подписок», — это кнопка-обманка.
         """
         button = getattr(self, "refresh_subs_btn", None)
-        if button is not None:
-            button.setVisible(self._tab == TAB_LINKS)
+        if button is None:
+            return
+        wanted = self._tab == TAB_LINKS
+        if not self.isVisible():
+            button.setVisible(wanted)
+            return
+        from ui.reveal import conceal_widgets, reveal_widgets
+
+        if wanted:
+            # Кнопка могла как раз уходить — тогда проявление подхватит её
+            # с того места, где застало, и уход не спрячет её в конце.
+            moving = button.isHidden() or button.graphicsEffect() is not None
+            button.setVisible(True)
+            if moving:
+                reveal_widgets([button])
+        elif not button.isHidden() and not conceal_widgets([button]):
+            button.setVisible(False)
 
     def _current_profile(self):
         # Спрашиваем список: он на экране, и именно в нём человек выбрал
