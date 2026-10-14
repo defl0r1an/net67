@@ -187,7 +187,7 @@ class JsonReportTests(unittest.TestCase):
         text = history.report_json(report, entry, app_version="21.1.7.50")
         document = json.loads(text)
 
-        self.assertEqual(document["format"], "zapretgui.blockcheck/1")
+        self.assertEqual(document["format"], "net67.blockcheck/1")
         self.assertEqual(document["app_version"], "21.1.7.50")
         self.assertEqual(document["time"], "2026-10-07T20:15:30")
         self.assertEqual(document["report"]["problems"][0]["text"], "DNS подменяет ответы")

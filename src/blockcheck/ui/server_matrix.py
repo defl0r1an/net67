@@ -171,7 +171,9 @@ class ServerMatrix(QWidget):
         index = self.row_at(event.position().y())
         self._hint.hide()
         if event.button() == Qt.MouseButton.LeftButton and index >= 0:
+            event.accept()
             self.opened.emit(index)
+            return
         super().mouseReleaseEvent(event)
 
     def columns(self) -> list[str]:

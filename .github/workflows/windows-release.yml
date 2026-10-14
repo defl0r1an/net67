@@ -48,7 +48,7 @@ jobs:
         run: |
           import os, pathlib, re
 
-          FALLBACK_VERSION = "0.21.67"
+          FALLBACK_VERSION = "0.22.67"
 
           # Версия берётся из тега релиза: v0.4.67 -> 0.4.67. Так номер
           # в «О программе» и номер выпуска на GitHub не разъезжаются —
@@ -93,6 +93,8 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $env:PYTHONPATH = (Resolve-Path "src").Path
+          $env:PATH = python scripts\prepare_build_environment.py
+          if ($LASTEXITCODE -ne 0) { throw "Не удалось подготовить окружение сборки" }
           $modules = @(
             python -c "from app.feature_facades import iter_lazy_feature_facade_modules; from ui.page_registry import iter_lazy_page_modules; print(*sorted(set(iter_lazy_feature_facade_modules()) | set(iter_lazy_page_modules())), sep='\n')"
           )

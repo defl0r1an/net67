@@ -78,7 +78,7 @@ def start_run_log(
         f"{'=' * 70}\n\n"
     )
     started = run_log_sessions.start(primary_path, header)
-    return StrategyScanRunLogState(path=primary_path if started else None)
+    return StrategyScanRunLogState(path=primary_path if started else None, created=started)
 
 
 def append_run_log(path: Path | None, message: str) -> None:

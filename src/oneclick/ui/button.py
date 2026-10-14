@@ -116,6 +116,9 @@ class OneClickButton(QWidget):
         self._state = OneClickState.OFF
         self._stopping = False
         self._worker: _OneClickWorker | None = None
+        from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+        self._availability_runtime = OneShotWorkerRuntime()
+        self._closed = False
 
         # Главный экран: круг по центру, состояние крупной строкой под
         # ним. Раньше кнопка стояла слева, а состояние текстом справа, и
@@ -592,6 +595,7 @@ class OneClickButton(QWidget):
             self._apply_state(OneClickState.ERROR, "Подсистема запуска недоступна")
             return
 
+        self._cancel_availability()
         enable = self._state is not OneClickState.RUNNING
         self._start_worker(enable=enable, feature=feature)
 
@@ -621,12 +625,36 @@ class OneClickButton(QWidget):
         worker.start()
 
     def _on_progress(self, state, message: str) -> None:
-        # Промежуточные состояния показываем, но кнопку не разблокируем.
-        if state in _BUSY:
+        if state in _BUSY or state is OneClickState.RUNNING:
             self._apply_state(state, str(message or ""))
+            # Настройки ещё применяются: две изменяющие систему команды
+            # одновременно запускать нельзя. Проверка сайтов сюда не входит.
+            self.button.setEnabled(False)
 
     def _on_finished(self, state, message: str) -> None:
         self._apply_state(state, str(message or ""))
+        worker = self._worker
+        if state is OneClickState.RUNNING and bool(getattr(worker, 'needs_selfcheck', False)):
+            self._start_availability()
+
+    def _start_availability(self) -> None:
+        from oneclick.ui.oneclick_worker import AvailabilityWorker
+        self._cancel_availability()
+        self._availability_runtime.start_qthread_worker(
+            worker_factory=AvailabilityWorker,
+            on_loaded=self._on_availability,
+        )
+        self._apply_state(OneClickState.RUNNING, "Идёт проверка доступности")
+
+    def _on_availability(self, request_id: int, message: str) -> None:
+        if self._availability_runtime.is_current(request_id, cleanup_in_progress=self._closed) and self._state is OneClickState.RUNNING:
+            self._apply_state(OneClickState.RUNNING, message)
+
+    def _cancel_availability(self) -> None:
+        runtime = self.__dict__.get('_availability_runtime')
+        if runtime is not None:
+            runtime.stop(blocking=False)
+            runtime.cancel()
 
     def _on_worker_done(self, worker) -> None:
         """Убирает завершившийся поток, не трогая текущий.
@@ -654,6 +682,8 @@ class OneClickButton(QWidget):
 
     def stop_worker(self) -> None:
         """Аккуратно гасит поток при закрытии страницы."""
+        self._closed = True
+        self._cancel_availability()
         worker = self._worker
         self._worker = None
         if worker is None:

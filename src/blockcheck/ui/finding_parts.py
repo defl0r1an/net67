@@ -325,7 +325,9 @@ class FindingCard(QWidget):
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if self._clickable and event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.pos()):
+            event.accept()
             self.clicked.emit()
+            return
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802

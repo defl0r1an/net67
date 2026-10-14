@@ -96,6 +96,9 @@ class OneClickRunner:
             if extra:
                 failed_domains = extra
 
+            if step.key is StepKey.DPI and result.ok:
+                self._set_state(OneClickState.RUNNING, "Обход включён, завершаем настройку")
+
             if not result.ok and not result.skipped:
                 # Откатываем всё, что успели изменить, и сообщаем причину.
                 self._rollback(results)
@@ -139,7 +142,7 @@ class OneClickRunner:
                 # Предупреждаем до того, как Telegram выпрыгнет поверх
                 # работы со своим вопросом про прокси.
                 if note:
-                    self._set_state(OneClickState.PREPARING, note)
+                    self._set_state(OneClickState.RUNNING, note)
 
                 ok, message = deps.start_telegram_proxy()
                 if not ok:
@@ -185,6 +188,9 @@ class OneClickRunner:
                 return StepResult(key, ok=True, message=message), tuple(failed)
 
         except Exception as exc:
+            if key is StepKey.SELFCHECK:
+                # Ошибка измерения не отменяет уже запущенный движок.
+                return StepResult(key, ok=True, message="Обход включён, доступность проверить не удалось", note=str(exc)), ()
             return StepResult(key, ok=False, message=f"{type(exc).__name__}: {exc}"), ()
 
         return StepResult(key, ok=True, message="", skipped=True), ()

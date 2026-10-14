@@ -43,6 +43,7 @@ FORBIDDEN = re.compile(r"zapret\s*gui|zapretgui", re.IGNORECASE)
 
 #: Где имя разрешено, и почему.
 ALLOWED: dict[str, str] = {
+    "src/diagnostics/report_compat.py": "формат уже сохранённых отчётов ранней диагностики — только чтение",
     "src/autostart/scheduled_task_api.py": (
         "имя задачи прежней версии — нужно, чтобы её удалить из планировщика"
     ),

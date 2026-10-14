@@ -206,6 +206,7 @@ def load_past_blockcheck_report(log_file: str | None) -> dict | None:
     import json
 
     from diagnostics.history import REPORT_FORMAT
+    from diagnostics.report_compat import LEGACY_BLOCKCHECK_FORMAT
 
     if not log_file:
         return None
@@ -214,7 +215,7 @@ def load_past_blockcheck_report(log_file: str | None) -> dict | None:
             document = json.load(stream)
     except (OSError, ValueError):
         return None
-    if not isinstance(document, dict) or document.get("format") != REPORT_FORMAT:
+    if not isinstance(document, dict) or document.get("format") not in (REPORT_FORMAT, LEGACY_BLOCKCHECK_FORMAT):
         return None
     report = document.get("report")
     return report if isinstance(report, dict) else None

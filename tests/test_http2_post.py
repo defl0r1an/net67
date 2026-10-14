@@ -76,7 +76,8 @@ class ExchangeTests(unittest.TestCase):
             except OSError:
                 pass
 
-        threading.Thread(target=_run, daemon=True).start()
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
         until = time.monotonic() + timeout
 
         def remaining() -> float:
@@ -93,6 +94,10 @@ class ExchangeTests(unittest.TestCase):
             content_type="application/dns-message",
             remaining=remaining,
         )
+        # Клиент уже прочёл тело, но тестовый сервер ещё может записывать
+        # подтверждения SETTINGS/PING. Без ожидания проверка зависела от CPU.
+        thread.join(timeout=5.0)
+        self.assertFalse(thread.is_alive(), 'Тестовый сервер не завершил обмен')
         return result, seen
 
     def test_request_is_sent_and_answer_is_read(self) -> None:

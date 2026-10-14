@@ -594,19 +594,16 @@ class DnsProviderGrid(QWidget):
         """
         hover = self._hover_amount(index)
         pressed = index == self._pressed
-        if dark:
-            if pressed:
-                fill, border = QColor(255, 255, 255, 8), QColor(255, 255, 255, 18)
-            else:
-                fill = QColor(255, 255, 255, round(13 + 8 * hover))
-                border = mix_color(QColor(0, 0, 0, 48), QColor(255, 255, 255, 13), hover)
-        else:
-            fill = QColor(255, 255, 255, 118 if pressed else round(170 + 60 * hover))
-            border = QColor(0, 0, 0, round(15 + 12 * hover))
-        tint_alpha = (22 if dark else 26) if tile.selected else 0
+        from shell.theme import palette
+        colors = palette(dark)
+        # Прозрачный фон зависел от родителя и делал DNS темнее hosts.
+        # Общая поверхность приложения даёт одинаковый тон в обеих темах.
+        fill = mix_color(QColor(colors.surface), QColor(colors.surface_hover), 1.0 if pressed else hover)
+        border = QColor(colors.border_strong if pressed else colors.border)
+        tint_alpha = (16 if dark else 20) if tile.selected else 0
         flash = self._flash.get(tile.key, 0.0)
         if flash > 0:
-            tint_alpha += int(70 * flash)
+            tint_alpha += int(60 * flash)
         path = self._card_path(rect)
         painter.fillPath(path, fill)
         if tint_alpha:

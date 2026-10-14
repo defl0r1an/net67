@@ -29,7 +29,7 @@ __all__ = [
 
 KIND_BLOCKCHECK = "blockcheck"
 # Название и номер формата выгрузки: по ним чужая программа поймёт, что перед ней.
-REPORT_FORMAT = "zapretgui.blockcheck/1"
+REPORT_FORMAT = "net67.blockcheck/1"
 
 def _overall_level(report: dict) -> str:
     return worst(problem.get("level") for problem in report.get("problems") or ())

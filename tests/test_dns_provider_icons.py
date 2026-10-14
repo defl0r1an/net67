@@ -14,6 +14,7 @@ from hosts.ui.profile_icons import profile_icon
 from profile.ui import profile_icon as profile_icon_module
 from profile.ui.own_icons import OWN_ICON_SVGS
 from profile.ui.simple_icons_bundle import SIMPLE_ICON_SVGS
+from profile.ui.brand_images import BRAND_IMAGE_PNGS
 
 
 # Сервер со страницы «Настройка DNS» -> его DNS-профиль в «Редакторе hosts».
@@ -50,6 +51,8 @@ class DnsProviderIconTests(unittest.TestCase):
                     self.assertIn(slug, SIMPLE_ICON_SVGS)
                 elif icon.startswith("own:"):
                     self.assertIn(slug, OWN_ICON_SVGS)
+                elif icon.startswith("img:"):
+                    self.assertIn(slug, BRAND_IMAGE_PNGS)
                 else:
                     self.assertRegex(icon, r"^fa5[sb]\.[a-z0-9-]+$")
 

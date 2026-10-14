@@ -217,7 +217,9 @@ class Index:
 def default_folder() -> Path:
     from config.runtime_layout import APPLICATION_PATHS
 
-    return Path(APPLICATION_PATHS.user_dir) / "registry"
+    # У net67 пользовательские данные лежат в settings; user_dir есть
+    # только в другом варианте структуры приложения.
+    return APPLICATION_PATHS.settings_dir / "diagnostics" / "registry"
 
 
 def load(folder: Path) -> Index:

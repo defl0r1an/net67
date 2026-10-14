@@ -24,7 +24,7 @@ Write-Host "[1/6] Checking generated files" -ForegroundColor Cyan
 
 $buildInfo = Join-Path $Root "src\config\build_info.py"
 if (-not (Test-Path $buildInfo)) {
-    $lines = @('APP_VERSION = "0.21.67"', 'CHANNEL = "stable"')
+    $lines = @('APP_VERSION = "0.22.67"', 'CHANNEL = "stable"')
     Set-Content -Path $buildInfo -Value $lines -Encoding UTF8
     Write-Host "      created build_info.py" -ForegroundColor Yellow
 }
@@ -51,6 +51,9 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to collect module list" }
 Write-Host "      modules: $($modules.Count)"
 
 Write-Host "[3/6] Running PyInstaller" -ForegroundColor Cyan
+
+$env:PATH = & $Py $PyVer (Join-Path $Root "scripts\prepare_build_environment.py")
+if ($LASTEXITCODE -ne 0) { throw "Failed to prepare build environment" }
 
 $BuildRoot = Join-Path $Root "build-local"
 $DistRoot = Join-Path $BuildRoot "dist"

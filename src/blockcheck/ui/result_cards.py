@@ -639,7 +639,11 @@ class ResultCard(QWidget):
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.pos()):
+            # Диалог крутит очередь событий: новый результат может удалить
+            # эту карточку до возврата из обработчика её сигнала.
+            event.accept()
             self.opened.emit(self.card)
+            return
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802

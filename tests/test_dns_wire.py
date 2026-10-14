@@ -100,11 +100,17 @@ class _FakeDnsServer:
 
     def __init__(self, reply) -> None:
         self._reply = reply
-        self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udp.bind(("127.0.0.1", 0))
-        self.port = self.udp.getsockname()[1]
         self.tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.tcp.bind(("127.0.0.1", self.port))
+        # Windows резервирует разные диапазоны для TCP и UDP: порт выбирает TCP.
+        self.tcp.bind(("127.0.0.1", 0))
+        self.port = self.tcp.getsockname()[1]
+        self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.udp.bind(("127.0.0.1", self.port))
+        except OSError:
+            self.udp.close()
+            self.tcp.close()
+            raise
         self.tcp.listen(1)
         self.udp.settimeout(3)
         self.tcp.settimeout(3)

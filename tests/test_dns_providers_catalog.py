@@ -24,6 +24,16 @@ class DnsProvidersCatalogTests(unittest.TestCase):
     def test_catalog_has_no_problems(self) -> None:
         self.assertEqual(catalog_problems(), [])
 
+    def test_net67_is_a_selectable_ordinary_dns_without_encryption_claim(self):
+        data = DNS_PROVIDERS['Малоизвестные']['net67 DNS']
+        self.assertEqual(data['ipv4'], ['138.124.29.69'])
+        self.assertEqual(data['desc'], 'Без рекламы, Швеция')
+        self.assertFalse(data.get('doh'))
+        self.assertFalse(data.get('dot'))
+        self.assertTrue(data.get('dnssec'))
+        self.assertEqual(data['ipv6'], ['2a0b:4140:cdfc::2'])
+        self.assertEqual(find_provider_by_address('138.124.29.69')[1], 'net67 DNS')
+
     def test_broken_entries_are_reported(self) -> None:
         broken = copy.deepcopy(DNS_PROVIDERS)
         broken["Популярные"]["Копия"] = dict(broken["Популярные"]["Cloudflare"])

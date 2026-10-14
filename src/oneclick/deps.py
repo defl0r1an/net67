@@ -447,6 +447,38 @@ def probe_domain_over_https(url: str, *, timeout: float = 6.0) -> bool:
                 pass
 
 
+def check_availability(cancel) -> str:
+    """Отдельное измерение; не меняет hosts, DNS и состояние движка."""
+    from urllib.parse import urlparse
+    from diagnostics.tls_probe import https_get, KIND_OK
+    from utils.net_resolve import resolve_addrinfo
+    from oneclick.plans import build_selfcheck_message
+
+    failed = []
+    checked = 0
+    for url in SELFCHECK_URLS:
+        if cancel.cancelled:
+            return ""
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        ok = False
+        try:
+            addresses = resolve_addrinfo(host, 443, timeout=3.0)
+            if cancel.cancelled:
+                return ""
+            if addresses:
+                result = https_get(host, addresses[0][4][0], parsed.path or '/', timeout=6.0, cancel=cancel)
+                ok = result.kind == KIND_OK and result.status is not None
+        except OSError:
+            pass
+        if cancel.cancelled:
+            return ""
+        checked += 1
+        if not ok:
+            failed.append(host)
+    return build_selfcheck_message(total=checked, failed_domains=tuple(failed))
+
+
 def _probe_domains() -> tuple[int, tuple[str, ...]]:
     from urllib.parse import urlparse
 
