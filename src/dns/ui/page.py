@@ -777,6 +777,10 @@ class NetworkPage(BasePage):
     # ── замер скорости ──────────────────────────────────────
 
     def _measure_latency(self) -> None:
+        # Кнопка во время замера не отключается (см. DnsNowPanel.set_measuring),
+        # поэтому повторное нажатие гасится здесь.
+        if self._measuring:
+            return
         servers = [
             address
             for group in self._providers.values()

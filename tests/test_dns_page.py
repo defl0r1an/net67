@@ -411,7 +411,10 @@ class DnsPageTests(unittest.TestCase):
         servers = page._latency_lane.request.call_args.args[0]
         self.assertIn("1.1.1.1", servers)
         self.assertTrue(all(":" not in server for server in servers))
-        self.assertFalse(page.now_panel.measure_button.isEnabled())
+        # Кнопка остаётся доступной (иначе фокус уйдёт и страница прокрутится), а второе нажатие замер не повторяет.
+        self.assertTrue(page.now_panel.measure_button.isEnabled())
+        page.now_panel.measure_button.click()
+        self.assertEqual(page._latency_lane.request.call_count, 1)
         unmeasured = {"Wikimedia DNS", "DNS-AI"}
         network_tiles = [tile for tile in self._provider_tiles(page) if tile.key not in unmeasured]
         self.assertEqual({tile.latency for tile in network_tiles}, {"measuring"})
