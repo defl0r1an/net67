@@ -405,6 +405,8 @@ class NetworkPage(BasePage):
         self.now_panel.set_state(self._now_state(plan))
         self.now_panel.update_adapter_tooltips(self._adapter_tooltips())
         self.grid.set_tiles(self._tiles(plan))
+        # Предупреждение зависит и от отметок адаптеров: неотмеченный адаптер — дорога мимо выбранного сервера.
+        self._render_notice()
 
     def _provider(self, name: str) -> dict | None:
         for group in self._providers.values():
@@ -804,7 +806,6 @@ class NetworkPage(BasePage):
         self._measuring = True
         self._latency = {}
         self._intercepted = False
-        self.now_panel.set_notice("")
         self.latency_summary.hide()
         self._retranslate()
         self._render()
@@ -815,17 +816,51 @@ class NetworkPage(BasePage):
         self._latency = dict(getattr(report, "results", {}) or {})
         self._intercepted = bool(getattr(report, "intercepted", False))
         self._retranslate()
-        self.now_panel.set_notice(
-            self._t(
+        self._update_latency_summary()
+        # Предупреждение ставит _render → _render_notice: перехват главнее.
+        self._render()
+
+    def _render_notice(self) -> None:
+        if self._intercepted:
+            text = self._t(
                 "page.network.latency.intercepted",
                 "Похоже, DNS-запросы перехватываются по пути (провайдером или роутером): ответил даже адрес, "
                 "где DNS-сервера нет. Цифры показывают перехватчик, а не выбранные серверы.",
             )
-            if self._intercepted
-            else ""
-        )
-        self._update_latency_summary()
-        self._render()
+        else:
+            text = self._leftover_text()
+        self.now_panel.set_notice(text)
+
+    def _leftover_text(self) -> str:
+        """Дороги, по которым запросы идут мимо выбранного сервера: IPv6-DNS роутера, неотмеченный адаптер."""
+        if not self._loaded:
+            return ""
+        leftovers = dns_page_plans.find_dns_leftovers(self._adapters, self._selected_adapters())
+        parts: list[str] = []
+        for item in leftovers:
+            addresses = ", ".join(item.addresses[:2])
+            if item.kind == dns_page_plans.LEFTOVER_IPV6:
+                parts.append(
+                    self._t(
+                        "page.network.now.leftover.ipv6",
+                        "На адаптере «{adapter}» по IPv6 остался DNS роутера или провайдера ({addresses}): Windows "
+                        "спрашивает и его, так что ответ может прийти не от выбранного сервера. У выбранного сервера "
+                        "адресов IPv6 нет — выберите сервер, у которого они есть.",
+                        adapter=item.adapter,
+                        addresses=addresses,
+                    )
+                )
+            else:
+                parts.append(
+                    self._t(
+                        "page.network.now.leftover.adapter",
+                        "Адаптер «{adapter}» подключён, но не отмечен: на нём свой DNS ({addresses}), и запросы "
+                        "через него идут мимо выбранного сервера.",
+                        adapter=item.adapter,
+                        addresses=addresses,
+                    )
+                )
+        return "\n".join(parts)
 
     def _update_latency_summary(self) -> None:
         best_name, best_ms = "", None

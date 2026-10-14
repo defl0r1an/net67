@@ -2176,6 +2176,14 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Замер не удался",
         "en": "Measurement failed",
     },
+    "page.network.now.leftover.ipv6": {
+        "ru": "На адаптере «{adapter}» по IPv6 остался DNS роутера или провайдера ({addresses}): Windows спрашивает и его, так что ответ может прийти не от выбранного сервера. У выбранного сервера адресов IPv6 нет — выберите сервер, у которого они есть.",
+        "en": "Adapter “{adapter}” still has the router's or provider's DNS over IPv6 ({addresses}): Windows asks it too, so the answer may come from it instead of the chosen server. The chosen server has no IPv6 addresses — pick a server that has them.",
+    },
+    "page.network.now.leftover.adapter": {
+        "ru": "Адаптер «{adapter}» подключён, но не отмечен: на нём свой DNS ({addresses}), и запросы через него идут мимо выбранного сервера.",
+        "en": "Adapter “{adapter}” is connected but not ticked: it keeps its own DNS ({addresses}), and queries through it bypass the chosen server.",
+    },
     "page.network.latency.intercepted": {
         "ru": "Похоже, DNS-запросы перехватываются по пути (провайдером или роутером): ответил даже адрес, где DNS-сервера нет. Цифры показывают перехватчик, а не выбранные серверы.",
         "en": "DNS queries seem to be intercepted on the way (by your ISP or router): even an address with no DNS server replied. The numbers show the interceptor, not the chosen servers.",
