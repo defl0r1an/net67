@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 
 from config.runtime_layout import APPLICATION_PATHS
+from log.log_kinds import BLOCKCHECK_RUN_LOG_PATTERNS, STRATEGY_SCAN_LOG_PATTERNS, WINWS_DEBUG_LOG_PATTERNS
 
 from config.urls import BLOCKCHECK_ISSUES_URL
 from log.log import global_logger, LOG_FILE
@@ -56,6 +57,9 @@ def _common_candidate_paths() -> list[str | None]:
     ]
 
 
+BLOCKCHECK_RECENT_PATTERNS = (*BLOCKCHECK_RUN_LOG_PATTERNS, *WINWS_DEBUG_LOG_PATTERNS)
+
+
 def prepare_blockcheck_support_request(
     *,
     run_log_file: str | None,
@@ -73,7 +77,7 @@ def prepare_blockcheck_support_request(
         bundle_prefix="blockcheck_support",
         context_label=f"BlockCheck: {mode_label}",
         candidate_paths=[run_log_file, *_common_candidate_paths()],
-        recent_patterns=("blockcheck_run_*.log", "zapret_winws2_debug_*.log"),
+        recent_patterns=BLOCKCHECK_RECENT_PATTERNS,
         extra_note=extra_note,
         discussions_url=BLOCKCHECK_ISSUES_URL,
     )
@@ -104,7 +108,7 @@ def prepare_strategy_scan_support_request(
             run_log_file,
             *_common_candidate_paths(),
         ],
-        recent_patterns=("blockcheck_run_*.log", "zapret_winws2_debug_*.log"),
+        recent_patterns=(*STRATEGY_SCAN_LOG_PATTERNS, *WINWS_DEBUG_LOG_PATTERNS),
         extra_note=extra_note,
         discussions_url=BLOCKCHECK_ISSUES_URL,
     )
