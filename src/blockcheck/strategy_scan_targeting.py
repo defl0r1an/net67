@@ -21,7 +21,9 @@ def scan_protocol_from_value(value) -> str:
 
 
 def mode_from_index(index: int) -> str:
-    mode_map = {0: "quick", 1: "standard", 2: "full"}
+    # После добавления экспресса старые индексы отправляли в worker
+    # «Быстро · 30», хотя на экране было выбрано «Экспресс · 5».
+    mode_map = {0: "smart", 1: "quick", 2: "standard", 3: "full"}
     return mode_map.get(int(index), "quick")
 
 

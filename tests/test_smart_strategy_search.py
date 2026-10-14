@@ -17,6 +17,19 @@ from blockcheck.strategy_search.verdict import CONFIRM_ATTEMPTS, VERDICT_WORKING
 
 
 class SmartStrategySearchTests(unittest.TestCase):
+    def test_displayed_modes_reach_candidate_selection(self):
+        from blockcheck.strategy_scan_page_plans import MODE_ITEMS
+        from blockcheck.strategy_scan_targeting import build_selection_state
+
+        candidates = [Candidate(str(i), str(i), "--lua-desync=fake") for i in range(100)]
+        for index, ((_key, _text, mode), expected_count) in enumerate(zip(MODE_ITEMS, (5, 30, 80, 100))):
+            with self.subTest(mode=mode):
+                selection = build_selection_state(
+                    protocol_value="tcp_https", udp_scope_value="all", mode_index=index,
+                )
+                self.assertEqual(selection.mode, mode)
+                self.assertEqual(len(batch_for_mode(candidates, selection.mode)), expected_count)
+
     def test_smart_mode_batch_size(self):
         self.assertIn("smart", MODE_BATCH_SIZES)
         self.assertEqual(MODE_BATCH_SIZES["smart"], 5)
