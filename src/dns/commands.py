@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from dns.state import CustomServerResult, DnsCommandResult, DnsState
 
 
@@ -42,11 +44,27 @@ def create_dns_check_save_worker(request_id: int, *, file_path: str, plain_text:
 def run_dns_poisoning_check(*, log_callback=None, should_stop=None) -> dict:
     from diagnostics.engine import run_dns_check
 
-    results = run_dns_check(
-        emit=log_callback or (lambda _line: None),
-        should_stop=should_stop,
-    )
-    return dict(results or {})
+    # Строки отчёта копятся, чтобы лечь в тот же файл: у прошлой проверки по ним работает кнопка «Отчёт».
+    lines: list[str] = []
+
+    def emit(line: str) -> None:
+        lines.append(str(line))
+        if log_callback is not None:
+            log_callback(line)
+
+    results = run_dns_check(emit=emit, should_stop=should_stop)
+    results = dict(results or {})
+    from diagnostics.history import dns_check_entry
+
+    entry = dns_check_entry(results)
+    if entry is not None:
+        # Итог целиком — в файл: прошлая проверка открывается теми же карточками.
+        document = {"format": DNS_CHECK_FORMAT, "report": results, "text": lines}
+        entry["log_file"] = _save_past_check("dns_check", document)
+        # Экран показывает ту самую запись, что сохранена в настройки.
+        results["history_entry"] = entry
+    _remember_check("dns_history", entry)
+    return results
 
 
 def save_dns_check_results(*, file_path: str, plain_text: str):
@@ -218,10 +236,9 @@ def duplicate_custom_server(server_id: str) -> CustomServerResult:
 
 def build_domain_lookup_servers():
     """Серверы для вкладки «Проверка домена»: системные, шифрованные, из списка программы и свои."""
-    from dns.custom_servers import build_dns_providers_with_custom, CUSTOM_DNS_CATEGORY
-    from dns.dns_providers import DNS_PROVIDERS
+    from dns.custom_servers import build_dns_providers_with_custom
+    from dns.dns_providers import is_encrypted_only, network_providers
     from dns.domain_lookup import (
-        DOH_SERVERS,
         EXTRA_SERVERS,
         SERVER_CUSTOM,
         SERVER_DOH,
@@ -229,27 +246,35 @@ def build_domain_lookup_servers():
         SERVER_SYSTEM,
         DnsServer,
     )
-
+    from dns.custom_servers import CUSTOM_DNS_CATEGORY
+    from utils.dns_reference import REFERENCE_RESOLVERS
 
     servers: list = []
     try:
         from utils.windows_dns_query import system_dns_servers
 
-        servers.extend(DnsServer(label=address, address=address, kind=SERVER_SYSTEM) for address in system_dns_servers())
+        from dns.dns_providers import find_provider_by_address
+
+        for address in system_dns_servers():
+            # Подпись — чей это сервер («Google»), если он есть в списке программы: адрес и так показан рядом.
+            found = find_provider_by_address(address)
+            servers.append(DnsServer(label=str(found[1]) if found else "", address=address, kind=SERVER_SYSTEM))
     except Exception:
         pass
-    servers.extend(DnsServer(label=label, address=address, kind=SERVER_DOH) for label, address in DOH_SERVERS)
+    servers.extend(
+        DnsServer(label=f"{resolver.label} (шифрованный)", address=resolver.address, kind=SERVER_DOH)
+        for resolver in REFERENCE_RESOLVERS
+    )
 
-    try:
-        from settings.store import get_custom_dns_servers
-
-        custom_servers = get_custom_dns_servers()
-    except Exception:
-        custom_servers = []
-    providers = build_dns_providers_with_custom(DNS_PROVIDERS, custom_servers)
+    custom_servers = load_custom_servers()
+    # Режимы встроенного шифрованного DNS — не серверы в сети: у них один адрес 127.0.0.1.
+    providers = build_dns_providers_with_custom(network_providers(), custom_servers)
     for category, group in providers.items():
         kind = SERVER_CUSTOM if category == CUSTOM_DNS_CATEGORY else SERVER_PROVIDER
         for name, data in group.items():
+            if is_encrypted_only(data):
+                # Вкладка спрашивает серверы списка обычным DNS, а такой сервер его не принимает.
+                continue
             addresses = list(data.get("ipv4") or ()) or list(data.get("ipv6") or ())
             if addresses:
                 servers.append(DnsServer(label=str(name), address=str(addresses[0]), kind=kind))
@@ -260,11 +285,220 @@ def build_domain_lookup_servers():
 def run_domain_lookup(target: str, *, use_external: bool = True, on_stage=None, should_stop=None):
     from dns.domain_lookup import run_domain_lookup as _run_domain_lookup
 
-    return _run_domain_lookup(
+    report = _run_domain_lookup(
         target,
         servers=build_domain_lookup_servers(),
         use_external=use_external,
         on_stage=on_stage,
         should_stop=should_stop,
     )
+    from dns.domain_lookup_plans import build_history_entry, build_text_report
 
+    entry = build_history_entry(report)
+    if entry is not None:
+        # Проверка целиком — в файл: запись истории на вкладке открывает её теми же карточками.
+        entry["log_file"] = save_domain_lookup_text(report.target, build_text_report(report), report)
+    _remember_check("domain_history", entry)
+    # Экран показывает именно сохранённую запись: соберёт свою — в ней не будет пути к полному тексту.
+    return replace(report, history_entry=entry)
+
+
+def _save_past_check(prefix: str, document: dict) -> str:
+    """Кладёт отчёт проверки вкладки в папку журналов. Возвращает путь; пусто — записать не удалось.
+
+    У каждой вкладки свои файлы (``prefix``); старые сверх ``PAST_CHECK_FILES_KEPT`` удаляются.
+    """
+    import json
+    import os
+    from datetime import datetime
+
+    try:
+        from config.runtime_layout import APPLICATION_PATHS
+
+        folder = str(APPLICATION_PATHS.logs_dir)
+        os.makedirs(folder, exist_ok=True)
+        # С миллисекундами: две проверки, закончившиеся в одну секунду, не затирают друг друга.
+        path = os.path.join(folder, f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]}.json")
+        with open(path, "w", encoding="utf-8") as stream:
+            json.dump(document, stream, ensure_ascii=False, indent=1)
+        old = sorted(name for name in os.listdir(folder) if name.startswith(f"{prefix}_") and name.endswith(".json"))
+        for name in old[:-PAST_CHECK_FILES_KEPT]:
+            try:
+                os.remove(os.path.join(folder, name))
+            except OSError:
+                pass
+        return path
+    except Exception:
+        return ""
+
+
+def _format_version(value: object, expected_format: str) -> int | None:
+    """Номер версии файла той же вкладки (``net67.<вкладка>/<номер>``). None — чужой файл."""
+    family, _slash, _current = expected_format.rpartition("/")
+    name, slash, number = str(value or "").rpartition("/")
+    if not slash or name != family:
+        return None
+    try:
+        return int(number)
+    except ValueError:
+        return None
+
+
+def _read_past_check(log_file: str | None, expected_format: str) -> dict:
+    """Документ прошлой проверки вкладки. Пусто — файла нет, он чужой или из более новой программы.
+
+    Файл любой версии формата этой вкладки не новее текущей читается: смена номера
+    версии не должна делать нечитаемыми все сохранённые проверки.
+    """
+    import json
+
+    if not log_file:
+        return {}
+    try:
+        with open(str(log_file), encoding="utf-8") as stream:
+            document = json.load(stream)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(document, dict):
+        return {}
+    version = _format_version(document.get("format"), expected_format)
+    current = _format_version(expected_format, expected_format)
+    if version is None or current is None or version > current:
+        return {}
+    return document
+
+
+def load_past_server_check_report(log_file: str | None):
+    """Отчёт прошлой проверки DNS-серверов — тем же объектом, из которого строятся карточки. None — файла нет."""
+    from dns.server_check import ServerCheckReport, rejudge_report
+    from utils.dataclass_json import from_plain
+
+    report = from_plain(ServerCheckReport, _read_past_check(log_file, SERVER_CHECK_FORMAT).get("report"))
+    # Выводы — по нынешним правилам: сырые факты в файле есть, а правила с тех пор могли уточниться.
+    return rejudge_report(report) if report is not None else None
+
+
+def _remember_check(key: str, entry: dict | None) -> None:
+    """Дописывает итог проверки в историю вкладки. Сбой записи проверку не ломает."""
+    if entry is None:
+        return
+    try:
+        from settings.store import add_tab_history_run
+
+        add_tab_history_run(key, entry)
+    except Exception:
+        pass
+
+
+def build_server_check_targets():
+    """Адреса для вкладки «DNS-серверы»: все серверы программы и свои, IPv6 — если он есть."""
+    from dns.custom_servers import build_dns_providers_with_custom
+    from dns.dns_providers import network_providers
+    from dns.server_check import build_targets
+
+    custom_servers = load_custom_servers()
+    try:
+        from dns.winapi import internet_route
+
+        ipv6 = bool(internet_route().has_ipv6)
+    except Exception:
+        ipv6 = False
+    return build_targets(build_dns_providers_with_custom(network_providers(), custom_servers), ipv6=ipv6)
+
+
+def run_server_check(*, on_progress=None, should_stop=None):
+    from dns.server_check import run_server_check as _run_server_check
+
+    report = _run_server_check(
+        build_server_check_targets(),
+        on_progress=on_progress,
+        should_stop=should_stop,
+        bypass=_running_bypass(),
+    )
+    from diagnostics.history import server_check_entry
+    from utils.dataclass_json import to_plain
+
+    entry = server_check_entry(report)
+    if entry is not None:
+        entry["log_file"] = _save_past_check("server_check", {"format": SERVER_CHECK_FORMAT, "report": to_plain(report)})
+    _remember_check("servers_history", entry)
+    return replace(report, history_entry=entry)
+
+
+def _running_bypass() -> tuple[str, ...]:
+    """net67 и другие программы обхода, запущенные сейчас: оговорка к результатам проверки."""
+    from utils.bypass_tools import bypass_tools_among
+
+    try:
+        from settings.mode import ALL_WINWS_EXE_NAME_SET
+        from utils.windows_process_probe import iter_process_records_winapi
+
+        names = [str(name or "").lower() for _pid, name in iter_process_records_winapi()]
+    except Exception:
+        return ()
+    zapret = ("net67",) if any(name in ALL_WINWS_EXE_NAME_SET for name in names) else ()
+    return zapret + bypass_tools_among(names)
+
+
+SERVER_CHECK_FORMAT = "net67.server_check/1"
+PAST_CHECK_FILES_KEPT = 40
+
+
+def save_domain_lookup_text(target: str, text: str, report=None) -> str:
+    """Кладёт проверку домена в папку журналов. Возвращает путь; пусто — записать не удалось.
+
+    В файле и сам отчёт (по нему прошлая проверка рисуется теми же карточками), и его текст.
+    """
+    document = {"format": DOMAIN_LOOKUP_FORMAT, "target": str(target), "text": str(text).split("\n")}
+    if report is not None:
+        from utils.dataclass_json import to_plain
+
+        document["report"] = to_plain(report)
+    return _save_past_check("domain_lookup", document)
+
+
+def load_past_domain_lookup(log_file: str | None) -> str:
+    """Текст прошлой проверки домена. Пусто — файла нет или он не читается."""
+    lines = _read_past_check(log_file, DOMAIN_LOOKUP_FORMAT).get("text")
+    return "\n".join(str(line) for line in lines) if isinstance(lines, list) else ""
+
+
+def load_past_domain_lookup_report(log_file: str | None):
+    """Отчёт прошлой проверки домена — тем же объектом, из которого рисуются карточки.
+
+    None — файла нет, он не читается или сохранён до того, как отчёт стали класть в файл.
+    """
+    from dns.domain_lookup import DomainLookupReport
+    from utils.dataclass_json import from_plain
+
+    return from_plain(DomainLookupReport, _read_past_check(log_file, DOMAIN_LOOKUP_FORMAT).get("report"))
+
+
+def load_past_dns_check_report(log_file: str | None) -> dict | None:
+    """Итог прошлой проверки DNS подмены — тем же словарём, что уходил на экран вкладки. None — файла нет."""
+    report = _read_past_check(log_file, DNS_CHECK_FORMAT).get("report")
+    return report if isinstance(report, dict) else None
+
+
+def load_past_dns_check_text(log_file: str | None) -> str:
+    """Текст прошлой проверки DNS подмены. Пусто — файла нет или текст в него не клали."""
+    lines = _read_past_check(log_file, DNS_CHECK_FORMAT).get("text")
+    return "\n".join(str(line) for line in lines) if isinstance(lines, list) else ""
+
+
+DOMAIN_LOOKUP_FORMAT = "net67.domain_lookup/1"
+DNS_CHECK_FORMAT = "net67.dns_check/1"
+
+
+def load_past_report_text(kind: str, log_file: str) -> str:
+    if kind == "dns":
+        return load_past_dns_check_text(log_file)
+    if kind == "domain":
+        from dns.domain_lookup_plans import build_text_report
+        report = load_past_domain_lookup_report(log_file)
+    elif kind == "servers":
+        from dns.server_check_plans import build_text_report
+        report = load_past_server_check_report(log_file)
+    else:
+        raise ValueError("Неизвестный вид проверки")
+    return build_text_report(report) if report is not None else ""

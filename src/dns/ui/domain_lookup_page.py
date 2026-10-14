@@ -153,7 +153,7 @@ class DnsAnswersTable(TableWidget):
 class DomainLookupPage(BasePage):
     """Пинг, адреса с разных DNS и «кто ещё на этом адресе» для одного домена или IP."""
 
-    def __init__(self, parent=None, *, dns_feature, embedded: bool = False):
+    def __init__(self, parent=None, *, dns_feature, embedded: bool = False, open_hosts_service=None):
         super().__init__(
             "Проверка домена",
             "Пинг, адреса с разных DNS-серверов и домены на том же адресе",
@@ -161,6 +161,7 @@ class DomainLookupPage(BasePage):
             title_key="page.domain_lookup.title",
             subtitle_key="page.domain_lookup.subtitle",
         )
+        self._open_hosts_service = open_hosts_service
         self._dns = dns_feature
         self._closed = False
         self._report = None
@@ -260,6 +261,17 @@ class DomainLookupPage(BasePage):
 
         for card in (self.ping_card, self.dns_card, self.neighbors_card):
             card.setVisible(False)
+        from blockcheck.ui.result_cards import CardsGrid, card_plain_text
+
+        self.detail_cards = CardsGrid(330, self.content)
+        self.detail_cards.opened.connect(lambda card: show_log_report_dialog(self.window(), title=card.title, text=card_plain_text(card)))
+        self.detail_cards.hide()
+        self.layout.insertWidget(self.layout.indexOf(self.control_card) + 1, self.detail_cards)
+        self.control_card.main_layout.addWidget(self.add_to_hosts_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        from dns.ui.check_history import CheckHistory
+
+        self.check_history = CheckHistory(dns_feature=self._dns, kind="domain", parent=self.content)
+        self.layout.addWidget(self.check_history)
         self.layout.addStretch()
 
     def _apply_texts(self) -> None:
@@ -401,6 +413,7 @@ class DomainLookupPage(BasePage):
         if self._closed:
             return
         self._show_report(report)
+        self.check_history.append(getattr(report, "history_entry", None))
         self.stop_button.setEnabled(True)
         self._set_running(False)
 
@@ -414,35 +427,27 @@ class DomainLookupPage(BasePage):
         self._set_running(False)
 
     def _show_report(self, report) -> None:
+        from dns.ui.domain_lookup_cards import build_lookup_cards
+
         self._report = report
+        self.report_button.setEnabled(True)
+        self.detail_cards.show_cards(build_lookup_cards(report), animate=False)
+        self.detail_cards.setVisible(True)
         self.status_lines.set_lines((plans.build_status(report),))
-
-        ping_lines = plans.build_ping_lines(report)
-        self.ping_lines.set_lines(ping_lines)
-        self.network_lines.set_lines(plans.build_network_lines(report))
-        self.ping_card.setVisible(bool(ping_lines))
-
-        rows = plans.build_answer_rows(report)
-        self.dns_card.setVisible(bool(rows))
-        can_add_hosts = bool(report.primary_ip and getattr(report, "kind", "") == "domain")
-        self.add_to_hosts_btn.setVisible(can_add_hosts)
-        if can_add_hosts:
-            self.add_to_hosts_btn.setEnabled(not self._hosts_lane.is_busy())
-            self.add_to_hosts_btn.setText(self._t("button.add_to_hosts", "Добавить в Hosts"))
-        if rows:
-            self.dns_summary.set_lines((plans.build_dns_summary(report),))
-            self.dns_table.show_rows(rows)
-
-        text = plans.build_neighbors_text(report)
-        self.neighbors_card.setVisible(bool(text))
-        if text != getattr(self, "_last_neighbors_text", None):
-            self._last_neighbors_text = text
-            self.neighbors_text.setPlainText(text)
-            lines = min(18, max(4, text.count("\n") + 1))
-            self.neighbors_text.setFixedHeight(lines * self.neighbors_text.fontMetrics().lineSpacing() + 24)
-        set_state_text(self.neighbors_text, f"Домены на том же адресе: найдено {plans.count_neighbors(report)}")
+        # Все измерения уже находятся в карточках и подробном отчёте:
+        # прежние таблицы не дублируют их на той же странице.
+        for old in (self.ping_card, self.dns_card, self.neighbors_card):
+            old.hide()
+        can_add = bool(report.primary_ip and report.kind == "domain")
+        self.add_to_hosts_btn.setVisible(can_add)
+        self.add_to_hosts_btn.setEnabled(can_add and not self._hosts_lane.is_busy())
+        self.add_to_hosts_btn.setText("Настроить в hosts" if getattr(report, "hosts_service", "") and self._open_hosts_service is not None else self._t("button.add_to_hosts", "Добавить в Hosts"))
 
     def _on_add_to_hosts(self) -> None:
+        service = getattr(self._report, "hosts_service", "")
+        if service and self._open_hosts_service is not None:
+            self._open_hosts_service(service)
+            return
         if self._closed or self._hosts_lane.is_busy() or not self._report or not self._report.primary_ip:
             return
         domain = str(self._report.target or "").strip()
@@ -503,10 +508,14 @@ class DomainLookupPage(BasePage):
             pass
 
     def cleanup(self) -> None:
+        self.check_history.cleanup()
         self._closed = True
         self._hosts_lane.close()
         self._lane.close()
         super().cleanup()
 
+
+    def set_history(self, runs) -> None:
+        self.check_history.set_history(runs)
 
 __all__ = ["DnsAnswersTable", "DomainLookupPage"]

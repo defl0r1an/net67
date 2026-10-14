@@ -18,6 +18,9 @@ class DnsFeature:
     create_dns_apply_worker: Callable
     create_custom_server_worker: Callable
     create_domain_lookup_worker: Callable
+    create_past_report_worker: Callable
+    create_server_check_worker: Callable
+    load_past_server_check_report: Callable
 
 
 def build_dns_feature() -> DnsFeature:
@@ -149,6 +152,16 @@ def build_dns_feature() -> DnsFeature:
             parent=parent,
         )
 
+    def _create_server_check_worker(request_id: int, *, parent=None):
+        from dns.server_check_worker import ServerCheckWorker
+
+        return ServerCheckWorker(request_id, run_server_check=_commands().run_server_check, parent=parent)
+
+    def _create_past_report_worker(request_id: int, *, kind: str, log_file: str, parent=None):
+        from dns.past_report_worker import DnsPastReportWorker
+
+        return DnsPastReportWorker(request_id, log_file=log_file, load_text=lambda path: _commands().load_past_report_text(kind, path), parent=parent)
+
     return DnsFeature(
         migrate_outdated_dns_addresses=lambda *args, **kwargs: _public().migrate_outdated_dns_addresses(*args, **kwargs),
         warm_page_data_cache=lambda *args, **kwargs: _public().warm_state(*args, **kwargs),
@@ -162,5 +175,8 @@ def build_dns_feature() -> DnsFeature:
         create_dns_apply_worker=_create_dns_apply_worker,
         create_custom_server_worker=_create_custom_server_worker,
         create_domain_lookup_worker=_create_domain_lookup_worker,
+        create_past_report_worker=_create_past_report_worker,
+        create_server_check_worker=_create_server_check_worker,
+        load_past_server_check_report=lambda *args, **kwargs: _commands().load_past_server_check_report(*args, **kwargs),
     )
 

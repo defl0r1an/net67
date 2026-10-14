@@ -18,7 +18,7 @@ from dataclasses import replace
 from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QTimer, Qt
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut
-from PyQt6.QtWidgets import QGraphicsOpacityEffect, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QGraphicsOpacityEffect, QSizePolicy, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from qfluentwidgets import (
     Action,
     BodyLabel,
@@ -195,6 +195,7 @@ class HostsPage(BasePage):
         # Проверка профилей кнопкой на плитке: по одному сервису за раз,
         # остальные нажатые ждут очереди — адреса профилей чужие серверы,
         # и сотню соединений разом им слать незачем.
+        self._address_runtime = OneShotWorkerRuntime()
         self._probe_runtime = OneShotWorkerRuntime()
         self._probing: str | None = None
         self._probe_queue: list[str] = []
@@ -267,6 +268,14 @@ class HostsPage(BasePage):
         self.access_card.main_layout.addLayout(access_row)
         self.access_card.hide()
         self.add_widget(self.access_card)
+        self.address_check_button = PushButton(FluentIcon.SYNC, "Обновить адреса", self.content)
+        self.address_check_button.clicked.connect(self._check_addresses)
+        set_control_accessibility(self.address_check_button, name="Обновить адреса сервисов", description="Проверяет адреса включённых сервисов и обновляет только записи net67 в hosts.")
+        self.add_widget(self.address_check_button)
+        self.address_check_button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.address_check_status = CaptionLabel("", self.content)
+        self.address_check_status.hide()
+        self.add_widget(self.address_check_status)
 
         # Поиск: появляется по Ctrl+F, прячется по Esc.
         self.search_edit = SearchLineEdit(self.content)
@@ -440,7 +449,7 @@ class HostsPage(BasePage):
         self._cleanup_in_progress = True
         self._probe_queue.clear()
         self._probing = None
-        for runtime in (self._snapshot_runtime, self._apply_runtime, self._restore_runtime, self._probe_runtime):
+        for runtime in (self._snapshot_runtime, self._apply_runtime, self._restore_runtime, self._probe_runtime, self._address_runtime):
             try:
                 runtime.stop(blocking=False, warning_prefix="Hosts worker")
                 runtime.cancel()
@@ -1020,6 +1029,39 @@ class HostsPage(BasePage):
         self.tiles.set_tiles(tiles)
         if self._focus_service_pending:
             QTimer.singleShot(0, self._show_focused_service)
+
+
+
+    def _check_addresses(self) -> None:
+        if self._address_runtime.is_running() or self._address_runtime.is_queued():
+            self._address_runtime.stop(blocking=False)
+            return
+        self.address_check_button.setText("Отменить проверку адресов")
+        self._address_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._hosts.create_address_check_worker(request_id, self),
+            on_loaded=self._on_addresses_checked,
+            on_failed=self._on_addresses_failed,
+            on_finished=self._on_address_worker_finished,
+        )
+
+    def _on_addresses_checked(self, request_id: int, result) -> None:
+        if not self._address_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        from hosts.address_words import describe_address_check
+
+        report, _snapshot = result
+        text = "Не удалось проверить доступность сети." if report is not None and not report.network else f"Проверено адресов: {report.checked if report is not None else 0}. " + describe_address_check(report)
+        self.address_check_status.setText(text.strip())
+        self.address_check_status.show()
+        self._request_snapshot()
+
+    def _on_address_worker_finished(self, _worker) -> None:
+        if not self._cleanup_in_progress:
+            self.address_check_button.setText("Обновить адреса")
+
+    def _on_addresses_failed(self, request_id: int, error: str) -> None:
+        if self._address_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            self._show_error("Не удалось обновить адреса", error)
 
 
 __all__ = ["ADOBE_TILE_KEY", "HostsPage"]

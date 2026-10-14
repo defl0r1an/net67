@@ -20,7 +20,8 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QHBoxLayout, QWidget
 
 import blockcheck.page_runtime as blockcheck_page_runtime
-from blockcheck.ui.check_results import BlockcheckSitesTable, BlockcheckSummaryPanel
+from blockcheck.ui.check_results import BlockcheckSummaryPanel, BlockcheckHistoryList
+from blockcheck.ui.result_cards import ResultCardsView, card_plain_text
 from blockcheck.ui.domain_chip import DomainChip
 from blockcheck.ui.domains_build import build_blockcheck_domains_ui
 from blockcheck.ui.helpers import (
@@ -66,6 +67,7 @@ logger = logging.getLogger(__name__)
 
 SCOPE_MAIN = "main"
 SCOPE_ALL = "all"
+SCOPE_FULL = "full"
 
 
 def update_blockcheck_tabs_accessibility(pivot, *, current: object | None = None, language: str = "ru") -> None:
@@ -75,6 +77,7 @@ def update_blockcheck_tabs_accessibility(pivot, *, current: object | None = None
         "blockcheck": tr_catalog("page.blockcheck.tab.blockcheck", language=language, default="BlockCheck"),
         "strategy_scan": tr_catalog("page.blockcheck.tab.strategy_scan", language=language, default="Подбор стратегии"),
         "domain_lookup": tr_catalog("page.blockcheck.tab.domain_lookup", language=language, default="Проверка домена"),
+        "dns_servers": tr_catalog("page.blockcheck.tab.dns_servers", language=language, default="DNS-серверы"),
         "dns_spoofing": tr_catalog("page.blockcheck.tab.dns_spoofing", language=language, default="DNS подмена"),
     }
     key = str(current or "").strip() if isinstance(current, str) else ""
@@ -105,11 +108,13 @@ class BlockcheckPage(BasePage):
     TAB_STRATEGY_SCAN = "strategy_scan"
     TAB_DOMAIN_LOOKUP = "domain_lookup"
     TAB_DNS_SPOOFING = "dns_spoofing"
+    TAB_DNS_SERVERS = "dns_servers"
     TAB_ORDER = (
         TAB_BLOCKCHECK,
         TAB_STRATEGY_SCAN,
         TAB_DOMAIN_LOOKUP,
         TAB_DNS_SPOOFING,
+        TAB_DNS_SERVERS,
     )
     # «Диагностика» влилась в BlockCheck: старые ссылки на неё ведут сюда.
     TAB_ALIASES = {
@@ -157,6 +162,7 @@ class BlockcheckPage(BasePage):
         self._tab_widgets: list[QWidget] = []
         self._strategy_tab_page = None
         self._domain_lookup_tab_page = None
+        self._dns_servers_tab_page = None
         self._dns_spoofing_tab_page = None
         self._active_tab_index: int = 0
         self._pending_tab_key: str | None = None
@@ -169,6 +175,7 @@ class BlockcheckPage(BasePage):
         self._support_status_label = None
         self._initial_state = blockcheck_page_runtime.BlockcheckPageInitialStatePlan(user_domains=())
         self._initial_state_runtime = OneShotWorkerRuntime()
+        self._past_report_runtime = OneShotWorkerRuntime()
         self._initial_state_load_started_at = 0.0
         self._run_runtime = OneShotWorkerRuntime()
         self._support_prepare_runtime = OneShotWorkerRuntime()
@@ -229,6 +236,13 @@ class BlockcheckPage(BasePage):
             return
         self._log_ui_timing("blockcheck_ui.initial_state.load", self._initial_state_load_started_at)
         self._initial_state = initial_state
+        self._show_check_history(getattr(initial_state, "check_history", ()))
+        if self._domain_lookup_tab_page is not None:
+            self._domain_lookup_tab_page.set_history(getattr(initial_state, "domain_history", ()))
+        if self._dns_spoofing_tab_page is not None:
+            self._dns_spoofing_tab_page.set_history(getattr(initial_state, "dns_history", ()))
+        if self._dns_servers_tab_page is not None:
+            self._dns_servers_tab_page.set_history(getattr(initial_state, "servers_history", ()))
         self._apply_initial_domain_chips(tuple(getattr(initial_state, "user_domains", ()) or ()))
 
     def _on_initial_state_failed(self, request_id: int, error: str) -> None:
@@ -279,6 +293,11 @@ class BlockcheckPage(BasePage):
             lambda: self.switch_to_tab(self.TAB_DNS_SPOOFING),
         )
 
+        self._tabs_pivot.addItem(
+            self.TAB_DNS_SERVERS,
+            tr_catalog("page.blockcheck.tab.dns_servers", default="DNS-серверы"),
+            lambda: self.switch_to_tab(self.TAB_DNS_SERVERS),
+        )
         self._tabs_pivot.setCurrentItem(self.TAB_BLOCKCHECK)
         self._tabs_pivot.setItemFontSize(13)
         self._update_tabs_accessibility(self.TAB_BLOCKCHECK)
@@ -303,6 +322,7 @@ class BlockcheckPage(BasePage):
         self._scope_combo.addItem(
             tr_catalog("page.blockcheck.scope_all", default="Все сайты"), userData=SCOPE_ALL
         )
+        self._scope_combo.addItem("Подробно: сайты и сеть", userData=SCOPE_FULL)
         self._scope_combo.setCurrentIndex(1)
         self._scope_combo.setMinimumWidth(260)
         self._update_scope_combo_accessibility()
@@ -381,11 +401,20 @@ class BlockcheckPage(BasePage):
         self._log_ui_timing("blockcheck_ui.domains_card.build", section_started_at)
 
         # ── Итог и список сайтов ──
-        self._summary_panel = BlockcheckSummaryPanel(on_action=self._on_problem_action, parent=self.content)
+        self._summary_panel = BlockcheckSummaryPanel(
+            on_action=self._on_problem_action, parent=self.content,
+            on_open=self._open_card_by_key,
+            on_open_page=lambda card: show_report_dialog(self.window(), card_plain_text(card)),
+        )
         self._add_tab_widget(self._summary_panel)
+        self._check_history = BlockcheckHistoryList()
+        self._check_history.run_opened.connect(self._open_past_check)
+        self._add_tab_widget(self._check_history)
+        self._show_check_history(getattr(self._initial_state, "check_history", ()))
 
         self._results_card = SettingsCard()
-        self._sites_table = BlockcheckSitesTable()
+        self._sites_table = ResultCardsView()
+        self._sites_table.opened.connect(lambda card: show_report_dialog(self.window(), card_plain_text(card)))
         self._results_card.add_widget(self._sites_table)
         self._add_tab_widget(self._results_card)
         # Пустая таблица с одной шапкой до первой проверки — лишний мусор.
@@ -493,7 +522,9 @@ class BlockcheckPage(BasePage):
                 parent=self,
                 dns_feature=self._dns,
                 embedded=True,
+                open_hosts_service=lambda service: self._on_problem_action("hosts", service),
             )
+            self._domain_lookup_tab_page.set_history(getattr(self._initial_state, "domain_history", ()))
             self._domain_lookup_tab_page.setVisible(False)
             self.add_widget(self._domain_lookup_tab_page)
             try:
@@ -519,6 +550,7 @@ class BlockcheckPage(BasePage):
                 embedded=True,
                 open_dns_settings=self._open_dns_settings,
             )
+            self._dns_spoofing_tab_page.set_history(getattr(self._initial_state, "dns_history", ()))
             self._dns_spoofing_tab_page.setVisible(False)
             self.add_widget(self._dns_spoofing_tab_page)
 
@@ -606,9 +638,13 @@ class BlockcheckPage(BasePage):
         elif tab_key == self.TAB_DNS_SPOOFING:
             self._ensure_dns_spoofing_tab()
 
+        if tab_key == self.TAB_DNS_SERVERS:
+            self._ensure_dns_servers_tab()
+
         show_blockcheck = tab_key == self.TAB_BLOCKCHECK
         for widget in self._tab_widgets:
             widget.setVisible(show_blockcheck)
+        self._check_history.setVisible(show_blockcheck and bool(self._check_history.rows()))
         if self._results_card is not None and self._last_report is None:
             self._results_card.setVisible(False)
         if not self._support_footer_available:
@@ -620,6 +656,9 @@ class BlockcheckPage(BasePage):
             self._domain_lookup_tab_page.setVisible(tab_key == self.TAB_DOMAIN_LOOKUP)
         if self._dns_spoofing_tab_page is not None:
             self._dns_spoofing_tab_page.setVisible(tab_key == self.TAB_DNS_SPOOFING)
+
+        if self._dns_servers_tab_page is not None:
+            self._dns_servers_tab_page.setVisible(tab_key == self.TAB_DNS_SERVERS)
 
         if tab_key == self.TAB_BLOCKCHECK:
             self._apply_pending_diagnostics_start_focus()
@@ -656,7 +695,7 @@ class BlockcheckPage(BasePage):
         self._last_report = None
         self._report_lines = []
         self._summary_panel.set_pending()
-        self._sites_table.clear_rows()
+        self._sites_table.clear()
         self._results_card.setVisible(False)
         self._report_btn.setEnabled(False)
         self._set_support_footer_available(False)
@@ -676,6 +715,8 @@ class BlockcheckPage(BasePage):
             on_log=self._on_log,
             on_run_log_started=self._on_run_log_started,
             on_finished=self._on_finished,
+            on_partial=self._on_partial_report,
+            on_progress=self._on_check_progress,
         )
         self._set_status_text(self._status_label.text())
 
@@ -711,6 +752,7 @@ class BlockcheckPage(BasePage):
             return
         self._last_report = report
         self._summary_panel.show_report(report)
+        self._show_check_history(report.get("history") or ())
         self._sites_table.show_report(report)
         self._results_card.setVisible(True)
         # Список сайтов выплывает следом за итогом.
@@ -745,6 +787,12 @@ class BlockcheckPage(BasePage):
             from ui.window_adapter import show_page
 
             show_page(self.window(), PageName.HOSTS)
+            if target:
+                from ui.window_adapter import get_loaded_page
+
+                page = get_loaded_page(self.window(), PageName.HOSTS)
+                if page is not None:
+                    page.focus_service(target)
             return
         if action not in ("strategy", "strategy_voice"):
             return
@@ -1260,6 +1308,8 @@ class BlockcheckPage(BasePage):
 
     def cleanup(self) -> None:
         self._cleanup_in_progress = True
+        self._past_report_runtime.stop(blocking=False, log_fn=log)
+        self._past_report_runtime.cancel()
         self._initial_state_runtime.stop(
             blocking=False,
             log_fn=log,
@@ -1287,7 +1337,7 @@ class BlockcheckPage(BasePage):
         )
         self._run_runtime.cancel()
 
-        for page in (self._strategy_tab_page, self._domain_lookup_tab_page, self._dns_spoofing_tab_page):
+        for page in (self._strategy_tab_page, self._domain_lookup_tab_page, self._dns_spoofing_tab_page, self._dns_servers_tab_page):
             if page is None:
                 continue
             cleanup_handler = getattr(page, "cleanup", None)
@@ -1348,3 +1398,71 @@ class BlockcheckPage(BasePage):
                 self._dns_spoofing_tab_page.set_ui_language(language)
         except Exception:
             pass
+
+    def _ensure_dns_servers_tab(self) -> None:
+        if self._dns_servers_tab_page is not None:
+            return
+        from dns.ui.server_check_page import ServerCheckPage
+
+        page = ServerCheckPage(parent=self, dns_feature=self._dns, embedded=True, open_dns_settings=self._open_dns_settings)
+        page.report_requested.connect(self._show_dns_server_report)
+        page.details_requested.connect(lambda details: self._show_dns_server_report(details))
+        page.past_view_opened.connect(lambda title, headline, view, text: self._show_dns_server_report_text(title, text))
+        page.set_ui_language(self._ui_language)
+        page.set_history(getattr(self._initial_state, "servers_history", ()))
+        page.setVisible(False)
+        self.add_widget(page)
+        self._dns_servers_tab_page = page
+
+    def _show_dns_server_report(self, report) -> None:
+        title = getattr(report, "title", "Подробности DNS-сервера")
+        self._show_dns_server_report_text(title, str(report.text))
+
+    def _show_dns_server_report_text(self, title: str, text: str) -> None:
+        from ui.log_report_dialog import LogReportDialog
+
+        LogReportDialog(title=title, text=text, parent=self).exec()
+
+    def _on_partial_report(self, report) -> None:
+        if self._cleanup_in_progress or not isinstance(report, dict):
+            return
+        self._sites_table.show_partial(report)
+        self._results_card.setVisible(self.TAB_ORDER[self._active_tab_index] == self.TAB_BLOCKCHECK)
+
+    def _on_check_progress(self, stage: str, done: int, total: int) -> None:
+        if self._cleanup_in_progress:
+            return
+        from blockcheck.ui.result_cards import _STEP_TITLES
+
+        label = _STEP_TITLES.get(stage, ("", "Проверяем соединения"))[1]
+        text = f"{label}: {done} из {total}" if total else label
+        self._set_status_text(text)
+
+    def _open_past_check(self, run) -> None:
+        # Чтение отчёта вынесено из обработчика нажатия: большой файл
+        # или медленный диск не должен останавливать прокрутку окна.
+        def bind(worker):
+            worker.completed.connect(self._on_past_check_loaded)
+
+        self._past_report_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: self._blockcheck.create_past_report_worker(
+                request_id, log_file=str(run.get("log_file") or ""), parent=self),
+            bind_worker=bind,
+        )
+
+    def _on_past_check_loaded(self, request_id: int, report) -> None:
+        if self._past_report_runtime.is_current(request_id, sender=self.sender(), cleanup_in_progress=self._cleanup_in_progress):
+            self._show_past_check(report)
+
+    def _show_past_check(self, report) -> None:
+        if isinstance(report, dict) and not self._cleanup_in_progress:
+            self._show_dns_server_report_text("Прошлая проверка BlockCheck", "\n".join(map(str, report.get("text") or ())))
+
+    def _open_card_by_key(self, key: str) -> None:
+        widget = self._sites_table.card(key)
+        if widget is not None:
+            show_report_dialog(self.window(), card_plain_text(widget.card))
+
+    def _show_check_history(self, runs) -> None:
+        self._check_history.show_history(runs)
+        self._check_history.setVisible(bool(runs) and self.TAB_ORDER[self._active_tab_index] == self.TAB_BLOCKCHECK)

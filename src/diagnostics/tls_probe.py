@@ -135,6 +135,14 @@ class ProbeCancel:
         with self._lock:
             self._sockets.discard(sock)
 
+    # Общий SocketCancel новых проверок использует публичные track/release;
+    # прежние вызовы ProbeCancel сохраняют свои методы отмены.
+    def track(self, sock: socket.socket) -> bool:
+        return self._track(sock)
+
+    def release(self, sock: socket.socket) -> None:
+        self._release(sock)
+
 
 def _close_quietly(sock: socket.socket | None) -> None:
     if sock is None:
@@ -177,6 +185,10 @@ def _client_context() -> ssl.SSLContext:
                 pass
             _context = context
         return _context
+
+
+def client_context() -> ssl.SSLContext:
+    return _client_context()
 
 
 def _cert_problem(error: ssl.SSLCertVerificationError) -> str:
@@ -255,14 +267,14 @@ def https_get(
     try:
         family = socket.AF_INET6 if ":" in ip else socket.AF_INET
         sock = socket.socket(family, socket.SOCK_STREAM)
-        if not token._track(sock):
+        if not token.track(sock):
             return _result(KIND_CANCELLED)
         sock.settimeout(_remaining())
         sock.connect((ip, int(port)))
 
         stage = STAGE_TLS
         wrapped = _client_context().wrap_socket(sock, server_hostname=host, do_handshake_on_connect=False)
-        token._track(wrapped)
+        token.track(wrapped)
         wrapped.settimeout(_remaining())
         wrapped.do_handshake()
         tls_version = str(wrapped.version() or "")
@@ -322,5 +334,5 @@ def https_get(
     finally:
         for item in (wrapped, sock):
             if item is not None:
-                token._release(item)
+                token.release(item)
                 _close_quietly(item)

@@ -189,6 +189,10 @@ class DNSCheckPage(BasePage):
         self.domains_card.setVisible(False)
         self.layout.addWidget(self.domains_card)
 
+        from dns.ui.check_history import CheckHistory
+
+        self.check_history = CheckHistory(dns_feature=self._dns, kind="dns", parent=self.content)
+        self.layout.addWidget(self.check_history)
         self.layout.addStretch()
 
     def _open_log(self) -> None:
@@ -314,6 +318,8 @@ class DNSCheckPage(BasePage):
             return
         # Обновляем статус
         plan = dns_check_page_plans.build_finish_plan(results)
+        if isinstance(results, dict):
+            self.check_history.append(results.get("history_entry"))
         self._apply_interaction_state(
             check_enabled=plan.check_enabled,
             save_enabled=plan.save_enabled,
@@ -548,6 +554,9 @@ class DNSCheckPage(BasePage):
 
         try:
             self._cleanup_in_progress = True
+            history = self.__dict__.get("check_history")
+            if history is not None:
+                history.cleanup()
             self._check_state_obj().reset()
             self._save_results_state_obj().reset()
             self._check_runtime.stop(
@@ -592,3 +601,6 @@ class DNSCheckPage(BasePage):
         )
         self._update_action_button_state_text()
         self._set_status(self.status_label.text(), tone=self._status_tone, bold=self._status_bold)
+
+    def set_history(self, runs) -> None:
+        self.check_history.set_history(runs)

@@ -32,6 +32,9 @@ class BlockcheckFeature:
             append_run_log=self.append_blockcheck_run_log,
             close_run_log=self.close_blockcheck_run_log,
             load_geo_sites=self.load_geo_sites,
+            remember_run=self.remember_blockcheck_run,
+            save_report=self.save_blockcheck_report,
+            check_dns_servers=self.check_dns_servers,
             **kwargs,
         )
 
@@ -206,3 +209,38 @@ class BlockcheckFeature:
 
     def build_support_error_plan(self, *args, **kwargs):
         return self._commands().build_support_error_plan(*args, **kwargs)
+
+
+    def create_past_report_worker(self, request_id: int, *, log_file: str, parent=None):
+        from blockcheck.workers import BlockcheckPastReportWorker
+
+        return BlockcheckPastReportWorker(
+            request_id,
+            log_file=log_file,
+            load_past_blockcheck_report=self.load_past_blockcheck_report,
+            parent=parent,
+        )
+
+    def check_dns_servers(self, *args, **kwargs):
+        return self._worker_commands().check_dns_servers(*args, **kwargs)
+
+    def remember_blockcheck_run(self, report, log_file):
+        return self._worker_commands().remember_blockcheck_run(report, log_file, preset=self._selected_preset_name())
+
+    def _selected_preset_name(self) -> str:
+        """Название выбранного пресета — чтобы сравнение «с Zapret и без» называло, что проверялось."""
+        try:
+            from settings.dpi.launch_method import get_current_launch_method
+
+            return str(self.presets_feature.get_selected_source_preset_display(get_current_launch_method(default=""))[0])
+        except Exception:
+            return ""
+
+    def load_past_blockcheck_report(self, *args, **kwargs):
+        return self._worker_commands().load_past_blockcheck_report(*args, **kwargs)
+
+    def make_blockcheck_report_path(self, *args, **kwargs) -> str:
+        return self._worker_commands().make_blockcheck_report_path(*args, **kwargs)
+
+    def save_blockcheck_report(self, *args, **kwargs) -> str:
+        return self._worker_commands().save_blockcheck_report(*args, **kwargs)

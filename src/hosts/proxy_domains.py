@@ -61,6 +61,22 @@ class HostsCatalog:
     #: он молча выпадет из hosts. Надпись отделена от имени ради этого.
     service_titles: dict[str, str] = field(default_factory=dict)
 
+    service_id_by_name: dict[str, str] = field(default_factory=dict)
+    service_name_by_id: dict[str, str] = field(default_factory=dict)
+    catalog_version: str = "json"
+    content_sha256: str = ""
+
+    def __post_init__(self) -> None:
+        import hashlib
+
+        known = {"YouTube": "hosts.youtube", "GitHub": "hosts.github", "GitHub загрузки/картинки": "hosts.githubusercontent_ipv6"}
+        ids = self.service_id_by_name or {name: known.get(name, "service." + name.casefold()) for name in self.service_entries}
+        object.__setattr__(self, "service_id_by_name", ids)
+        object.__setattr__(self, "service_name_by_id", self.service_name_by_id or {value: key for key, value in ids.items()})
+        if not self.content_sha256:
+            payload = json.dumps([self.dns_profiles, self.service_entries], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            object.__setattr__(self, "content_sha256", hashlib.sha256(payload.encode("utf-8")).hexdigest())
+
 
 #: Сервис каталога, чьи записи в hosts ведёт другая страница.
 #:
@@ -768,7 +784,9 @@ def _load_catalog() -> HostsCatalog:
             sig = None
 
         _CACHE_TEXT = text
-        _CACHE = _parse_hosts_catalog_json(text)
+        from hosts.catalog_overlay import apply_overlay
+
+        _CACHE = apply_overlay(_parse_hosts_catalog_json(text), get_engine_overlay())
         _CACHE_SIG = sig
         _CACHE_PATH = path
         _CACHE_PROFILE_INDEX = None
@@ -802,7 +820,7 @@ def get_hosts_catalog_signature() -> tuple[str, int, int] | None:
     if sig is None:
         return None
     revision, size = sig
-    return (str(path), revision, size)
+    return (str(path), revision + _OVERLAY_REVISION, size)
 
 
 def get_hosts_catalog_text() -> str:
@@ -1192,3 +1210,72 @@ QUICK_SERVICES = [
     # Домены переехали в lists/soundcloud.txt — там их может взять
     # движок winws, который работает как раз с таким видом блокировки.
 ]
+
+
+def load_shipped_catalog() -> HostsCatalog:
+    path, _candidates, _exists = _select_catalog_path()
+    if path.is_dir():
+        data, _signature = _load_split_catalog_data_with_sig(path)
+        return _parse_hosts_catalog_json(json.dumps(data, ensure_ascii=False))
+    return _parse_hosts_catalog_json(path.read_text(encoding="utf-8-sig") if path.exists() else "")
+
+
+def get_engine_overlay() -> dict:
+    from hosts.catalog_overlay import clean_overlay
+
+    return clean_overlay(settings_store.get_hosts_engine())
+
+
+def set_engine_overlay(value: object) -> bool:
+    from hosts.catalog_overlay import clean_overlay
+
+    global _OVERLAY_REVISION
+    cleaned = clean_overlay(value)
+    before = get_engine_overlay()
+    settings_store.set_hosts_engine(cleaned)
+    if before != cleaned:
+        with _CACHE_LOCK:
+            _OVERLAY_REVISION += 1
+            invalidate_hosts_catalog_cache()
+    return True
+
+
+def relay_addresses_of(catalog: HostsCatalog) -> frozenset[str]:
+    # Только посредники DNS-профилей: настоящие адреса прямого профиля
+    # не требуют такого же имени и общей доступности.
+    return frozenset(address for rows in catalog.service_entries.values() for _host, values in rows
+                     for index, address in enumerate(values) if address and catalog.dns_profiles[index] != "hosts")
+
+
+def get_relay_addresses() -> frozenset[str]:
+    return relay_addresses_of(load_shipped_catalog())
+
+
+def has_saved_user_hosts_selection() -> bool:
+    return bool(load_user_hosts_selection())
+
+
+_OVERLAY_REVISION = 0
+
+
+def direct_service_with_ipv4(hostname: str) -> str:
+    """Название сервиса, тумблер которого записывает этому имени адрес IPv4. Пусто — такого нет.
+
+    Нужен «Проверке домена»: когда Windows ведёт программы на адрес IPv6, по которому сайт не
+    открывается, тумблер этого сервиса возвращает имя на IPv4.
+    """
+    wanted = _clean_str(hostname).rstrip(".").casefold()
+    if not wanted:
+        return ""
+    catalog = load_shipped_catalog()
+    index = _infer_direct_profile_index(catalog)
+    if index is None:
+        return ""
+    for service_name in catalog.service_order:
+        if catalog.service_modes.get(_clean_str(service_name).casefold()) == _SERVICE_MODE_DNS:
+            continue
+        for domain, ips in catalog.service_entries.get(service_name, []):
+            address = _clean_str(ips[index]) if index < len(ips) else ""
+            if address and ":" not in address and _clean_str(domain).casefold() == wanted:
+                return service_name
+    return ""

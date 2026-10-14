@@ -756,7 +756,7 @@ class StrategyScanPage(BasePage):
         """Останавливает подбор перед ручным запуском основного DPI."""
         if not self._strategy_scan_run_runtime.is_running():
             return False
-        # Пользователь сам запускает Zapret: подбор не должен запускать его
+        # Пользователь сам запускает net67: подбор не должен запускать его
         # второй раз, когда остановится.
         cancel_restore = getattr(self.__dict__.get("_scan_worker"), "cancel_runtime_restore", None)
         if cancel_restore is not None:

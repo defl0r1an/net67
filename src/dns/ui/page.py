@@ -359,6 +359,7 @@ class NetworkPage(BasePage):
     def _apply_state(self, state) -> None:
         """Новый снимок адаптеров; отметки уже известных адаптеров сохраняются."""
         known = self.now_panel.adapter_keys()
+        self._line_check = getattr(state, "line_check", None)
         self._adapters = tuple(getattr(state, "adapters", ()) or ())
         self._ipv6_available = bool(getattr(state, "ipv6_available", False))
         self._doh_supported = bool(getattr(state, "doh_supported", False))
@@ -522,8 +523,10 @@ class NetworkPage(BasePage):
                 ipv4 = dns_page_plans.normalize_dns_list(data.get("ipv4", []))
                 ipv6 = dns_page_plans.normalize_dns_list(data.get("ipv6", []))
                 custom = bool(data.get("custom_id"))
-                status = str(data.get("status", ""))
+                status, measured = self._line_status(name, data)
                 tooltip_lines = [f"{name} — {data.get('desc', '')}".rstrip(" —")]
+                if measured:
+                    tooltip_lines.append(measured)
                 if status in STATUS_TOOLTIP_KEYS:
                     tooltip_lines.append(self._t(*STATUS_TOOLTIP_KEYS[status]))
                 if encrypted_only:
@@ -743,7 +746,7 @@ class NetworkPage(BasePage):
                         if part
                     ),
                 )
-            elif payload.get("action") == "provider" and (payload.get("data") or {}).get("status") == STATUS_BLOCKED:
+            elif payload.get("action") == "provider" and self._line_status(str(payload.get("name") or ""), payload.get("data") or {})[0] == STATUS_BLOCKED:
                 # О блокировке выбранного сервера — только когда DNS и правда поставлен.
                 name = str(payload.get("name") or "")
                 self._info(
@@ -754,6 +757,8 @@ class NetworkPage(BasePage):
                         "DNS поставлен, как вы выбрали. Если сайты перестанут открываться, выберите другой сервер.",
                     ),
                 )
+        if plan is not None and getattr(plan, "warning", ""):
+            self._info("warning", "Шифрованный DNS не подтверждён", plan.warning)
         state = data.get("state")
         if state is not None:
             self._apply_state(state)
@@ -976,5 +981,25 @@ class NetworkPage(BasePage):
             self._t("page.network.custom.copied.content", "Адреса DNS в буфере обмена."),
         )
 
+
+
+    def _line_status(self, name: str, data: dict) -> tuple[str, str]:
+        from diagnostics.history import format_time
+        from dns.server_check_plans import CARD_NETWORK, CARD_OK, CARD_TITLES
+
+        status = str(data.get("status", "") or "")
+        line = self.__dict__.get("_line_check")
+        found = line.card(name) if line is not None else None
+        if found is None:
+            return status, ""
+        card, note = found
+        if card == CARD_NETWORK:
+            status = STATUS_BLOCKED
+        elif card == CARD_OK:
+            status = ""
+        verdict = CARD_TITLES.get(card, "Не удалось определить")
+        if note:
+            verdict += " — " + note
+        return status, f"Проверка {format_time(line.time)} на вашей линии: {verdict}"
 
 __all__ = ["NetworkPage"]

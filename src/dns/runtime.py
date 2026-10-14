@@ -16,6 +16,7 @@ from dns.adapters import DnsAdapter, build_dns_adapters, is_dns_adapter
 from dns.custom_servers import custom_doh_templates
 from dns.dns_providers import doh_templates
 from dns.state import DnsCommandResult, DnsState
+from dns.reachability import check_servers
 from log.log import log
 
 _warmed_state: DnsState | None = None
@@ -37,11 +38,14 @@ def load_state() -> DnsState:
             static[interface.guid] = winapi.read_static_dns(interface.guid)
         except winapi.DnsWinApiError as exc:
             log(f"DNS: не удалось прочитать DNS адаптера «{interface.name}»: {exc}", "WARNING")
+    from dns.line_check import load_line_check
+
     return DnsState(
         adapters=build_dns_adapters(interfaces, route, static),
         ipv6_available=route.has_ipv6,
         doh_supported=winapi.is_doh_supported(),
         custom_servers=tuple(load_custom_servers()),
+        line_check=load_line_check(),
     )
 
 
@@ -101,6 +105,9 @@ def apply_dns(guids: list[str], ipv4: list[str], ipv6: list[str]) -> DnsCommandR
     guids = list(dict.fromkeys(str(item or "").strip() for item in guids if str(item or "").strip()))
     names = {adapter.guid: adapter.name for adapter in load_state().adapters}
     templates = write_doh_templates()
+    reach = check_servers(list(ipv4 or []), list(ipv6 or []), templates) if any(guid in names for guid in guids) else None
+    if reach is not None and reach.blocked:
+        return DnsCommandResult(success=False, message=reach.blocked, total_count=len(guids))
     errors: list[str] = []
     for guid in guids:
         if guid not in names:
@@ -121,6 +128,7 @@ def apply_dns(guids: list[str], ipv4: list[str], ipv6: list[str]) -> DnsCommandR
         message=message,
         affected_count=len(guids) - len(errors),
         total_count=len(guids),
+        warning="Сервер отвечает обычным DNS, но проверка DoH не получила ответа. Windows может использовать DNS без шифрования." if reach is not None and reach.doh_closed else "",
     )
 
 

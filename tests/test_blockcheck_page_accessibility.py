@@ -96,7 +96,7 @@ class BlockcheckPageAccessibilityTests(unittest.TestCase):
         self.assertFalse(page._report_btn.isEnabled())
         self.assertEqual(page._report_btn.accessibleName(), "Открыть подробный отчёт BlockCheck")
         self.assertEqual(page._prepare_support_btn.accessibleName(), "Подготовить обращение по BlockCheck")
-        self.assertEqual(page._sites_table.accessibleName(), "Результаты BlockCheck по сайтам: пока нет результатов")
+        self.assertEqual(page._sites_table.accessibleName(), "Результаты BlockCheck: пока нет результатов")
         self.assertEqual(page._summary_panel.level, "idle")
 
     def test_hidden_progress_bars_do_not_animate(self) -> None:
@@ -140,7 +140,7 @@ class BlockcheckPageAccessibilityTests(unittest.TestCase):
         page = _make_page()
         self.addCleanup(page.deleteLater)
 
-        self.assertEqual(page.TAB_ORDER, ("blockcheck", "strategy_scan", "domain_lookup", "dns_spoofing"))
+        self.assertEqual(page.TAB_ORDER, ("blockcheck", "strategy_scan", "domain_lookup", "dns_spoofing", "dns_servers"))
         self.assertEqual(page._normalize_tab_key("diagnostics"), "blockcheck")
         self.assertEqual(page._normalize_tab_key("connection"), "blockcheck")
 
@@ -171,14 +171,15 @@ class BlockcheckPageAccessibilityTests(unittest.TestCase):
         self.assertTrue(page._footer_card.isHidden())
         page._switch_tab(0)
         self.assertFalse(page._footer_card.isHidden())
-        names = [page._sites_table.item(row, 0).text() for row in range(page._sites_table.rowCount())]
-        # Сначала сломанное; YouTube открывается — подмена DNS только в подробностях.
+        from blockcheck.ui.result_cards import card_plain_text
+
+        cards = [widget.card for widget in page._sites_table.cards()]
+        names = [card.title for card in cards]
         self.assertEqual(names[0], "X (Twitter)")
-        youtube_row = names.index("YouTube")
-        self.assertEqual(page._sites_table.item(youtube_row, 1).text(), "✓ Открывается")
-        self.assertIn("DNS подменён", page._sites_table.item(youtube_row, 2).text())
-        self.assertIn("Голосовые звонки (UDP)", names)
-        self.assertIn("Обрыв на 16–20 КБ", names)
+        youtube = next(card for card in cards if card.title == "YouTube")
+        self.assertIn("открывается", youtube.status.lower())
+        self.assertIn("DNS", card_plain_text(youtube))
+        self.assertTrue(any(card.key == "voice" for card in cards))
 
     def test_stopped_run_does_not_leave_pending_summary(self) -> None:
         page = _make_page()
@@ -252,9 +253,10 @@ class SummaryPanelTests(unittest.TestCase):
         rows = panel.problem_rows()
         rows[0].action_button.click()
         # У предупреждения про DNS — кнопка «Настройка DNS», у строки «Открываются» кнопки нет.
-        self.assertEqual(rows[1].action_button.text(), "Настройка DNS")
-        rows[1].action_button.click()
-        self.assertIsNone(rows[2].action_button)
+        dns_button = next(group.shared_action_button for group in panel.problem_groups() if group.shared_action_button is not None)
+        self.assertEqual(dns_button.text(), "Настройка DNS")
+        dns_button.click()
+        self.assertIsNone(rows[1].action_button)
         self.assertEqual(calls, [("strategy", "x.com"), ("dns", "")])
         self.assertIn("net67 включён", panel.env_label.text())
 

@@ -151,3 +151,9 @@ def strategy_phrases(strategy_args: str, language: str | None = None) -> tuple[s
 
 
 __all__ = ["phrases", "strategy_phrases", "technique_kind"]
+
+
+def show_state_line(ticker, kind: str, language: str | None = None) -> None:
+    # Итог уже объясняет результат; дополнительная строка не повторяет его.
+    ticker.stop("")
+    ticker.setVisible(False)

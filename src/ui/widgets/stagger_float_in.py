@@ -80,6 +80,9 @@ _SOURCE_REFRESH_S = 0.12
 _MAX_STAGGERED = 10
 _CONTROLLER_ATTR = "_zapret_stagger_float_in"
 NO_FLOAT_IN_ATTR = "_zapret_no_float_in"
+# Отложенная сборка помечает контейнер группы; маркер не меняет
+# существующую анимацию появления карточек net67.
+FLOAT_IN_GROUP_ATTR = "_zapret_float_in_group"
 
 
 def _critically_damped(progress: float) -> float:
@@ -299,6 +302,14 @@ def float_in(widget: QWidget, *, delay_ms: int = 0) -> bool:
         return False
     _FloatIn(widget, delay_ms, widget)
     return True
+
+
+def is_floating_in(widget: QWidget) -> bool:
+    """Позволяет внутреннему движению дождаться входа всей карточки."""
+    if sip.isdeleted(widget):
+        return False
+    effect = widget.graphicsEffect()
+    return isinstance(effect, _RiseEffect) and effect._progress < 1.0
 
 
 def skip_float_in(widget: QWidget) -> QWidget:

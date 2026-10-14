@@ -276,6 +276,15 @@ class RealEnvironment:
     def sleep(self, seconds: float) -> None:
         time.sleep(max(0.0, float(seconds)))
 
+    def probe_hello(self, address: str, name: str | None) -> bool | None:
+        """Начало шифрования к адресу с именем ``name``: True — прошло, False — оборвали, None — нет соединения."""
+        from diagnostics.block_cause import HELLO_CANCELLED, HELLO_CONNECT, tls_hello
+
+        result = tls_hello(address, name, timeout=2.5, cancel=self._cancel)
+        if result.kind in (HELLO_CONNECT, HELLO_CANCELLED):
+            return None
+        return bool(result.answered)
+
 
 class _ManagedSession:
     """Сессия, которая при неудачной остановке зовёт полную остановку программы."""

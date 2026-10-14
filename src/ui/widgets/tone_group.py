@@ -115,7 +115,8 @@ class ToneGroup(QWidget):
     """Группа строк одного вида.
 
     ``plain`` — группа без названия и подложки: строки идут как обычный список
-    (для того, что ни к какому виду не отнесли).
+    (для того, что ни к какому виду не отнесли). ``flat`` — с названием, но без
+    подложки: для группы карточек, у которых подложка своя.
     """
 
     def __init__(
@@ -127,18 +128,24 @@ class ToneGroup(QWidget):
         count: int = 0,
         about: str = "",
         plain: bool = False,
+        flat: bool = False,
     ) -> None:
         super().__init__(parent)
         self._color_for = color_for
         self._plain = plain
+        # Группа карточек: подложка есть у карточек, второй — под ними — не нужно.
+        self._flat = flat
         self._surface = QColor()
         self._body = QVBoxLayout(self)
         self._body.setSpacing(6)
         if self._plain:
             self._body.setContentsMargins(0, 0, 0, 0)
+        elif self._flat:
+            self._body.setContentsMargins(0, 6, 0, 6)
         else:
             self._body.setContentsMargins(14, 12, 12, 12)
 
+        self._header: QHBoxLayout | None = None
         self.title_label: StrongBodyLabel | None = None
         self.about_label: CaptionLabel | None = None
         if not plain:
@@ -146,10 +153,14 @@ class ToneGroup(QWidget):
             header.setSpacing(8)
             header.addWidget(ToneDot(color_for, self), 0, Qt.AlignmentFlag.AlignVCenter)
             self.title_label = StrongBodyLabel(title, self)
+            if flat:
+                # Заголовки соседних групп стоят на одной линии — с кнопкой в заголовке или без.
+                self.title_label.setMinimumHeight(30)
             header.addWidget(self.title_label, 0, Qt.AlignmentFlag.AlignVCenter)
             if count > 1:
                 header.addWidget(mute(CaptionLabel(str(count), self)), 0, Qt.AlignmentFlag.AlignVCenter)
             header.addStretch(1)
+            self._header = header
             self._body.addLayout(header)
             if about:
                 self.about_label = self.add_note(about)
@@ -158,6 +169,20 @@ class ToneGroup(QWidget):
 
     def add_widget(self, widget: QWidget) -> None:
         self._body.addWidget(widget)
+
+    def add_title_widget(self, widget: QWidget) -> bool:
+        """Ставит маленький виджет сразу за названием группы (значок-пояснение). ``False`` — заголовка нет."""
+        if self._header is None or self.title_label is None:
+            return False
+        self._header.insertWidget(self._header.indexOf(self.title_label) + 1, widget, 0, Qt.AlignmentFlag.AlignVCenter)
+        return True
+
+    def add_header_widget(self, widget: QWidget) -> bool:
+        """Ставит виджет в правый край заголовка: общее для всей группы действие. ``False`` — заголовка нет."""
+        if self._header is None:
+            return False
+        self._header.addWidget(widget, 0, Qt.AlignmentFlag.AlignVCenter)
+        return True
 
     def add_note(self, text: str) -> CaptionLabel:
         """Строка мелкого текста во всю ширину группы: пояснение или общий совет."""
@@ -179,7 +204,7 @@ class ToneGroup(QWidget):
 
     def paintEvent(self, event) -> None:  # noqa: N802
         _ = event
-        if self._plain:
+        if self._plain or self._flat:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

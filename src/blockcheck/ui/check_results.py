@@ -1,29 +1,78 @@
 """Экран итогов BlockCheck: панель «что с сетью и что делать» и список сайтов.
 
 Панель итога отвечает на главный вопрос одной фразой («Всё открывается» /
-«Найдены проблемы: 2») и перечисляет проблемы по важности — каждая с советом и,
-где можно, кнопкой («Подобрать стратегию»). Список сайтов — одна строка на
-сервис: открывается ли он и что именно не так.
+«Найдены проблемы: 2»). Под ней — картина блокировок (``block_kinds_view``):
+полоса и плитки показывают, сколько сайтов открывается, сколько закрыто по
+адресу (IP), сколько режут по имени сайта (SNI) и у скольких загрузка
+обрывается после 16 КБ.
+
+Проблемы собраны в группы по виду блокировки: у группы цветная метка, одно
+пояснение простыми словами и общий совет, а внутри — строки сайтов с кнопкой
+(«Подобрать стратегию»). Карточки сайтов и остальных проверок лежат отдельно —
+в ``result_cards``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QHBoxLayout, QHeaderView, QLabel, QSizePolicy, QTableWidgetItem, QVBoxLayout, QWidget
-from qfluentwidgets import BodyLabel, CaptionLabel, PushButton, SimpleCardWidget, StrongBodyLabel, TableWidget
+from PyQt6.QtCore import QEvent, QRectF, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter
+from PyQt6.QtWidgets import QAbstractScrollArea, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from qfluentwidgets.common.font import getFont
+from qfluentwidgets import BodyLabel, CaptionLabel, FlowLayout, PushButton, TransparentPushButton, TransparentToolButton, SimpleCardWidget, StrongBodyLabel, SubtitleLabel
 
-from ui.accessibility import set_control_accessibility, set_item_accessible_text, set_state_text
+from blockcheck.ui.block_kinds_view import KindsOverview, kind_color, site_groups
+from blockcheck.ui.finding_parts import CardsFlow, FindingCard, ServerChip, split_server_list, theme_color
+from ui.widgets.elided_label import ElidedLabel as _ElidedLabel
+from blockcheck.ui.result_cards import finding_detail_card, state_color
+from blockcheck.ui.summary_model import (
+    HISTORY_ALL,
+    HISTORY_SHOWN,
+    HistoryRow,
+    NOT_SITE_KINDS,
+    bypass_note,
+    bypass_warning,
+    cut_providers,
+    environment_text,
+    group_problems,
+    history_lines,
+    history_rows,
+    is_site_problem,
+    own_advice,
+    problem_card_key,
+    shared_advice,
+    site_explanation,
+    site_name,
+    site_note,
+    split_named_sites,
+    split_problem_text,
+)
+from blockcheck.ui.result_cards_model import Card, FindingParts, Line, Section, build_cards, read_finding_parts
+from blockcheck.ui.brand_icons import BrandIcon, site_brand
+from diagnostics.compare import GROUP_TITLES
+from diagnostics.report_upgrade import upgrade as upgrade_report
+from diagnostics.block_kind import KIND_OTHER, KIND_UNSTABLE, kind_info
+from ui.accessibility import set_control_accessibility, set_state_text
+from ui.fluent_widgets import set_tooltip
 from ui.theme import get_cached_qta_pixmap
 from ui.theme_refresh import ThemeRefreshBinding
-from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips, set_fluent_item_tooltip
 from ui.widgets.fun import FunTicker, Mascot, burst_confetti
 from ui.widgets.fun.mascot import MOOD_ALARM, MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD, place_mascot
+from ui.widgets.columns_flow import ColumnsFlow
+from ui.widgets.hover_hint import HoverHint
+from ui.widgets.reveal import Reveal
 from ui.widgets.stagger_float_in import float_in
+from ui.widgets.tone_group import MUTED_TEXT, ToneDot, ToneGroup, dot_on_first_line, mute
 
 ActionHandler = Callable[[str, str], None]
+# Открыть полный отчёт по карточке: получает её ключ («site:youtube», «hostings» …).
+OpenHandler = Callable[[str], None]
+# Открыть страницу на уровень глубже: ключ карточки-родителя и готовый отчёт находки.
+# Открыть страницу одной находки: ей передают готовый отчёт находки. Страница своя, отдельная —
+# не шаг внутрь отчёта раздела (у того своя карточка ниже и значок в заголовке группы).
+OpenPageHandler = Callable[[object], None]
 
 _LEVEL_ICONS = {
     "ok": ("fa5s.check-circle", "success"),
@@ -33,48 +82,21 @@ _LEVEL_ICONS = {
     "pending": ("fa5s.hourglass-half", "muted"),
     "idle": ("fa5s.stethoscope", "muted"),
 }
-_RESULT_WORDS = {
-    "ok": "✓ Открывается",
-    "warn": "⚠ Есть проблемы",
-    "fail": "✗ Не открывается",
-    "unknown": "? Не удалось проверить",
-}
-_SECTION_WORDS = {
-    "voice": {
-        "ok": "✓ Работают",
-        "warn": "⚠ С перебоями",
-        "fail": "✗ Не работают",
-        "unknown": "? Не удалось проверить",
-    },
-    "freeze": {
-        "ok": "✓ Обрыва нет",
-        "warn": "✗ Обрывается",
-        "fail": "✗ Обрывается",
-        "unknown": "? Не удалось проверить",
-    },
-}
-# Сервер, который не удалось проверить, — «?», а не «✗»: это не «не работает».
-_ITEM_MARKS = {"ok": "✓", "fail": "✗", "freeze": "✗", "unknown": "?"}
-
-
-def _item_mark(item: dict) -> str:
-    state = str(item.get("state") or ("ok" if item.get("ok") else "fail"))
-    return _ITEM_MARKS.get(state, "?")
-
-
 _ACTION_TEXT = {
     "strategy": "Подобрать стратегию",
     "strategy_voice": "Подобрать стратегию для звонков",
-    "start_zapret": "Запустить net67",
+    "start_zapret": "Включить обход",
     "dns": "Настройка DNS",
     "hosts": "Редактор hosts",
+    "telegram_proxy": "Telegram Proxy",
 }
 _ACTION_DESCRIPTION = {
     "strategy": "Открывает подбор стратегии",
     "strategy_voice": "Открывает подбор стратегии для голосовых звонков",
-    "start_zapret": "Открывает страницу управления net67",
+    "start_zapret": "Запускает net67 с выбранным пресетом",
     "dns": "Открывает раздел «Настройка DNS», где включается DNS с шифрованием",
     "hosts": "Открывает «Редактор hosts», где сервису включается DNS-профиль",
+    "telegram_proxy": "Открывает «Telegram Proxy»: Telegram закрыт по адресу, и обход net67 ему обычно не помогает",
 }
 
 
@@ -90,6 +112,10 @@ def tone_color(tone: str, tokens=None) -> str:
         }.get(tone, "")
     except Exception:
         return {"success": "#6ccb5f", "warning": "#ff9800", "error": "#ff6b6b"}.get(tone, "")
+
+
+# Точка строки без своего цвета («нет ответа»).
+_NEUTRAL_DOT = "#9aa0aa"
 
 
 def _level_tone(level: str) -> str:
@@ -114,27 +140,586 @@ class _HeightKeeper:
         QTimer.singleShot(0, self._sync_min_height)
 
 
+# Важность словом — в подсказке к точке строки.
+_LEVEL_WORDS = {"fail": "Мешает работе", "warn": "Работает не полностью", "unknown": "Нет ответа"}
+_SITE_ICON = "fa5s.globe"
+
+
+def problem_parts(problem: dict) -> tuple[str, list[tuple[str, list[str]]], int, str, str]:
+    """Проблема по частям: заголовок, метки, сколько серверов не названо, пояснение и подробности для подсказки.
+
+    Находка про DNS-серверы приходит уже частями (``parts``) — с полным перечнем
+    серверов. Иначе фраза делится здесь: так показываются остальные проблемы и
+    отчёты прошлых проверок, где частей ещё не было.
+    """
+    ready = read_finding_parts(problem.get("parts"))
+    if ready is not None:
+        return ready.title, ready.services(), 0, ready.note, ready.detail()
+    title, detail = split_problem_text(problem)
+    # Сайты из заголовка («… для: YouTube, X») уходят в метки с логотипами.
+    title, named_sites = split_named_sites(title)
+    servers, more, rest = split_server_list(detail) if problem.get("kind") == "dns" else ([], 0, detail)
+    return title, [*[(name, []) for name in named_sites], *servers], more, rest, detail
+
+
+def problem_brand(problem: dict) -> tuple[str, str] | None:
+    """(значок, фирменный цвет) строки про сайт. ``None`` — строка не про сайт: у неё точка важности."""
+    kind = str(problem.get("kind") or KIND_OTHER)
+    if kind == "voice":
+        # «Звонки в Telegram могут не работать» — логотип того, чьи звонки.
+        brand = site_brand(str(problem.get("text") or "").partition(":")[0])
+        return (brand.icon, brand.color) if brand is not None else None
+    if kind in NOT_SITE_KINDS:
+        return None
+    first_word = str(problem.get("text") or "").split(" ", 1)[0]
+    brand = site_brand(
+        str(problem.get("site_key") or ""), str(problem.get("title") or ""), str(problem.get("target") or ""), first_word
+    )
+    if brand is not None:
+        return brand.icon, brand.color
+    # Своего логотипа нет — значок с карточки этого сайта, нейтральным цветом.
+    if problem.get("card_icon"):
+        return str(problem["card_icon"]), ""
+    return (_SITE_ICON, "") if problem.get("title") or problem.get("target") else None
+
+
+# Значок кнопки действия на карточке сайта; что она делает, сказано в подсказке.
+_ACTION_ICONS = {
+    "strategy": "fa5s.magic",
+    "strategy_voice": "fa5s.magic",
+    "start_zapret": "fa5s.play",
+    "dns": "fa5s.network-wired",
+    "hosts": "fa5s.edit",
+    "telegram_proxy": "fa5b.telegram-plane",
+}
+
+
+# Уже этого адрес и причина на карточке сайта не помещаются.
+SITE_CARD_MIN_WIDTH = 240
+# С полоской дорог шесть значков с подписями должны помещаться целиком.
+SITE_CARD_MARKS_WIDTH = 300
+
+
+# Короткие подписи дорог для узкой карточки сайта в итоге.
+_MARK_SHORT = {"TLS 1.2": "1.2", "TLS 1.3": "1.3"}
+
+
+class MarksStrip(QWidget):
+    """Как проверяли сайт, одной строкой значков: TLS 1.2, TLS 1.3, Chrome, HTTP, QUIC, DNS.
+
+    Группа говорит, чем сайты похожи, а полоска — чем этот сайт отличается: у
+    одного режется только TLS, у другого ещё и QUIC, у третьего подменён DNS.
+    Значки стоят в одном порядке у всех сайтов; цвет — чем кончилась проба.
+    """
+
+    HEIGHT = 18
+    ICON = 11
+    GAP = 9
+
+    def __init__(self, marks, parent=None) -> None:
+        super().__init__(parent)
+        self._marks = tuple(marks)
+        self.setFixedHeight(self.HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._font = getFont(11)
+        self._metrics = QFontMetrics(self._font)
+        self.reveal = Reveal(self)
+        self._theme_refresh = ThemeRefreshBinding(self, lambda *_args, **_kwargs: self.update())
+        set_state_text(self, "; ".join(f"{mark.label}: {mark.word}" for mark in self._marks))
+
+    def marks(self) -> tuple:
+        return self._marks
+
+    def cells(self, width: int) -> list[tuple[float, float]]:
+        """Места дорог (левый край, ширина) — сколько целиком помещается в ширину."""
+        cells: list[tuple[float, float]] = []
+        x = 0.0
+        for mark in self._marks:
+            need = self.ICON + 3 + self._metrics.horizontalAdvance(_MARK_SHORT.get(mark.label, mark.label))
+            if x + need > width:
+                break
+            cells.append((x, need))
+            x += need + self.GAP
+        return cells
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        _ = event
+        painter = QPainter(self)
+        painter.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        painter.setFont(self._font)
+        cells = self.cells(self.width())
+        muted = theme_color("fg_muted", QColor("#9aa0aa"))
+        for order, ((left, width), mark) in enumerate(zip(cells, self._marks)):
+            painter.setOpacity(self.reveal.part(order, len(cells)))
+            color = QColor(state_color(mark.state))
+            try:
+                icon = get_cached_qta_pixmap(mark.icon, color=color.name(), size=self.ICON)
+                painter.drawPixmap(int(left), (self.HEIGHT - self.ICON) // 2, self.ICON, self.ICON, icon)
+            except Exception:
+                pass
+            # Подпись в цвете состояния только у того, что не прошло: остальное приглушено.
+            painter.setPen(color if mark.state in ("fail", "warn") else muted)
+            painter.drawText(
+                QRectF(left + self.ICON + 3, 0, width, self.HEIGHT),
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                _MARK_SHORT.get(mark.label, mark.label),
+            )
+        painter.end()
+
+
+class _SiteCard(QWidget):
+    """Сайт карточкой: логотип, название, адрес и значок-кнопка действия.
+
+    В карточке только то, чем сайты различаются: адрес и причина в два-три слова.
+    Полное объяснение и советы — в подсказке и в отчёте по нажатию.
+    """
+
+    HEIGHT = 48
+    # С полоской «как проверяли» карточка выше.
+    HEIGHT_WITH_MARKS = 72
+
+    def __init__(
+        self,
+        problem: dict,
+        on_action: ActionHandler | None,
+        parent=None,
+        *,
+        card_key: str = "",
+        on_open: OpenHandler | None = None,
+        tall: bool = False,
+    ) -> None:
+        super().__init__(parent)
+        self.problems = [problem]
+        caption = site_explanation(problem)
+        self._level = str(problem.get("level") or "unknown")
+        self._on_open = on_open
+        self.card_key = card_key if on_open is not None else ""
+        self._hover = False
+        marks = tuple(problem.get("marks") or ())
+        # В группе карточки одной высоты: ``tall`` — у соседей есть полоска дорог.
+        self.setFixedHeight(self.HEIGHT_WITH_MARKS if marks or tall else self.HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        if self.card_key:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(11, 0, 6, 8 if marks or tall else 0)
+        outer.setSpacing(0)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        outer.addLayout(layout, 1)
+        self.marks_strip: MarksStrip | None = None
+        if marks:
+            self.marks_strip = MarksStrip(marks, self)
+            outer.addWidget(self.marks_strip)
+
+        icon_name, icon_color = problem_brand(problem) or (_SITE_ICON, "")
+        self.icon = BrandIcon(icon_name, icon_color, self, size=20)
+        layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self.title = site_name(problem)
+        self.note = site_note(problem)
+        texts = QVBoxLayout()
+        texts.setContentsMargins(0, 0, 0, 0)
+        texts.setSpacing(0)
+        texts.addStretch(1)
+        self.text_label = _ElidedLabel(self.title, self, strong=True)
+        texts.addWidget(self.text_label)
+        self.note_label: _ElidedLabel | None = None
+        if self.note:
+            self.note_label = mute(_ElidedLabel(self.note, self))
+            texts.addWidget(self.note_label)
+        texts.addStretch(1)
+        layout.addLayout(texts, 1)
+
+        # Частично работающий сайт помечен кольцом: это не полная блокировка.
+        self.dot: ToneDot | None = None
+        if self._level != "fail":
+            tone = _level_tone(self._level)
+            self.dot = ToneDot(lambda tokens: tone_color(tone, tokens) or _NEUTRAL_DOT, self, size=7, hollow=True)
+            set_tooltip(self.dot, _LEVEL_WORDS.get(self._level, ""))
+            layout.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        action = str(problem.get("action") or "")
+        self.action_button: TransparentToolButton | None = None
+        self._action_icon = _ACTION_ICONS.get(action, "")
+        if on_action is not None and action in _ACTION_TEXT:
+            target = str(problem.get("target") or "")
+            self.action_button = TransparentToolButton(self)
+            self.action_button.setFixedSize(30, 30)
+            self.action_button.clicked.connect(lambda _checked=False, a=action, t=target: on_action(a, t))
+            what = f"{_ACTION_TEXT[action]}{f' для {target}' if target and action == 'strategy' else ''}"
+            set_tooltip(self.action_button, what)
+            set_control_accessibility(self.action_button, name=what, description=f"{_ACTION_DESCRIPTION.get(action, '')}.")
+            layout.addWidget(self.action_button, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        roads = " · ".join(f"{mark.label}: {mark.word}" for mark in marks)
+        hint = [self.title, *([self.note] if self.note else []), *([roads] if roads else []), *caption]
+        self.hint_text = "\n".join(hint)
+        set_tooltip(self, self.hint_text + ("\nНажмите, чтобы открыть полный отчёт" if self.card_key else ""))
+        state = str(problem.get("text") or self.title)
+        if self.card_key:
+            set_control_accessibility(self, name=state, description="Нажмите, чтобы открыть полный отчёт.")
+        set_state_text(self, state)
+        self._theme_refresh = ThemeRefreshBinding(self, self._apply_theme_refresh)
+        self._apply_theme_refresh()
+
+    def _apply_theme_refresh(self, tokens=None, force: bool = False) -> None:
+        _ = force
+        if self.action_button is not None and self._action_icon:
+            try:
+                color = theme_color("icon_fg_muted", QColor("#d2d7df")).name()
+                self.action_button.setIcon(QIcon(get_cached_qta_pixmap(self._action_icon, color=color, size=14)))
+            except Exception:
+                pass
+        self.update()
+
+    def open_report(self) -> None:
+        if self.card_key and self._on_open is not None:
+            self._on_open(self.card_key)
+
+    def event(self, event) -> bool:
+        if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
+            self._hover = event.type() == QEvent.Type.HoverEnter
+            self.update()
+        return super().event(event)
+
+    def focusInEvent(self, event) -> None:  # noqa: N802
+        super().focusInEvent(event)
+        self.update()
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802
+        super().focusOutEvent(event)
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.pos()):
+            self.open_report()
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if self.card_key and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.open_report()
+            return
+        super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        _ = event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        lit = self._hover or self.hasFocus()
+        painter.setBrush(theme_color("surface_bg_hover" if lit else "surface_bg", QColor(255, 255, 255, 18 if lit else 10)))
+        painter.drawRoundedRect(self.rect(), 6, 6)
+        painter.end()
+
+
+def problem_finding_card(problem: dict, parent=None) -> FindingCard:
+    """Находка не про сайт (DNS и подобное) карточкой; пояснение и совет — в подсказке."""
+    level = str(problem.get("level") or "unknown")
+    tone = _level_tone(level)
+    title, servers, more, rest, detail = problem_parts(problem)
+    evidence = set(problem.get("evidence") or ())
+    advice = [str(item) if item in evidence else f"→ {item}" for item in problem.get("advice") or ()]
+    return FindingCard(
+        title,
+        parent,
+        servers=[*servers, *(problem.get("chips") or ())],
+        more=more,
+        note=rest,
+        hint="\n".join(part for part in (title, detail, *advice) if part),
+        color_for=lambda tokens: tone_color(tone, tokens) or _NEUTRAL_DOT,
+        hollow=level not in ("fail", "ok"),
+        level_word=_LEVEL_WORDS.get(level, ""),
+        state_text=str(problem.get("text") or ""),
+    )
+
+
+# Группы сравнения «с net67 и без» в полосе итога: ключ отчёта, короткая подпись, состояние (цвет).
+# Полные названия групп — в отчёте сравнения; здесь место только на слово-два.
+_COMPARE_GROUPS = (
+    ("helped", "помог", "ok"),
+    ("not_helped", "не помог", "fail"),
+    ("broken", "сломалось", "warn"),
+    ("fine_anyway", "и так открывались", "info"),
+)
+
+
+class CompareBand(QWidget):
+    """Полоса «С net67 и без» под шапкой итога: вывод одной фразой и счётчики по группам.
+
+    Сравниваются эта проверка и прошлая в противоположном состоянии обхода.
+    Фраза вывода приходит из отчёта готовой и называет пресет: «пресет не
+    помог» — не то же, что «net67 не починит», поэтому здесь её не переписывают.
+    """
+
+    HEIGHT = 52
+    opened = pyqtSignal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._compare: dict = {}
+        self._unreliable = False
+        self._hover = False
+        self.setFixedHeight(self.HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self._title_font = getFont(13, QFont.Weight.DemiBold)
+        self._text_font = getFont(12)
+        self.reveal = Reveal(self)
+        self._theme_refresh = ThemeRefreshBinding(self, lambda *_args, **_kwargs: self.update())
+
+    def compare(self) -> dict:
+        return dict(self._compare)
+
+    def set_unreliable(self, unreliable: bool) -> None:
+        """Во время проверки работал VPN или другой обход: разницу мог дать он, а не net67."""
+        self._unreliable = bool(unreliable)
+        self.update()
+
+    def headline(self) -> str:
+        """Фраза вывода; с оговоркой впереди, когда сравнению нельзя верить."""
+        text = str(self._compare.get("headline") or "")
+        return f"Неточно — работал VPN или другой обход. {text}" if self._unreliable and text else text
+
+    def title(self) -> str:
+        """Заголовок полосы. В нём назван пресет: сравнение — итог его одного, а не net67 вообще."""
+        preset = str(self._compare.get("preset") or "")
+        return f"С net67 и без · пресет «{preset}»" if preset else "С net67 и без"
+
+    def counts(self) -> list[tuple[str, int, str]]:
+        """Группы, в которых есть сайты: (подпись, сколько, состояние)."""
+        return [
+            (caption, len(self._compare.get(key) or ()), state)
+            for key, caption, state in _COMPARE_GROUPS
+            if self._compare.get(key)
+        ]
+
+    def show_compare(self, compare: dict | None) -> None:
+        self._compare = dict(compare or {})
+        self.setVisible(bool(self._compare))
+        if not self._compare:
+            return
+        headline = str(self._compare.get("headline") or "")
+        names = "; ".join(
+            f"{GROUP_TITLES.get(key, caption)}: {', '.join(map(str, self._compare.get(key) or ()))}"
+            for key, caption, _state in _COMPARE_GROUPS
+            if self._compare.get(key)
+        )
+        one_preset = "Это итог одного пресета: с другим пресетом результат может быть другим."
+        set_tooltip(self, "\n".join(part for part in (self.title(), headline, names, one_preset, "Нажмите, чтобы открыть сравнение") if part))
+        set_control_accessibility(self, name=f"С net67 и без: {headline}", description="Открывает сравнение с прошлой проверкой.")
+        set_state_text(self, f"С net67 и без: {headline}")
+        self.reveal.play()
+
+    def event(self, event) -> bool:
+        if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
+            self._hover = event.type() == QEvent.Type.HoverEnter
+            self.update()
+        return super().event(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.pos()):
+            self.opened.emit()
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.opened.emit()
+            return
+        super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        _ = event
+        painter = QPainter(self)
+        painter.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        token = "surface_bg_hover" if self._hover or self.hasFocus() else "surface_bg"
+        painter.setBrush(theme_color(token, QColor(255, 255, 255, 18 if self._hover else 10)))
+        painter.drawRoundedRect(self.rect(), 6, 6)
+        level = str(self._compare.get("level") or "unknown")
+        tone = QColor(state_color(level))
+        muted = theme_color("fg_muted", QColor("#9aa0aa"))
+        text = theme_color("fg", QColor("#f2f2f2"))
+        try:
+            painter.drawPixmap(14, (self.HEIGHT - 18) // 2, 18, 18, get_cached_qta_pixmap("fa5s.balance-scale", color=tone.name(), size=18))
+        except Exception:
+            pass
+        # Счётчики групп — справа, каждая своим цветом; фраза вывода занимает остальное.
+        metrics = QFontMetrics(self._text_font)
+        title_metrics = QFontMetrics(self._title_font)
+        right = float(self.width() - 14)
+        counts = self.counts()
+        for order, (caption, count, state) in reversed(list(enumerate(counts))):
+            number = str(count)
+            need = title_metrics.horizontalAdvance(number) + 5 + metrics.horizontalAdvance(caption)
+            left = right - need
+            if left < 320:
+                break
+            painter.setOpacity(self.reveal.part(order, len(counts)))
+            painter.setFont(self._title_font)
+            painter.setPen(QColor(state_color(state)) if state != "info" else muted)
+            painter.drawText(QRectF(left, 0, need, self.HEIGHT), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), number)
+            painter.setFont(self._text_font)
+            painter.setPen(muted)
+            painter.drawText(
+                QRectF(left + title_metrics.horizontalAdvance(number) + 5, 0, need, self.HEIGHT),
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                caption,
+            )
+            right = left - 18
+        painter.setOpacity(1.0)
+        room = max(40.0, right - 44)
+        painter.setFont(self._title_font)
+        painter.setPen(text)
+        painter.drawText(
+            QRectF(44, 8, room, 18),
+            int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+            title_metrics.elidedText(self.title(), Qt.TextElideMode.ElideRight, int(room)),
+        )
+        painter.setFont(self._text_font)
+        painter.setPen(QColor(state_color("warn")) if self._unreliable else (tone if level in ("fail", "warn") else muted))
+        headline = metrics.elidedText(self.headline(), Qt.TextElideMode.ElideRight, int(room))
+        painter.drawText(QRectF(44, 27, room, 17), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), headline)
+        painter.end()
+
+
+# Значок страницы находки — по виду проблемы.
+_KIND_ICONS = {"cut16": "fa5s.cut", "quic": "fa5s.bolt", "voice": "fa5s.phone-alt", "dns": "fa5s.network-wired", "ip": "fa5s.ban", "sni": "fa5s.lock"}
+
+
+def problem_detail_card(problem: dict) -> Card:
+    """Страница одной находки: что найдено, какие серверы названы, что это значит и что делать."""
+    parts = read_finding_parts(problem.get("parts"))
+    chips = problem.get("chips") or ()
+    if parts is None and chips:
+        # Серверы пришли метками (хостинги с обрывом): на странице они те же, что на карточке.
+        title, _servers, _more, rest, _detail = problem_parts(problem)
+        pairs = tuple((str(name), str(address)) for name, addresses in chips for address in (addresses or [""]))
+        # Хвост фразы («13 из 31 проверенных серверов») — итог одной строкой под названием, а не раздел.
+        parts, status = FindingParts(title, pairs, ""), rest.rstrip(".")
+    else:
+        status = ""
+    card = finding_detail_card(
+        str(problem.get("text") or ""),
+        str(problem.get("level") or ""),
+        parts,
+        icon=_KIND_ICONS.get(str(problem.get("kind") or ""), "fa5s.network-wired"),
+        status=status,
+    )
+    advice = tuple(Line("info", item) for item in own_advice(problem))
+    return replace(card, sections=(*card.sections, Section("Что делать", advice))) if advice else card
+
+
 class _ProblemRow(QWidget):
-    def __init__(self, problem: dict, on_action: ActionHandler | None, parent=None) -> None:
+    """Находка не про один сайт (DNS, компьютер, сеть, звонки): точка важности, заголовок, пояснение, совет, кнопка.
+
+    Перечень DNS-серверов и сайтов показан метками. ``grouped`` — строка стоит
+    в группе: заголовок отделяется от пояснения. ``card_key`` — карточка с полным отчётом:
+    строка подсвечивается под мышью и открывает его по нажатию или Enter.
+    """
+
+    def __init__(
+        self,
+        problem: dict,
+        on_action: ActionHandler | None,
+        parent=None,
+        *,
+        grouped: bool = False,
+        hidden_advice=(),
+        divided: bool = False,
+        card_key: str = "",
+        on_open: OpenHandler | None = None,
+        compact: bool = False,
+    ) -> None:
         super().__init__(parent)
         self._level = str(problem.get("level") or "unknown")
+        self._divided = divided
+        self.problems = [problem]
+        self._on_open = on_open
+        self.card_key = card_key if on_open is not None else ""
+        self._hover = False
+        if self.card_key:
+            self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        # Текст нажимаемой строки не выделяется мышью: иначе нажатие по нему не дошло бы до строки.
+        text_flags = (
+            Qt.TextInteractionFlag.NoTextInteraction if self.card_key else Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 2, 0, 2)
-        layout.setSpacing(10)
+        # ``compact`` — действие и отчёт стоят в заголовке группы: строка ниже и не нажимается.
+        pad = 6 if compact else 9
+        layout.setContentsMargins(0, pad, 0, pad)
+        layout.setSpacing(12)
 
-        self._icon = QLabel(self)
-        self._icon.setFixedSize(18, 18)
-        layout.addWidget(self._icon, 0, Qt.AlignmentFlag.AlignTop)
+        tone = _level_tone(self._level)
+        hollow = self._level not in ("fail", "ok")
+        self.icon: BrandIcon | None = None
+        self.dot: ToneDot | None = None
+        brand = problem_brand(problem)
+        if brand is not None:
+            self.icon = BrandIcon(brand[0], brand[1], self, size=18)
+            layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignTop)
+        else:
+            # Ошибка — закрашенная точка, остальное — кольцо; слово важности в подсказке.
+            self.dot = ToneDot(lambda tokens: tone_color(tone, tokens) or _NEUTRAL_DOT, self, hollow=hollow)
+            holder = dot_on_first_line(self.dot)
+            holder.setFixedWidth(18)
+            self.dot.move(5, self.dot.y())
+            set_tooltip(holder, _LEVEL_WORDS.get(self._level, ""))
+            layout.addWidget(holder, 0, Qt.AlignmentFlag.AlignTop)
 
         texts = QVBoxLayout()
-        texts.setSpacing(2)
-        self.text_label = BodyLabel(str(problem.get("text") or ""), self)
+        texts.setSpacing(3)
+        if not grouped:
+            title, servers, more, rest = str(problem.get("text") or ""), [], 0, ""
+        else:
+            title, servers, more, rest, _detail = problem_parts(problem)
+        self.text_label = BodyLabel(title, self) if not grouped else StrongBodyLabel(title, self)
         self.text_label.setWordWrap(True)
+        self.text_label.setTextInteractionFlags(text_flags)
         texts.addWidget(self.text_label)
+
+        # Перечень DNS-серверов — метками: по одной на сервис, адреса в подсказке.
+        self.server_chips: list[ServerChip] = []
+        self.more_label: CaptionLabel | None = None
+        servers = [*servers, *(problem.get("chips") or ())]
+        if servers:
+            chips = QWidget(self)
+            flow = FlowLayout(chips, needAni=False)
+            flow.setContentsMargins(0, 2, 0, 2)
+            flow.setHorizontalSpacing(6)
+            flow.setVerticalSpacing(4)
+            for name, addresses in servers:
+                chip = ServerChip(name, addresses, chips)
+                flow.addWidget(chip)
+                self.server_chips.append(chip)
+            if more:
+                self.more_label = mute(CaptionLabel(f"и ещё {more}", chips))
+                self.more_label.setFixedHeight(22)
+                flow.addWidget(self.more_label)
+            texts.addWidget(chips)
+        self.detail_label: BodyLabel | None = None
+        if rest:
+            self.detail_label = mute(BodyLabel(rest, self))
+            self.detail_label.setWordWrap(True)
+            self.detail_label.setTextInteractionFlags(text_flags)
+            texts.addWidget(self.detail_label)
+        evidence = set(problem.get("evidence") or ())
+        self.advice_labels: list[CaptionLabel] = []
         for advice in problem.get("advice") or ():
-            advice_label = CaptionLabel(f"→ {advice}", self)
+            if advice in hidden_advice:
+                continue
+            # Свидетельство — это факт, а не действие: стрелка только у советов.
+            advice_label = BodyLabel(str(advice), self) if advice in evidence else CaptionLabel(f"→ {advice}", self)
+            mute(advice_label)
             advice_label.setWordWrap(True)
             texts.addWidget(advice_label)
+            self.advice_labels.append(advice_label)
+        texts.addStretch(1)
         layout.addLayout(texts, 1)
 
         action = str(problem.get("action") or "")
@@ -153,39 +738,240 @@ class _ProblemRow(QWidget):
             )
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
             self.action_button = button
-        set_state_text(self, str(problem.get("text") or ""))
-        self._theme_refresh = ThemeRefreshBinding(self, self._apply_theme_refresh)
-        self._apply_theme_refresh()
+        state = str(problem.get("text") or "")
+        if self.card_key:
+            # Стрелка справа — знак, что строка открывается.
+            self.chevron = BrandIcon("fa5s.chevron-right", "", self, size=10)
+            layout.addWidget(self.chevron, 0, Qt.AlignmentFlag.AlignVCenter)
+            set_control_accessibility(self, name=state, description="Нажмите, чтобы открыть полный отчёт.")
+            set_tooltip(self, "Открыть полный отчёт")
+        set_state_text(self, state)
+        self._theme_refresh = ThemeRefreshBinding(self, lambda *_args, **_kwargs: self.update())
 
-    def _apply_theme_refresh(self, tokens=None, force: bool = False) -> None:
-        _ = force
-        icon_name, tone = _LEVEL_ICONS.get(self._level, _LEVEL_ICONS["unknown"])
-        color = tone_color(tone, tokens) or None
-        try:
-            self._icon.setPixmap(get_cached_qta_pixmap(icon_name, color=color, size=16, muted_fallback=color is None))
-        except Exception:
-            pass
+    def open_report(self) -> None:
+        if self.card_key and self._on_open is not None:
+            self._on_open(self.card_key)
+
+    def event(self, event) -> bool:
+        if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
+            self._hover = event.type() == QEvent.Type.HoverEnter
+            self.update()
+        return super().event(event)
+
+    def focusInEvent(self, event) -> None:  # noqa: N802
+        super().focusInEvent(event)
+        self.update()
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802
+        super().focusOutEvent(event)
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.pos()):
+            self.open_report()
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if self.card_key and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.open_report()
+            return
+        super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        _ = event
+        if not self._divided and not self.card_key:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        if self.card_key and (self._hover or self.hasFocus()):
+            # Мягкая подсветка под мышью: окно без рамок, поэтому фон, а не обводка.
+            painter.setBrush(theme_color("surface_bg_hover", QColor(255, 255, 255, 18)))
+            painter.drawRoundedRect(self.rect().adjusted(-8, 1, 6, 0), 5, 5)
+        elif self._divided:
+            # Тонкая линия между строками группы — вместо отдельной подложки у каждой.
+            painter.setBrush(theme_color("divider_strong", QColor(255, 255, 255, 26)))
+            painter.drawRect(0, 0, self.width(), 1)
+        painter.end()
 
 
-class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
-    """Итог проверки: одна фраза, строка про окружение, проблемы с советами."""
+_OTHER_ABOUT = "Что именно мешает, проверка не определила — подробности в подсказке и в отчёте по нажатию."
 
-    def __init__(self, on_action: ActionHandler | None = None, parent=None) -> None:
+
+class _ProblemGroup(ToneGroup):
+    """Проблемы одного вида блокировки: заголовок с цветной точкой, пояснение, карточки сайтов и строки.
+
+    Сайты идут одной сеткой карточек, без текста между ними: что это за
+    блокировка, сказано в заголовке группы. Находки не про сайт идут строками ниже.
+    """
+
+    def __init__(
+        self,
+        kind: str,
+        problems: list[dict],
+        on_action: ActionHandler | None,
+        parent=None,
+        *,
+        card_key_for: Callable[[dict], str] | None = None,
+        on_open: OpenHandler | None = None,
+        on_open_page: OpenPageHandler | None = None,
+    ) -> None:
+        info = kind_info(kind)
+        # «Остальное» — не вид блокировки, но заголовок и подложка у группы те же:
+        # без них карточки сайтов висели между группами как случайные.
+        plain = False
+        key_for = card_key_for or (lambda _problem: "")
+        super().__init__(
+            info.title,
+            lambda tokens: kind_color(kind, tokens),
+            parent,
+            count=len(problems),
+            about=info.about or _OTHER_ABOUT,
+            plain=plain,
+            # Подложка — только у карточек: группа на своей подложке давала «виджет в виджете».
+            flat=True,
+        )
+        self._kind = kind
+        hidden = () if plain else tuple(shared_advice(problems))
+        # Пояснение вида блокировки и общий совет — в подсказке заголовка: абзацы над карточками
+        # читались как стена текста, а главное — что с каждым сайтом — видно на самих карточках.
+        self.shared_advice_lines = [f"→ {advice}" for advice in hidden]
+        self.about_text = "\n".join(part for part in (info.about or _OTHER_ABOUT, *self.shared_advice_lines) if part)
+        if self.about_label is not None:
+            self.about_label.setVisible(False)
+        if self.title_label is not None and self.about_text:
+            self.info_icon = BrandIcon("fa5s.info-circle", "", self, size=12)
+            set_tooltip(self.info_icon, self.about_text)
+            set_tooltip(self.title_label, self.about_text)
+            self.add_title_widget(self.info_icon)
+        sites = [problem for problem in problems if is_site_problem(problem)]
+        others = [problem for problem in problems if not is_site_problem(problem)]
+
+        self.rows: list[_SiteCard | FindingCard | _ProblemRow] = []
+        self.flow: CardsFlow | None = None
+        if sites:
+            tall = any(problem.get("marks") for problem in sites)
+            self.flow = CardsFlow(
+                self,
+                min_width=SITE_CARD_MARKS_WIDTH if tall else SITE_CARD_MIN_WIDTH,
+                card_height=_SiteCard.HEIGHT_WITH_MARKS if tall else _SiteCard.HEIGHT,
+            )
+            for problem in sites:
+                card = _SiteCard(problem, on_action, self.flow, card_key=key_for(problem), on_open=on_open, tall=tall)
+                self.flow.add(card)
+                self.rows.append(card)
+            self.add_widget(self.flow)
+        # У всех строк одно действие и один отчёт (так у находок по DNS): кнопка и значок
+        # отчёта ставятся один раз в заголовок группы, а не повторяются в каждой строке.
+        actions = {str(problem.get("action") or "") for problem in others}
+        keys = {key_for(problem) for problem in others}
+        self.shared_action_button: PushButton | None = None
+        self.report_button: TransparentToolButton | None = None
+        # Одна находка — та же карточка, что и несколько: строка во всю ширину окна с
+        # абзацами текста выбивалась из ряда карточек.
+        targets = {str(problem.get("target") or "") for problem in others}
+        uniform = bool(others) and len(actions) == 1 and len(keys) == 1 and len(targets) == 1
+        target = next(iter(targets), "")
+        action = next(iter(actions), "")
+        shared_action = uniform and on_action is not None and action in _ACTION_TEXT
+        if shared_action:
+            self.shared_action_button = PushButton(_ACTION_TEXT[action], self)
+            self.shared_action_button.clicked.connect(lambda _checked=False, a=action, t=target: on_action(a, t))
+            set_control_accessibility(
+                self.shared_action_button, name=_ACTION_TEXT[action], description=f"{_ACTION_DESCRIPTION.get(action, '')}."
+            )
+            self.add_header_widget(self.shared_action_button)
+        key = next(iter(keys), "")
+        shared_report = uniform and on_open is not None and bool(key)
+        if shared_report:
+            self.report_button = TransparentToolButton(self)
+            self.report_button.setFixedSize(30, 30)
+            color = theme_color("icon_fg_muted", QColor("#d2d7df")).name()
+            self.report_button.setIcon(QIcon(get_cached_qta_pixmap("fa5s.file-alt", color=color, size=14)))
+            self.report_button.clicked.connect(lambda _checked=False, k=key: on_open(k))
+            set_tooltip(self.report_button, "Открыть полный отчёт")
+            set_control_accessibility(
+                self.report_button, name=f"Полный отчёт: {info.title}", description="Открывает страницу со всеми измерениями."
+            )
+            self.add_header_widget(self.report_button)
+        # Несколько находок с общим действием и отчётом — карточками: заголовок и метки,
+        # без абзацев пояснений (они в подсказке и в полном отчёте).
+        self.findings_flow: CardsFlow | None = None
+        if uniform:
+            self.findings_flow = CardsFlow(self, min_width=FindingCard.MIN_WIDTH, card_height=FindingCard.HEIGHT)
+            for problem in others:
+                card = problem_finding_card(problem, self.findings_flow)
+                if on_open_page is not None:
+                    # Карточка открывает одну страницу — свою: что найдено, серверы, пояснение и совет.
+                    card.set_clickable()
+                    card.clicked.connect(lambda item=problem: on_open_page(problem_detail_card(item)))
+                self.findings_flow.add(card)
+                self.rows.append(card)
+            self.add_widget(self.findings_flow)
+            others = []
+        for problem in others:
+            row = _ProblemRow(
+                problem,
+                None if shared_action else on_action,
+                self,
+                grouped=True,
+                hidden_advice=hidden,
+                divided=not plain,
+                card_key="" if shared_report else key_for(problem),
+                on_open=on_open,
+                compact=shared_action or shared_report,
+            )
+            self.add_widget(row)
+            self.rows.append(row)
+        set_state_text(self, f"{info.title}, проблем: {len(problems)}")
+
+    def kind(self) -> str:
+        return self._kind
+
+
+class BlockcheckSummaryPanel(_HeightKeeper, QWidget):
+    """Итог проверки: одна фраза, картина блокировок и проблемы по видам с советами.
+
+    Подложка есть только у шапки (``hero``) и у самих карточек. Картина
+    блокировок и группы проблем лежат прямо на странице: общая подложка под
+    группами, а под ней ещё подложка панели читались как «виджет в виджете».
+    """
+
+    # Группа из стольких карточек (и меньше) — небольшая: такие стоят рядом, столбцами.
+    SMALL_GROUP = 2
+    GROUP_COLUMN_WIDTH = 400
+
+    def __init__(
+        self,
+        on_action: ActionHandler | None = None,
+        parent=None,
+        *,
+        on_open: OpenHandler | None = None,
+        on_open_page: OpenPageHandler | None = None,
+    ) -> None:
         super().__init__(parent)
         self._on_action = on_action
+        self._on_open = on_open
+        self._on_open_page = on_open_page
         self._level = "idle"
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(12)
+        self.hero = SimpleCardWidget(self)
+        outer.addWidget(self.hero)
+        root = QVBoxLayout(self.hero)
+        # Размеры шапки — те же, что у панелей остальных вкладок раздела (образец — «DNS-серверы»).
         root.setContentsMargins(16, 14, 16, 14)
-        root.setSpacing(8)
+        root.setSpacing(10)
 
         header = QHBoxLayout()
-        header.setSpacing(12)
-        # Значок программы: работает, пока идёт проверка, и реагирует на итог.
-        self.mascot = Mascot(self, size=44)
+        header.setSpacing(14)
+        # Значок net67: работает, пока идёт проверка, и реагирует на итог.
+        self.mascot = Mascot(self.hero, size=44)
         titles = QVBoxLayout()
-        titles.setSpacing(2)
         place_mascot(header, self.mascot, titles, left=16, top=14)
+        titles.setSpacing(4)
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
         self._icon = QLabel(self)
@@ -195,23 +981,56 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
         self.title_label.setWordWrap(True)
         title_row.addWidget(self.title_label, 1)
         titles.addLayout(title_row)
-        self.env_label = CaptionLabel("", self)
+        self.env_label = BodyLabel("", self)
         self.env_label.setWordWrap(True)
         titles.addWidget(self.env_label)
+        # Что изменилось с прошлой такой же проверки.
+        # Проверка шла при включённом VPN или другой программе обхода: главное предупреждение итога.
+        # Стоит сразу под фразой итога и в цвете предупреждения — мелкой строкой внизу его не замечали.
+        self.bypass_label = CaptionLabel("", self)
+        self.bypass_label.setWordWrap(True)
+        self.bypass_label.setVisible(False)
+        titles.addWidget(self.bypass_label)
+        self.changes_label = mute(CaptionLabel("", self))
+        self.changes_label.setWordWrap(True)
+        self.changes_label.setVisible(False)
+        titles.addWidget(self.changes_label)
         self.ticker = FunTicker(self)
         self.ticker.setVisible(False)
         titles.addWidget(self.ticker)
+        # Кнопки страницы («Проверить», «Остановить») и выбор набора — сразу под главной фразой.
+        self.actions = QHBoxLayout()
+        self.actions.setContentsMargins(0, 6, 0, 0)
+        self.actions.setSpacing(10)
+        titles.addLayout(self.actions)
+        # Остальное управление страницы (свои домены) — здесь же, под кнопками: всё, чем
+        # проверку настраивают и запускают, стоит в шапке, а не под результатами.
+        self.controls = QVBoxLayout()
+        self.controls.setContentsMargins(0, 0, 0, 0)
+        self.controls.setSpacing(6)
+        titles.addLayout(self.controls)
         header.addLayout(titles, 1)
-        # Текст — от верха, вровень со значком: в карточке выше нужного он
-        # иначе всплывал бы к середине, а значок оставался наверху.
         header.setAlignment(titles, Qt.AlignmentFlag.AlignTop)
         root.addLayout(header)
 
+        # Картина блокировок: полоса и плитки по видам.
+        self.overview = KindsOverview(self)
+        self.overview.tile_opened.connect(self.scroll_to_group)
+        self.overview.setVisible(False)
+        # Сравнение с прошлой проверкой в противоположном состоянии обхода: помог ли пресет.
+        self.compare_band = CompareBand(self)
+        self.compare_band.opened.connect(lambda: self._on_open is not None and self._on_open("compare"))
+        self.compare_band.setVisible(False)
+        outer.addWidget(self.compare_band)
+        outer.addWidget(self.overview)
+
         self._problems_host = QWidget(self)
         self._problems_layout = QVBoxLayout(self._problems_host)
-        self._problems_layout.setContentsMargins(56, 4, 0, 0)
-        self._problems_layout.setSpacing(6)
-        root.addWidget(self._problems_host)
+        self._problems_layout.setContentsMargins(0, 0, 0, 0)
+        self._problems_layout.setSpacing(14)
+        outer.addWidget(self._problems_host)
+        self._groups: list[_ProblemGroup] = []
+        self.small_groups: ColumnsFlow | None = None
 
         self._theme_refresh = ThemeRefreshBinding(self, self._apply_theme_refresh)
         self.set_idle()
@@ -222,29 +1041,92 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
 
     def problem_rows(self) -> list[_ProblemRow]:
         rows = []
-        for index in range(self._problems_layout.count()):
-            widget = self._problems_layout.itemAt(index).widget()
-            if isinstance(widget, _ProblemRow):
-                rows.append(widget)
+        for group in self._groups:
+            rows.extend(group.rows)
         return rows
+
+    def scroll_to_group(self, kind: str) -> bool:
+        """Нажатие на плитку вида блокировки: страница прокручивается к его группе. ``False`` — группы нет."""
+        group = next((item for item in self.problem_groups() if item.kind() == kind), None)
+        parent = self.parentWidget()
+        while parent is not None and not isinstance(parent, QAbstractScrollArea):
+            parent = parent.parentWidget()
+        if group is None or parent is None:
+            return False
+        parent.ensureWidgetVisible(group, 0, 24)
+        # Заголовок группы — у верхнего края окна, а не у нижнего.
+        bar = parent.verticalScrollBar()
+        bar.setValue(min(bar.maximum(), group.mapTo(parent.widget(), group.rect().topLeft()).y() - 12))
+        return True
+
+    def problem_groups(self) -> list[_ProblemGroup]:
+        """Группы в порядке важности (на экране небольшие группы собраны в столбцы)."""
+        return list(self._groups)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._sync_min_height()
 
+    def _show_bypass(self, report: dict | None) -> None:
+        """Строка о VPN и программах обхода, запущенных во время проверки (кроме самого обхода).
+
+        Тревожная — только когда программа стоит на дороге проверки: тогда итог описывает
+        сеть вместе с ней. Запущена, но интернет идёт мимо — спокойная строка: проверка
+        честно показывает провайдера, просто браузер может ходить иначе.
+        """
+        report = report or {}
+        running = [str(name) for name in report.get("other_bypass_tools") or () if str(name).strip()]
+        # У отчётов до появления «на дороге» этого ключа нет: считаем, как раньше, что мешают все.
+        in_path = [str(name) for name in report.get("tools_in_path", running) or () if str(name).strip()]
+        text = bypass_warning(in_path) or bypass_note(running)
+        self.bypass_label.setText(text)
+        self.bypass_label.setVisible(bool(text))
+        if text:
+            warning = QColor(tone_color("warning") or "#d99a4e")
+            # Порядок цветов — светлая тема, затем тёмная.
+            self.bypass_label.setTextColor(warning if in_path else MUTED_TEXT[0], warning if in_path else MUTED_TEXT[1])
+        compare = report.get("compare")
+        disturbed = compare.get("disturbed") if isinstance(compare, dict) and "disturbed" in compare else bool(in_path)
+        self.compare_band.set_unreliable(bool(disturbed))
+
+    def _show_changes(self, report: dict | None) -> None:
+        changes = [str(item) for item in (report or {}).get("changes") or ()]
+        previous_time = str((report or {}).get("previous_time") or "")
+        text = ""
+        if changes or previous_time:
+            from diagnostics.history import format_time
+
+            when = format_time(previous_time)
+            if changes:
+                text = f"С прошлой проверки ({when}) {'; '.join(changes)}."
+            elif any(item.get("level") in ("fail", "warn") for item in (report or {}).get("problems") or ()):
+                # После подбора или настройки важно знать и это: помогло не стало.
+                text = f"С прошлой такой же проверки ({when}) ничего не изменилось."
+        self.changes_label.setText(text)
+        self.changes_label.setVisible(bool(text))
+
     def _clear_problems(self) -> None:
+        self._show_changes(None)
+        self._show_bypass(None)
+        self.overview.clear()
+        self.overview.setVisible(False)
+        self.compare_band.show_compare(None)
         while self._problems_layout.count():
             item = self._problems_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+        self._groups = []
+        self.small_groups = None
         self._problems_host.setVisible(False)
 
-    def _set_state(self, level: str, title: str, env: str = "", *, mood: str = MOOD_IDLE) -> None:
+    def _set_state(self, level: str, title: str, env: str = "", *, mood: str = MOOD_IDLE, fun: str = "") -> None:
         self._level = level if level in _LEVEL_ICONS else "unknown"
         if level != "pending":
-            self.ticker.stop()
-            self.ticker.setVisible(False)
+            # Заголовок итога точный; под ним — одна шутка про это состояние.
+            from blockcheck.ui.fun_texts import show_state_line
+
+            show_state_line(self.ticker, fun)
         self.mascot.set_mood(mood)
         self.title_label.setText(title)
         self.env_label.setText(env)
@@ -257,8 +1139,9 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
         self._clear_problems()
         self._set_state(
             "idle",
-            "net67 готова проверить вашу сеть",
-            "Нажмите «Проверить»: посмотрим, какие сайты открываются, и подскажем, что делать с остальными.",
+            "Сеть ещё не проверялась",
+            "Нажмите «Проверить»: покажем, какие сайты открываются и что делать с остальными.",
+            fun="bc_idle",
         )
 
     def set_pending(self) -> None:
@@ -273,31 +1156,111 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
     def set_stopped(self, text: str = "Проверка остановлена") -> None:
         self._clear_problems()
         failed = "ошибк" in str(text or "").lower()
-        self._set_state("unknown", text, "", mood=MOOD_ALARM if failed else MOOD_IDLE)
+        self._set_state(
+            "unknown", text, "", mood=MOOD_ALARM if failed else MOOD_IDLE, fun="error" if failed else "stopped"
+        )
 
     def show_report(self, report: dict) -> None:
         self._clear_problems()
+        # Отчёт старой версии (из файла или истории) — в текущий вид, один раз и здесь.
+        report = upgrade_report(report) or {}
         problems = list(report.get("problems") or ())
+        # У общей строки про обрыв на 16 КБ — метки хостингов, где он найден.
+        providers = cut_providers(report)
+        if providers:
+            problems = [
+                {**item, "chips": providers}
+                if item.get("kind") == "cut16" and not item.get("title") and not item.get("target")
+                else item
+                for item in problems
+            ]
         blocking = [item for item in problems if item.get("level") in ("fail", "warn")]
         if not problems:
-            level, title, mood = "ok", "Всё открывается — провайдер сегодня добрый 🎉", MOOD_HAPPY
+            level, title, mood, fun = "ok", "Всё открывается", MOOD_HAPPY, "bc_ok"
         elif not blocking:
-            level, title, mood = "unknown", "Часть проверок не дала ответа", MOOD_IDLE
+            level, title, mood, fun = "unknown", "Часть проверок не дала ответа", MOOD_IDLE, "bc_unknown"
+        elif not any(is_site_problem(item) for item in blocking) and not any(
+            str(service.get("level") or "") in ("fail", "warn")
+            for service in report.get("services") or ()
+            if not service.get("control")
+        ):
+            # Сайты открываются, а замечания — про DNS-серверы, IPv6, компьютер: не красная тревога.
+            level, title, mood, fun = "warn", f"Сайты открываются, есть замечания: {len(blocking)}", MOOD_SAD, "bc_problems"
         else:
             level = "fail" if any(item.get("level") == "fail" for item in blocking) else "warn"
-            title = f"Найдены проблемы: {len(blocking)} — ниже, что с ними делать"
+            title = f"Найдены проблемы: {len(blocking)}"
             mood = MOOD_ALARM if level == "fail" else MOOD_SAD
-        rows = [_ProblemRow(problem, self._on_action, self._problems_host) for problem in problems]
-        working = list(report.get("working") or ())
-        if working and problems:
-            rows.append(_ProblemRow({"level": "ok", "text": f"Открываются: {', '.join(working)}"}, None, self._problems_host))
+            fun = "bc_problems"
+        self._show_changes(report)
+        self._show_bypass(report)
+        # Строка открывает полный отчёт, только если под итогом есть такая карточка;
+        # с карточки сайта берётся и значок, когда своего логотипа у сайта нет.
+        cards = {card.key: card for card in build_cards(report)}
+        keys = [problem_card_key(item, report) for item in problems]
+        problems = [
+            {
+                **item,
+                "site_key": key.removeprefix("site:"),
+                "card_icon": cards[key].icon,
+                "site_label": cards[key].title,
+                # Причина в два-три слова — та же метка, что на карточке сайта под итогом.
+                # Сами протоколы («TLS 1.2: сброс») показывает полоска дорог — в причину не берём.
+                "cause_word": next(
+                    (text for text, state in cards[key].chips if state == "fail" and not (cards[key].marks and ": " in text)), ""
+                ),
+                "marks": cards[key].marks,
+                # «Через раз» — своя группа в итоге, а не «Остальное»: вид берётся с карточки сайта.
+                **({"kind": KIND_UNSTABLE} if cards[key].kind == KIND_UNSTABLE else {}),
+            }
+            if key.startswith("site:") and key in cards
+            else item
+            for item, key in zip(problems, keys)
+        ]
+
+        def card_key_for(problem: dict) -> str:
+            key = problem_card_key(problem, report)
+            return key if key in cards and self._on_open is not None else ""
+
+        self._groups = [
+            _ProblemGroup(
+                kind,
+                items,
+                self._on_action,
+                self._problems_host,
+                card_key_for=card_key_for,
+                on_open=self._on_open,
+                on_open_page=self._on_open_page,
+            )
+            for kind, items in group_problems(problems)
+        ]
+        # Небольшие группы (одна-две карточки) стоят рядом столбцами — там, где шла первая из
+        # них; каждая во всю ширину окна была бы на три четверти пустой. Большие — во всю ширину.
+        small = [group for group in self._groups if len(group.rows) <= self.SMALL_GROUP]
+        rows: list[QWidget] = []
+        if len(small) > 1:
+            self.small_groups = ColumnsFlow(self._problems_host, min_width=self.GROUP_COLUMN_WIDTH)
+            self.small_groups.replaced.connect(self._schedule_min_height_sync, Qt.ConnectionType.QueuedConnection)
+            for group in self._groups:
+                if group in small:
+                    if self.small_groups not in rows:
+                        rows.append(self.small_groups)
+                    self.small_groups.add(group)
+                else:
+                    rows.append(group)
+        else:
+            rows = list(self._groups)
         for row in rows:
             self._problems_layout.addWidget(row)
         self._problems_host.setVisible(bool(rows))
-        self._set_state(level, title, _environment_text(report), mood=mood)
-        # Проблемы выплывают по очереди, а если всё хорошо — салют.
+        compare = report.get("compare")
+        self.compare_band.show_compare(compare if isinstance(compare, dict) else None)
+        groups = site_groups(report)
+        self.overview.setVisible(bool(groups))
+        self.overview.show_groups(groups)
+        self._set_state(level, title, environment_text(report), mood=mood, fun=fun)
+        # Группы выплывают по очереди, а если всё хорошо — салют.
         for order, row in enumerate(rows):
-            float_in(row, delay_ms=120 + order * 90)
+            float_in(row, delay_ms=160 + order * 90)
         if level == "ok":
             burst_confetti(self)
 
@@ -311,158 +1274,216 @@ class BlockcheckSummaryPanel(_HeightKeeper, SimpleCardWidget):
             pass
 
 
-def _environment_text(report: dict) -> str:
-    running = report.get("zapret_running")
-    parts = []
-    if running is True:
-        parts.append("net67 включён — проверено с обходом")
-    elif running is False:
-        parts.append("net67 выключен — проверено без обхода")
-    elapsed = report.get("elapsed")
-    if isinstance(elapsed, (int, float)):
-        parts.append(f"проверка заняла {elapsed:.0f} с")
-    if report.get("timed_out"):
-        parts.append("часть проверок не успела")
-    return " · ".join(parts)
+class _HistoryTable(QWidget):
+    """Таблица прошлых проверок, которую рисует один виджет: значок итога, время, набор, полоса, итог, перемены."""
 
+    HEADER = 24
+    ROW = 30
+    _COLUMNS = (("Когда", 104), ("Что проверяли", 160), ("Итог", 350))
+    _LAST = "Что изменилось с прошлой такой проверки"
+    _ICONS = {"ok": "fa5s.check-circle", "warn": "fa5s.exclamation-triangle", "fail": "fa5s.times-circle", "unknown": "fa5s.question-circle"}
 
-def _target_mark(item: dict) -> str:
-    """✓ открывается, ? проверка не дала ответа, ✗ не открывается."""
-    if item.get("ok"):
-        return "✓"
-    return "?" if str(item.get("state") or "") == "unknown" else "✗"
-
-
-def _service_details(service: dict) -> tuple[str, str]:
-    """(коротко для ячейки, подробно для подсказки)."""
-    targets = list(service.get("targets") or ())
-    if len(targets) > 1:
-        short = " · ".join(f"{_target_mark(item)} {item.get('purpose', '')}" for item in targets)
-    elif targets:
-        short = str(targets[0].get("short") or "")
-    else:
-        short = ""
-    if service.get("dns_note"):
-        short = f"{short} · DNS подменён" if short else "DNS подменён"
-    tooltip = "\n".join(
-        f"{item.get('host', '')}: {item.get('text', '')}" for item in targets
-    )
-    headline = str(service.get("headline") or "")
-    if headline:
-        tooltip = f"{headline}\n\n{tooltip}" if tooltip else headline
-    return short, tooltip
-
-
-def _row_level(service: dict) -> str:
-    """Уровень для строки списка. Подмена DNS при открывающемся сайте — не «проблема
-    сайта»: о ней одна общая строка в итоге, а здесь — пометка в подробностях."""
-    level = str(service.get("level") or "unknown")
-    targets = list(service.get("targets") or ())
-    if level == "warn" and targets and all(item.get("ok") for item in targets):
-        return "ok"
-    return level
-
-
-class BlockcheckSitesTable(TableWidget):
-    """Одна строка на сервис: название, открывается ли, что именно не так."""
-
-    COLUMNS = ("Сайт", "Результат", "Подробности")
+    # Нажали строку: её номер сверху.
+    opened = pyqtSignal(int)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setColumnCount(len(self.COLUMNS))
-        self.setHorizontalHeaderLabels(list(self.COLUMNS))
-        self.setEditTriggers(TableWidget.EditTrigger.NoEditTriggers)
-        self.setSelectionBehavior(TableWidget.SelectionBehavior.SelectRows)
-        self.verticalHeader().setVisible(False)
-        self.setWordWrap(False)
-        # Высота — ровно по строкам (см. _fit_height): таблица не растягивает карточку.
+        self._rows: list[HistoryRow] = []
+        self._hover = -1
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hint = HoverHint(self)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        header = self.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        set_control_accessibility(
-            self,
-            name="Результаты BlockCheck по сайтам",
-            description="Для каждого сайта: открывается ли он и что именно не так. Подробности — в подсказке строки.",
-        )
-        set_state_text(self, "Результаты BlockCheck по сайтам: пока нет результатов")
-        install_fluent_item_tooltips(self)
-        self._levels: list[str] = []
-        self._theme_refresh = ThemeRefreshBinding(self, self._apply_theme_refresh)
+        self.setFixedHeight(0)
+        self._theme_refresh = ThemeRefreshBinding(self, lambda *_args, **_kwargs: self.update())
 
-    def clear_rows(self) -> None:
-        self.setRowCount(0)
-        self._levels = []
-        self.setMinimumHeight(0)
-        self.setMaximumHeight(16777215)
-        set_state_text(self, "Результаты BlockCheck по сайтам: пока нет результатов")
+    def rows(self) -> list[HistoryRow]:
+        return list(self._rows)
 
-    def _add_row(self, name: str, level: str, result_text: str, details: str, tooltip: str) -> None:
-        row = self.rowCount()
-        self.insertRow(row)
-        # Диктор читает ячейку саму по себе: без этого на «Не открылся» он
-        # не говорил, какой сайт не открылся. Каждой ячейке — всю строку.
-        spoken = ". ".join(part for part in (name, result_text, details) if part)
-        for column, text in enumerate((name, result_text, details)):
-            item = QTableWidgetItem(text)
-            # Фирменная подсказка таблицы читает свою роль данных, а не
-            # стандартную: через setToolTip текст до неё не доходил, и
-            # подсказки в результатах не показывались вовсе.
-            set_fluent_item_tooltip(item, tooltip or details)
-            set_item_accessible_text(item, spoken)
-            self.setItem(row, column, item)
-        self._levels.append(level)
+    def set_rows(self, rows: list[HistoryRow]) -> None:
+        self._rows = list(rows)
+        self.setFixedHeight(self.HEADER + self.ROW * len(self._rows) if self._rows else 0)
+        self.update()
 
-    def show_report(self, report: dict) -> None:
-        self.clear_rows()
-        services = list(report.get("services") or ())
-        # Сначала то, что сломано: пользователь ищет глазами именно это.
-        order = {"fail": 0, "warn": 1, "unknown": 2, "ok": 3}
-        for service in sorted(services, key=lambda item: order.get(_row_level(item), 9)):
-            level = _row_level(service)
-            short, tooltip = _service_details(service)
-            name = str(service.get("label") or "")
-            if service.get("control"):
-                name = f"{name} (контрольный)"
-            self._add_row(name, level, _RESULT_WORDS.get(level, ""), short, tooltip)
-        for key, title in (("freeze", "Обрыв на 16–20 КБ"), ("voice", "Голосовые звонки (UDP)")):
-            section = report.get(key)
-            if not section:
-                continue
-            level = str(section.get("level") or "unknown")
-            tooltip = "\n".join(
-                f"{_item_mark(item)} {item.get('name', '')}: {item.get('text', '')}"
-                for item in section.get("items") or ()
+    def row_at(self, y: float) -> int:
+        index = int((y - self.HEADER) // self.ROW) if y >= self.HEADER else -1
+        return index if 0 <= index < len(self._rows) else -1
+
+    def hint(self, index: int) -> str:
+        row = self._rows[index]
+        lines = [f"{row.when} · {row.scope}", row.outcome, f"{self._LAST}: {row.changes[:1].lower()}{row.changes[1:]}"]
+        if row.headline and row.headline != row.outcome:
+            lines.append(f"Первая проблема: {row.headline}")
+        return "\n".join(lines)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        hover = self.row_at(event.position().y())
+        if hover != self._hover:
+            self._hover = hover
+            self.update()
+            text = self.hint(hover) + "\nНажмите, чтобы открыть эту проверку" if hover >= 0 else ""
+            self._hint.show(text, event.globalPosition().toPoint())
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._hover = -1
+        self._hint.hide()
+        self.update()
+        super().leaveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        index = self.row_at(event.position().y())
+        self._hint.hide()
+        if event.button() == Qt.MouseButton.LeftButton and index >= 0:
+            self.opened.emit(index)
+        super().mouseReleaseEvent(event)
+
+    def event(self, event) -> bool:
+        # Системную подсказку не показываем: на тёмной теме она мелькает белым окном.
+        if event.type() == QEvent.Type.ToolTip:
+            return True
+        return super().event(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        _ = event
+        if not self._rows:
+            return
+        painter = QPainter(self)
+        painter.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        text = theme_color("fg", QColor(255, 255, 255, 235))
+        muted = theme_color("fg_muted", QColor(255, 255, 255, 165))
+        line = theme_color("divider_strong", QColor(255, 255, 255, 26))
+        hover = theme_color("surface_bg_hover", QColor(255, 255, 255, 18))
+        font = QFont(self.font())
+        font.setPixelSize(13)
+        small = QFont(self.font())
+        small.setPixelSize(12)
+        metrics = QFontMetrics(font)
+        left, bar_width = 30, 64
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        painter.setFont(small)
+        painter.setPen(muted)
+        x = left
+        for caption, width in self._COLUMNS:
+            painter.drawText(QRectF(x, 0, width, self.HEADER), flags, caption)
+            x += width
+        painter.drawText(QRectF(x, 0, max(0, self.width() - x), self.HEADER), flags, self._LAST)
+
+        for index, row in enumerate(self._rows):
+            top = self.HEADER + index * self.ROW
+            painter.setPen(Qt.PenStyle.NoPen)
+            if index == self._hover:
+                painter.setBrush(hover)
+                painter.drawRoundedRect(QRectF(0, top + 1, self.width(), self.ROW - 1), 5, 5)
+            else:
+                painter.setBrush(line)
+                painter.drawRect(QRectF(0, top, self.width(), 1))
+            color = tone_color(_level_tone(row.level)) or _NEUTRAL_DOT
+            try:
+                icon = get_cached_qta_pixmap(self._ICONS[row.level], color=color, size=14)
+                painter.drawPixmap(6, int(top + (self.ROW - 14) / 2), 14, 14, icon)
+            except Exception:
+                pass
+            painter.setFont(font)
+            x = left
+            painter.setPen(muted)
+            painter.drawText(QRectF(x, top, self._COLUMNS[0][1], self.ROW), flags, row.when)
+            x += self._COLUMNS[0][1]
+            painter.setPen(text)
+            width = self._COLUMNS[1][1]
+            painter.drawText(QRectF(x, top, width, self.ROW), flags, metrics.elidedText(row.scope, Qt.TextElideMode.ElideRight, width - 10))
+            x += width
+            # Полоса: какая доля сайтов открывалась, была закрыта и осталась без ответа.
+            total = row.opened + row.blocked + row.unknown
+            width = self._COLUMNS[2][1]
+            text_left = x
+            if total:
+                painter.setPen(Qt.PenStyle.NoPen)
+                bar_x = float(x)
+                for share, tone in ((row.opened, "success"), (row.blocked, "error"), (row.unknown, "")):
+                    if not share:
+                        continue
+                    part = (bar_width - 4) * share / total
+                    painter.setBrush(QColor(tone_color(tone) or _NEUTRAL_DOT))
+                    painter.drawRoundedRect(QRectF(bar_x, top + self.ROW / 2 - 2.5, max(2.0, part), 5), 2.5, 2.5)
+                    bar_x += part + 2
+                text_left = x + bar_width + 10
+            painter.setPen(text)
+            painter.drawText(
+                QRectF(text_left, top, x + width - text_left, self.ROW),
+                flags,
+                metrics.elidedText(row.outcome, Qt.TextElideMode.ElideRight, int(x + width - text_left - 10)),
             )
-            headline = str(section.get("headline") or "")
-            # «Голосовые звонки: отвечают 1 из 2…» — название уже в первой колонке.
-            if headline.startswith("Голосовые звонки: "):
-                headline = headline[len("Голосовые звонки: "):]
-            self._add_row(title, level, _SECTION_WORDS[key].get(level, ""), headline, tooltip)
-        self._apply_theme_refresh()
-        self._fit_height()
-        broken = sum(1 for level in self._levels if level in ("fail", "warn"))
+            x += width
+            painter.setPen(muted)
+            rest = max(0, self.width() - x - 26)
+            painter.drawText(QRectF(x, top, rest, self.ROW), flags, metrics.elidedText(row.changes, Qt.TextElideMode.ElideRight, rest))
+            # Стрелка справа — знак, что строка открывается.
+            painter.drawText(QRectF(self.width() - 20, top, 14, self.ROW), int(Qt.AlignmentFlag.AlignCenter), "›")
+        painter.end()
+
+
+class BlockcheckHistoryList(QWidget):
+    """Прошлые проверки таблицей: когда, что проверяли, сколько открывалось и что изменилось.
+
+    Строка открывает ту проверку целиком. Сразу видны последние, остальные (до
+    ``HISTORY_ALL``) — по кнопке «Показать все».
+    """
+
+    # Просят открыть прошлую проверку: её запись из истории.
+    run_opened = pyqtSignal(dict)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(6)
+        header = QHBoxLayout()
+        self.title_label = StrongBodyLabel("Прошлые проверки", self)
+        header.addWidget(self.title_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        header.addStretch(1)
+        self.more_button = TransparentPushButton("", self)
+        self.more_button.clicked.connect(self._toggle_all)
+        header.addWidget(self.more_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._layout.addLayout(header)
+        self.table = _HistoryTable(self)
+        self.table.opened.connect(self._on_row_opened)
+        self._layout.addWidget(self.table)
+        self._lines: list[tuple[str, str]] = []
+        self._runs: list[dict] = []
+        self._all = False
+
+    def _toggle_all(self) -> None:
+        self._all = not self._all
+        self._fill()
+
+    def _on_row_opened(self, index: int) -> None:
+        # Строки идут новыми сверху, записи истории — старыми сверху.
+        if 0 <= index < len(self._runs):
+            self.run_opened.emit(dict(self._runs[len(self._runs) - 1 - index]))
+
+    def _fill(self) -> None:
+        total = min(len(self._runs), HISTORY_ALL)
+        self.table.set_rows(history_rows(self._runs, HISTORY_ALL if self._all else HISTORY_SHOWN))
+        self.more_button.setVisible(total > HISTORY_SHOWN)
+        self.more_button.setText("Свернуть" if self._all else f"Показать все: {total}")
+
+    def lines(self) -> list[tuple[str, str]]:
+        return list(self._lines)
+
+    def rows(self) -> list[HistoryRow]:
+        return self.table.rows()
+
+    def show_history(self, runs) -> None:
+        self._lines = history_lines(runs)
+        self._runs = [dict(run) for run in runs or ()]
+        self._fill()
         set_state_text(
             self,
-            f"Результаты BlockCheck по сайтам: {self.rowCount()} строк, с проблемами {broken}",
+            "Прошлые проверки: "
+            + ("; ".join(f"{row.when}, {row.scope}: {row.outcome}, {row.changes}" for row in self.rows()) or "пока нет"),
         )
 
-    def _fit_height(self) -> None:
-        """Таблица во всю высоту: строки «Звонки» и «Обрыв 16 КБ» не прячутся под прокруткой."""
-        height = self.horizontalHeader().height() + 2 * self.frameWidth() + 4
-        for row in range(self.rowCount()):
-            height += self.rowHeight(row)
-        self.setMinimumHeight(height)
-        self.setMaximumHeight(height)
 
-    def _apply_theme_refresh(self, tokens=None, force: bool = False) -> None:
-        _ = force
-        for row, level in enumerate(self._levels):
-            item = self.item(row, 1)
-            if item is None:
-                continue
-            color = tone_color(_level_tone(level), tokens)
-            if color:
-                item.setForeground(QColor(color))
+from blockcheck.ui.legacy_results import BlockcheckSitesTable

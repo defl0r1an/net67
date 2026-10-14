@@ -23,6 +23,7 @@ class NetworkDnsApplyResultPlan:
     adapter_count: int = 0
     success_count: int = 0
     error: str = ""
+    warning: str = ""
 
 
 @dataclass(slots=True)

@@ -240,13 +240,16 @@ class BlockcheckProblemsGeoTests(unittest.TestCase):
     """Итог BlockCheck: у гео-сайта кнопка ведёт в hosts, а не в подбор стратегии."""
 
     def _problems(self, host: str, geo_service_for):
-        from diagnostics import engine
+        from diagnostics import engine, problems
+        from diagnostics.services import _site
+        from diagnostics.run_context import Probe
         from diagnostics.verdict import ADVICE_VIA_ZAPRET, Level, ReachState, ServiceVerdict
 
-        service = engine._site("site", host, host)
-        probe = SimpleNamespace(host=host, reach_state=ReachState.DPI, judgement=None)
+        service = _site("site", host, host)
+        probe = Probe(target=service.targets[0], service="site", host=host)
+        probe.reach_state = ReachState.DPI
         verdict = ServiceVerdict(Level.FAIL, f"{host} не открывается", (ADVICE_VIA_ZAPRET[0],))
-        problems, _working, _spoofed = engine._collect_problems(
+        problems, _working, _spoofed = problems.collect_problems(
             {"site": service},
             {"site": verdict},
             {"site": [probe]},

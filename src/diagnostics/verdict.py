@@ -20,11 +20,20 @@
 
 from __future__ import annotations
 
-import ipaddress
 from dataclasses import dataclass, field
 from enum import Enum
 
-from blockcheck.config import KNOWN_BLOCK_IPS
+from diagnostics.block_kind import (
+    KIND_CUT,
+    KIND_DNS,
+    KIND_DOWN,
+    KIND_FINGERPRINT,
+    KIND_IP,
+    KIND_NO_CONNECT,
+    KIND_UNSTABLE,
+    kind_info,
+    site_kind,
+)
 from diagnostics.tls_probe import (
     KIND_CANCELLED,
     KIND_CERT,
@@ -35,13 +44,15 @@ from diagnostics.tls_probe import (
     KIND_TLS,
     ProbeResult,
 )
+from diagnostics.limits import FREEZE_MAX_BYTES, FREEZE_MIN_BYTES
+from utils.address_kinds import AddressKind, address_kind, is_stub_address
 from utils.windows_dns_query import DNS_STATUS_NAME_ERROR, DNS_STATUS_NO_RECORDS
 
 __all__ = [
+    "ADVICE_HOSTS_STALE",
+    "ADVICE_UNSTABLE",
     "DnsJudgement",
     "DnsState",
-    "FREEZE_MAX_BYTES",
-    "FREEZE_MIN_BYTES",
     "Level",
     "ReachState",
     "ServiceVerdict",
@@ -64,36 +75,6 @@ class DnsState(Enum):
 class DnsJudgement:
     state: DnsState
     reason: str
-
-
-# VPN-клиенты в режиме fake-ip (sing-box, Clash, Happ) отдают адреса из этого
-# диапазона и сами подставляют настоящий сервер. Это не провайдер.
-_FAKE_IP_NETWORK = ipaddress.ip_network("198.18.0.0/15")
-
-
-def _is_stub_ip(ip: str) -> bool:
-    if ip in KNOWN_BLOCK_IPS:
-        return True
-    try:
-        address = ipaddress.ip_address(ip)
-    except ValueError:
-        return False
-    if address in _FAKE_IP_NETWORK:
-        return False
-    return (
-        address.is_private
-        or address.is_loopback
-        or address.is_unspecified
-        or address.is_link_local
-        or address.is_reserved
-    )
-
-
-def _is_fake_ip(ip: str) -> bool:
-    try:
-        return ipaddress.ip_address(ip) in _FAKE_IP_NETWORK
-    except ValueError:
-        return False
 
 
 # Чужой сертификат и по адресу из DNS, и по эталонному: подменяют не адрес, а сам HTTPS.
@@ -138,6 +119,8 @@ def judge_dns(
     # Провайдер подсовывает «сайта нет» наперегонки с настоящим ответом: иногда
     # первым приходит настоящий. Хоть один такой ответ при существующем сайте —
     # подмена, даже если в остальных попытках адрес пришёл правильный.
+    # Хватает и одного раза: исправный DNS-сервер при сбое молчит или отвечает
+    # ошибкой сервера, а «такого сайта нет» про существующий сайт сам не скажет.
     if system_ips and nxdomain_count and reference_ips:
         return DnsJudgement(
             DnsState.SPOOFED,
@@ -162,11 +145,22 @@ def judge_dns(
             )
         return DnsJudgement(DnsState.UNKNOWN, "DNS-сервер не дал адрес, сравнить не с чем")
 
-    fake_ips = [ip for ip in system_ips if _is_fake_ip(ip)]
+    fake_ips = [ip for ip in system_ips if address_kind(ip) == AddressKind.FAKE_IP]
     if fake_ips:
         return DnsJudgement(DnsState.LOCAL, f"адрес {fake_ips[0]} выдал VPN-клиент (режим fake-ip) — это не провайдер")
 
-    stubs = [ip for ip in system_ips if _is_stub_ip(ip)]
+    # Адрес домашней сети возвращают домашние фильтры: роутер с родительским контролем,
+    # Pi-hole, AdGuard Home. Это настройка сети человека, а не провайдер. Адрес «никуда»
+    # (0.0.0.0, 127.0.0.1) сюда не входит: им отвечают и DNS-серверы провайдеров.
+    home = [ip for ip in system_ips if address_kind(ip) == AddressKind.LOCAL]
+    if home and not any(address_kind(ip) == AddressKind.BLOCK_STUB for ip in system_ips):
+        return DnsJudgement(
+            DnsState.LOCAL,
+            f"DNS вернул адрес домашней сети {home[0]} — так отвечают фильтры на роутере или компьютере "
+            "(родительский контроль, Pi-hole, AdGuard Home), это не провайдер",
+        )
+
+    stubs = [ip for ip in system_ips if is_stub_address(ip)]
     if stubs:
         return DnsJudgement(DnsState.SPOOFED, f"DNS вернул адрес-заглушку {stubs[0]} вместо настоящего сервера")
 
@@ -218,9 +212,6 @@ def judge_dns(
 # Открывается ли адрес
 # ---------------------------------------------------------------------------
 
-# ТСПУ режет соединения с зарубежными серверами после ~16 КБ данных.
-FREEZE_MIN_BYTES = 14_000
-FREEZE_MAX_BYTES = 24_000
 
 
 class ReachState(Enum):
@@ -262,13 +253,13 @@ def describe_reach(result: ProbeResult | None, *, timeout: float = 0.0) -> str:
     if state == ReachState.CERT:
         return f"чужой сертификат ({result.cert_problem or 'не прошёл проверку'}) — трафик перехватывает антивирус, прокси или провайдер"
     if state == ReachState.IP_BLOCK:
-        return "сервер не отвечает на подключение — адрес заблокирован или нет сети"
+        return "не удалось соединиться с сервером"
     if result.kind == KIND_TLS:
-        return "соединение рвётся при установке шифрования — так режет DPI"
+        return "соединение рвётся при установке шифрования — так обычно режет фильтр провайдера"
     if result.kind == KIND_RESET:
-        return "соединение сброшено — так режет DPI"
+        return "соединение сброшено — так обычно режет фильтр провайдера"
     if result.kind == KIND_TIMEOUT:
-        return f"подключение есть, но сервер не ответил за {timeout:.0f} с — так выглядит блокировка провайдером"
+        return f"подключение есть, но сервер не ответил за {timeout:.0f} с — похоже на блокировку провайдером"
     if result.kind == KIND_CANCELLED:
         return "проверка прервана — не хватило времени или нажата «Стоп»"
     return result.detail or "не удалось выполнить запрос"
@@ -293,6 +284,18 @@ class TargetOutcome:
     reach: ReachState
     dns: DnsState
     main: bool = False
+    # Вид блокировки (``diagnostics.block_kind``), если его уточнили пробами.
+    # Пусто — берётся тот, что следует из одного исхода ``reach``.
+    kind: str = ""
+    # Сам сайт открылся, но адрес, записанный для него в файле hosts, не работает.
+    hosts_stale: bool = False
+    # Сайт открылся, но не каждый раз или не по каждому своему адресу.
+    unstable: bool = False
+    # Проверка сайт открыла, но приветствие с составом Chrome не проходит: в браузере он может висеть.
+    fingerprint: bool = False
+    # DNS компьютера адреса не дал вовсе («такого сайта нет»), хотя сайт существует: проверка
+    # дошла до него по адресу из шифрованного DNS, а браузер и программы спросят Windows.
+    dns_blind: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,20 +305,28 @@ class ServiceVerdict:
     # Что сделать, по пунктам. Первый пункт — главный.
     advice: tuple[str, ...] = field(default_factory=tuple)
     dns_note: str = ""
+    # Вид блокировки сервиса: по нему экран собирает проблемы в группы.
+    kind: str = ""
 
 
 _BROKEN = (ReachState.DPI, ReachState.FREEZE, ReachState.IP_BLOCK, ReachState.CERT)
 
 _ADVICE_STRATEGY = "Подберите другую стратегию: вкладка «Подбор стратегии» найдёт рабочую для вашего провайдера."
-_ADVICE_START = "Запустите net67 на странице «Управление net67 v2»."
-# Советы «почини обходом»: движок убирает их у гео-сайтов, которым обход не помогает.
-ADVICE_VIA_ZAPRET = (_ADVICE_STRATEGY, _ADVICE_START)
+_ADVICE_START = "Включите обход на странице «Обход»."
+# Адрес принимает соединение, но шифрование не проходит ни с каким именем:
+# иногда стратегия справляется, но обещать этого нельзя.
+_ADVICE_STRATEGY_OR_ADDRESS = (
+    "Попробуйте подобрать стратегию во вкладке «Подбор стратегии». Если ни одна не подойдёт — закрыт сам адрес: "
+    "поможет DNS-профиль в «Редакторе hosts», другой DNS или VPN."
+)
+# Советы «почини через net67»: движок убирает их у гео-сайтов, которым net67 не помогает.
+ADVICE_VIA_ZAPRET = (_ADVICE_STRATEGY, _ADVICE_START, _ADVICE_STRATEGY_OR_ADDRESS)
 
 
 def advice_geo_site(service: str) -> str:
     """Совет для сервиса, который сам ограничивает доступ из России (каталог hosts)."""
     return (
-        f"{service} сам ограничивает доступ из России, поэтому стратегия обхода его не чинит. "
+        f"{service} сам ограничивает доступ из России, поэтому стратегия net67 его не чинит. "
         "Включите для него DNS-профиль на странице «Редактор hosts» или смените DNS в разделе «Настройка DNS»."
     )
 
@@ -333,7 +344,20 @@ _ADVICE_HOSTS = (
     "Удалите или исправьте запись этого сайта в файле hosts (страница «Редактор hosts») — "
     "адрес в ней устарел."
 )
+ADVICE_UNSTABLE = (
+    "Так выглядит фильтр, который срабатывает не на каждое соединение, или линия, теряющая пакеты. "
+    "Повторите проверку через несколько минут: если сайт снова «через раз» — это фильтр."
+)
+ADVICE_HOSTS_STALE = (
+    "Откройте «Редактор hosts», выключите и снова включите этот сервис или выберите для него другой "
+    "профиль — запишется рабочий адрес. Если сервис вам там не нужен, просто выключите его: сайт "
+    "откроется по своему настоящему адресу."
+)
 _ADVICE_IP = "Серверы недоступны по адресу. net67 в таком случае помогает не всегда — попробуйте другой DNS или VPN."
+_ADVICE_NO_CONNECT = (
+    "Повторите проверку: соединиться не удалось, но подтверждения, что закрыт сам адрес, нет. "
+    "Если повторяется — посмотрите записи этого сайта в «Редакторе hosts» и попробуйте другой DNS."
+)
 
 
 def _cert_cause(items: list[TargetOutcome]) -> DnsState | None:
@@ -345,20 +369,29 @@ def _cert_cause(items: list[TargetOutcome]) -> DnsState | None:
     return None
 
 
-def _reason_for(states: list[ReachState], cert_cause: DnsState | None = None) -> str:
-    if ReachState.CERT in states:
+def _kind_of(item: TargetOutcome) -> str:
+    return item.kind or site_kind(item.reach.value)
+
+
+def _leading_kind(items: list[TargetOutcome]) -> str:
+    """Вид блокировки сервиса: у первого сломанного адреса (главный идёт первым)."""
+    return next((kind for kind in map(_kind_of, items) if kind), "")
+
+
+def _reason_for(items: list[TargetOutcome], cert_cause: DnsState | None = None) -> str:
+    """Чем мешают: «блокировка по имени сайта», «сервер заблокирован по адресу», «обрыв после 16 КБ».
+
+    Причина — у первого сломанного адреса (главный идёт первым): чужой сертификат
+    у побочного адреса не должен подменять собой настоящую причину у главного.
+    """
+    if items and items[0].reach == ReachState.CERT:
         if cert_cause == DnsState.LOCAL:
             return "запись в файле hosts ведёт на чужой сервер"
         if cert_cause == DnsState.SPOOFED:
             return "DNS подсовывает адрес чужого сервера"
         return "вместо настоящего сервера отвечает чужой"
-    if ReachState.FREEZE in states:
-        return "ТСПУ обрывает загрузку данных"
-    if ReachState.DPI in states:
-        return "соединение блокирует провайдер"
-    if ReachState.IP_BLOCK in states:
-        return "серверы недоступны по адресу"
-    return "проверка не дала ответа"
+    kind = _leading_kind(items)
+    return kind_info(kind).reason if kind else "проверка не дала ответа"
 
 
 def _advice_for(
@@ -366,17 +399,29 @@ def _advice_for(
     *,
     zapret_running: bool | None,
     cert_cause: DnsState | None = None,
+    kind: str = "",
 ) -> tuple[str, ...]:
+    cert_advice = (
+        _ADVICE_HOSTS if cert_cause == DnsState.LOCAL else _ADVICE_DNS if cert_cause == DnsState.SPOOFED else _ADVICE_CERT
+    )
+    if kind == KIND_DOWN:
+        return (kind_info(KIND_DOWN).cure,)
+    if states and states[0] == ReachState.CERT:
+        return (cert_advice,)
     if ReachState.CERT in states:
-        if cert_cause == DnsState.LOCAL:
-            return (_ADVICE_HOSTS,)
-        if cert_cause == DnsState.SPOOFED:
-            return (_ADVICE_DNS,)
-        return (_ADVICE_CERT,)
+        # Чужой сертификат только у побочного адреса: сначала совет по главной причине, потом про него.
+        rest = [state for state in states if state != ReachState.CERT]
+        return _advice_for(rest, zapret_running=zapret_running, kind=kind) + (cert_advice,)
     if ReachState.DPI in states or ReachState.FREEZE in states:
-        return (_ADVICE_STRATEGY,) if zapret_running else (_ADVICE_START,)
+        # Вид блокировки важнее: закрытому адресу «запустите net67» обещал бы лишнее.
+        if kind == KIND_IP:
+            return (_ADVICE_STRATEGY_OR_ADDRESS,)
+        # «Не удалось узнать, запущен ли net67» — не «не запущен»: запускать не советуем.
+        if zapret_running is False:
+            return (_ADVICE_START,)
+        return (_ADVICE_STRATEGY,)
     if ReachState.IP_BLOCK in states:
-        return (_ADVICE_IP,)
+        return (_ADVICE_IP,) if kind == KIND_IP else (_ADVICE_NO_CONNECT,)
     return ("Повторите проверку через минуту.",)
 
 
@@ -403,7 +448,41 @@ def summarize_service(
     secondary_broken = [item for item in targets if item is not main and item.reach in _BROKEN]
     if main.reach == ReachState.OK:
         advice: tuple[str, ...] = ()
-        if not secondary_broken:
+        # Вид исхода, который не следует из сломанных адресов: «через раз».
+        own_kind = ""
+        stale = [item.host for item in targets if item.hosts_stale and item.reach == ReachState.OK]
+        if stale and not secondary_broken:
+            # Проверка дошла до сайта по настоящему адресу, а браузер и программы возьмут адрес из
+            # hosts и упрутся в нерабочий сервер. «Открывается» было бы неправдой для человека.
+            level = Level.WARN
+            headline = (
+                f"{label}: сам сайт доступен, но в файле hosts для него записан нерабочий адрес — "
+                "браузер пойдёт на него и сайт не откроет"
+            )
+            advice = (ADVICE_HOSTS_STALE,)
+        elif not secondary_broken and any(item.unstable and item.reach == ReachState.OK for item in targets):
+            # Не «открывается» и не «заблокирован»: третий исход, которого человеку и не хватает,
+            # когда сайт то грузится, то нет.
+            level = Level.WARN
+            headline = f"{label} открывается через раз"
+            advice = (_ADVICE_START if zapret_running is False else _ADVICE_STRATEGY, ADVICE_UNSTABLE)
+            own_kind = KIND_UNSTABLE
+        elif not secondary_broken and any(item.fingerprint and item.reach == ReachState.OK for item in targets):
+            level = Level.WARN
+            headline = (
+                f"{label}: проверка сайт открывает, но соединение «как у Chrome» не проходит — "
+                "в браузере он может не открываться"
+            )
+            own_kind = KIND_FINGERPRINT
+        elif not secondary_broken and main.dns_blind:
+            # «Открывается» было бы неправдой: по адресу из шифрованного DNS сайт доступен,
+            # а компьютеру его адрес не называют. Так выглядит «проверка проходит, а в браузере пусто».
+            level = Level.WARN
+            headline = (
+                f"{label}: сам сайт доступен, но DNS компьютера отвечает, что такого сайта нет — "
+                "браузер без защищённого DNS и программы его не откроют"
+            )
+        elif not secondary_broken:
             level = Level.WARN if spoofed else Level.OK
             headline = f"{label} открывается"
         else:
@@ -411,28 +490,38 @@ def summarize_service(
             parts = ", ".join(item.purpose for item in secondary_broken)
             states = [item.reach for item in secondary_broken]
             cause = _cert_cause(secondary_broken)
-            headline = f"{label} открывается, но не работают {parts}: {_reason_for(states, cause)}"
-            advice = _advice_for(states, zapret_running=zapret_running, cert_cause=cause)
+            headline = f"{label} открывается, но не работают {parts}: {_reason_for(secondary_broken, cause)}"
+            advice = _advice_for(
+                states, zapret_running=zapret_running, cert_cause=cause, kind=_leading_kind(secondary_broken)
+            )
         if spoofed and _ADVICE_DNS not in advice:
             advice = advice + (_ADVICE_DNS,)
-        return ServiceVerdict(level, headline, advice, dns_note)
+        return ServiceVerdict(level, headline, advice, dns_note, own_kind or _leading_kind(secondary_broken))
 
     if main.reach in _BROKEN:
-        states = [main.reach] + [item.reach for item in secondary_broken]
-        cause = _cert_cause([main, *secondary_broken])
-        headline = f"{label} не открывается: {_reason_for(states, cause)}"
-        if main.reach in (ReachState.DPI, ReachState.FREEZE) and zapret_running:
+        broken = [main, *secondary_broken]
+        states = [item.reach for item in broken]
+        cause = _cert_cause(broken)
+        kind = _leading_kind(broken)
+        # При обрыве сайт «открывается» на первые килобайты: честнее сказать, что он не догружается.
+        opens = "грузится не до конца" if kind == KIND_CUT else "не открывается"
+        headline = f"{label} {opens}: {_reason_for(broken, cause)}"
+        if main.reach in (ReachState.DPI, ReachState.FREEZE) and zapret_running and kind != KIND_DOWN:
             headline += " — net67 запущен, но эту блокировку не обходит"
-        advice = _advice_for(states, zapret_running=zapret_running, cert_cause=cause)
+        advice = _advice_for(states, zapret_running=zapret_running, cert_cause=cause, kind=kind)
         if spoofed and _ADVICE_DNS not in advice:
             advice = advice + (_ADVICE_DNS,)
-        return ServiceVerdict(Level.FAIL, headline, advice, dns_note)
+        # «Причина не ясна» и «не работает сам» — не установленная блокировка: замечание, а не тревога.
+        level = Level.WARN if kind in (KIND_NO_CONNECT, KIND_DOWN) else Level.FAIL
+        return ServiceVerdict(level, headline, advice, dns_note, kind)
 
     if main.reach == ReachState.NO_ADDRESS:
+        # Адреса нет — это дело DNS: такой сайт идёт в группу «DNS» с кнопкой настройки DNS.
         return ServiceVerdict(
             Level.FAIL,
             f"{label} не открывается: не удалось узнать адрес сервера",
             ("Проверьте подключение к интернету.", _ADVICE_DNS),
             dns_note,
+            KIND_DNS,
         )
     return ServiceVerdict(Level.UNKNOWN, f"{label}: проверка не дала ответа", ("Повторите проверку через минуту.",), dns_note)

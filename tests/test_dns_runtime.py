@@ -48,9 +48,10 @@ KNOWN = DnsState(
 
 
 class DnsRuntimeTests(unittest.TestCase):
-    def _run(self, fake: _FakeWinApi, func, *args, custom_servers=()):
+    def _run(self, fake: _FakeWinApi, func, *args, custom_servers=(), reach=None):
         patchers = [
             *fake.patches(),
+            patch.object(runtime, "check_servers", return_value=reach or runtime.check_servers([], [], None)),
             patch.object(runtime, "load_state", return_value=KNOWN),
             patch.object(runtime, "load_custom_servers", return_value=list(custom_servers)),
         ]
@@ -58,6 +59,24 @@ class DnsRuntimeTests(unittest.TestCase):
             item.start()
             self.addCleanup(item.stop)
         return func(*args)
+
+    def test_unreachable_server_does_not_change_adapters(self) -> None:
+        from dns.reachability import ServerReach
+
+        fake = _FakeWinApi()
+        result = self._run(fake, runtime.apply_dns, [ETH], ["1.1.1.1"], [], reach=ServerReach(blocked="DNS не изменён"))
+        self.assertFalse(result.success)
+        self.assertEqual((fake.writes, fake.flushes), ([], 0))
+        self.assertEqual(result.message, "DNS не изменён")
+
+    def test_missing_doh_is_reported_after_plain_dns_is_applied(self) -> None:
+        from dns.reachability import ServerReach
+
+        fake = _FakeWinApi(doh=True)
+        result = self._run(fake, runtime.apply_dns, [ETH], ["1.1.1.1"], [], reach=ServerReach(doh_closed=True))
+        self.assertTrue(result.success)
+        self.assertTrue(fake.writes)
+        self.assertIn("без шифрования", result.warning)
 
     def test_apply_writes_both_families_then_flushes_cache(self) -> None:
         fake = _FakeWinApi()

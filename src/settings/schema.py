@@ -177,6 +177,7 @@ def default_hosts() -> dict[str, Any]:
     return {
         "active_domains": [],
         "selection": {},
+        "engine": {"catalog": "", "checked_at": "", "suspects": [], "services": {}, "pool": {}},
     }
 
 
@@ -282,6 +283,8 @@ def default_blockcheck() -> dict[str, Any]:
         "user_domains": [],
         # Итоги прошлых подборов стратегии: {"<режим>|<цель>": {"confirmed": [...], "failed": {id: время}}}.
         "strategy_history": {},
+        "check_history": [],
+        **{key: [] for key in TAB_HISTORY_KEYS},
     }
 
 
@@ -326,3 +329,19 @@ def build_default_settings() -> dict[str, Any]:
         "folders": default_folders(),
         "profile_identity": default_profile_identity(),
     }
+
+CHECK_HISTORY_LIMIT = 50
+
+CHECK_HISTORY_TEXT_LIMIT = 400
+
+CHECK_HISTORY_PROBLEMS_LIMIT = 12
+
+CHECK_HISTORY_STATES_LIMIT = 80
+
+CHECK_HISTORY_LEVELS = frozenset({"ok", "warn", "fail", "unknown"})
+
+CHECK_HISTORY_ZAPRET = frozenset({"on", "off", ""})
+
+TAB_HISTORY_LIMIT = 20
+
+TAB_HISTORY_KEYS = ("domain_history", "dns_history", "servers_history")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from dataclasses import dataclass
 
 
@@ -484,3 +485,15 @@ def is_ai_service(name: str) -> bool:
         for marker in ("chatgpt", "openai", "gemini", "claude", "copilot", "grok", "manus")
     ) or service_name in {"meta ai", "trae.ai", "windsurf"}
 
+
+def describe_checked_at(checked_at: str, *, now: datetime | None = None) -> tuple[str, str, str]:
+    """Когда проверялись адреса: («today» | «date» | «», день «13.10», время «14:20»).
+
+    Пусто — проверки ещё не было или запись о ней не читается.
+    """
+    try:
+        moment = datetime.fromisoformat(str(checked_at or ""))
+    except ValueError:
+        return "", "", ""
+    today = (now or datetime.now()).date()
+    return ("today" if moment.date() == today else "date"), moment.strftime("%d.%m"), moment.strftime("%H:%M")

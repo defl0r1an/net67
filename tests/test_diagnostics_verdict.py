@@ -7,6 +7,8 @@ import unittest
 from unittest.mock import patch
 
 import diagnostics.engine as engine
+from diagnostics import net_access, reach, sections
+from utils.dns_wire import TYPE_AAAA
 from diagnostics.tls_probe import (
     KIND_CERT,
     KIND_CONNECT,
@@ -74,10 +76,13 @@ class JudgeDnsTests(unittest.TestCase):
 
         self.assertEqual(judgement.state, DnsState.UNKNOWN)
 
-    def test_stub_and_private_addresses_are_spoofing(self) -> None:
-        for ip in ("195.82.146.214", "127.0.0.1", "0.0.0.0", "10.10.10.10", "192.168.1.1"):
+    def test_stub_addresses_are_spoofing(self) -> None:
+        for ip in ("195.82.146.214", "127.0.0.1", "0.0.0.0", "10.10.10.10"):
             with self.subTest(ip=ip):
                 self.assertEqual(self._judge(system_ips=(ip,)).state, DnsState.SPOOFED)
+
+    def test_lan_address_is_local_filter_not_provider_spoofing(self) -> None:
+        self.assertEqual(self._judge(system_ips=("192.168.1.1",)).state, DnsState.LOCAL)
 
     def test_vpn_fake_ip_is_local_not_spoofing(self) -> None:
         self.assertEqual(self._judge(system_ips=("198.18.0.12",)).state, DnsState.LOCAL)
@@ -156,7 +161,7 @@ class ServiceSummaryTests(unittest.TestCase):
     def test_main_blocked_without_zapret_suggests_start(self) -> None:
         verdict = summarize_service("Discord", self._outcomes(ReachState.DPI), zapret_running=False)
 
-        self.assertIn("Запустите net67", verdict.advice[0])
+        self.assertIn("Включите обход", verdict.advice[0])
 
     def test_broken_secondary_part_is_named(self) -> None:
         verdict = summarize_service(
@@ -180,7 +185,7 @@ class _Done:
 class _Net:
     """Фейковая сеть для движка: DNS, эталон и HTTPS по адресу."""
 
-    def __init__(self, *, system=DISCORD_REAL, reference=DISCORD_REAL, status=0, https=None, reference_v6=(), voice=(), freeze=()):
+    def __init__(self, *, system=DISCORD_REAL, reference=DISCORD_REAL, status=0, https=None, reference_v6=(), voice=(), freeze=(), cause_facts=None):
         self.voice = voice
         self.freeze = freeze
         self.system = system
@@ -189,6 +194,82 @@ class _Net:
         self.status = status
         self.https = https or (lambda host, ip: _ok(ip))
         self.calls: list[tuple[str, str]] = []
+        # Что ответил сервер за рубежом и о каких сайтах его спрашивали.
+        self.outside: dict[str, str] = {}
+        self.outside_asked: list[str] = []
+        # Что «нашла» проверка подсетей; сколько раз её звали.
+        self.subnets = None
+        self.subnet_checks = 0
+        # Какие записи спрашивали у эталонного DNS (A, AAAA).
+        self.doh_types: list[int] = []
+        # Что «показали» дополнительные пробы: по умолчанию ничего не выяснили.
+        self.cause_facts = cause_facts
+        self.refined: list[str] = []
+        self.bypass_tools: tuple[str, ...] = ()
+        # Что написано в чужом сертификате (``utils.cert_reader.CertNames``) и у каких адресов его читали.
+        self.cert_names = None
+        self.cert_asked: list[tuple[str, str]] = []
+        # Адреса сайта из файла hosts: по умолчанию записей нет.
+        self.hosts: tuple[str, ...] = ()
+        self.dns_place = None
+        # Что «показал» QUIC: по умолчанию проверку будто сняли — вывода нет.
+        self.quic_facts = None
+        self.quic_asked: list[tuple[str, str]] = []
+        # Что «показал» набор объёма по одному соединению: по умолчанию обрыва нет.
+        self.volume_facts = None
+        self.volume_asked: list[str] = []
+        self.network: dict = {"external_ip": "", "provider": "", "lines": []}
+        self.telegram: tuple = ()
+        self.speed: dict | None = None
+        # Что «показал» замер потока по имени в проверке одного сайта: по умолчанию замера нет.
+        self.names: dict | None = None
+        self.crowd: dict | None = None
+        self.crowd_tools: list | None = None
+        # TLS 1.2 / TLS 1.3 / HTTP по отдельности: по умолчанию проверку будто сняли.
+        self.protocol_facts = None
+        self.registry = engine.registry.Index()
+        self.habits = None
+        self.burst = None
+        self.protocols_asked: list[tuple[str, str]] = []
+        self.ipv6 = sections.ipv6_check.Ipv6Verdict(sections.ipv6_check.IPV6_ABSENT, "в этой сети его нет")
+        # Состояние системы читает реестр и службы: в сценариях движка оно задаётся явно.
+        self.system_items: tuple = ()
+
+    def _quic(self, host, ip, **_kwargs):
+        self.quic_asked.append((host, ip))
+        if self.quic_facts is not None:
+            return self.quic_facts(host, ip)
+        return engine.quic_probe.QuicFacts(host=host, cancelled=True)
+
+    def _protocols(self, host, ip, **_kwargs):
+        self.protocols_asked.append((host, ip))
+        if self.protocol_facts is not None:
+            return self.protocol_facts(host, ip)
+        return engine.protocol_probe.ProtocolFacts(host=host, ip=ip, cancelled=True)
+
+    def _volume(self, host, ip, _path, **_kwargs):
+        self.volume_asked.append(host)
+        if self.volume_facts is not None:
+            return self.volume_facts(host, ip)
+        return engine.volume_probe.VolumeFacts(engine.volume_probe.VolumeRun(engine.volume_probe.RUN_PASSED, 49_500, 4))
+
+    def _collect(self, host, result, **_kwargs):
+        self.refined.append(host)
+        if self.cause_facts is not None:
+            return self.cause_facts(host, result)
+        return engine.block_cause.CauseFacts(host=host, result=result)
+
+    def _outside(self, hosts, **_kwargs):
+        self.outside_asked.extend(hosts)
+        return {host: self.outside[host] for host in hosts if host in self.outside}
+
+    def _subnets(self, _run, _emit):
+        self.subnet_checks += 1
+        return self.subnets
+
+    def _doh(self, _run, _host, record_type=engine.DNS_TYPE_A):
+        self.doh_types.append(record_type)
+        return True, self.reference_v6 if record_type == TYPE_AAAA else self.reference
 
     def patches(self):
         def _https_get(host, ip, *_args, **_kwargs):
@@ -197,29 +278,66 @@ class _Net:
 
         return (
             patch.object(
-                engine,
+                net_access,
                 "query_ipv4",
                 side_effect=lambda host, **_kw: (
                     self.system(host) if callable(self.system) else DnsAnswer(ips=self.system, status=self.status)
                 ),
             ),
             patch.object(
-                engine,
-                "_doh_lookup",
-                side_effect=lambda _run, _host, record_type=engine.DNS_TYPE_A: (
-                    True,
-                    self.reference_v6 if record_type == engine.DNS_TYPE_AAAA else self.reference,
-                ),
+                net_access,
+                "doh_lookup",
+                side_effect=self._doh,
             ),
-            patch.object(engine, "https_get", side_effect=_https_get),
-            patch.object(engine, "hosts_file_ipv4", return_value=()),
-            patch.object(engine, "system_dns_servers", return_value=("83.220.169.155",)),
-            patch.object(engine, "_zapret_status", return_value=(True, "✅ net67 запущен")),
-            patch.object(engine, "_discover_googlevideo", return_value=("rr1---sn-test.googlevideo.com", "")),
+            patch.object(net_access, "https_get", side_effect=_https_get),
+            # Пауза перед повтором нужна настоящей сети; сценариям она только добавляет секунды.
+            patch.object(reach, "RETRY_PAUSE_S", 0.0),
+            # Уточнение причины ходит в сеть само: в сценариях движка оно подменено.
+            patch.object(engine.block_cause, "collect", side_effect=self._collect),
+            patch.object(engine.quic_probe, "collect", side_effect=self._quic),
+            patch.object(engine.volume_probe, "collect", side_effect=self._volume),
+            patch.object(engine.protocol_probe, "collect", side_effect=self._protocols),
+            patch.object(sections, "check_ipv6", side_effect=lambda _run: self.ipv6),
+            # «Ваша сеть» и дата-центры Telegram ходят в сеть сами: в сценариях движка их нет.
+            patch.object(sections, "check_network", side_effect=lambda _run, _tools: self.network),
+            patch.object(sections, "check_speed", side_effect=lambda _run, _emit, *_sites: self.speed),
+            # Замер потока по имени в проверке одного сайта качает файл с постороннего сервера.
+            patch.object(sections, "check_name_speed", side_effect=lambda *_a, **_k: self.names),
+            # Пачка одновременных соединений — настоящие приветствия в сеть.
+            patch.object(sections, "check_crowd", side_effect=self._crowd),
+            patch.object(engine.telegram_check, "check_telegram", side_effect=lambda *_a, **_k: self.telegram),
+            patch.object(sections, "check_system", side_effect=lambda _run, _services, _zapret=None: self.system_items),
+            # Подсети — десятки настоящих соединений: в сценариях движка их нет.
+            patch.object(sections, "check_subnets", side_effect=self._subnets),
+            # «Жив ли сайт снаружи» — запрос к серверу проекта: в сценариях его нет.
+            patch.object(engine.outside_check, "ask", side_effect=self._outside),
+            patch.object(net_access, "hosts_file_ipv4", side_effect=lambda _host: self.hosts),
+            # Чужой сертификат читается отдельным соединением — в сценариях движка сети нет.
+            patch.object(engine.cert_owner, "collect", side_effect=self._cert),
+            patch.object(net_access, "system_dns_servers", return_value=("83.220.169.155",)),
+            patch.object(sections, "zapret_status", return_value=(True, "✅ net67 запущен")),
+            # Список реестра РКН качается из сети и лежит на диске: в сценариях движка его нет.
+            patch.object(sections, "start_registry", return_value=lambda _seconds, _cancel: self.registry),
+            # Пробы «как работает фильтр» шлют свои приветствия в сеть.
+            patch.object(sections, "check_filter_habits", side_effect=lambda _run, _collected, _emit, **_kwargs: self.habits),
+            # Место перехвата DNS — настоящие пакеты в сеть: в сценариях движка его нет.
+            patch.object(sections, "_dns_place", side_effect=lambda _run, _trace: self.dns_place),
+            # Серии пакетов UDP уходят на настоящие серверы.
+            patch.object(sections, "check_udp_burst", side_effect=lambda _run: self.burst),
+            patch.object(engine, "running_bypass_tools", return_value=self.bypass_tools),
+            patch.object(engine, "_discover_googlevideo", return_value=(("rr1---sn-test.googlevideo.com",), "")),
             # Звонки и обрыв 16 КБ проверяются в любом режиме — без сети в тестах.
             patch("diagnostics.voice_check.check_voice", return_value=self.voice),
             patch("diagnostics.freeze_check.check_freeze", return_value=self.freeze),
         )
+
+    def _crowd(self, _run, _collected, _services, _emit, *, tools=()):
+        self.crowd_tools = list(tools)
+        return self.crowd
+
+    def _cert(self, host, ip, **_kwargs):
+        self.cert_asked.append((host, ip))
+        return self.cert_names
 
     def run(self, fn, *args, **kwargs):
         from contextlib import ExitStack
@@ -253,7 +371,7 @@ class EngineScenarioTests(unittest.TestCase):
         ] * 10)
         lines: list[str] = []
         net = _Net()
-        with patch.object(engine, "query_ipv4", side_effect=lambda *_a, **_k: next(answers)):
+        with patch.object(net_access, "query_ipv4", side_effect=lambda *_a, **_k: next(answers)):
             patches = [item for item in net.patches() if getattr(item, "attribute", "") != "query_ipv4"]
             from contextlib import ExitStack
 
@@ -341,7 +459,8 @@ class EngineScenarioTests(unittest.TestCase):
         text = "\n".join(lines)
 
         youtube = next(item for item in result["services"] if item["key"] == "youtube")
-        self.assertEqual(youtube["headline"], "YouTube открывается")
+        self.assertIn("сам сайт доступен", youtube["headline"])
+        self.assertIn("такого сайта нет", youtube["headline"])
         self.assertEqual(youtube["level"], "warn")
         self.assertIn("www.youtube.com", youtube["dns_note"])
         self.assertTrue(result["dns_poisoning_detected"])
@@ -355,7 +474,7 @@ class EngineScenarioTests(unittest.TestCase):
         text = "\n".join(lines)
 
         discord_calls = [ip for host, ip in net.calls if host == "discord.com"]
-        self.assertEqual(sorted(discord_calls), sorted(DISCORD_REAL))
+        self.assertEqual(discord_calls, [DISCORD_REAL[0], DISCORD_REAL[1], DISCORD_REAL[0]])
         self.assertFalse(result["dns_poisoning_detected"])
         self.assertEqual(result["services"][0]["level"], "fail")
         self.assertIn("Подбор стратегии", text)
@@ -432,10 +551,16 @@ class EngineMixedAnswerTests(unittest.TestCase):
 
     def _mixed_net(self, https):
         stub = "95.1.1.1"
-        answers = iter([DnsAnswer(ips=(stub,)), DnsAnswer(ips=DISCORD_REAL), DnsAnswer(ips=DISCORD_REAL)] * 20)
+        counts: dict[str, int] = {}
+        lock = threading.Lock()
 
-        def _system(_host):
-            return next(answers)
+        def _system(host):
+            # Параллельные запросы разных сайтов не должны делить одну
+            # очередь: каждый сайт получает один чужой ответ из трёх.
+            with lock:
+                index = counts.get(host, 0)
+                counts[host] = index + 1
+            return DnsAnswer(ips=(stub,)) if index % 3 == 0 else DnsAnswer(ips=DISCORD_REAL)
 
         return _Net(system=_system, https=https), stub
 
@@ -612,7 +737,7 @@ class BlockcheckScopeTests(unittest.TestCase):
 
         frozen = classify_download(_ok(body_cut=True, body_size=16_500))
         self.assertEqual(frozen[0], FreezeState.FREEZE)
-        self.assertEqual(classify_download(_ok(body_size=32_768))[0], FreezeState.OK)
+        self.assertEqual(classify_download(_ok(body_size=64_000))[0], FreezeState.OK)
         # Сброс сразу, без данных — не «доступ есть» и не «обрыв», а «не удалось проверить».
         self.assertEqual(classify_download(ProbeResult(ip="1.1.1.1", kind=KIND_RESET))[0], FreezeState.UNKNOWN)
         self.assertEqual(classify_download(_ok(body_size=2_000))[0], FreezeState.UNKNOWN)
@@ -631,7 +756,7 @@ class BlockcheckScopeTests(unittest.TestCase):
 
         def _download(host, _path):
             calls.append(host)
-            return None if host == "dead.example" else _ok(body_size=33_000)
+            return None if host == "dead.example" else _ok(body_size=64_000)
 
         with patch("blockcheck.data_lists.TCP_16_20_TARGETS", targets):
             servers = check_freeze(lambda fn, *a: _Done(fn(*a)), lambda f: f.result(), _download)

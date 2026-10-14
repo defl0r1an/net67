@@ -44,6 +44,8 @@ def start_blockcheck_page_run(
     on_log,
     on_run_log_started,
     on_finished,
+    on_partial=None,
+    on_progress=None,
 ) -> None:
     """Готовит экран и запускает фоновую проверку BlockCheck."""
     set_support_status("")
@@ -66,6 +68,10 @@ def start_blockcheck_page_run(
     worker.log_message.connect(on_log)
     worker.run_log_started.connect(on_run_log_started)
     worker.finished.connect(on_finished)
+    if on_partial is not None and hasattr(worker, "partial"):
+        worker.partial.connect(on_partial)
+    if on_progress is not None and hasattr(worker, "progress"):
+        worker.progress.connect(on_progress)
     run_runtime.start_qobject_worker(
         parent=parent,
         worker_factory=lambda _request_id: worker,

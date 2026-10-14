@@ -30,6 +30,21 @@ class SmartStrategySearchTests(unittest.TestCase):
                 self.assertEqual(selection.mode, mode)
                 self.assertEqual(len(batch_for_mode(candidates, selection.mode)), expected_count)
 
+    def test_remembered_sni_variant_is_restored_within_the_express_budget(self):
+        from blockcheck.strategy_search.sni_discovery import with_allowed_name
+
+        candidates = [Candidate(f"id_{i}", f"Стратегия {i}", "--lua-desync=fake:tls_mod=sni=example.com") for i in range(10)]
+        remembered = with_allowed_name(candidates[0], "vk.com")
+        self.assertIsNotNone(remembered)
+        env = Mock()
+        env.load_candidates.return_value = candidates
+        env.load_history.return_value = Mock(confirmed=(remembered.strategy_id,), failed={})
+        env.wall_time.return_value = 1.0
+        engine = StrategySearch(SearchRequest(target="example.com", mode="smart"), env=env, events=Mock())
+        batch, _total = engine._select_batch("test")
+        self.assertEqual(len(batch), 5)
+        self.assertEqual(batch[0], remembered)
+
     def test_smart_mode_batch_size(self):
         self.assertIn("smart", MODE_BATCH_SIZES)
         self.assertEqual(MODE_BATCH_SIZES["smart"], 5)

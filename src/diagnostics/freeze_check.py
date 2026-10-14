@@ -2,7 +2,7 @@
 
 ТСПУ пропускает начало ответа, а после ~16 КБ соединение замирает или
 рвётся. Проверка качает по ~32 КБ с нескольких хостингов разных провайдеров:
-если у одних файл приходит целиком, а у других обрывается на 14–24 КБ —
+если у одних файл приходит целиком, а у других обрывается на 12–36 КБ —
 это и есть такой обрыв.
 
 Что было неверно раньше:
@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Future
@@ -29,20 +30,40 @@ from enum import Enum
 from urllib.parse import urlsplit
 
 from diagnostics.tls_probe import ProbeResult
-from diagnostics.verdict import FREEZE_MAX_BYTES, FREEZE_MIN_BYTES, Level, describe_reach
+from diagnostics.upload_probe import UPLOAD_BULK_STALLS, UPLOAD_OK, UPLOAD_PACKET_LIMIT, UploadVerdict
+from diagnostics.limits import FREEZE_MAX_BYTES, FREEZE_MIN_BYTES
+from diagnostics.verdict import Level
 
 __all__ = [
+    "DIRECTION_DOWNLOAD",
+    "DIRECTION_UPLOAD",
     "FreezeReport",
     "FreezeServer",
     "FreezeState",
     "check_freeze",
     "classify_download",
+    "every_freeze_target",
     "pick_freeze_targets",
     "summarize_freeze",
 ]
 
-READ_LIMIT = 32 * 1024
+READ_LIMIT = 64 * 1024
 TARGETS_COUNT = 6
+# Сколько серверов полной проверки опрашивать одновременно.
+EVERY_AT_ONCE = 12
+# Один обрыв при стольких серверах без обрыва — единичный случай, а не вывод о сети.
+SINGLE_CUT_NEEDS_FINE = 4
+# «Обрывает» всерьёз: не меньше стольких серверов и не меньше трети проверенных.
+WIDESPREAD_CUTS = 3
+# Почему сервер проверить не удалось — без догадок о причине.
+_UNREACHED = {
+    "connect": "нет соединения с сервером",
+    "timeout": "сервер не ответил",
+    "reset": "соединение сброшено",
+    "tls": "шифрование не установилось",
+    "cert": "у сервера другой сертификат (он мог переехать)",
+    "cancelled": "проверку прервали",
+}
 # Сколько адресов одного провайдера пробовать, если первый не дал ответа.
 CANDIDATES_PER_PROVIDER = 3
 # Запасной адрес берётся, только пока с начала проверки прошло меньше этого:
@@ -60,11 +81,22 @@ class FreezeState(Enum):
     UNKNOWN = "unknown"
 
 
+DIRECTION_DOWNLOAD = "download"
+DIRECTION_UPLOAD = "upload"
+
+
 @dataclass(frozen=True, slots=True)
 class FreezeServer:
     name: str
     state: FreezeState
     text: str
+    # В какую сторону шли данные, когда соединение замерло.
+    direction: str = DIRECTION_DOWNLOAD
+    provider: str = ""
+    host: str = ""
+    # Метка сервера в списке: страна и номер («DE.AWS-01»).
+    ident: str = ""
+    seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,12 +131,23 @@ def pick_freeze_targets(
     return [(name, by_provider[name]) for name in names[: max(0, int(count))]]
 
 
+def every_freeze_target(targets) -> list[tuple[str, list[dict]]]:
+    """Все HTTPS-адреса списка, каждый отдельной проверкой: так идёт полная проверка."""
+    return [
+        (str(item.get("provider") or ""), [item])
+        for item in targets
+        if str(item.get("url") or "").startswith("https://")
+    ]
+
+
 def classify_download(result: ProbeResult | None) -> tuple[FreezeState, str]:
     """Что значит результат загрузки для проверки обрыва."""
     if result is None:
         return FreezeState.UNKNOWN, "не удалось узнать адрес сервера"
     if not result.ok:
-        return FreezeState.UNKNOWN, f"не удалось проверить: {describe_reach(result)}"
+        # Причины здесь не называются: мёртвый или переехавший сервер из списка
+        # отвечал бы «чужой сертификат» — и это выглядело бы как перехват трафика.
+        return FreezeState.UNKNOWN, f"не удалось проверить: {_UNREACHED.get(result.kind, 'сервер не ответил как ожидалось')}"
     size = int(result.body_size)
     kb = size // 1024
     if result.body_cut and FREEZE_MIN_BYTES <= size <= FREEZE_MAX_BYTES:
@@ -112,7 +155,7 @@ def classify_download(result: ProbeResult | None) -> tuple[FreezeState, str]:
     if size >= FREEZE_MAX_BYTES:
         return FreezeState.OK, f"получено {kb} КБ без обрыва"
     if result.body_cut:
-        return FreezeState.UNKNOWN, f"загрузка оборвалась на {kb} КБ — не похоже на обрыв ТСПУ"
+        return FreezeState.UNKNOWN, f"загрузка оборвалась на {kb} КБ — вне окна 12–36 КБ, на этот обрыв не похоже"
     status = int(result.status or 0)
     if status >= 300:
         return FreezeState.UNKNOWN, f"сервер не отдал файл (код {status})"
@@ -127,40 +170,87 @@ def _split_url(url: str) -> tuple[str, str]:
     return parts.hostname or "", path
 
 
+def _confirm_cut(first_text: str, again: tuple[FreezeState, str]) -> tuple[FreezeState, str]:
+    """Обрыв считается обрывом, только если повторился: фильтр режет каждый раз, сбой сети — нет."""
+    state, text = again
+    if state == FreezeState.FREEZE:
+        return FreezeState.FREEZE, f"{text} — дважды подряд"
+    if state == FreezeState.OK:
+        return FreezeState.OK, f"{text} со второго раза: первый обрыв был случайным сбоем"
+    return FreezeState.UNKNOWN, f"{first_text}, но при повторе обрыв не подтвердился ({text})"
+
+
 def _check_provider(
     provider: str,
     candidates: list[dict],
     download: Callable[[str, str], ProbeResult | None],
     fallback_allowed: Callable[[], bool],
+    upload: Callable[[str, str], UploadVerdict | None] | None = None,
 ) -> FreezeServer:
-    """Пробует адреса провайдера по очереди, пока один не даст ясный ответ."""
+    """Пробует адреса провайдера по очереди, пока один не даст ясный ответ.
+
+    Если загрузка прошла без обрыва, на том же сервере проверяется отправка:
+    ограничение работает в обе стороны.
+    """
+    started = time.monotonic()
     host = ""
+    ident = ""
     state, text = FreezeState.UNKNOWN, "нет адресов для проверки"
     tried = 0
     for item in candidates:
         if tried and not fallback_allowed():
             break
         host, path = _split_url(str(item.get("url") or ""))
+        ident = str(item.get("id") or "")
         tried += 1
         state, text = classify_download(download(host, path))
+        if state == FreezeState.FREEZE:
+            state, text = _confirm_cut(text, classify_download(download(host, path)))
         if state != FreezeState.UNKNOWN:
             break
     if state == FreezeState.UNKNOWN and tried > 1:
         text = f"{text} (запасные адреса тоже не помогли, всего адресов: {tried})"
-    return FreezeServer(name=f"{provider} ({host})" if host else provider, state=state, text=text)
+    name = f"{provider} ({host})" if host else provider
+    direction = DIRECTION_DOWNLOAD
+    if state == FreezeState.OK and upload is not None:
+        verdict = upload(host, path)
+        if verdict is not None and verdict.code in (UPLOAD_BULK_STALLS, UPLOAD_PACKET_LIMIT):
+            state, text, direction = FreezeState.FREEZE, f"загрузка проходит, но {verdict.text}", DIRECTION_UPLOAD
+        elif verdict is not None and verdict.code == UPLOAD_OK:
+            text = f"{text}; отправка тоже проходит"
+    return FreezeServer(
+        name=name,
+        state=state,
+        text=text,
+        direction=direction,
+        provider=provider,
+        host=host,
+        ident=ident,
+        seconds=time.monotonic() - started,
+    )
 
 
 def check_freeze(
     submit: Callable[..., Future],
     wait: Callable[[Future], object],
     download: Callable[[str, str], ProbeResult | None],
+    upload: Callable[[str, str], UploadVerdict | None] | None = None,
     *,
     budget: float = FALLBACK_BUDGET,
+    every: bool = False,
+    on_server: Callable[[FreezeServer, int, int], None] | None = None,
 ) -> tuple[FreezeServer, ...]:
     """Провайдеры проверяются параллельно, адреса одного провайдера — по очереди.
 
-    ``download(host, path)`` сам выбирает IP. Запасной адрес пробуется, только
-    пока не вышел ``budget`` секунд с начала проверки.
+    ``every`` — полная проверка: каждый адрес списка проверяется сам по себе,
+    без запасных. Сколько серверов идёт одновременно, решает ``submit``: движок
+    даёт очередь на ``EVERY_AT_ONCE`` (десятки соединений разом сами дали бы
+    ложные обрывы). ``on_server(сервер, готово, всего)``
+    зовётся по мере готовности — для хода проверки на экране.
+
+    ``download(host, path)`` и ``upload(host, path)`` сами выбирают IP. Запасной
+    адрес пробуется, только пока не вышел ``budget`` секунд с начала проверки.
+    Отправка проверяется, только если загрузка с этого сервера прошла.
     """
     from blockcheck.data_lists import TCP_16_20_TARGETS
 
@@ -169,16 +259,31 @@ def check_freeze(
     def _fallback_allowed() -> bool:
         return time.monotonic() - started < budget
 
-    planned = [
-        (provider, submit(_check_provider, provider, candidates, download, _fallback_allowed))
-        for provider, candidates in pick_freeze_targets(TCP_16_20_TARGETS)
-    ]
+    picked = every_freeze_target(TCP_16_20_TARGETS) if every else pick_freeze_targets(TCP_16_20_TARGETS)
+    lock = threading.Lock()
+    done = [0]
+
+    def _one(provider: str, candidates: list[dict]) -> FreezeServer:
+        server = _check_provider(provider, candidates, download, _fallback_allowed, upload)
+        if on_server is not None:
+            with lock:
+                done[0] += 1
+                ready = done[0]
+            try:
+                on_server(server, ready, len(picked))
+            except Exception:
+                pass
+        return server
+
+    planned = [(provider, submit(_one, provider, candidates)) for provider, candidates in picked]
     servers: list[FreezeServer] = []
     for provider, future in planned:
         try:
             servers.append(wait(future))
         except Exception as exc:
-            servers.append(FreezeServer(name=provider, state=FreezeState.UNKNOWN, text=f"ошибка проверки ({exc})"))
+            servers.append(
+                FreezeServer(name=provider, state=FreezeState.UNKNOWN, text=f"ошибка проверки ({exc})", provider=provider)
+            )
     return tuple(servers)
 
 
@@ -187,13 +292,31 @@ def summarize_freeze(servers: tuple[FreezeServer, ...], *, zapret_running: bool 
     fine = [item for item in servers if item.state == FreezeState.OK]
     if frozen:
         advice = (
-            ("Подберите стратегию: в «Подборе стратегии» укажите сайт, который грузится не до конца.",)
-            if zapret_running
-            else ("Запустите net67 на странице «Управление net67 v2» — стратегии обходят этот обрыв.",)
+            ("Подберите стратегию для любого сайта, который у вас грузится не до конца: впишите его адрес в «Подборе стратегии».",)
+            if zapret_running is not False
+            else ("Включите обход на странице «Обход» — стратегии обходят этот обрыв.",)
         )
+        directions = {item.direction for item in frozen}
+        if directions == {DIRECTION_UPLOAD}:
+            what = "отправка данных на зарубежные серверы"
+        elif directions == {DIRECTION_DOWNLOAD}:
+            what = "загрузка с зарубежных серверов на 16–20 КБ"
+        else:
+            what = "загрузка с зарубежных серверов на 16–20 КБ и отправка данных на них"
+        decided = len(frozen) + len(fine)
+        if len(frozen) == 1 and len(fine) >= SINGLE_CUT_NEEDS_FINE:
+            # Один сервер из многих — не картина сети: так бывает из-за самого сервера.
+            return FreezeReport(
+                Level.OK,
+                f"Обрыва на 16–20 КБ нет: без обрыва {len(fine)} из {decided} серверов, один оборвался — "
+                "единичный случай",
+                servers,
+            )
+        # «Обрывает» — когда это видно у нескольких серверов и у заметной их доли.
+        widespread = len(frozen) >= WIDESPREAD_CUTS and len(frozen) * 3 >= decided
         return FreezeReport(
-            Level.FAIL if len(frozen) >= len(fine) else Level.WARN,
-            f"Провайдер обрывает загрузку с зарубежных серверов на 16–20 КБ ({len(frozen)} из {len(servers)})",
+            Level.FAIL if widespread else Level.WARN,
+            f"Обрывается {what}: {len(frozen)} из {decided} проверенных серверов",
             servers,
             advice,
         )

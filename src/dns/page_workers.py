@@ -237,4 +237,5 @@ class DnsApplyWorker(QThread):
         else:
             raise ValueError(f"Неизвестное DNS действие: {self._action}")
 
+        plan.warning = str(getattr(command_result, "warning", "") or "")
         return {"plan": plan, "state": self._load_state()}

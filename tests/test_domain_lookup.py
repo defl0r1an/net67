@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import inspect
 import json
+import socket
+from diagnostics.path_trace import RouteTrace
 import unittest
 from unittest.mock import patch
 
@@ -36,7 +38,7 @@ def _answer(rtype: int, *values: str) -> DnsQueryResult:
 
 
 def _fake_query(server, name, rtype, **_kwargs):
-    if server == engine.CANARY_SERVER or server == DEAD.address:
+    if server == DEAD.address:
         return DnsQueryResult(status=STATUS_TIMEOUT)
     if name.endswith(".in-addr.arpa"):
         return _answer(TYPE_PTR, "host.example.net.")
@@ -70,8 +72,18 @@ def _fake_http(method, url, **kwargs):
 class _Network:
     """Подменяет всю сеть движка: тесты не выходят в интернет."""
 
-    def __init__(self, test: unittest.TestCase, *, http=_fake_http) -> None:
+    def __init__(self, test: unittest.TestCase, *, http=_fake_http, route=None, quic=None) -> None:
         self.http_calls: list[str] = []
+        # Путь и QUIC ходят в сеть сами: по умолчанию «трассировка недоступна» и «QUIC не проверяли».
+        self.route = route or (lambda ip: RouteTrace(target=ip, supported=False))
+        self.quic = quic or (lambda domain, ip: (None, None))
+        # Проверка сайта «как в BlockCheck» тоже ходит в сеть: по умолчанию её итога нет.
+        self.site = None
+        self.site_calls: list[str] = []
+
+        def site_spy(domain, should_stop):
+            self.site_calls.append(domain)
+            return self.site
 
         def http_spy(method, url, **kwargs):
             self.http_calls.append(url)
@@ -81,12 +93,20 @@ class _Network:
         patches = [
             patch.object(engine, "query_server", _fake_query),
             patch.object(engine, "query_doh", _fake_query),
+            patch.object(engine, "query_tcp", _fake_query),
+            patch.object(engine, "canary_answered", lambda _domain: False),
+            patch.object(engine, "trace_route", lambda ip, **_k: self.route(ip)),
+            patch.object(engine, "_inspect_quic", lambda domain, ip, max_ttl, cancel: self.quic(domain, ip)),
             patch.object(engine, "_http", http_spy),
+            patch.object(engine, "_check_site", site_spy),
+            # Подсказка через hosts читает каталог и файл hosts и пробует адреса по сети.
+            patch.object(engine, "_hosts_help", lambda domain: engine.HostsHelp()),
+            patch.object(engine, "_hosts_road", lambda domain, offered, cancel: None),
             patch.object(engine, "fetch_cert_names", lambda ip, server_name=None: CertNames("ok", ("cert.example",), "cn.example")),
             patch.object(engine, "_tcp_connect", lambda ip, port=443: engine.TcpReport(ip, port, "ok", 5.0)),
             patch("utils.windows_icmp.ping_ipv4_host_winapi", lambda *a, **k: ping),
             patch("utils.windows_icmp.ping_ipv6_winapi", lambda *a, **k: ping),
-            patch("utils.net_resolve.resolve_ips", lambda host, **k: (["93.184.216.34"], [])),
+            patch("utils.net_resolve.resolve_addrinfo", lambda host, **k: [(socket.AF_INET, 0, 0, "", ("93.184.216.34", 0))]),
         ]
         for item in patches:
             item.start()
@@ -275,7 +295,7 @@ class RunTests(unittest.TestCase):
 
     def test_intercepted_dns_is_detected_by_canary(self) -> None:
         _Network(self)
-        with patch.object(engine, "query_server", lambda server, name, rtype, **k: _answer(TYPE_A, "93.184.216.34")):
+        with patch.object(engine, "canary_answered", lambda _domain: True):
             report = engine.run_domain_lookup("example.com", servers=[GOOD], use_external=False)
 
         self.assertTrue(report.intercepted)

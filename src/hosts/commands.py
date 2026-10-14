@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+from hosts.address_words import describe_address_check
+
 from hosts.state import HostsApplyResult, HostsCommandResult, HostsFileText, HostsState
 
 
@@ -145,7 +148,9 @@ def refresh_applied_selection(hosts_manager=None) -> HostsCommandResult:
             selection,
             has_saved_selection=bool(selection),
         )
-    return HostsCommandResult(success=True, message=reason, changed=bool(changed))
+    write_failed = not changed and reason not in ("", "адреса в hosts уже актуальны", "блока net67 в hosts нет", "выбор сервисов не сохранён", "IPv6 сейчас недоступен, а в блоке есть IPv6-записи")
+    _settle_overlay_after_refresh(write_failed=write_failed)
+    return HostsCommandResult(success=not write_failed, message=reason, changed=bool(changed))
 
 
 def _hand_telegram_to_proxy_page(selection: dict[str, str]) -> dict[str, str]:
@@ -430,3 +435,121 @@ def save_hosts_text(text: str) -> HostsCommandResult:
         return HostsCommandResult(False, "Не удалось записать файл hosts: нет прав или файл занят.")
     return HostsCommandResult(True, str(HOSTS_PATH), changed=True)
 
+
+def _fresh_addresses(host: str, want_ipv6: bool) -> list[str]:
+    """Адреса имени по шифрованному DNS: обычному ответу для таких имён в России верить нельзя."""
+    from utils.dns_reference import reference_ask
+    from utils.dns_wire import TYPE_A, TYPE_AAAA
+    from utils.socket_cancel import SocketCancel
+
+    ask = reference_ask(SocketCancel(), timeout_s=3.0)
+    found: list[str] = []
+    for rtype in (TYPE_A, TYPE_AAAA) if want_ipv6 else (TYPE_A,):
+        answer = ask(host, rtype)
+        if answer is not None:
+            found.extend(answer.values(rtype))
+    return found
+
+
+def check_addresses(selection: dict[str, str] | None = None, *, strict: bool = False, recheck=None, should_stop=None, fresh: bool = False, commit: bool = True):
+    """Умный движок: проверяет адреса включённых сервисов и запоминает рабочие (hosts.address_engine).
+
+    ``selection`` — выбор «сервис → профиль»; None — сохранённый выбор. ``strict`` — человек
+    только что переключил сервис: мёртвый адрес убирается сразу, без второй проверки.
+    ``recheck`` — названия сервисов, которые проверить сейчас (None — все включённые).
+    Сам файл hosts здесь не меняется: его переписывает refresh_applied_selection, если
+    проверенные адреса отличаются от записанных.
+    """
+    with _CHECK_LOCK:
+        if fresh:
+            _PROBE_CACHE.clear()
+        return _check_addresses(selection, strict=strict, recheck=recheck, should_stop=should_stop, commit=commit)
+
+
+def _check_addresses(selection: dict[str, str] | None, *, strict: bool, recheck, should_stop=None, commit: bool = True):
+    global _OVERLAY_BEFORE_REFRESH
+    import time
+
+    from hosts import address_engine, proxy_domains
+    from hosts.address_probe import ALIVE, check_address, sweep
+    from hosts.ipv6_detection import is_ipv6_available
+    from hosts.relay_check import internet_reachable
+    from log.log import log
+
+    chosen = load_user_selection() if selection is None else dict(selection or {})
+    active = {
+        name: profile.strip()
+        for name, profile in chosen.items()
+        if isinstance(name, str) and isinstance(profile, str) and profile.strip().lower() not in _OFF_PROFILES
+    }
+    cancelled = should_stop or (lambda: False)
+    if cancelled():
+        return None
+
+    def _probe(address: str, host: str, front: str):
+        if cancelled():
+            from hosts.address_probe import Probe, UNKNOWN
+            return Probe(UNKNOWN)
+        # Адрес, который ответил несколько минут назад, заново не проверяется: иначе каждое
+        # переключение любого тумблера перепроверяло бы все включённые сервисы.
+        key = (address, host, front)
+        cached = _PROBE_CACHE.get(key)
+        if cached is not None and time.monotonic() - cached[0] < _ALIVE_CACHE_S:
+            return cached[1]
+        result = check_address(address, host, front=front)
+        if result.verdict == ALIVE:
+            _PROBE_CACHE[key] = (time.monotonic(), result)
+        else:
+            _PROBE_CACHE.pop(key, None)
+        return result
+
+    previous = proxy_domains.get_engine_overlay()
+    catalog = proxy_domains.load_shipped_catalog()
+    overlay, report = address_engine.check_selection(
+        active,
+        catalog=catalog,
+        previous=previous,
+        relays=proxy_domains.relay_addresses_of(catalog),
+        probe=_probe,
+        resolve=lambda host, ipv6: [] if cancelled() else _fresh_addresses(host, ipv6),
+        network_ok=internet_reachable,
+        ipv6=bool(is_ipv6_available()),
+        strict=strict,
+        recheck=recheck,
+        sweep=lambda addresses: {} if cancelled() else sweep(addresses),
+    )
+    if cancelled():
+        return None
+    if not commit:
+        return overlay, report
+    if overlay is not None:
+        if selection is None and report.changed:
+            _OVERLAY_BEFORE_REFRESH = previous
+        proxy_domains.set_engine_overlay(overlay)
+    text = describe_address_check(report)
+    log(f"Hosts, проверка адресов: проверено {report.checked}, изменилось: {report.changed}. {text}".strip(), "INFO")
+    return report
+
+
+
+
+
+
+def _settle_overlay_after_refresh(*, write_failed: bool) -> None:
+    """После сверки hosts: если новые адреса записать не удалось, вернуть набор, который записан."""
+    global _OVERLAY_BEFORE_REFRESH
+    from hosts import proxy_domains
+    from log.log import log
+
+    with _CHECK_LOCK:
+        before, _OVERLAY_BEFORE_REFRESH = _OVERLAY_BEFORE_REFRESH, None
+        if write_failed and before is not None:
+            proxy_domains.set_engine_overlay(before)
+            log("Hosts: проверенные адреса записать не удалось — оставлены те, что уже в файле", "WARNING")
+
+
+_OFF_PROFILES = ("", "off", "откл", "откл.", "0", "false")
+_ALIVE_CACHE_S = 600.0
+_PROBE_CACHE = {}
+_CHECK_LOCK = threading.RLock()
+_OVERLAY_BEFORE_REFRESH = None

@@ -55,6 +55,7 @@ class HostsPageSnapshot:
     readable: bool = True
     read_only: bool = False
     adobe_active: bool = False
+    addresses_checked_at: str = ""
 
     def block(self, kind: str) -> HostsBlock | None:
         for block in self.blocks:
@@ -237,6 +238,7 @@ def build_page_snapshot(
     ipv6_available: bool,
     saved_selection: dict[str, str] | None = None,
     catalog_key: object = None,
+    addresses_checked_at: str = "",
 ) -> HostsPageSnapshot:
     """Собирает снимок из уже прочитанного текста hosts и каталога.
 
@@ -315,6 +317,7 @@ def build_page_snapshot(
         readable=bool(readable),
         read_only=bool(read_only),
         adobe_active=_is_adobe_active(blocks),
+        addresses_checked_at=str(addresses_checked_at or ""),
     )
 
 
@@ -327,7 +330,7 @@ def load_page_snapshot() -> HostsPageSnapshot:
     global _SNAPSHOT
     from hosts.hosts import HOSTS_PATH, _get_hosts_sig, is_file_readonly, safe_read_hosts_file
     from hosts.ipv6_detection import is_ipv6_available
-    from hosts.proxy_domains import get_hosts_catalog_signature, load_user_hosts_selection
+    from hosts.proxy_domains import get_hosts_catalog_signature, load_user_hosts_selection, get_engine_overlay
 
     catalog_key = get_hosts_catalog_signature()
     ipv6_available = bool(is_ipv6_available())
@@ -350,6 +353,7 @@ def load_page_snapshot() -> HostsPageSnapshot:
         ipv6_available=ipv6_available,
         saved_selection=saved_selection,
         catalog_key=catalog_key,
+        addresses_checked_at=get_engine_overlay().get("checked_at", ""),
     )
     with _LOCK:
         _SNAPSHOT = (key, snapshot)

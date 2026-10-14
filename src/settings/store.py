@@ -32,6 +32,7 @@ from settings.normalize import (
     unique_str_list as _unique_str_list,
 )
 from settings.schema import (
+    TAB_HISTORY_KEYS,
     DEFAULT_TG_PROXY_HOST as _DEFAULT_TG_PROXY_HOST,
     DEFAULT_TG_PROXY_PORT as _DEFAULT_TG_PROXY_PORT,
     DEFAULT_TG_PROXY_UPSTREAM_PORT as _DEFAULT_TG_PROXY_UPSTREAM_PORT,
@@ -1509,3 +1510,39 @@ def find_preset_remote_source_by_url(url: str) -> tuple[str, str, dict[str, Any]
             if isinstance(binding, dict) and str(binding.get("url") or "").strip() == needle:
                 return str(scope), str(file_name), copy.deepcopy(binding)
     return None
+
+
+def get_check_history() -> list[dict[str, Any]]:
+    """Итоги прошлых проверок сети, от старых к новым."""
+    return copy.deepcopy(get_blockcheck_settings().get("check_history", []))
+
+
+def add_check_history_run(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """Дописывает итог проверки и возвращает историю; лишние старые записи отбрасываются."""
+
+    def _append(section: dict[str, Any]) -> None:
+        runs = section.get("check_history")
+        section["check_history"] = [*(runs if isinstance(runs, list) else []), _as_dict(entry)]
+
+    return copy.deepcopy(update_blockcheck_settings(_append)["check_history"])
+
+
+def add_tab_history_run(key: str, entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """Дописывает итог проверки вкладки (``domain_history`` / ``dns_history``) и возвращает её историю."""
+    if key not in TAB_HISTORY_KEYS:
+        raise ValueError(f"unknown tab history: {key}")
+
+    def _append(section: dict[str, Any]) -> None:
+        runs = section.get(key)
+        section[key] = [*(runs if isinstance(runs, list) else []), _as_dict(entry)]
+
+    return copy.deepcopy(update_blockcheck_settings(_append)[key])
+
+
+def get_hosts_engine() -> dict[str, Any]:
+    return copy.deepcopy(_get_path_value(read_settings(), ("hosts", "engine"), {}))
+
+
+def set_hosts_engine(value: dict[str, Any]) -> bool:
+    _update_settings(lambda data: _set_path_value(data, ("hosts", "engine"), copy.deepcopy(value)))
+    return True

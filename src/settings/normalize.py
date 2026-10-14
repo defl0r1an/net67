@@ -433,6 +433,7 @@ def normalize_hosts(data: object) -> dict[str, Any]:
     return {
         "active_domains": unique_str_list(raw.get("active_domains")),
         "selection": selection,
+        "engine": _normalize_hosts_engine(raw.get("engine")),
     }
 
 
@@ -702,6 +703,8 @@ def normalize_blockcheck(data: object) -> dict[str, Any]:
             if normalize_lookup_key(item)
         ],
         "strategy_history": normalize_blockcheck_strategy_history(raw.get("strategy_history")),
+        "check_history": normalize_check_history(raw.get("check_history")),
+        **{key: normalize_check_history(raw.get(key))[-schema.TAB_HISTORY_LIMIT:] for key in schema.TAB_HISTORY_KEYS},
     }
 
 
@@ -752,4 +755,82 @@ def normalize_settings(data: object) -> dict[str, Any]:
         "blockcheck": normalize_blockcheck(raw.get("blockcheck")),
         "folders": normalize_folders(raw.get("folders")),
         "profile_identity": normalize_profile_identity(raw.get("profile_identity")),
+    }
+
+
+def _history_text(value: object) -> str:
+    return as_clean_str(value)[: schema.CHECK_HISTORY_TEXT_LIMIT]
+
+
+def normalize_check_history(data: object) -> list[dict[str, Any]]:
+    """История проверок сети: только известные поля, ограниченной длины, последние записи."""
+    runs: list[dict[str, Any]] = []
+    for raw_run in data if isinstance(data, list) else ():
+        run = as_dict(raw_run)
+        kind = as_clean_str(run.get("kind"))
+        time_text = as_clean_str(run.get("time"))
+        if not kind or not time_text:
+            continue
+        states: dict[str, str] = {}
+        for raw_name, raw_level in as_dict(run.get("states")).items():
+            name = _history_text(raw_name)
+            level = as_clean_str(raw_level)
+            if name and level in schema.CHECK_HISTORY_LEVELS and len(states) < schema.CHECK_HISTORY_STATES_LIMIT:
+                states[name] = level
+        problems = [
+            text
+            for text in (_history_text(item) for item in (run.get("problems") if isinstance(run.get("problems"), list) else ()))
+            if text
+        ][: schema.CHECK_HISTORY_PROBLEMS_LIMIT]
+        runs.append(
+            {
+                "kind": kind[:40],
+                "time": time_text[:40],
+                "title": _history_text(run.get("title")),
+                "level": as_str_in(run.get("level"), schema.CHECK_HISTORY_LEVELS, "unknown"),
+                "headline": _history_text(run.get("headline")),
+                "problems": problems,
+                "states": states,
+                "log_file": as_clean_str(run.get("log_file"))[:520],
+                # Условия проверки: работал ли Zapret и с каким пресетом, были ли VPN, как ведёт себя фильтр.
+                "zapret": as_str_in(run.get("zapret"), schema.CHECK_HISTORY_ZAPRET, ""),
+                "preset": _history_text(run.get("preset")),
+                "tools": run.get("tools") is True,
+                "habit": as_clean_str(run.get("habit"))[:40],
+            }
+        )
+    return runs[-schema.CHECK_HISTORY_LIMIT :]
+
+
+def _normalize_hosts_engine(data: object) -> dict[str, Any]:
+    """Набор проверенных адресов hosts: только строки и пары «имя, адрес». Смысл проверяет hosts.catalog_overlay."""
+    raw = as_dict(data)
+    services: dict[str, dict[str, list[list[str]]]] = {}
+    for service_id, profiles in as_dict(raw.get("services")).items():
+        kept: dict[str, list[list[str]]] = {}
+        for profile_id, rows in as_dict(profiles).items():
+            pairs = [
+                [as_clean_str(row[0]), as_clean_str(row[1])]
+                for row in (rows if isinstance(rows, list) else [])
+                if isinstance(row, (list, tuple)) and len(row) == 2 and as_clean_str(row[0]) and as_clean_str(row[1])
+            ]
+            if pairs and as_clean_str(profile_id):
+                kept[as_clean_str(profile_id)] = pairs
+        if kept and as_clean_str(service_id):
+            services[as_clean_str(service_id)] = kept
+    pool: dict[str, dict[str, list[str]]] = {}
+    for service_id, hosts in as_dict(raw.get("pool")).items():
+        found = {
+            as_clean_str(host): unique_str_list(addresses)
+            for host, addresses in as_dict(hosts).items()
+            if as_clean_str(host) and unique_str_list(addresses)
+        }
+        if found and as_clean_str(service_id):
+            pool[as_clean_str(service_id)] = found
+    return {
+        "catalog": as_clean_str(raw.get("catalog")),
+        "checked_at": as_clean_str(raw.get("checked_at")),
+        "suspects": unique_str_list(raw.get("suspects")),
+        "services": services,
+        "pool": pool,
     }

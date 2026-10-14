@@ -27,6 +27,7 @@ class HostsFeature:
     create_permission_restore_worker: Callable
     create_file_text_worker: Callable
     create_file_save_worker: Callable
+    create_address_check_worker: Callable
     create_profile_probe_worker: Callable
     load_geo_sites: Callable
     load_geo_services_for_site_list: Callable
@@ -140,6 +141,11 @@ def build_hosts_feature() -> HostsFeature:
 
         return HostsProfileProbeWorker(request_id, _probe, parent=parent)
 
+    def _create_address_check_worker(request_id: int, parent=None):
+        from hosts.address_worker import HostsAddressCheckWorker
+
+        return HostsAddressCheckWorker(request_id, parent=parent)
+
     return HostsFeature(
         refresh_applied_selection=lambda *args, **kwargs: _public().refresh_applied_selection(*args, **kwargs),
         warm_page_data_cache=_warm_page_data_cache,
@@ -154,6 +160,7 @@ def build_hosts_feature() -> HostsFeature:
         create_permission_restore_worker=_create_permission_restore_worker,
         create_file_text_worker=_create_file_text_worker,
         create_file_save_worker=_create_file_save_worker,
+        create_address_check_worker=_create_address_check_worker,
         create_profile_probe_worker=_create_profile_probe_worker,
         # Читает каталог hosts с диска: звать только из фонового потока.
         load_geo_sites=lambda: _public().load_geo_sites(),

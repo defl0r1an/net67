@@ -99,13 +99,15 @@ class DomainLookupPageTests(unittest.TestCase):
         self.assertFalse(page._running)
         self.assertTrue(page.start_button.isEnabled())
         self.assertTrue(page.report_button.isEnabled())
-        self.assertFalse(page.ping_card.isHidden())
-        self.assertFalse(page.dns_card.isHidden())
-        self.assertFalse(page.neighbors_card.isHidden())
-        self.assertEqual(page.dns_table.rowCount(), 2)
-        self.assertIn("заглушка (Ростелеком)", page.dns_table.item(1, 2).text())
-        self.assertIn("a.example", page.neighbors_text.toPlainText())
-        self.assertIn("AS64500", page.network_lines._lines[-1].text)
+        self.assertFalse(page.detail_cards.isHidden())
+        self.assertTrue(page.ping_card.isHidden())
+        self.assertTrue(page.dns_card.isHidden())
+        from blockcheck.ui.result_cards import card_plain_text
+
+        texts = "\n".join(card_plain_text(widget.card) for widget in page.detail_cards.cards())
+        self.assertIn("Ростелеком", texts)
+        self.assertIn("a.example", texts)
+        self.assertIn("64500", texts)
 
         # Проверка адреса (не домена): таблицы DNS нет.
         page._on_finished(_report(kind=engine.KIND_IP, target="93.184.216.34", answers=()))
