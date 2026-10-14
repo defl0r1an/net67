@@ -3,8 +3,8 @@
 Каталоги стратегий и builtin preset-ы ссылаются на lua-функции (`--lua-desync=`),
 blob-ы (`blob=`, `seqovl_pattern=` ...) и файлы фейков в `bin/`. Если имени нет
 в поставке, winws2/winws падает при запуске уже у пользователя. Lua-файлы и
-bin-файлы лежат в private-репозитории (private_zapretgui/dist), поэтому без
-него проверка пропускается.
+bin-файлы берутся из рабочей поставки net67. Их отсутствие — ошибка
+проверки, иначе неполная поставка оставалась бы незамеченной.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from fakes.names import BLOB_REFERENCE_ARG_NAMES, NFQWS2_BUILTIN_BLOBS
 from profile.winws2_preset_source import WINWS2_LUA_INIT_PATHS
 
 PUBLIC_ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_DIST = PUBLIC_ROOT.parent / "private_zapretgui" / "dist"
-PRIVATE_LUA_DIR = PRIVATE_DIST / "lua"
-PRIVATE_BIN_DIR = PRIVATE_DIST / "bin"
+SHIPPED_ROOT = PUBLIC_ROOT
+SHIPPED_LUA_DIR = SHIPPED_ROOT / "lua"
+SHIPPED_BIN_DIR = SHIPPED_ROOT / "bin"
 CATALOGS_ROOT = PUBLIC_ROOT / "src" / "profile" / "strategy_catalogs"
 BUILTIN_PRESETS_ROOT = PUBLIC_ROOT / "src" / "presets" / "builtin"
 
@@ -35,8 +35,8 @@ _WINWS1_PRESET_BIN_RE = re.compile(r"(?<![A-Za-z0-9_])bin[/\\]([A-Za-z0-9_.\-]+\
 
 
 def _lua_file(init_path: str) -> Path:
-    # "lua/zapret-lib.lua" в preset-е -> private_zapretgui/dist/lua/zapret-lib.lua
-    return PRIVATE_DIST / Path(init_path)
+    # Проверяем те же файлы, которые попадут в установщик.
+    return SHIPPED_ROOT / Path(init_path)
 
 
 def _read(path: Path) -> str:
@@ -60,7 +60,7 @@ def _preset_files(engine: str) -> list[Path]:
 
 def _shipped_bin_names() -> set[str]:
     # Windows-first: поиск файла в bin/ не зависит от регистра.
-    return {path.name.lower() for path in PRIVATE_BIN_DIR.iterdir() if path.is_file()}
+    return {path.name.lower() for path in SHIPPED_BIN_DIR.iterdir() if path.is_file()}
 
 
 def _bin_file_name(value: str) -> str | None:
@@ -71,13 +71,13 @@ def _bin_file_name(value: str) -> str | None:
     return re.split(r"[/\\]", text)[-1]
 
 
-class _PrivateDistTestCase(unittest.TestCase):
+class _ShippedFilesTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        if not PRIVATE_LUA_DIR.is_dir() or not PRIVATE_BIN_DIR.is_dir():
-            self.skipTest(f"Нет private-репозитория: {PRIVATE_DIST}")
+        if not SHIPPED_LUA_DIR.is_dir() or not SHIPPED_BIN_DIR.is_dir():
+            self.fail(f"В поставке нет lua/ или bin/: {SHIPPED_ROOT}")
 
 
-class LuaDesyncFunctionsTest(_PrivateDistTestCase):
+class LuaDesyncFunctionsTest(_ShippedFilesTestCase):
     def _available_functions(self) -> set[str]:
         # Каждый preset winws2 подключает полный обязательный блок --lua-init,
         # поэтому доступны функции всех его файлов.
@@ -122,7 +122,7 @@ class LuaDesyncFunctionsTest(_PrivateDistTestCase):
                 self.assertEqual(sorted(used - available), [], f"winws2/{path.name}: нет lua-функций")
 
 
-class Winws2BlobNamesTest(_PrivateDistTestCase):
+class Winws2BlobNamesTest(_ShippedFilesTestCase):
     def _available_blobs(self) -> set[str]:
         names = set(NFQWS2_BUILTIN_BLOBS)
         for init_path in WINWS2_LUA_INIT_PATHS:
@@ -155,7 +155,7 @@ class Winws2BlobNamesTest(_PrivateDistTestCase):
                 self.assertEqual(sorted(used - available), [], f"winws2/{path.name}: нет blob-ов")
 
 
-class ShippedBinFilesTest(_PrivateDistTestCase):
+class ShippedBinFilesTest(_ShippedFilesTestCase):
     def test_winws1_catalog_bin_files_exist(self) -> None:
         shipped = _shipped_bin_names()
         checked = 0
@@ -175,16 +175,9 @@ class ShippedBinFilesTest(_PrivateDistTestCase):
                 self.assertEqual(missing, [], f"winws1/{path.name}: нет файлов в dist/bin")
         self.assertGreater(checked, 0)
 
-    def test_winws1_builtin_preset_bin_files_exist(self) -> None:
-        shipped = _shipped_bin_names()
-        checked = 0
-        for path in _preset_files("winws1"):
-            used = set(_WINWS1_PRESET_BIN_RE.findall(_read(path)))
-            checked += len(used)
-            with self.subTest(preset=path.name):
-                missing = sorted(name for name in used if name.lower() not in shipped)
-                self.assertEqual(missing, [], f"winws1/{path.name}: нет файлов в dist/bin")
-        self.assertGreater(checked, 0)
+    def test_retired_engine_has_no_shipped_builtin_presets(self) -> None:
+        # Режим winws1 убран: его готовые пресеты не должны попадать в поставку.
+        self.assertEqual(_preset_files("winws1"), [])
 
     def test_winws2_builtin_preset_blob_files_exist(self) -> None:
         shipped = _shipped_bin_names()

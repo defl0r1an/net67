@@ -11,8 +11,6 @@ from __future__ import annotations
 import os
 import sys
 
-import pytest
-
 SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
@@ -54,13 +52,9 @@ def test_empty_value_survives():
 
 def test_probe_preset_has_no_spaces_in_option_values():
     """Сам пробный пресет диагностики: ни одной строки с пробелом в пути."""
-    scanner = pytest.importorskip("blockcheck.strategy_scanner")
+    from unittest.mock import patch
+    from blockcheck.strategy_search.probe_profile import build_probe_profile, PROTOCOL_UDP_GAMES
 
-    class _Fake:
-        _work_dir = BASE
-
-    value = scanner.StrategyScanner._preset_path_value(
-        _Fake(), os.path.join(BASE, "blockcheck_probe_hosts.txt")
-    )
-
-    assert value == "blockcheck_probe_hosts.txt"
+    with patch("profile.winws2_preset_source.preset_path_value", side_effect=lambda path: preset_path_value(path, BASE)):
+        profile = build_probe_profile(PROTOCOL_UDP_GAMES, strategy_args="--lua-desync=pass", games_ipset_paths=[os.path.join(BASE, "blockcheck_probe_hosts.txt")])
+    assert "--ipset=blockcheck_probe_hosts.txt" in profile.filter_lines

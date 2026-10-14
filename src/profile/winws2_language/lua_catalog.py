@@ -263,6 +263,12 @@ LUA_ARGS: dict[str, LuaArgSpec] = {
         _a("src_range", "Диапазон адресов источника: rfc1918 или cgn.", "enum", ("rfc1918", "cgn")),
         _a("rst_interval", "Интервал RST в секундах (по умолчанию 2).", "int"),
         _a("rst_bytes", "Размер RST-пакетов.", "int"),
+        _a("ttl_min", "Первый TTL в серии фейков (по умолчанию 3).", "int"),
+        _a("ttl_max", "Последний TTL в серии фейков (по умолчанию 12).", "int"),
+        _a("before", "Число фейков перед данными (по умолчанию 3).", "int"),
+        _a("after", "Число фейков после данных (по умолчанию 3).", "int"),
+        _a("ovl_size", "Размер перекрытия белым фейком (по умолчанию 200 байт).", "int"),
+        _a("white_blob", "Имя белого фейка, если blob не указан.", "blob"),
         _a("fin_mode", "Чередовать RST и FIN.", "flag"),
     )
 }
@@ -516,6 +522,14 @@ LUA_FUNCTIONS: tuple[LuaFunctionSpec, ...] = (
     _f("fakemultidisorder", ("fakemultidisorder.lua",), "multidisorder с фейком перед каждой частью.",
        ("fake_blob", "pos", "pattern", "seqovl", "seqovl_pattern", "blob", "optional", "tls_mod",
         "tcp_ts_up", "nodrop", "fake_count", "fake_all", "unsafe_fake"), _CUSTOM),
+    _f("flood_white", ("zapret-16kb.lua",), "Серия фейков с белым SNI перед настоящими данными.",
+       ("blob", "white_blob", "tls_mod", "count", "pos"), _ALL),
+    _f("ttl_ladder", ("zapret-16kb.lua",), "Фейки с последовательно увеличивающимся TTL.",
+       ("blob", "white_blob", "tls_mod", "ttl_min", "ttl_max", "pos"), _ALL),
+    _f("white_sandwich", ("zapret-16kb.lua",), "Белые фейки до и после настоящих данных.",
+       ("blob", "white_blob", "tls_mod", "before", "after", "pos"), _ALL),
+    _f("seqovl_white", ("zapret-16kb.lua",), "Перекрытие TCP sequence белым фейком.",
+       ("blob", "white_blob", "tls_mod", "ovl_size", "pos"), _ALL),
     # ---------------------------------------------------- zapret-rst-flood.lua
     _f("rst_flood", ("zapret-rst-flood.lua",), "Поток ложных RST с подменой источника.",
        ("no_pollution", "flood_count", "src_range", "no_rst", "rst_interval", "rst_bytes", "fin_mode",

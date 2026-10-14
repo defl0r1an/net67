@@ -3,10 +3,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import shutil
 import ssl
 import struct
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,18 +16,9 @@ HOST_NAME = "kws2.test.local"
 
 
 def _make_cert(directory: Path) -> tuple[Path, Path]:
-    cert = directory / "cert.pem"
-    key = directory / "key.pem"
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-            "-keyout", str(key), "-out", str(cert), "-days", "1",
-            "-subj", f"/CN={HOST_NAME}", "-addext", f"subjectAltName=DNS:{HOST_NAME}",
-        ],
-        check=True,
-        capture_output=True,
-    )
-    return cert, key
+    from tls_test_certificate import make_certificate
+
+    return make_certificate(directory, HOST_NAME)
 
 
 def _accept(key: str) -> str:
@@ -60,7 +49,6 @@ async def _read_client_frame(reader: asyncio.StreamReader) -> tuple[int, bytes]:
     return opcode, bytes(b ^ mask[i % 4] for i, b in enumerate(data))
 
 
-@unittest.skipUnless(shutil.which("openssl"), "нужен openssl для тестового сертификата")
 class WebSocketTransportTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:

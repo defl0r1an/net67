@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import shutil
 import socket
 import ssl
 import struct
-import subprocess
 import tempfile
 import threading
 import unittest
@@ -313,18 +311,9 @@ TLS_NAME = "dns.test"
 
 
 def _make_certificate(folder: Path) -> tuple[Path, Path]:
-    """Самоподписанный сертификат на имя ``dns.test`` и на адрес 127.0.0.1."""
-    cert, key = folder / "cert.pem", folder / "key.pem"
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-            "-keyout", str(key), "-out", str(cert), "-subj", f"/CN={TLS_NAME}",
-            "-addext", f"subjectAltName=DNS:{TLS_NAME},IP:127.0.0.1",
-        ],
-        check=True,
-        capture_output=True,
-    )
-    return cert, key
+    from tls_test_certificate import make_certificate
+
+    return make_certificate(folder, TLS_NAME)
 
 
 class _TlsServer:
@@ -377,7 +366,6 @@ def _read_http_request(tls) -> tuple[str, bytes]:
     return head.decode("ascii"), body
 
 
-@unittest.skipUnless(shutil.which("openssl"), "нужен openssl для учебного сертификата")
 class EncryptedTransportTests(unittest.TestCase):
     """DoT и DoH на учебном сервере: настоящее шифрование, но без выхода в сеть."""
 

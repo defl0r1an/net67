@@ -3,8 +3,8 @@
 Список сверяется с массивом ``long_options[]`` из исходников zapret2
 (``nfq2/nfqws.c``) вместе с блоками ``#ifdef``: опции под ``__CYGWIN__``
 есть только в Windows-сборке, под ``__linux__``/``BSD`` — только в других.
-Если исходников zapret2 рядом нет (например, в CI), сверка пропускается,
-а остальные проверки справочника выполняются всегда.
+Эталон таблицы хранится рядом с тестами и привязан к хешу поставляемого
+движка, поэтому сверка выполняется и без отдельного дерева его кода.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
-ZAPRET2_NFQWS = Path("/home/codex-pve/zapret2/nfq2/nfqws.c")
+ZAPRET2_NFQWS = Path(__file__).parent / "fixtures" / "nfqws_b78b52c4_options.c"
 
 _OPTION_RE = re.compile(r'\{"([a-z0-9-]+)",\s*(no_argument|required_argument|optional_argument)')
 _ARG_KIND = {"no_argument": "none", "required_argument": "required", "optional_argument": "optional"}
@@ -87,7 +87,14 @@ class Winws2OptionCatalogTests(unittest.TestCase):
         self.assertIsNone(spec)
         self.assertEqual(candidates, ())
 
-    @unittest.skipUnless(ZAPRET2_NFQWS.is_file(), "нет исходников zapret2")
+    def test_option_fixture_matches_the_shipped_engine(self) -> None:
+        import hashlib
+        import json
+
+        metadata = json.loads(ZAPRET2_NFQWS.with_name("nfqws_b78b52c4_engine.json").read_text(encoding="utf-8"))
+        engine = Path(__file__).resolve().parents[1] / "exe" / "winws2.exe"
+        self.assertEqual(hashlib.sha256(engine.read_bytes()).hexdigest(), metadata["sha256"], "После обновления движка обновите эталон опций по его коммиту")
+
     def test_catalog_matches_original_long_options(self) -> None:
         from profile.winws2_language.options import OPTIONS_BY_NAME
 

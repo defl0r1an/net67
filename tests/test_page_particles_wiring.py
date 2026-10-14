@@ -166,11 +166,14 @@ class RibbonSwitchTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(
-    __import__("ui.pages.base_page", fromlist=["BasePage"]).BasePage.PARTICLES_ENABLED,
-    "лента песчинок выключена, см. RibbonSwitchTests",
-)
 class LivePageTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+        from ui.pages.base_page import BasePage
+        # Проверяем реализацию доступного слоя, не включая его пользователям.
+        self.enterContext(patch.object(BasePage, "PARTICLES_ENABLED", True))
+        self.enterContext(patch("ui.animation_policy.are_live_animations_enabled", return_value=True))
+
     def _page(self):
         def stub(*args, **kwargs):
             class _Any:

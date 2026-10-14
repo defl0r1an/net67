@@ -94,8 +94,11 @@ Name: "startmenuicon"; Description: "Создать ярлык в меню «П�
 ; Один такой запуск, и установщик разослал бы двадцати менеджерам чужой
 ; settings.json поверх их собственного.
 Source: "{#SourceDir}\*"; DestDir: "{app}"; \
-  Excludes: "logs\*,tmp\*,settings\*,lists\user\*,presets\winws1\*,presets\winws2\*"; \
+  Excludes: "_internal,_internal\*,logs\*,tmp\*,settings\*,lists\user\*,presets\winws1\*,presets\winws2\*"; \
   Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Рабочая версия остаётся на месте до проверки полной распаковки.
+Source: "{#SourceDir}\_internal\*"; DestDir: "{app}\_internal.new"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Лежит рядом с приложением: деинсталлятор зовёт его до удаления файлов.
 Source: "clear_hosts.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
@@ -113,9 +116,15 @@ Name: "{app}\tmp";            Permissions: users-modify
 [InstallDelete]
 ; Мусор прошлой версии. Пользовательские папки в списке отсутствуют
 ; намеренно: пресеты, списки и настройки переживают обновление.
-Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\_internal.new"
 Type: filesandordirs; Name: "{app}\tmp"
 Type: files;          Name: "{app}\logs\*.log"
+
+[UninstallDelete]
+; После переименования распакованных файлов журнал Inno знает только .new.
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\_internal.new"
+Type: filesandordirs; Name: "{app}\_internal.old"
 
 [Icons]
 ; Ярлыки меню «Пуск» — по отметке на странице ярлыков. Отметка стоит по
@@ -250,10 +259,122 @@ begin
   end;
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+function RuntimeDirectoryContainsExe(const Directory: String): Boolean;
 begin
-  if CurStep = ssInstall then
-    StopRunningEngine();
+  Result := FileExists(AddBackslash(Directory) + '{#AppExeName}');
+end;
+
+function TryRenameRuntimeDirectory(const Source, Destination: String): Boolean;
+var Attempt: Integer;
+begin
+  Result := False;
+  for Attempt := 1 to 10 do
+  begin
+    if RenameFile(Source, Destination) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    Sleep(100);
+  end;
+end;
+
+function TryRemoveRuntimeDirectory(const Directory: String): Boolean;
+var Attempt: Integer;
+begin
+  Result := True;
+  if not DirExists(Directory) then Exit;
+  Result := False;
+  for Attempt := 1 to 10 do
+  begin
+    if DelTree(Directory, True, True, True) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    Sleep(100);
+  end;
+end;
+
+function CommitRuntimeSwap(var FailureReason: String): Boolean;
+var LiveDir, StagingDir, BackupDir: String; HadPrevious: Boolean;
+begin
+  Result := False;
+  LiveDir := ExpandConstant('{app}\_internal');
+  StagingDir := ExpandConstant('{app}\_internal.new');
+  BackupDir := ExpandConstant('{app}\_internal.old');
+  if not RuntimeDirectoryContainsExe(StagingDir) then
+  begin
+    FailureReason := 'Новая версия распакована не полностью.';
+    Exit;
+  end;
+  HadPrevious := DirExists(LiveDir);
+  { Старую резервную копию можно снять только при наличии рабочей версии. }
+  if HadPrevious then
+  begin
+    if DirExists(BackupDir) and not RuntimeDirectoryContainsExe(LiveDir) then
+    begin
+      FailureReason := 'Рабочая версия повреждена. Резервная копия сохранена.';
+      Exit;
+    end;
+    if not TryRemoveRuntimeDirectory(BackupDir) then
+    begin
+      FailureReason := 'Не удалось освободить папку резервной копии.';
+      Exit;
+    end;
+    if not TryRenameRuntimeDirectory(LiveDir, BackupDir) then
+    begin
+      FailureReason := 'Не удалось сохранить рабочую версию. Закройте net67.';
+      Exit;
+    end;
+  end;
+  if not TryRenameRuntimeDirectory(StagingDir, LiveDir) then
+  begin
+    if HadPrevious and not TryRenameRuntimeDirectory(BackupDir, LiveDir) then
+      FailureReason := 'Не удалось переключить версию. Рабочая копия сохранена в _internal.old.'
+    else
+      FailureReason := 'Не удалось переключить версию. Прежняя версия сохранена.';
+    Exit;
+  end;
+  if not RuntimeDirectoryContainsExe(LiveDir) then
+  begin
+    TryRemoveRuntimeDirectory(LiveDir);
+    if HadPrevious and not TryRenameRuntimeDirectory(BackupDir, LiveDir) then
+      FailureReason := 'Не удалось восстановить прежнюю версию. Она сохранена в _internal.old.'
+    else
+      FailureReason := 'Новая версия не прошла проверку. Прежняя версия восстановлена.';
+    Exit;
+  end;
+  Result := True;
+  { Неудачная уборка не отменяет успешное переключение; копия остаётся. }
+  if HadPrevious then TryRemoveRuntimeDirectory(BackupDir);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var LiveDir, BackupDir: String;
+begin
+  Result := '';
+  StopRunningEngine();
+  LiveDir := ExpandConstant('{app}\_internal');
+  BackupDir := ExpandConstant('{app}\_internal.old');
+  { Восстанавливаем прерванное переключение до удаления остатков .new. }
+  if not DirExists(LiveDir) and DirExists(BackupDir) then
+    if not TryRenameRuntimeDirectory(BackupDir, LiveDir) then
+      Result := 'Не удалось восстановить прежнюю версию из _internal.old.';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var FailureReason: String; RuntimeSwapSucceeded: Boolean;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    RuntimeSwapSucceeded := CommitRuntimeSwap(FailureReason);
+    if not RuntimeSwapSucceeded then
+    begin
+      { Исключение прерывает завершение и запуск непроверенной версии. }
+      RaiseException(FailureReason);
+    end;
+  end;
 end;
 
 { ---------------------------------------------------------------- }

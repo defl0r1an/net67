@@ -46,9 +46,10 @@ class CrashLogSessionHeaderTests(unittest.TestCase):
     def test_non_windows_falls_back_to_platform_name(self) -> None:
         from log import crash_handler
 
-        if hasattr(sys, "getwindowsversion"):
-            self.skipTest("проверка для систем без sys.getwindowsversion")
-        self.assertEqual(crash_handler._session_platform_line(), sys.platform)
+        # Подменяем саму платформу, чтобы ветка проверялась и на Windows.
+        fake_sys = SimpleNamespace(platform="linux")
+        with patch.object(crash_handler, "sys", fake_sys):
+            self.assertEqual(crash_handler._session_platform_line(), "linux")
 
 
 class _RecordingDarkdetectFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):

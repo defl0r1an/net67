@@ -10,7 +10,7 @@ from profile.strategy_catalog import load_strategy_catalogs
 from profile.strategy_visuals import _TECHNIQUES, describe_strategy_visual
 
 PUBLIC_ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_LUA_DIR = PUBLIC_ROOT.parent / "private_zapretgui" / "dist" / "lua"
+SHIPPED_LUA_DIR = PUBLIC_ROOT / "lua"
 # Стандартные функции --lua-desync из оригинального zapret2.
 STANDARD_LUA_FILES = ("zapret-lib.lua", "zapret-antidpi.lua")
 _DESYNC_FUNCTION_RE = re.compile(r"^function\s+([a-z0-9_]+)\(ctx,\s*desync\)", re.MULTILINE)
@@ -147,11 +147,10 @@ class ProfileStrategyVisualTests(unittest.TestCase):
         self.assertGreater(checked, 0)
 
     def test_every_standard_function_in_winws2_catalogs_has_technique(self) -> None:
-        if not PRIVATE_LUA_DIR.is_dir():
-            self.skipTest(f"Нет private-репозитория: {PRIVATE_LUA_DIR}")
+        self.assertTrue(SHIPPED_LUA_DIR.is_dir(), "В поставке нет lua/")
         standard: set[str] = set()
         for file_name in STANDARD_LUA_FILES:
-            text = (PRIVATE_LUA_DIR / file_name).read_text(encoding="utf-8", errors="replace")
+            text = (SHIPPED_LUA_DIR / file_name).read_text(encoding="utf-8", errors="replace")
             standard |= set(_DESYNC_FUNCTION_RE.findall(text))
         used = {
             name

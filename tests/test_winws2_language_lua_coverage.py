@@ -19,7 +19,7 @@ PROJECT_SRC = PUBLIC_ROOT / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
-LUA_DIR = PUBLIC_ROOT.parent / "private_zapretgui" / "dist" / "lua"
+LUA_DIR = PUBLIC_ROOT / "lua"
 
 _DESYNC_FUNCTION_RE = re.compile(r"^function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*ctx\s*,\s*desync\s*\)", re.M)
 _ANY_FUNCTION_RE = re.compile(r"^(?:local\s+)?function\s+", re.M)
@@ -61,7 +61,6 @@ class Winws2LuaCatalogTests(unittest.TestCase):
         for path in WINWS2_LUA_INIT_PATHS:
             self.assertIn(Path(path).name, KNOWN_LUA_FILES)
 
-    @unittest.skipUnless(LUA_DIR.is_dir(), "нет поставляемых lua-файлов")
     def test_catalog_covers_every_shipped_desync_function_and_argument(self) -> None:
         from profile.winws2_language.lua_catalog import LUA_FUNCTIONS_BY_NAME, function_arg_names
 
@@ -75,7 +74,6 @@ class Winws2LuaCatalogTests(unittest.TestCase):
                 missing = keys - set(function_arg_names(spec))
                 self.assertEqual(missing, set(), f"{name}: не описаны аргументы {sorted(missing)}")
 
-    @unittest.skipUnless(LUA_DIR.is_dir(), "нет поставляемых lua-файлов")
     def test_catalog_has_no_functions_missing_from_shipped_files(self) -> None:
         from profile.winws2_language.lua_catalog import LUA_FUNCTIONS
 

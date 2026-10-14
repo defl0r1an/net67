@@ -27,9 +27,9 @@ from fakes.user_fakes import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_ROOT = REPO_ROOT.parent / "private_zapretgui"
-PRIVATE_CATALOG = PRIVATE_ROOT / "resources" / "system" / "fakes_catalog.sqlite3"
-PRIVATE_BIN = PRIVATE_ROOT / "dist" / "bin"
+SHIPPED_ROOT = REPO_ROOT
+SHIPPED_CATALOG = SHIPPED_ROOT / "json" / "fakes_catalog.sqlite3"
+SHIPPED_BIN = SHIPPED_ROOT / "bin"
 
 
 # ------------------------------------------------------------------ helpers
@@ -115,16 +115,15 @@ def test_detect_never_raises_on_truncated_client_hello():
         assert sni in {None, "truncated.example.org"}
 
 
-@pytest.mark.skipif(not PRIVATE_CATALOG.is_file() or not PRIVATE_BIN.is_dir(), reason="нет private_zapretgui")
 def test_detect_matches_registry_for_shipped_tls_files():
     from fakes.catalog_repository import read_fakes_catalog
 
-    catalog = read_fakes_catalog(PRIVATE_CATALOG)
+    catalog = read_fakes_catalog(SHIPPED_CATALOG)
     checked = 0
     for entry in catalog.entries.values():
         if entry.source_kind != "file" or entry.kind != "tls":
             continue
-        data = (PRIVATE_BIN / entry.file_name).read_bytes()
+        data = (SHIPPED_BIN / entry.file_name).read_bytes()
         assert detect_fake_kind(data) == ("tls", entry.sni), entry.name
         checked += 1
     assert checked > 10

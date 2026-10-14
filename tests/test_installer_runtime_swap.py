@@ -14,8 +14,7 @@ import unittest
 
 
 PUBLIC_ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_ROOT = PUBLIC_ROOT.parent / "private_zapretgui"
-INNO_SCRIPT = PRIVATE_ROOT / "build_zapret" / "zapret_universal.iss"
+INNO_SCRIPT = PUBLIC_ROOT / "installer" / "net67.iss"
 
 
 def _read_script() -> str:
@@ -38,7 +37,6 @@ def _routine(iss: str, name: str) -> str:
     return ""
 
 
-@unittest.skipUnless(INNO_SCRIPT.is_file(), "нужен закрытый репозиторий со сборкой установщика")
 class InstallerRuntimeLayoutTests(unittest.TestCase):
     def setUp(self) -> None:
         self.iss = _read_script()
@@ -76,7 +74,6 @@ class InstallerRuntimeLayoutTests(unittest.TestCase):
             self.assertIn(expected, deleted_names)
 
 
-@unittest.skipUnless(INNO_SCRIPT.is_file(), "нужен закрытый репозиторий со сборкой установщика")
 class InstallerRuntimeSwapTests(unittest.TestCase):
     def setUp(self) -> None:
         self.iss = _read_script()
@@ -115,21 +112,18 @@ class InstallerRuntimeSwapTests(unittest.TestCase):
         self.assertIn("Sleep(", rename)
         self.assertIn("for Attempt := 1 to", remove)
 
-    def test_swap_runs_before_anything_else_after_installation(self) -> None:
+    def test_swap_runs_after_unpacking_before_run_actions(self) -> None:
         step_changed = _routine(self.iss, "CurStepChanged")
-        swap_call = step_changed.index("CommitRuntimeSwap(FailureReason)")
+        self.assertIn("CurStep = ssPostInstall", step_changed)
+        self.assertIn("CommitRuntimeSwap(FailureReason)", step_changed)
+        recovery = _routine(self.iss, "PrepareToInstall")
+        self.assertIn("not DirExists(LiveDir) and DirExists(BackupDir)", recovery)
+        self.assertIn("TryRenameRuntimeDirectory(BackupDir, LiveDir)", recovery)
 
-        for later in ("WriteInstallOwnerMarker", "RelocatePersistentBindingsIfNeeded",
-                      "CleanupPreviousInstallIfRequested"):
-            self.assertLess(swap_call, step_changed.index(later))
-
-    def test_failed_swap_stops_finalization_and_tells_the_user(self) -> None:
+    def test_failed_swap_stops_finalization(self) -> None:
         step_changed = _routine(self.iss, "CurStepChanged")
         failure_branch = step_changed[step_changed.index("if not RuntimeSwapSucceeded then"):]
-
-        self.assertIn("WarnRuntimeSwapFailed(FailureReason)", failure_branch)
-        self.assertIn("Exit;", failure_branch)
-        self.assertIn("MsgBox", _routine(self.iss, "WarnRuntimeSwapFailed"))
+        self.assertIn("RaiseException(FailureReason)", failure_branch)
 
 
 if __name__ == "__main__":

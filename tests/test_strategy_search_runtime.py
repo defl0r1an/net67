@@ -119,6 +119,14 @@ class UdpProbeTests(unittest.TestCase):
 
 
 class RealEnvironmentTests(unittest.TestCase):
+    def setUp(self):
+        from winws_runtime.runtime.scan_guard import mark_external_winws_scan_active
+
+        # Настоящий start_session ставит общий флаг; в этих тестах сессия
+        # подменена, поэтому её завершение тоже должно быть гарантировано.
+        mark_external_winws_scan_active(False)
+        self.addCleanup(mark_external_winws_scan_active, False)
+
     def make_env(self, shutdown=None):
         from blockcheck.strategy_search.environment import RealEnvironment
 
