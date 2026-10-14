@@ -19,6 +19,8 @@ from diagnostics.verdict import Level
 
 __all__ = ["VoiceReport", "VoiceServer", "check_voice", "summarize_voice"]
 
+GROUP_TELEGRAM = "telegram"
+
 # Коды ``SingleTestResult.error_code`` из ``blockcheck.stun_tester``.
 _ANSWERED_CODES = {"", "PARSE_ERR"}
 
@@ -29,6 +31,11 @@ class VoiceServer:
     host: str
     answered: bool
     text: str
+    # Проверка состоялась: сервер ответил или промолчал. False — до него не дошло
+    # дело (не узнали адрес, ошибка самой проверки): это не говорит ничего о UDP.
+    decided: bool = True
+    # Чьи это звонки (``STUN_TARGETS[...]["group"]``): "telegram" или "general".
+    group: str = "general"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,20 +57,24 @@ def _parse_target(value: str) -> tuple[str, int]:
         return raw, 3478
 
 
-def _describe(result) -> tuple[bool, str]:
+def _describe(result) -> tuple[bool, str, bool]:
+    """(ответил ли, пояснение, состоялась ли проверка)."""
     status = str(getattr(getattr(result, "status", None), "value", getattr(result, "status", "")) or "").lower()
     code = str(getattr(result, "error_code", "") or "")
     if status == "ok":
-        return True, "отвечает"
+        return True, "отвечает", True
     if code in _ANSWERED_CODES:
-        return True, "отвечает (ответ необычный, но UDP проходит)"
+        return True, "отвечает (ответ необычный, но UDP проходит)", True
     if code == "TIMEOUT":
-        return False, "не ответил — UDP до него не доходит"
+        return False, "не ответил — UDP до него не доходит", True
     if code == "DNS_ERR":
-        return False, "не удалось узнать адрес сервера"
+        return False, "не удалось узнать адрес сервера — проверить его не вышло", False
     if code == "RESET":
-        return False, "сервер отклонил запрос (порт закрыт)"
-    return False, str(getattr(result, "detail", "") or "ошибка проверки")
+        return False, "сервер отклонил запрос (порт закрыт)", True
+    if code == "UNREACHABLE":
+        # Нет маршрута (часто — нет IPv6 или сети вовсе): о закрытом UDP это ничего не говорит.
+        return False, "до адреса сервера нет дороги — проверить его не вышло", False
+    return False, str(getattr(result, "detail", "") or "ошибка проверки"), False
 
 
 def check_voice(submit: Callable[..., Future], wait: Callable[[Future], object]) -> tuple[VoiceServer, ...]:
@@ -74,15 +85,15 @@ def check_voice(submit: Callable[..., Future], wait: Callable[[Future], object])
     planned = []
     for target in STUN_TARGETS:
         host, port = _parse_target(target["value"])
-        planned.append((target["name"], host, submit(test_stun, host, port)))
+        planned.append((target["name"], host, target.get("group", "general"), submit(test_stun, host, port)))
 
     servers: list[VoiceServer] = []
-    for name, host, future in planned:
+    for name, host, group, future in planned:
         try:
-            answered, text = _describe(wait(future))
+            answered, text, decided = _describe(wait(future))
         except Exception as exc:  # отдельный сервер не должен ронять отчёт
-            answered, text = False, f"ошибка проверки ({exc})"
-        servers.append(VoiceServer(name=name, host=host, answered=answered, text=text))
+            answered, text, decided = False, f"ошибка проверки ({exc})", False
+        servers.append(VoiceServer(name=name, host=host, answered=answered, text=text, decided=decided, group=group))
     return tuple(servers)
 
 
@@ -91,8 +102,17 @@ def summarize_voice(servers: tuple[VoiceServer, ...]) -> VoiceReport:
     они, это блокировка звонков Telegram, а не «UDP вообще не проходит»."""
     if not servers:
         return VoiceReport(Level.UNKNOWN, "Голосовые серверы не проверялись", servers)
-    telegram = [item for item in servers if "telegram" in f"{item.name} {item.host}".lower()]
-    general = [item for item in servers if item not in telegram]
+    # Судим только по серверам, проверка которых состоялась: «не узнали адрес» — не «UDP закрыт».
+    decided = [item for item in servers if item.decided]
+    if not decided:
+        return VoiceReport(
+            Level.UNKNOWN,
+            "Голосовые серверы проверить не удалось: не получилось узнать их адреса",
+            servers,
+            ("Повторите проверку. Если повторяется — проверьте DNS в разделе «Настройка DNS».",),
+        )
+    telegram = [item for item in decided if item.group == GROUP_TELEGRAM]
+    general = [item for item in decided if item not in telegram]
     general_ok = any(item.answered for item in general) if general else True
     telegram_ok = any(item.answered for item in telegram) if telegram else True
     strategy_advice = (
@@ -101,16 +121,17 @@ def summarize_voice(servers: tuple[VoiceServer, ...]) -> VoiceReport:
     if not general_ok:
         return VoiceReport(
             Level.FAIL,
-            "Голосовые звонки могут не работать: UDP до голосовых серверов не проходит",
+            "Голосовые звонки могут не работать: проверочные серверы (STUN) не отвечают по UDP",
             servers,
             strategy_advice,
         )
     if not telegram_ok:
         return VoiceReport(
             Level.WARN,
-            "Звонки в Telegram могут не работать: его голосовые серверы не отвечают по UDP",
+            "Звонки в Telegram могут не работать: его проверочные серверы (STUN) не отвечают по UDP",
             servers,
             strategy_advice,
         )
     answered = sum(1 for item in servers if item.answered)
-    return VoiceReport(Level.OK, f"Голосовые звонки: UDP проходит (ответили {answered} из {len(servers)} серверов)", servers)
+    # Ответ на один запрос — это «UDP доходит», а не «звонок пройдёт»: приложения режут и по содержимому пакетов.
+    return VoiceReport(Level.OK, f"Проверочные серверы звонков отвечают по UDP ({answered} из {len(servers)})", servers)
