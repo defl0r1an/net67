@@ -146,7 +146,7 @@
 --hostlist=lists/google-backend.txt
 --out-range=-d8
 --payload=tls_client_hello
---lua-desync=multisplit:pos=1,host+2,sld+2,sld+5,sniext+1,sniext+2,endhost-2:seqovl=1
+--lua-desync=hostfakesplit_multi:hosts=google.com,vimeo.com:tcp_ts=-1000:tcp_md5:repeats=2
 
 --new
 
