@@ -96,6 +96,13 @@ def _is_fake_ip(ip: str) -> bool:
         return False
 
 
+# Чужой сертификат и по адресу из DNS, и по эталонному: подменяют не адрес, а сам HTTPS.
+_FOREIGN_CERT_EVERYWHERE = (
+    "чужой сертификат приходит и по адресу из DNS, и по настоящему адресу сайта — HTTPS подменяет "
+    "программа на компьютере (антивирус, прокси) или сеть, а DNS тут ни при чём"
+)
+
+
 def judge_dns(
     *,
     system_ips: tuple[str, ...],
@@ -106,14 +113,19 @@ def judge_dns(
     check_cert_problem: str = "",
     nxdomain_count: int = 0,
     attempts: int = 1,
+    control_kind: str = "",
 ) -> DnsJudgement:
     """Вердикт по одному домену.
 
     ``system_ips`` — ответ DNS-серверов системы (без кэша и hosts),
     ``reference_ips`` — эталон по DNS-over-HTTPS, ``check_kind`` — исход
     HTTPS-запроса к адресу из hosts или DNS системы (пусто, если запрос
-    не делался: адрес совпал с эталоном).
+    не делался: адрес совпал с эталоном). ``control_kind`` — исход того же запроса
+    к эталонному адресу; его делают, когда по адресу из DNS пришёл чужой
+    сертификат: чужой сертификат и там значит, что HTTPS подменяют на компьютере
+    или в сети (антивирус, прокси), а DNS тут ни при чём.
     """
+    foreign_everywhere = check_kind == KIND_CERT and control_kind == KIND_CERT
     if hosts_ips:
         note = f"адрес задан в файле hosts ({', '.join(hosts_ips)}), программы берут его оттуда, а не у DNS"
         if check_kind == KIND_CERT:
@@ -162,6 +174,8 @@ def judge_dns(
         # Кроме настоящего адреса DNS дал и другой. ``check_kind`` здесь —
         # проверка именно этого другого адреса: чужой сертификат на нём значит,
         # что часть ответов подменена.
+        if foreign_everywhere:
+            return DnsJudgement(DnsState.UNKNOWN, _FOREIGN_CERT_EVERYWHERE)
         if check_kind == KIND_CERT:
             problem = check_cert_problem or "сертификат не прошёл проверку"
             return DnsJudgement(
@@ -182,6 +196,15 @@ def judge_dns(
 
     if check_kind == KIND_CERT:
         problem = check_cert_problem or "сертификат не прошёл проверку"
+        if not reference_ips:
+            # Сравнить не с чем: чужой сертификат даёт и подмена DNS, и антивирус с проверкой HTTPS.
+            return DnsJudgement(
+                DnsState.UNKNOWN,
+                f"по адресу из DNS отвечает чужой сервер ({problem}), но эталон недоступен — "
+                "подмену DNS доказать нечем: так же выглядит антивирус или прокси, проверяющий HTTPS",
+            )
+        if foreign_everywhere:
+            return DnsJudgement(DnsState.UNKNOWN, _FOREIGN_CERT_EVERYWHERE)
         return DnsJudgement(DnsState.SPOOFED, f"по адресу из DNS отвечает чужой сервер: {problem}")
 
     return DnsJudgement(
