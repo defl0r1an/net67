@@ -28,6 +28,8 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from utils.net_failure import FAILURE_REFUSED, FAILURE_TIMEOUT, classify
+
 __all__ = [
     "KIND_CANCELLED",
     "KIND_CERT",
@@ -51,6 +53,10 @@ KIND_TIMEOUT = "timeout"
 KIND_CONNECT = "connect"
 KIND_CANCELLED = "cancelled"
 KIND_ERROR = "error"
+
+# Почему не соединились — вид сбоя из общего словаря ``utils.net_failure``.
+CONNECT_TIMEOUT = FAILURE_TIMEOUT
+CONNECT_REFUSED = FAILURE_REFUSED
 
 STAGE_CONNECT = "connect"
 STAGE_TLS = "tls"
@@ -88,6 +94,10 @@ class ProbeResult:
     elapsed_ms: float = 0.0
     detail: str = ""
     body: bytes = b""
+    # Почему не установилось соединение — вид сбоя ``utils.net_failure``: "timeout" —
+    # ответа нет вовсе, "refused" — адрес сам отказал, "unreachable" — до адреса нет
+    # дороги, "other" — прочая ошибка системы (например, запрет сетевого экрана).
+    connect_fail: str = ""
 
     @property
     def ok(self) -> bool:
@@ -287,10 +297,10 @@ def https_get(
         if status is not None:
             return _result(KIND_OK, body_cut=True)
         if stage == STAGE_CONNECT:
-            return _result(KIND_CONNECT, "сервер не отвечает на подключение")
+            return _result(KIND_CONNECT, "сервер не отвечает на подключение", connect_fail=CONNECT_TIMEOUT)
         return _result(KIND_TIMEOUT)
     except ConnectionRefusedError:
-        return _result(KIND_CONNECT, "подключение отклонено")
+        return _result(KIND_CONNECT, "подключение отклонено", connect_fail=CONNECT_REFUSED)
     except ssl.SSLError as error:
         if status is not None:
             return _result(KIND_OK, body_cut=True)
@@ -302,8 +312,12 @@ def https_get(
     except OSError as error:
         if status is not None:
             return _result(KIND_OK, body_cut=True)
+        # Коды Windows, которые Python не перевёл в свои классы исключений.
+        failure = classify(error)
         if stage == STAGE_CONNECT:
-            return _result(KIND_CONNECT, str(error))
+            return _result(KIND_CONNECT, str(error), connect_fail=failure)
+        if failure == FAILURE_TIMEOUT:
+            return _result(KIND_TIMEOUT)
         return _result(KIND_RESET, str(error))
     finally:
         for item in (wrapped, sock):
