@@ -240,7 +240,14 @@ def _simple_icon_svg(slug: str, *, color: str, icons: dict | None = None) -> str
 
 def _valid_hex_color(color: str) -> str:
     qcolor = QColor(str(color or ""))
-    return qcolor.name() if qcolor.isValid() else ""
+    if not qcolor.isValid():
+        return ""
+    # Прозрачность сохраняем: приглушённый значок приходит цветом вида
+    # #6EFFFFFF, и qcolor.name() делал из него сплошной белый — маска «67»
+    # у невыбранного профиля горела ярче соседних значков из шрифта.
+    if qcolor.alpha() < 255:
+        return qcolor.name(QColor.NameFormat.HexArgb)
+    return qcolor.name()
 
 
 def _initials_pixmap(initials: str, *, color: str, size: int) -> QPixmap:

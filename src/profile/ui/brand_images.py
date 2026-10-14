@@ -52,11 +52,12 @@ BRAND_IMAGE_SOURCES: dict[str, str] = {
     'wunderground': 'Google faviconV2 для https://www.wunderground.com/',
     'xerox': 'https://www.xerox.com/apple-touch-icon.png',
     'zerossl': 'https://zerossl.com/images/zerossl_icon.png',
+    'net67': 'src/ico/net67_1024.png — только цифры логотипа, без плитки',
 }
 
 # Все знаки одноцветные: из картинки берётся только прозрачность, цвет
 # даёт каталог (или цвет текста темы). См. profile/ui/profile_icon.py.
-BRAND_IMAGE_MASKS: frozenset[str] = frozenset({'aave', 'analogdevices', 'arkoselabs', 'arrow', 'bestbuy', 'bikecomponents', 'camelai', 'chaos', 'coreweave', 'cummins', 'dyson', 'fmhy', 'game8', 'genspark', 'guidedhacking', 'hume', 'kaleido', 'lego', 'mangalib', 'microchip', 'modivo', 'naukri', 'ntcparty', 'parsec', 'pumpfun', 'rutor', 'triage', 'truthsocial', 'wunderground', 'xerox', 'zerossl'})
+BRAND_IMAGE_MASKS: frozenset[str] = frozenset({'aave', 'analogdevices', 'arkoselabs', 'arrow', 'bestbuy', 'bikecomponents', 'camelai', 'chaos', 'coreweave', 'cummins', 'dyson', 'fmhy', 'game8', 'genspark', 'guidedhacking', 'hume', 'kaleido', 'lego', 'mangalib', 'microchip', 'modivo', 'net67', 'naukri', 'ntcparty', 'parsec', 'pumpfun', 'rutor', 'triage', 'truthsocial', 'wunderground', 'xerox', 'zerossl'})
 
 # имя -> маска 64×64 в PNG, base64
 BRAND_IMAGE_PNGS: dict[str, str] = {
@@ -674,6 +675,36 @@ BRAND_IMAGE_PNGS: dict[str, str] = {
         "nXIKh4N1JnEVt2dqdsorVSs9izoDhrAqKAo+4JrYWznSoM4UHuKm2FC1lq7fBIsB2QKyKQZkC8imGJAtIJtiQLaAbLregLqj"
         "8B1MYF0gzzvcU3PW/gPjqo8e+wMxE3gqduSel/la0WGx2eAoLjWoP4C9OBCI+YoLquamUCgU/oofRh+VfhPHitMAAAAASUVO"
         "RK5CYII="
+    ),
+    # Знак профиля «net67 DNS» в редакторе hosts: цифры логотипа на тех же
+    # местах, что в значке программы, но без чёрной плитки под ними.
+    'net67': (
+        "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"
+        "Zmz+AAAAAElFTkSuQmCC"
     ),
 }
 

@@ -51,6 +51,7 @@ from hosts.profile_probe import (
     ServiceProbe,
 )
 from hosts.ui.profile_icons import profile_icon
+from profile.ui.profile_icon import profile_icon_pixmap
 from hosts.ui.services_tiles import HostsChoice, HostsTile, HostsTilesGrid, split_service_title
 from ui.accessibility import set_control_accessibility, set_state_text
 from ui.animation_policy import are_live_animations_enabled
@@ -884,7 +885,7 @@ class HostsPage(BasePage):
                 action = Action(label, parent=menu)
             else:
                 icon_name, color = profile_icon(profile_id, position - 1)
-                action = Action(QIcon(get_cached_qta_pixmap(icon_name, color=color, size=16)), label, parent=menu)
+                action = Action(QIcon(profile_icon_pixmap(icon_name, color=color, size=16)), label, parent=menu)
             action.triggered.connect(lambda _checked=False, value=profile_id: self._set_all_dns(value))
             menu.addAction(action)
         old_menu = self.dns_all_button.menu()

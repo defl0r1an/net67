@@ -789,7 +789,7 @@ class HostsTilesGrid(QWidget):
             width = icon + 5 + metrics.horizontalAdvance(choice.label)
             if left + width > area.right():
                 break
-            pixmap = get_cached_qta_pixmap(choice.icon_name, color=choice.color, size=icon)
+            pixmap = profile_icon_pixmap(choice.icon_name, color=choice.color, size=icon)
             painter.drawPixmap(left, area.top() + (area.height() - icon) // 2, pixmap)
             text_rect = QRect(left + icon + 5, area.top(), width - icon - 5 + 2, area.height())
             painter.drawText(text_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), choice.label)
@@ -1006,7 +1006,7 @@ class HostsTilesGrid(QWidget):
             highlighted = selected or slot == hover_slot or angle != 0.0
             icon_color = choice.color if highlighted else muted.name(QColor.NameFormat.HexArgb)
             size = self._CHOICE_ICON
-            pixmap = get_cached_qta_pixmap(choice.icon_name, color=icon_color, size=size)
+            pixmap = profile_icon_pixmap(choice.icon_name, color=icon_color, size=size)
             # Не открывшийся профиль тускнеет, пока на него не навели.
             dimmed = choice.mark == "bad" and not highlighted
             if dimmed:
