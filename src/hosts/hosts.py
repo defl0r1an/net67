@@ -903,7 +903,13 @@ class HostsManager:
         нет, выбор не сохранён или адреса и так совпадают.
         """
         content = safe_read_hosts_file()
-        block_rows = _iter_managed_hosts_block_rows((content or "").splitlines(keepends=True))
+        # Строки человека каталог не порождает. С ними в сравнении блок с
+        # актуальными адресами считался «устаревшим» на каждом запуске, и в
+        # журнал шло «адреса заменены по свежему каталогу», хотя менять было
+        # нечего.
+        lines = (content or "").splitlines(keepends=True)
+        manual_rows = set(_managed_manual_rows(lines))
+        block_rows = [row for row in _iter_managed_hosts_block_rows(lines) if row not in manual_rows]
         allow_ipv6 = is_ipv6_available() if block_rows else True
 
         def _desired_rows() -> list[tuple[str, str]]:
