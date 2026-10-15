@@ -225,11 +225,20 @@ def build_blockcheck_page_kwargs(
         # Гео-сайты каталога hosts: подбор предупреждает, что им нужна не стратегия.
         return blockcheck_feature.create_geo_sites_worker(request_id, parent=parent)
 
+    def _ensure_bypass_for_strategy() -> str:
+        if runtime_feature.is_strategy_scan_active():
+            return "scan_running"
+        running = bool(runtime_feature.is_running())
+        accepted = runtime_feature.restart() if running else runtime_feature.start()
+        return ("restarting" if running else "started") if accepted is not False else "failed"
+
     return {
         "blockcheck_feature": blockcheck_feature,
         "dns_feature": dns_feature,
         "create_strategy_scan_worker": _create_strategy_scan_worker,
         "create_geo_sites_worker": _create_geo_sites_worker,
+        "ensure_bypass_for_strategy": _ensure_bypass_for_strategy,
+        "bypass_is_running": runtime_feature.is_running,
         # «Поймали провайдера на подмене DNS» → кнопка ведёт на «Настройка DNS».
         "open_dns_settings": (lambda: show_page(PageName.NETWORK)) if show_page is not None else None,
     }

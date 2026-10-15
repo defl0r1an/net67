@@ -78,8 +78,14 @@ class StrategyScanPage(BasePage):
         create_geo_sites_worker=None,
         open_hosts_editor=None,
         open_dns_settings=None,
+        ensure_bypass_for_strategy=None,
+        bypass_is_running=None,
     ):
         self._embedded = bool(embedded)
+        self._ensure_bypass_for_strategy = ensure_bypass_for_strategy
+        self._bypass_is_running = bypass_is_running
+        self._apply_check_runtime = OneShotWorkerRuntime()
+        self._apply_check_host = ""
         super().__init__(
             title=tr_catalog("page.blockcheck_public.title", default="Подбор стратегии"),
             subtitle=tr_catalog("page.blockcheck_public.subtitle",
@@ -1179,6 +1185,7 @@ class StrategyScanPage(BasePage):
         )
 
     def _request_strategy_apply(self, result) -> None:
+        self._cancel_apply_check()
         # Цель и протокол — из самого результата: пока применение ждёт очереди,
         # на странице мог начаться подбор для другого сайта.
         payload = {
@@ -1188,6 +1195,9 @@ class StrategyScanPage(BasePage):
             "scan_protocol": str(getattr(result, "scan_protocol", "") or ""),
             "apply_lines": tuple(getattr(result, "apply_lines", ()) or ()),
         }
+        probe_host = str((getattr(result, "raw_data", None) or {}).get("probe_host") or "")
+        if probe_host:
+            payload["probe_host"] = probe_host
         state = self._strategy_apply_state_obj()
         if state.is_busy():
             state.pending = dict(payload)
@@ -1196,6 +1206,12 @@ class StrategyScanPage(BasePage):
         self._start_strategy_apply_worker(payload)
 
     def _start_strategy_apply_worker(self, payload: dict) -> None:
+        self._cancel_apply_check()
+        if str(payload.get("scan_protocol") or "") == PROTOCOL_TCP_HTTPS:
+            self._apply_check_host = str(payload.get("probe_host") or payload.get("scan_target") or "")
+        else:
+            self._apply_check_host = ""
+
         def worker_factory(request_id: int):
             return self.create_strategy_apply_worker(
                 request_id,
@@ -1232,6 +1248,50 @@ class StrategyScanPage(BasePage):
             tr_catalog(message_plan.title_key, default=message_plan.title_default),
             message_plan.body_text,
         )
+
+        ensure = self.__dict__.get("_ensure_bypass_for_strategy")
+        if ensure is not None:
+            try:
+                state = ensure()
+                if state in ("started", "restarting"):
+                    self._start_apply_check(restarting=state == "restarting")
+                elif state == "failed":
+                    InfoBarHelper.warning(self.window(), "Стратегия сохранена", "Не удалось запустить обход. Включите его и проверьте сайт.")
+            except Exception:
+                logger.exception("Не удалось запустить обход после применения стратегии")
+                InfoBarHelper.warning(self.window(), "Стратегия сохранена", "Не удалось запустить проверку. Включите обход и проверьте сайт.")
+
+    def _cancel_apply_check(self) -> None:
+        runtime = self.__dict__.get("_apply_check_runtime")
+        if runtime is not None:
+            runtime.stop(blocking=False)
+            runtime.cancel()
+
+    def _start_apply_check(self, *, restarting: bool) -> None:
+        host = self._apply_check_host
+        if not host or self._bypass_is_running is None or self._cleanup_in_progress:
+            return
+        from blockcheck.strategy_apply_check import StrategyApplyCheckWorker
+
+        self._cancel_apply_check()
+        self._apply_check_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: StrategyApplyCheckWorker(
+                request_id, host, is_running=self._bypass_is_running, restarting=restarting),
+            bind_worker=lambda worker: worker.completed.connect(self._on_apply_check_finished),
+        )
+        self._on_log(f"Проверяю {host} через ваш пресет после запуска обхода…")
+
+    def _on_apply_check_finished(self, request_id: int, host: str, code: str, text: str) -> None:
+        if not self._apply_check_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        from blockcheck.strategy_apply_check import apply_check_message
+
+        self._on_log(f"Проверка через пресет: {host} — {code}{f' ({text})' if text else ''}")
+        message = apply_check_message(host, code, text)
+        if message is not None:
+            kind, title, body = message
+            show = InfoBarHelper.warning if kind == "warning" else InfoBarHelper.success
+            show(self.window(), title, body)
 
     def _on_strategy_apply_failed(self, request_id: int, error: str) -> None:
         if not self._strategy_apply_runtime.is_current(
@@ -1523,6 +1583,7 @@ class StrategyScanPage(BasePage):
 
     def cleanup(self) -> None:
         self._cleanup_in_progress = True
+        self._cancel_apply_check()
         self._geo_sites_runtime.stop(
             blocking=False,
             warning_prefix="strategy scan geo sites worker",

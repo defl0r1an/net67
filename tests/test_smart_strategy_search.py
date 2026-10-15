@@ -84,7 +84,10 @@ class SmartStrategySearchTests(unittest.TestCase):
         # Кандидат 1: не работает, Кандидат 2: работает
         from blockcheck.strategy_search.engine import _StrategyRun, _Attempt
         run_fail = _StrategyRun(verdict=VERDICT_FAILED, attempts=[_Attempt(passed=False, reason="timeout", time_ms=0.0)])
-        run_success = _StrategyRun(verdict=VERDICT_WORKING, attempts=[_Attempt(passed=True, reason="ok", time_ms=32.0)])
+        run_success = _StrategyRun(
+            verdict=VERDICT_WORKING,
+            attempts=[_Attempt(passed=True, reason="ok", time_ms=32.0) for _ in range(CONFIRM_ATTEMPTS)],
+        )
 
         engine._test_strategy = Mock(side_effect=[run_fail, run_success])
 

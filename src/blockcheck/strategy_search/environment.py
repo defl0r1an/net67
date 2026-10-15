@@ -51,13 +51,13 @@ class RealEnvironment:
         log: Callable[[str], None] = lambda _message: None,
     ) -> None:
         from config.runtime_layout import APPLICATION_PATHS
-        from diagnostics.tls_probe import ProbeCancel
+        from utils.socket_cancel import SocketCancel
 
         self._shutdown_sync = shutdown_sync
         self._load_fakes_catalog = load_fakes_catalog
         self._log = log
         self._root = str(APPLICATION_PATHS.root)
-        self._cancel = ProbeCancel()
+        self._cancel = SocketCancel()
         self._fakes_catalog = None
         self._fakes_error = ""
         self._fakes_loaded = False
@@ -71,14 +71,19 @@ class RealEnvironment:
     def load_candidates(self, scan_protocol: str) -> list[Candidate]:
         from config.runtime_layout import APPLICATION_PATHS
         from core.paths import AppPaths
-        from profile.strategy_catalog import load_strategy_catalogs
+        from profile.strategy_catalog import load_strategy_catalogs_with_signature
+        from profile.strategy_usage import load_builtin_strategy_usage
         from settings.mode import ENGINE_WINWS2
 
         catalog_name = {PROTOCOL_STUN_VOICE: "voice", PROTOCOL_UDP_GAMES: "udp"}.get(scan_protocol, "tcp")
         app_paths = AppPaths(user_root=APPLICATION_PATHS.root, local_root=APPLICATION_PATHS.root)
-        entries = load_strategy_catalogs(app_paths, ENGINE_WINWS2).get(catalog_name, {})
+        signature, catalogs = load_strategy_catalogs_with_signature(app_paths, ENGINE_WINWS2)
+        entries = catalogs.get(catalog_name, {})
+        usage = load_builtin_strategy_usage(app_paths, ENGINE_WINWS2, catalogs, signature)
         return [
-            Candidate(strategy_id, getattr(entry, "name", "") or strategy_id, getattr(entry, "args", "") or "")
+            Candidate(strategy_id, getattr(entry, "name", "") or strategy_id,
+                      getattr(entry, "args", "") or "", label=getattr(entry, "label", "") or "",
+                      usage=usage.services.get((catalog_name, strategy_id), 0))
             for strategy_id, entry in entries.items()
         ]
 
@@ -192,7 +197,8 @@ class RealEnvironment:
         from winws_runtime.public import at_config_launch_arg
 
         launch_arg = at_config_launch_arg(path, self._root)
-        return _ManagedSession(WinwsSession([exe, launch_arg], cwd=self._root), self)
+        return _ManagedSession(WinwsSession([exe, launch_arg], cwd=self._root,
+                                          cancelled=lambda: self._cancel.cancelled, sleep=self.sleep), self)
 
     def _on_stop_failed(self) -> None:
         self._log("  winws2 не завершился — принудительная остановка")
@@ -213,7 +219,7 @@ class RealEnvironment:
         # разрядка между запусками, чтобы фильтры антивируса успели отработать.
         pause = self.strategy_pause_seconds()
         if pause > 0:
-            time.sleep(pause)
+            self._cancel.sleep(pause)
         self._needs_readiness_check = True
 
     def _ensure_windivert_ready(self) -> None:
@@ -256,6 +262,9 @@ class RealEnvironment:
     def probe_https(self, host: str, addresses: Sequence[str]):
         return probes.probe_https_addresses(host, addresses, cancel=self._cancel)
 
+    def probe_volume(self, host: str, address: str, answered):
+        return probes.probe_volume(host, address, answered, cancel=self._cancel)
+
     def probe_udp(self, specs):
         return probes.probe_udp_pool(specs)
 
@@ -274,7 +283,7 @@ class RealEnvironment:
         return time.time()
 
     def sleep(self, seconds: float) -> None:
-        time.sleep(max(0.0, float(seconds)))
+        self._cancel.sleep(max(0.0, float(seconds)))
 
     def probe_hello(self, address: str, name: str | None) -> bool | None:
         """Начало шифрования к адресу с именем ``name``: True — прошло, False — оборвали, None — нет соединения."""

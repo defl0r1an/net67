@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import unittest
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from blockcheck.strategy_search import verdict as rules
 from blockcheck.strategy_search.engine import SearchRequest, StrategySearch
@@ -75,6 +75,8 @@ class FakeEnv:
     control: list | None = None  # последовательность ответов control_alive
     port80_open: bool = False
     control_default: bool = True
+    # Объём задаётся отдельно, чтобы короткий HTTP-ответ не подменял проверку передачи.
+    volume: object = None
 
     def __post_init__(self):
         self.running = None
@@ -87,7 +89,10 @@ class FakeEnv:
         self.post_cleaned = False
         self.recovered = 0
         self.history_saved = None
+        self.history_saves = []
         self.slept = 0.0
+        self.volume_calls = []
+        self.cancel_on_sleep = False
         self.clock = 0.0
         self.control = list(self.control or [])
 
@@ -100,6 +105,7 @@ class FakeEnv:
 
     def record_history(self, key, *, confirmed, failed):
         self.history_saved = (key, list(confirmed), list(failed))
+        self.history_saves.append(self.history_saved)
 
     def blob_lines(self, strategy_args):
         return []
@@ -143,6 +149,13 @@ class FakeEnv:
     def probe_https(self, host, addresses):
         outcome = self._answer()
         return [outcome for _address in addresses]
+
+    def probe_volume(self, host, address, answered):
+        self.volume_calls.append((self.running, address))
+        code = self.volume(self.running, address) if self.volume is not None else rules.VOLUME_OK
+        if code == rules.VOLUME_CUT:
+            return ProbeOutcome(rules.PROBE_BLOCKED, "соединение замирает после ~16 КБ (блокировка по объёму)", answered.time_ms, "reset", answered.body_size, rules.VOLUME_CUT)
+        return replace(answered, volume=code)
 
     def probe_udp(self, specs):
         return [(spec, self.network(self.running, spec)) for spec in specs]
@@ -345,9 +358,19 @@ class StrategyVerdictTests(unittest.TestCase):
         report, events = run(env)
 
         self.assertEqual(events.results[0].verdict, rules.VERDICT_CRASH)
-        # Сбой winws2 не записывается в «не сработала».
-        self.assertEqual(env.history_saved[2], [])
+        # Одинаковое падение второй раз подряд — дело в стратегии: третий запуск
+        # не нужен, а в следующий раз она пойдёт в конец очереди.
+        self.assertEqual(len(env.sessions), 1 + 2)  # pass + два запуска «broken»
+        self.assertEqual(env.history_saved[2], ["broken"])
         self.assertEqual(report.working_strategies, [])
+
+    def test_one_time_start_failure_is_retried_and_not_remembered(self) -> None:
+        env = FakeEnv(network=blocked_unless(), candidates=[cand("racy")])
+        env.start_fails["racy"] = 1
+        _report, events = run(env)
+
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_FAILED)
+        self.assertEqual(env.recovered, 1)
 
     def test_network_drop_rechecks_strategy_instead_of_failing_it(self) -> None:
         state = {"down": True}
@@ -492,6 +515,16 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(set(seen_hosts), {"rr1---sn-abc.googlevideo.com"})
         self.assertIn("--hostlist-domains=googlevideo.com", events.results[0].apply_lines)
 
+    def test_www_target_profile_covers_the_whole_site(self) -> None:
+        # Профиль на www.googlevideo.com не ловил ни одного видеосервера rr…googlevideo.com.
+        env = FakeEnv(network=blocked_unless("good"), candidates=[cand("good")])
+        _report, events = run(env, target="www.googlevideo.com", probe_host="rr1---sn-abc.googlevideo.com")
+
+        self.assertIn("--hostlist-domains=googlevideo.com", events.results[0].apply_lines)
+        env = FakeEnv(network=blocked_unless("good"), candidates=[cand("good")])
+        _report, events = run(env, target="https://www.youtube.com/")
+        self.assertIn("--hostlist-domains=youtube.com", events.results[0].apply_lines)
+
 
 class UdpTests(unittest.TestCase):
     def test_games_success_ignores_probes_open_without_bypass(self) -> None:
@@ -545,3 +578,297 @@ class UdpTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HonestCheckTests(unittest.TestCase):
+    """Честная проверка: объём, одна прощённая тишина, контроль двумя пробами."""
+
+    def test_volume_block_is_found_without_bypass_and_judges_every_strategy(self) -> None:
+        # Короткая страница открывается всегда, но без «good» соединение замирает на объёме.
+        env = FakeEnv(
+            network=lambda running, n: OK,
+            candidates=[cand("bad"), cand("good")],
+            volume=lambda running, address: rules.VOLUME_OK if running == "good" else rules.VOLUME_CUT,
+        )
+        report, events = run(env)
+
+        self.assertFalse(report.baseline_accessible)
+        self.assertEqual(events.questions, [])
+        by_id = {result.strategy_id: result for result in events.results}
+        self.assertEqual(by_id["bad"].verdict, rules.VERDICT_FAILED)
+        self.assertIn("объёму", by_id["bad"].error)
+        self.assertEqual(by_id["good"].verdict, rules.VERDICT_WORKING)
+        # Каждая попытка «good» и проверка без обхода после неё судятся объёмом.
+        self.assertGreaterEqual(sum(1 for running, _a in env.volume_calls if running == "good"), 3)
+        self.assertIn(None, [running for running, _a in env.volume_calls[-2:]])
+
+    def test_short_answer_under_strategy_is_topped_up_once(self) -> None:
+        env = FakeEnv(
+            network=blocked_unless("cut", "good"),
+            candidates=[cand("cut"), cand("good")],
+            volume=lambda running, address: rules.VOLUME_CUT if running == "cut" else rules.VOLUME_OK,
+        )
+        _report, events = run(env)
+
+        by_id = {result.strategy_id: result for result in events.results}
+        self.assertEqual(by_id["cut"].verdict, rules.VERDICT_FAILED)
+        self.assertEqual(by_id["good"].verdict, rules.VERDICT_WORKING)
+        self.assertEqual(by_id["good"].raw_data["volume"], rules.VOLUME_OK)
+        # Для обычной блокировки объём добирается один раз, а не в каждой попытке
+        # (адреса 1.1.1.10 и 1.1.1.11 — одна подсеть, проверяется один).
+        self.assertEqual(sum(1 for running, _a in env.volume_calls if running == "good"), 1)
+
+    def test_unknown_volume_is_named_in_the_log(self) -> None:
+        env = FakeEnv(
+            network=blocked_unless("good"),
+            candidates=[cand("good")],
+            volume=lambda running, address: rules.VOLUME_UNKNOWN,
+        )
+        _report, events = run(env)
+
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_WORKING)
+        self.assertTrue(any("объём не проверен" in line for line in events.logs))
+
+    def test_one_silent_failure_after_success_is_forgiven(self) -> None:
+        def network(running, number):
+            if running == "good":
+                return TIMEOUT if number == 1 else OK
+            return RESET
+
+        env = FakeEnv(network=network, candidates=[cand("good")])
+        _report, events = run(env)
+
+        result = events.results[0]
+        self.assertEqual(result.verdict, rules.VERDICT_WORKING)
+        self.assertEqual((result.attempts_ok, result.attempts_total), (3, 4))
+
+    def test_explicit_failure_after_success_is_unstable(self) -> None:
+        def network(running, number):
+            if running == "flaky":
+                return RESET if number == 1 else OK
+            return RESET
+
+        env = FakeEnv(network=network, candidates=[cand("flaky")])
+        _report, events = run(env)
+
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_UNSTABLE)
+        self.assertEqual(env.calls["flaky"], 2)
+
+    def test_first_silent_failure_is_final_and_cheap(self) -> None:
+        env = FakeEnv(network=lambda running, n: TIMEOUT if running == "a" else RESET, candidates=[cand("a")])
+        _report, events = run(env)
+
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_FAILED)
+        self.assertEqual(env.calls["a"], 1)
+
+    def test_target_open_only_once_is_treated_as_blocked(self) -> None:
+        def network(running, number):
+            if running is None:
+                return OK if number == 0 else RESET
+            return OK if running == "good" else RESET
+
+        env = FakeEnv(network=network, candidates=[cand("good")])
+        report, events = run(env)
+
+        self.assertEqual(events.questions, [])
+        self.assertFalse(report.baseline_accessible)
+        self.assertTrue(any("через раз" in line for line in events.logs))
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_WORKING)
+
+    def test_pass_control_tries_twice(self) -> None:
+        def network(running, number):
+            if running == "pass":
+                return RESET if number == 0 else OK
+            return RESET
+
+        env = FakeEnv(network=network, candidates=[cand("a")])
+        report, events = run(env, FakeEvents(answer=False))
+
+        self.assertEqual(env.calls["pass"], 2)
+        self.assertEqual(len(events.questions), 1)
+        self.assertTrue(report.baseline_accessible)
+
+    def test_recheck_without_bypass_tries_twice(self) -> None:
+        state = {"after": 0}
+
+        def network(running, number):
+            if running == "lucky":
+                state["after"] = 0
+                return OK
+            if running is None and number > 0:
+                state["after"] += 1
+                return OK if state["after"] == 2 else RESET
+            return RESET
+
+        env = FakeEnv(network=network, candidates=[cand("lucky")])
+        _report, events = run(env)
+
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_NOT_COUNTED)
+
+    def test_network_lost_during_confirmation_rechecks_strategy(self) -> None:
+        state = {"down": True}
+
+        def network(running, number):
+            if running == "good" and number == 1 and state["down"]:
+                state["down"] = False
+                return TIMEOUT
+            return OK if running == "good" else RESET
+
+        # 1) перед подбором сеть есть; 2) после тишины на подтверждении — нет; 3) вернулась.
+        env = FakeEnv(network=network, candidates=[cand("good")], control=[True, False, True])
+        _report, events = run(env)
+
+        self.assertEqual(len(events.results), 1)
+        self.assertEqual(events.results[0].verdict, rules.VERDICT_WORKING)
+        self.assertGreater(env.slept, 0)
+
+    def test_full_flow_strategy_gets_incoming_packets(self) -> None:
+        env = FakeEnv(network=blocked_unless("rec"), candidates=[cand("rec", "tlsrec")])
+        _report, events = run(env)
+
+        result = events.results[0]
+        self.assertTrue(result.success)
+        self.assertIn("--wf-tcp-in=443", result.apply_lines)
+        self.assertIn("--in-range=a", result.apply_lines)
+        self.assertNotIn("--out-range=-d8", result.apply_lines)
+
+
+class FamilyOrderTests(unittest.TestCase):
+    def test_external_sibling_replaces_waiting_tail_without_expanding_budget(self) -> None:
+        from collections import deque
+
+        winner, other, sibling = cand("winner"), cand("other", "multisplit"), cand("sibling")
+        engine = StrategySearch(SearchRequest(target="example.org", mode="quick"), env=FakeEnv(), events=FakeEvents())
+        queue = deque([(other, False)])
+        seen = {"winner", "other"}
+        batch = engine._bring_siblings(winner, [winner, other, sibling], [winner, other], queue, seen)
+        self.assertEqual([item.strategy_id for item, _rechecked in queue], ["sibling"])
+        self.assertEqual(len(batch), 2)
+        self.assertEqual(seen, {"winner", "sibling"})
+
+    """Семейства приёмов, соседи удачной стратегии, история после смены фильтра."""
+
+    def test_modifiers_do_not_make_their_own_family(self) -> None:
+        from blockcheck.strategy_search.ordering import family_key
+
+        plain = Candidate("a", "a", "--lua-desync=multidisorder:pos=1")
+        boosted = Candidate("b", "b", "--lua-desync=send:repeats=2\n--lua-desync=syndata\n--lua-desync=multidisorder:pos=1")
+        md5 = Candidate("c", "c", "--lua-desync=fake:blob=tls1:tcp_md5:tcp_ts=-1000")
+        self.assertEqual(family_key(plain), family_key(boosted))
+        self.assertEqual(family_key(md5), ("fake", "md5"))
+
+    def test_big_family_gets_more_early_places_than_a_single(self) -> None:
+        from blockcheck.strategy_search.ordering import interleave_by_technique, main_technique
+
+        fakes = [Candidate(f"f{i}", "f", f"--lua-desync=fake:n={i}") for i in range(16)]
+        singles = [Candidate(f"s{i}", "s", f"--lua-desync=custom{i}") for i in range(8)]
+        first = interleave_by_technique([*singles, *fakes])[:8]
+        self.assertGreaterEqual(sum(1 for item in first if main_technique(item) == "fake"), 2)
+        self.assertLess(sum(1 for item in first if main_technique(item) == "fake"), 8)
+
+    def test_siblings_of_unstable_strategy_are_checked_next(self) -> None:
+        def network(running, number):
+            if running == "fam1":
+                return OK if number == 0 else RESET  # открылась один раз — нестабильно
+            return OK if running == "fam3" else RESET
+
+        candidates = [
+            cand("fam1", "fake"),
+            cand("other1", "multisplit"),
+            cand("other2", "hostfakesplit"),
+            cand("other3", "multidisorder"),
+            cand("fam2", "fake"),
+            cand("fam3", "fake"),
+        ]
+        env = FakeEnv(network=network, candidates=candidates)
+        _report, events = run(env)
+
+        order = [args_id(args) for args in events.started_args if args_id(args) not in (None, "pass")]
+        self.assertEqual(order[:3], ["fam1", "fam2", "fam3"])
+        self.assertEqual(len(order), len(set(order)))
+        self.assertTrue(any("соседи" in line for line in events.logs))
+
+    def test_confirmed_then_failed_strategy_leaves_the_head(self) -> None:
+        from blockcheck.strategy_search.ordering import order_candidates
+
+        items = [cand("a"), cand("b", "multisplit"), cand("c", "hostfakesplit")]
+        ordered = order_candidates(items, confirmed_ids=["c", "b"], failed_at={"c": 999_000.0}, now=1_000_000.0)
+        self.assertEqual([item.strategy_id for item in ordered][0], "b")
+        self.assertEqual([item.strategy_id for item in ordered][-1], "c")
+
+    def test_record_results_drops_failed_from_confirmed(self) -> None:
+        from unittest import mock
+
+        from blockcheck.strategy_search import history
+
+        store = {"strategy_history": {"k": {"confirmed": ["a", "b"], "failed": {}}}}
+        with mock.patch("settings.store.update_blockcheck_settings", side_effect=lambda mutate: mutate(store)):
+            history.record_results("k", confirmed=["c"], failed=["a"], now=5.0)
+        entry = store["strategy_history"]["k"]
+        self.assertEqual(entry["confirmed"], ["c", "b"])
+        self.assertEqual(entry["failed"], {"a": 5.0})
+
+    def test_family_search_keeps_quick_limit_without_continuation(self) -> None:
+        env = FakeEnv(network=blocked_unless(), candidates=[cand(f"x{i}") for i in range(35)])
+        report, _events = run(env)
+
+        self.assertEqual(report.total_tested, 30)
+
+
+class HistoryProgressTests(unittest.TestCase):
+    def test_failed_strategy_stays_unconfirmed_after_json_reload(self) -> None:
+        import json
+        from blockcheck.strategy_search import history
+        from settings import store
+
+        history.record_results("site", confirmed=["a", "b"], failed=[], now=1.0)
+        history.record_results("site", confirmed=["c"], failed=["a"], now=2.0)
+        saved = json.loads(store.get_settings_path().read_text(encoding="utf-8-sig"))
+        self.assertEqual(saved["blockcheck"]["strategy_history"]["site"]["confirmed"], ["c", "b"])
+        store.close_settings_database()
+        restored = history.load_target_history("site")
+        self.assertEqual(restored.confirmed, ["c", "b"])
+        self.assertEqual(restored.failed, {"a": 2.0})
+
+    def test_failed_incremental_save_keeps_results_for_final_retry(self) -> None:
+        from unittest.mock import Mock
+
+        env = FakeEnv()
+        env.record_history = Mock(side_effect=[OSError("временная ошибка записи"), None])
+        engine = StrategySearch(SearchRequest(target="example.org", mode="quick"), env=env, events=FakeEvents())
+        confirmed, failed = ["a"], ["b"]
+        engine._save_history("site", confirmed, failed)
+        self.assertEqual((confirmed, failed), (["a"], ["b"]))
+        engine._save_history("site", confirmed, failed)
+        self.assertEqual((confirmed, failed), ([], []))
+
+    def test_history_is_saved_along_the_way(self) -> None:
+        env = FakeEnv(network=blocked_unless(), candidates=[cand(f"x{i}") for i in range(25)])
+        run(env)
+
+        self.assertEqual([len(saved[2]) for saved in env.history_saves], [10, 10, 5])
+
+
+class StopDuringStartTests(unittest.TestCase):
+    def test_stop_while_winws2_starts_is_not_a_crash(self) -> None:
+        events = FakeEvents()
+        env = FakeEnv(network=blocked_unless(), candidates=[cand("a"), cand("b")])
+        original = env.start_session
+
+        def start_session(config_text):
+            session = original(config_text)
+            if session.strategy == "a":
+                def start():
+                    events.cancel_after_results = 0  # «Стоп» нажали, пока winws2 запускался
+                    return SessionStart(False, output_tail="остановлено")
+
+                session.start = start
+            return session
+
+        env.start_session = start_session
+        report, _events = run(env, events)
+
+        self.assertTrue(report.cancelled)
+        self.assertEqual(events.results, [])
+        self.assertEqual(env.recovered, 0)
+        self.assertEqual(env.history_saves, [])

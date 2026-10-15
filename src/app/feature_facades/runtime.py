@@ -68,6 +68,11 @@ class RuntimeFeature:
     def is_available(self) -> bool:
         return self.objects.is_available()
 
+    def is_strategy_scan_active(self) -> bool:
+        from winws_runtime.runtime.scan_guard import is_external_winws_scan_active
+
+        return bool(is_external_winws_scan_active())
+
     def is_running(self) -> bool:
         return self.objects.is_running()
 

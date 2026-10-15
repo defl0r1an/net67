@@ -6,15 +6,19 @@
    и чистка WinDivert, чтобы ничего постороннего не мешало замерам.
 2. Интернет жив? Если не открывается ни один обычный сайт, подбор бессмыслен.
 3. Проверка «до подбора» (как в blockcheck2): цель проверяется без обхода.
-   - закрыта так, как закрывает DPI, — подбираем на этих же адресах;
-   - открыта — спрашиваем пользователя, есть ли смысл продолжать;
+   - закрыта так, как закрывает DPI, — подбираем на этих же адресах
+     (два IPv4 из разных подсетей и один IPv6);
+   - ответила, но коротко — набираем объём по одному соединению: замерла
+     на 16–20 КБ — это обрыв по объёму, и каждую стратегию судим объёмом;
+   - открыта — проверяем ещё раз и спрашиваем пользователя, есть ли смысл;
    - закрыта раньше шифрования (сервер не принимает подключение) —
      стратегии обхода DPI это не чинят, останавливаемся с объяснением.
-4. Контроль: запуск winws2 с пустой стратегией ``pass``. Если цель
-   открывается уже от него — любая стратегия «сработает», и замер ненадёжен.
-5. Каждая стратегия: запуск winws2 → одна проверка. Прошла — ещё две на
-   свежих соединениях (итог 3/3), затем цель проверяется снова без обхода:
-   если открылась и так, успех стратегии не засчитывается.
+4. Контроль: запуск winws2 с пустой стратегией ``pass`` (две пробы). Если
+   цель открывается уже от него — любая стратегия «сработает», замер ненадёжен.
+5. Каждая стратегия: запуск winws2 → одна проверка (отбор). Короткий ответ
+   добирается объёмом. Прошла — подтверждение на свежих соединениях до трёх
+   успехов, одна тишина прощается (``verdict.attempts_done``). Затем цель
+   дважды проверяется без обхода: открылась и так — успех не засчитывается.
 6. Провал похож на пропавшую сеть (таймаут) — проверяем обычные сайты. Сеть
    пропала — ждём и перепроверяем стратегию, а не пишем её в провалы.
 7. Конец: чистка WinDivert, история подбора в настройки.
@@ -33,7 +37,7 @@ from typing import Protocol
 
 from blockcheck.scan_models import StrategyProbeResult, StrategyScanReport
 from blockcheck.strategy_search import verdict as rules
-from blockcheck.strategy_search.ordering import Candidate, batch_for_mode, order_candidates
+from blockcheck.strategy_search.ordering import Candidate, batch_for_mode, family_siblings, order_candidates
 from blockcheck.strategy_search.probe_profile import (
     PROTOCOL_STUN_VOICE,
     PROTOCOL_TCP_HTTPS,
@@ -48,12 +52,22 @@ logger = logging.getLogger(__name__)
 
 PASS_STRATEGY_ARGS = "--lua-desync=pass"
 # Сколько раз перезапускать стратегию, если winws2 упал (гонка драйвера).
+# Падение с тем же выводом второй раз подряд — не гонка, а сама стратегия.
 CRASH_RETRIES = 2
+# Сколько соседей открывшей цель стратегии проверить сразу следом.
+SIBLINGS_AFTER_SUCCESS = 3
+# История пишется по ходу, каждые столько итогов: упадёт программа посреди
+# долгого подбора — проверенное не пропадёт.
+HISTORY_FLUSH_EVERY = 10
 # Сколько ждать возвращения интернета, прежде чем остановить подбор.
 NETWORK_WAIT_SECONDS = 30.0
 NETWORK_POLL_SECONDS = 3.0
 # Сколько адресов цели проверять «до подбора».
 BASELINE_MAX_ADDRESSES = 4
+# Сколько раз пробовать цель под пустым winws2 и после успеха без обхода.
+# Одной пробы мало: фильтр, который пропускает «через раз», выдал бы любую
+# стратегию за рабочую.
+CONTROL_PROBES = 2
 
 # Вспомогательные игровые серверы: их ответ тоже показывает, что UDP игр
 # проходит. Для голоса проверяется только цель пользователя.
@@ -141,6 +155,7 @@ class SearchEnvironment(Protocol):
     def control_alive(self) -> bool: ...
     def resolve(self, host: str, port: int, *, udp: bool) -> tuple[list[str], str]: ...
     def probe_https(self, host: str, addresses: Sequence[str]) -> list[ProbeOutcome]: ...
+    def probe_volume(self, host: str, address: str, answered: ProbeOutcome) -> ProbeOutcome: ...
     def probe_udp(self, specs: Sequence[UdpProbeSpec]) -> list[tuple[UdpProbeSpec, ProbeOutcome]]: ...
     def tcp_port_open(self, address: str, port: int) -> bool: ...
     def cancel_probes(self) -> None: ...
@@ -161,6 +176,9 @@ class _Target:
     games_ports: tuple[int, ...] = ()
     # Цель открывалась без обхода, а пользователь решил проверять всё равно.
     forced: bool = False
+    # Без обхода цель отвечает, но соединение замирает на объёме: каждая
+    # проверка обязана набрать объём, иначе «откроется» любая стратегия.
+    volume_block: bool = False
 
 
 @dataclass
@@ -169,6 +187,14 @@ class _Attempt:
     reason: str = ""
     time_ms: float = 0.0
     network_suspect: bool = False
+    # Провал без явного следа DPI (``verdict.attempt_silent``).
+    silent: bool = False
+    # Итог проверки объёма в этой попытке (``verdict.VOLUME_*``) или "".
+    volume: str = ""
+
+    @property
+    def mark(self) -> rules.AttemptMark:
+        return rules.AttemptMark(self.passed, self.silent)
 
 
 @dataclass
@@ -176,6 +202,18 @@ class _StrategyRun:
     verdict: str
     attempts: list[_Attempt] = field(default_factory=list)
     reason: str = ""
+    # Во время проверки пропал интернет: стратегию надо перепроверить.
+    network_lost: bool = False
+    # winws2 дважды подряд упал одинаково: дело в стратегии, а не в драйвере.
+    repeatable_crash: bool = False
+
+    @property
+    def volume(self) -> str:
+        """Как стратегию проверили на объём: ok, unknown или "" (не проверяли)."""
+        codes = {attempt.volume for attempt in self.attempts if attempt.volume}
+        if rules.VOLUME_OK in codes:
+            return rules.VOLUME_OK
+        return rules.VOLUME_UNKNOWN if codes else ""
 
 
 class StrategySearch:
@@ -267,6 +305,9 @@ class StrategySearch:
                     return self._finish(report, working, failed, started, cancelled=self.cancelled)
 
             queue: deque[tuple[Candidate, bool]] = deque((candidate, False) for candidate in batch)
+            seen = {candidate.strategy_id for candidate in batch}
+            # Соседи могут менять порядок, но не расширять выбранный бюджет.
+            ordered = list(batch) if self._request.mode == "smart" else self._ordered_candidates
             index = 0
             while queue and not self.cancelled:
                 candidate, rechecked = queue.popleft()
@@ -276,14 +317,13 @@ class StrategySearch:
                 run = self._test_strategy(candidate)
                 if self.cancelled and run.verdict == rules.VERDICT_CANCELLED:
                     break
-                if run.verdict == rules.VERDICT_FAILED and run.attempts and run.attempts[-1].network_suspect:
-                    if not self._env.control_alive():
-                        self._events.log("  Похоже, пропал интернет — жду и перепроверю эту стратегию")
-                        if not self._wait_for_network():
-                            raise ScanFatal("Во время подбора пропал интернет. Подбор остановлен.", STOP_NETWORK_LOST)
-                        if not rechecked:
-                            queue.appendleft((candidate, True))
-                            continue
+                if run.network_lost:
+                    self._events.log("  Похоже, пропал интернет — жду и перепроверю эту стратегию")
+                    if not self._wait_for_network():
+                        raise ScanFatal("Во время подбора пропал интернет. Подбор остановлен.", STOP_NETWORK_LOST)
+                    if not rechecked:
+                        queue.appendleft((candidate, True))
+                        continue
                 result = self._make_result(candidate, run)
                 self._events.strategy_result(result)
                 self._log_result(index, len(batch), candidate, run)
@@ -300,8 +340,12 @@ class StrategySearch:
                         break
                 else:
                     failed.append(result)
-                    if run.verdict == rules.VERDICT_FAILED:
+                    if run.verdict == rules.VERDICT_FAILED or run.repeatable_crash:
                         failed_ids.append(candidate.strategy_id)
+                if run.verdict in (rules.VERDICT_WORKING, rules.VERDICT_UNSTABLE) and not self._target.forced:
+                    batch = self._bring_siblings(candidate, ordered, batch, queue, seen)
+                if len(confirmed_ids) + len(failed_ids) >= HISTORY_FLUSH_EVERY:
+                    self._save_history(key, confirmed_ids, failed_ids)
                 index += 1
                 pause = self._env.strategy_pause_seconds()
                 if pause > 0 and queue:
@@ -321,13 +365,46 @@ class StrategySearch:
                 self._env.post_cleanup()
             except Exception:
                 logger.exception("strategy search post-cleanup failed")
-            try:
-                # Если цель открывалась без обхода, «работают» все стратегии —
-                # такой подбор ничего не говорит о них и в историю не идёт.
-                if not self._target.forced:
-                    self._env.record_history(key, confirmed=confirmed_ids, failed=failed_ids)
-            except Exception:
-                logger.exception("strategy search history save failed")
+            self._save_history(key, confirmed_ids, failed_ids)
+
+    def _save_history(self, key: str, confirmed_ids: list[str], failed_ids: list[str]) -> None:
+        """Дописать накопленное в историю и начать копить заново."""
+        # Если цель открывалась без обхода, «работают» все стратегии —
+        # такой подбор ничего не говорит о них и в историю не идёт.
+        if self._target.forced or not (confirmed_ids or failed_ids):
+            return
+        try:
+            self._env.record_history(key, confirmed=list(confirmed_ids), failed=list(failed_ids))
+        except Exception:
+            logger.exception("strategy search history save failed")
+            # Не теряем накопленное при временной ошибке записи: конец прогона повторит её.
+            return
+        confirmed_ids.clear()
+        failed_ids.clear()
+
+    def _bring_siblings(self, winner, ordered, batch, queue, seen) -> list[Candidate]:
+        """Соседей открывшей цель стратегии — в начало очереди."""
+        if not queue:
+            return batch
+        waiting = {item.strategy_id for item, _rechecked in queue}
+        tested = seen - waiting
+        siblings = [
+            item
+            for item in family_siblings(ordered, winner, limit=len(ordered))
+            if item.strategy_id not in tested
+        ][:SIBLINGS_AFTER_SUCCESS]
+        if not siblings:
+            return batch
+        ids = {item.strategy_id for item in siblings}
+        rest = [entry for entry in queue if entry[0].strategy_id not in ids]
+        queue.clear()
+        # Внешний сосед заменяет последний ещё не проверенный вариант,
+        # а не добавляет лишний запуск сверх выбранного пользователем лимита.
+        queue.extend([*((item, False) for item in siblings), *rest][:len(waiting)])
+        seen.clear()
+        seen.update(tested | {item.strategy_id for item, _rechecked in queue})
+        self._events.log(f"  Дальше — соседи этой стратегии ({len(siblings)}): тот же приём с другими параметрами")
+        return [item for item in batch if item.strategy_id in tested] + [item for item, _rechecked in queue]
 
     def _finish(self, report, working, failed, started, *, cancelled: bool) -> StrategyScanReport:
         report.working_strategies = list(working)
@@ -366,6 +443,7 @@ class StrategySearch:
         )
         if not ordered:
             raise ScanFatal("Каталог стратегий пуст: переустановите программу.", STOP_OTHER)
+        self._ordered_candidates = ordered
         return batch_for_mode(ordered, self._request.mode), len(ordered)
 
     # --- Проверка «до подбора» ----------------------------------------------------
@@ -401,6 +479,8 @@ class StrategySearch:
         if decision.state == rules.BASELINE_NOT_DPI:
             raise ScanFatal(self._not_dpi_reason(host, addresses, decision.reason), STOP_ADDRESS_BLOCK)
         if decision.state == rules.BASELINE_OPEN:
+            decision = self._recheck_open_baseline(host, addresses, outcomes, decision)
+        if decision.state == rules.BASELINE_OPEN:
             report.baseline_accessible = True
             self._stage(STEP_BASELINE, "skipped", "Открывается и без обхода")
             if not self._ask_continue(
@@ -410,8 +490,55 @@ class StrategySearch:
             self._target = _Target(host=host, addresses=decision.probe_addresses, forced=True)
             return True
         self._events.log(f"  Без обхода закрыт ({decision.reason}). Проверяем на {', '.join(decision.probe_addresses)}")
-        self._target = _Target(host=host, addresses=decision.probe_addresses)
+        self._target = _Target(
+            host=host,
+            addresses=decision.probe_addresses,
+            volume_block=decision.volume_block,
+        )
         return True
+
+    def _recheck_open_baseline(
+        self,
+        host: str,
+        addresses: Sequence[str],
+        outcomes: Sequence[ProbeOutcome],
+        decision: rules.BaselineDecision,
+    ) -> rules.BaselineDecision:
+        """«Открыто без обхода» проверяется объёмом и второй пробой.
+
+        Короткая главная страница проходит и там, где фильтр режет соединение
+        после 16–20 КБ, — видео и файлы при этом не грузятся. А фильтр, который
+        пропускает через раз, мог случайно пропустить первую пробу.
+        """
+        checked = [
+            (address, self._env.probe_volume(host, address, outcome) if rules.needs_volume(outcome) else outcome)
+            for address, outcome in zip(addresses, outcomes)
+            if outcome.ok
+        ]
+        cut = [(address, outcome) for address, outcome in checked if outcome.volume == rules.VOLUME_CUT]
+        if cut:
+            for address, outcome in cut:
+                self._events.log(f"  без обхода {address}: {outcome.reason}")
+            return rules.BaselineDecision(
+                rules.BASELINE_BLOCKED,
+                tuple(rules.spread_addresses([address for address, _outcome in cut])),
+                cut[0][1].reason,
+                volume_block=True,
+            )
+        again = self._env.probe_https(host, list(decision.probe_addresses))
+        flaky = [
+            (address, outcome)
+            for address, outcome in zip(decision.probe_addresses, again)
+            if outcome.state == rules.PROBE_BLOCKED
+        ]
+        if flaky:
+            self._events.log(f"  без обхода {flaky[0][0]} со второго раза: {self._describe(flaky[0][1])} — открывается через раз")
+            return rules.BaselineDecision(
+                rules.BASELINE_BLOCKED,
+                tuple(rules.spread_addresses([address for address, _outcome in flaky])),
+                flaky[0][1].reason,
+            )
+        return decision
 
     def _not_dpi_reason(self, host: str, addresses: Sequence[str], reason: str) -> str:
         """Объяснение, почему стратегии не помогут, с проверкой порта 80."""
@@ -490,7 +617,7 @@ class StrategySearch:
             return False
         if run.verdict == rules.VERDICT_CRASH:
             raise ScanFatal(f"winws2 не запускается даже с пустой стратегией: {run.reason}", STOP_WINWS)
-        if run.attempts and run.attempts[0].passed:
+        if any(attempt.passed for attempt in run.attempts):
             report.baseline_accessible = True
             self._stage(STEP_CONTROL, "failed", "Открывается даже от пустого запуска winws2")
             if not self._ask_continue(
@@ -510,23 +637,40 @@ class StrategySearch:
         games_paths: list[str] = []
         if self._protocol == PROTOCOL_UDP_GAMES:
             games_paths = self._env.games_ipset_paths(self._request.udp_games_scope)
+        from blockcheck.strategy_scan_targeting import profile_domain
+
         return build_probe_profile(
             self._protocol,
             strategy_args=strategy_args,
-            match_domain=self._request.target,
+            match_domain=profile_domain(self._request.target) if self._protocol == PROTOCOL_TCP_HTTPS else self._request.target,
             games_ipset_paths=games_paths,
             games_addresses=self._target.games_addresses,
             games_ports=self._target.games_ports,
         )
 
-    def _probe_once(self) -> _Attempt:
+    def _probe_once(self, *, volume: bool = False) -> _Attempt:
+        """Одна попытка. ``volume`` — короткие ответы добрать объёмом по соединению."""
         if self._protocol == PROTOCOL_TCP_HTTPS:
-            outcomes = self._env.probe_https(self._target.host, self._target.addresses)
+            host = self._target.host
+            outcomes = self._env.probe_https(host, self._target.addresses)
+            if volume and rules.attempt_passed(outcomes):
+                outcomes = [
+                    self._env.probe_volume(host, address, outcome) if rules.needs_volume(outcome) else outcome
+                    for address, outcome in zip(self._target.addresses, outcomes)
+                ]
+            passed = rules.attempt_passed(outcomes)
+            volumes = {outcome.volume for outcome in outcomes if outcome.volume}
             return _Attempt(
-                rules.attempt_passed(outcomes),
+                passed,
                 rules.attempt_reason(outcomes),
                 rules.attempt_time_ms(outcomes),
                 rules.attempt_needs_network_check(outcomes),
+                silent=not passed and rules.attempt_silent(outcomes),
+                volume=(
+                    rules.VOLUME_CUT if rules.VOLUME_CUT in volumes
+                    else rules.VOLUME_UNKNOWN if rules.VOLUME_UNKNOWN in volumes
+                    else rules.VOLUME_OK if volumes else ""
+                ),
             )
         results = self._env.probe_udp(self._target.udp_specs)
         outcomes = [outcome for _spec, outcome in results]
@@ -542,34 +686,50 @@ class StrategySearch:
         )
 
     def _test_strategy(self, candidate: Candidate, *, confirm: bool = True) -> _StrategyRun:
+        """Проверка одной стратегии. ``confirm=False`` — контрольный запуск: до
+        ``CONTROL_PROBES`` проб, до первой открывшей цель."""
         profile = self._profile(candidate.args)
         config_text = build_probe_config_text(profile, self._env.blob_lines(candidate.args))
         crash_reason = ""
+        previous_crash = ""
         for crash_try in range(1 + CRASH_RETRIES):
             if self.cancelled:
                 return _StrategyRun(rules.VERDICT_CANCELLED)
             session = self._env.start_session(config_text)
             start = session.start()
+            if self.cancelled:
+                session.stop()
+                return _StrategyRun(rules.VERDICT_CANCELLED)
             if not getattr(start, "ok", False):
                 crash_reason = self._crash_text(start)
                 self._events.log(f"  winws2 не запустился: {crash_reason}")
                 session.stop()
+                if crash_reason and crash_reason == previous_crash:
+                    # Второй раз то же самое: перезапуски не помогут, стратегию запомним.
+                    return _StrategyRun(rules.VERDICT_CRASH, [], crash_reason, repeatable_crash=True)
+                previous_crash = crash_reason
                 self._env.recover_after_crash()
                 continue
             attempts: list[_Attempt] = []
             crashed = False
+            network_lost = False
             try:
-                total = rules.CONFIRM_ATTEMPTS if confirm else 1
-                for _number in range(total):
-                    if self.cancelled:
+                while not self.cancelled:
+                    if confirm and rules.attempts_done([attempt.mark for attempt in attempts]):
                         break
-                    attempt = self._probe_once()
+                    if not confirm and (len(attempts) >= CONTROL_PROBES or any(a.passed for a in attempts)):
+                        break
+                    # Объём добирается один раз — при первой удачной попытке; если
+                    # фильтр режет по объёму, то в каждой.
+                    volume = self._target.volume_block or not any(attempt.volume for attempt in attempts)
+                    attempt = self._probe_once(volume=volume)
                     if not session.alive():
                         crashed = True
                         crash_reason = session.output_tail(3) or "процесс завершился во время проверки"
                         break
                     attempts.append(attempt)
-                    if not attempt.passed:
+                    if confirm and not attempt.passed and attempt.network_suspect and not self._env.control_alive():
+                        network_lost = True
                         break
             finally:
                 session.stop()
@@ -579,16 +739,20 @@ class StrategySearch:
                 self._events.log(f"  winws2 упал во время проверки, перезапуск ({crash_try + 1})")
                 self._env.recover_after_crash()
                 continue
-            verdict = rules.final_verdict([attempt.passed for attempt in attempts])
-            if confirm and verdict == rules.VERDICT_WORKING and not self._target.forced:
-                recheck = self._probe_once()
-                if recheck.passed:
-                    return _StrategyRun(
-                        rules.VERDICT_NOT_COUNTED,
-                        attempts,
-                        "без обхода цель тоже открылась — сеть нестабильна, успех не засчитан",
-                    )
+            verdict = rules.final_verdict([attempt.mark for attempt in attempts])
             reason = next((attempt.reason for attempt in attempts if not attempt.passed), "")
+            if network_lost:
+                return _StrategyRun(rules.VERDICT_FAILED, attempts, reason, network_lost=True)
+            if confirm and verdict == rules.VERDICT_WORKING and not self._target.forced:
+                for _number in range(CONTROL_PROBES):
+                    if self.cancelled:
+                        return _StrategyRun(rules.VERDICT_CANCELLED, attempts)
+                    if self._probe_once(volume=self._target.volume_block).passed:
+                        return _StrategyRun(
+                            rules.VERDICT_NOT_COUNTED,
+                            attempts,
+                            "без обхода цель тоже открылась — сеть нестабильна, успех не засчитан",
+                        )
             return _StrategyRun(verdict, attempts, reason)
         return _StrategyRun(rules.VERDICT_CRASH, [], crash_reason or "winws2 падает при запуске")
 
@@ -625,16 +789,23 @@ class StrategySearch:
             scan_protocol=self._protocol,
             verdict=run.verdict,
             attempts_ok=len(passed),
-            attempts_total=rules.CONFIRM_ATTEMPTS if run.attempts else 0,
+            attempts_total=len(run.attempts),
             apply_lines=tuple(self._profile(candidate.args).apply_lines()) if success else (),
-            raw_data={"forced": self._target.forced},
+            raw_data={
+                "forced": self._target.forced,
+                "volume": run.volume,
+                # Какой хост открывали: у googlevideo.com это видеосервер rr…, а не сама цель.
+                "probe_host": self._target.host,
+            },
         )
 
     def _log_result(self, index: int, total: int, candidate: Candidate, run: _StrategyRun) -> None:
         passed = sum(1 for attempt in run.attempts if attempt.passed)
         head = f"[{index + 1}/{total}] {candidate.name}: {self._verdict_text(run.verdict)}"
         if run.verdict in (rules.VERDICT_WORKING, rules.VERDICT_UNSTABLE, rules.VERDICT_NOT_COUNTED):
-            head += f" {passed}/{rules.CONFIRM_ATTEMPTS}"
+            head += f" {passed}/{len(run.attempts)}"
+        if run.verdict == rules.VERDICT_WORKING and run.volume == rules.VOLUME_UNKNOWN:
+            head += " (объём не проверен: сайт отвечает коротко)"
         if run.reason:
             head += f" — {run.reason}"
         self._events.log(head)
