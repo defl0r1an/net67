@@ -534,8 +534,8 @@ def build_panel_outcome(report, result_rows: list[dict]) -> StrategyScanPanelOut
         best_time = float(best.get("time_ms") or 0)
         best_text = f"Лучшая — «{best.get('name', '')}»" + (f", ответ за {best_time:.0f} мс" if best_time > 0 else "")
         detail = (
-            "Каждая открыла сайт три раза подряд, а без обхода он закрыт. "
-            "Нажмите «Применить лучшую» — стратегия запишется в выбранный пресет."
+            "Получено по три успешных ответа; без обхода сайт закрыт. "
+            "«Применить лучшую» сохранит стратегию и проверит сайт через ваш пресет."
         )
         verb = "Нашлась" if count % 10 == 1 and count % 100 != 11 else "Нашлось"
         return StrategyScanPanelOutcome(
