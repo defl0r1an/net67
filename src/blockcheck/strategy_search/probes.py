@@ -1,4 +1,4 @@
-"""Сетевые проверки подбора: HTTPS, STUN и игровые UDP-запросы.
+"""Сетевые проверки подбора: HTTP, HTTPS, QUIC, STUN и игровые UDP-запросы.
 
 Адреса цели определяются один раз до подбора (``resolve_target_addresses``),
 и дальше каждая стратегия проверяется на тех же адресах. Так ответ DNS не
@@ -189,6 +189,126 @@ def probe_volume(host: str, address: str, answered: ProbeOutcome, *, cancel) -> 
 
     facts = volume_probe.collect(host, address, "/", cancel=cancel)
     return verdict.judge_volume(answered, volume_probe.judge(facts))
+
+
+HTTP_READ_LIMIT = 16 * 1024
+
+
+def probe_http(host: str, address: str, *, cancel=None, port: int = 80) -> ProbeOutcome:
+    """``GET http://host/`` по адресу: ответ, заглушка или обрыв (``verdict.judge_http``)."""
+    from utils.net_failure import FAILURE_CANCELLED, FAILURE_CLOSED
+    from utils.socket_cancel import SocketCancel, close_quietly
+
+    token = cancel or SocketCancel()
+    started = time.perf_counter()
+    deadline = started + HTTPS_TIMEOUT
+    sock = None
+    data = bytearray()
+    connected = False
+    failure = ""
+    try:
+        sock = socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET, socket.SOCK_STREAM)
+        if not token.track(sock):
+            return verdict.judge_http(host=host, status=None, failure=FAILURE_CANCELLED)
+        sock.settimeout(HTTPS_TIMEOUT)
+        sock.connect((address, port))
+        connected = True
+        wire_host = host.encode("idna").decode("ascii")
+        request = (
+            f"GET / HTTP/1.1\r\nHost: {wire_host}\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n"
+            "Accept: */*\r\nConnection: close\r\n\r\n"
+        )
+        sock.settimeout(max(0.001, deadline - time.perf_counter()))
+        sock.sendall(request.encode("ascii"))
+        while len(data) < HTTP_READ_LIMIT:
+            # Медленная выдача по байту не должна продлевать подбор бесконечно.
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                failure = FAILURE_TIMEOUT
+                break
+            sock.settimeout(min(HTTPS_READ_TIMEOUT, remaining))
+            chunk = sock.recv(HTTP_READ_LIMIT - len(data))
+            if not chunk:
+                head = bytes(data).partition(b"\r\n\r\n")[0].lower()
+                framed = b"\r\ncontent-length:" in head or b"\r\ntransfer-encoding:" in head
+                if framed and not http_body_complete(bytes(data)):
+                    failure = FAILURE_CLOSED
+                break
+            data.extend(chunk)
+            if http_body_complete(bytes(data)):
+                break
+    except OSError as error:
+        failure = classify(error)
+    finally:
+        if sock is not None:
+            token.release(sock)
+            close_quietly(sock)
+    elapsed = (time.perf_counter() - started) * 1000
+    if token.cancelled:
+        failure = FAILURE_CANCELLED
+    head, _sep, body = bytes(data).partition(b"\r\n\r\n")
+    lines = head.split(b"\r\n")
+    parts = lines[0].split(None, 2) if lines and lines[0] else []
+    status = int(parts[1]) if _sep and len(parts) >= 2 and parts[0].startswith(b"HTTP/") and parts[1].isdigit() else None
+    if status is None and connected and not failure:
+        failure = FAILURE_CLOSED
+    location = ""
+    for line in lines[1:]:
+        name, _colon, value = line.partition(b":")
+        if name.strip().lower() == b"location":
+            location = value.strip().decode("latin-1", errors="replace")
+    return verdict.judge_http(
+        host=host,
+        status=status,
+        location=location,
+        body=body,
+        failure=failure,
+        connected=connected,
+        elapsed_ms=elapsed,
+    )
+
+
+def probe_quic(host: str, address: str, *, cancel=None) -> ProbeOutcome:
+    """Первый пакет QUIC с именем сайта: ответил ли сервер (``diagnostics.quic_probe``)."""
+    from diagnostics.quic_probe import quic_hello
+    from utils.net_failure import FAILURE_CANCELLED
+
+    started = time.perf_counter()
+    answered_ms = quic_hello(address, host, cancel=cancel)
+    if answered_ms is not None:
+        return ProbeOutcome(verdict.PROBE_OK, "сервер ответил на QUIC", answered_ms)
+    if cancel is not None and cancel.cancelled:
+        return ProbeOutcome(verdict.PROBE_CANCELLED, "отменено", 0.0, FAILURE_CANCELLED)
+    return ProbeOutcome(
+        verdict.PROBE_BLOCKED,
+        "пакет QUIC с именем сайта пропадает",
+        (time.perf_counter() - started) * 1000,
+        FAILURE_TIMEOUT,
+    )
+
+
+def probe_quic_addresses(host: str, addresses: Sequence[str], *, cancel=None) -> list[ProbeOutcome]:
+    if len(addresses) <= 1:
+        return [probe_quic(host, address, cancel=cancel) for address in addresses]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(addresses)) as pool:
+        return list(pool.map(lambda address: probe_quic(host, address, cancel=cancel), addresses))
+
+
+def quic_blocked_by_name(host: str, address: str, *, cancel) -> bool:
+    """QUIC сайта режут по имени: с его именем молчит (дважды), с посторонним или без имени — отвечает."""
+    from diagnostics import quic_probe
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        facts = quic_probe.collect(host, address, submit=pool.submit, cancel=cancel)
+    found = quic_probe.judge(facts)
+    return found is not None and found.code == quic_probe.QUIC_BLOCKED_BY_NAME
+
+
+def probe_http_addresses(host: str, addresses: Sequence[str], *, cancel=None) -> list[ProbeOutcome]:
+    if len(addresses) <= 1:
+        return [probe_http(host, address, cancel=cancel) for address in addresses]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(addresses)) as pool:
+        return list(pool.map(lambda address: probe_http(host, address, cancel=cancel), addresses))
 
 
 def tcp_port_open(address: str, port: int, *, timeout: float = 3.0) -> bool:

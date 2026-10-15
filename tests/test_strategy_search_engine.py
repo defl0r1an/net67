@@ -77,6 +77,9 @@ class FakeEnv:
     control_default: bool = True
     # Объём задаётся отдельно, чтобы короткий HTTP-ответ не подменял проверку передачи.
     volume: object = None
+    http: object = None
+    quic_cut_by_name: bool = False
+    quic: object = None
 
     def __post_init__(self):
         self.running = None
@@ -150,6 +153,20 @@ class FakeEnv:
         outcome = self._answer()
         return [outcome for _address in addresses]
 
+    def probe_http(self, host, addresses):
+        outcome = (self.http or (lambda running, n: NO_CONNECT))(self.running, self.calls.setdefault(("http", self.running), 0))
+        self.calls[("http", self.running)] += 1
+        return [outcome for _address in addresses]
+
+    def quic_blocked_by_name(self, host, address):
+        return self.quic_cut_by_name
+
+    def probe_quic(self, host, addresses):
+        number = self.calls.setdefault(("quic", self.running), 0)
+        self.calls[("quic", self.running)] += 1
+        outcome = (self.quic or (lambda running, n: TIMEOUT))(self.running, number)
+        return [outcome for _address in addresses]
+
     def probe_volume(self, host, address, answered):
         self.volume_calls.append((self.running, address))
         code = self.volume(self.running, address) if self.volume is not None else rules.VOLUME_OK
@@ -188,6 +205,7 @@ class FakeEvents:
         self.cancel_after_results: int | None = None
         self.started_args: list[str] = []
         self.stages: list[tuple[str, str]] = []
+        self.stage_texts: list[str] = []
 
     def log(self, message):
         self.logs.append(message)
@@ -200,6 +218,7 @@ class FakeEvents:
 
     def stage(self, step, status, text=""):
         self.stages.append((step, status))
+        self.stage_texts.append(text)
 
     def strategy_result(self, result):
         self.results.append(result)
@@ -252,11 +271,13 @@ class BaselineTests(unittest.TestCase):
         self.assertTrue(all(result.raw_data.get("forced") for result in events.results))
 
     def test_connect_refused_everywhere_is_not_a_dpi_block(self) -> None:
-        env = FakeEnv(network=lambda running, n: NO_CONNECT, candidates=[cand("a")], port80_open=True)
+        env = FakeEnv(
+            network=lambda running, n: NO_CONNECT, candidates=[cand("a")], port80_open=True, http=lambda r, n: NO_CONNECT
+        )
         report, _events = run(env)
 
         self.assertIn("порт 80 открыт", report.fatal_error)
-        self.assertIn("не снимают", report.fatal_error)
+        self.assertIn("Причина не установлена", report.fatal_error)
         self.assertEqual(env.sessions, [])
         self.assertTrue(report.cancelled)
 
@@ -422,7 +443,9 @@ class StageEventTests(unittest.TestCase):
         self.assertIn("--lua-desync=fake:id=good", events.started_args)
 
     def test_stop_marks_running_step_failed_and_reports_kind(self) -> None:
-        env = FakeEnv(network=lambda running, n: NO_CONNECT, candidates=[cand("a")], port80_open=True)
+        env = FakeEnv(
+            network=lambda running, n: NO_CONNECT, candidates=[cand("a")], port80_open=True, http=lambda r, n: NO_CONNECT
+        )
         report, events = run(env)
 
         self.assertEqual(report.stop_kind, "address_block")
@@ -872,3 +895,129 @@ class StopDuringStartTests(unittest.TestCase):
         self.assertEqual(events.results, [])
         self.assertEqual(env.recovered, 0)
         self.assertEqual(env.history_saves, [])
+
+
+class TimeLeftTests(unittest.TestCase):
+    def test_progress_names_the_time_left(self) -> None:
+        env = FakeEnv(network=blocked_unless(), candidates=[cand(f"x{i}") for i in range(10)])
+        original = env.probe_https
+
+        def slow_probe(host, addresses):
+            env.clock += 20.0  # каждая стратегия — около 20 с
+            return original(host, addresses)
+
+        env.probe_https = slow_probe
+        _report, events = run(env)
+
+        texts = [text for text in events.stage_texts if text.startswith("Проверяем")]
+        self.assertNotIn("осталось", texts[0])
+        self.assertTrue(any("осталось ≈ 2 мин" in text for text in texts), texts)
+
+
+class HttpOnlySiteTests(unittest.TestCase):
+    """Сайт без HTTPS: порт 443 молчит, обычный HTTP закрыт фильтром — подбор сам идёт по HTTP."""
+
+    STUB = ProbeOutcome(rules.PROBE_BLOCKED, "заглушка провайдера: код 451", 40.0, "http")
+
+    def test_http_only_site_is_searched_over_port_80(self) -> None:
+        env = FakeEnv(
+            network=lambda running, n: NO_CONNECT,
+            candidates=[cand("tls")],
+            port80_open=True,
+            http=lambda running, n: OK if running == "web" else self.STUB,
+        )
+        env.load_candidates = lambda protocol: [cand("web")] if protocol == "tcp_http" else [cand("tls")]
+        report, events = run(env, target="old-site.ru")
+
+        self.assertEqual(report.fatal_error, "")
+        self.assertEqual(report.scan_protocol, "tcp_http")
+        result = events.results[0]
+        self.assertEqual((result.strategy_id, result.verdict), ("web", rules.VERDICT_WORKING))
+        self.assertIn("--filter-tcp=80", result.apply_lines)
+        self.assertIn("--wf-tcp-out=80", result.apply_lines)
+        self.assertIn("--hostlist-domains=old-site.ru", result.apply_lines)
+        self.assertTrue(env.history_saves[-1][0].startswith("tcp_http|"))
+
+    def test_port_80_answering_honestly_is_not_a_block(self) -> None:
+        env = FakeEnv(
+            network=lambda running, n: NO_CONNECT,
+            candidates=[cand("tls")],
+            port80_open=True,
+            http=lambda running, n: OK,
+        )
+        report, events = run(env, FakeEvents(answer=False), target="old-site.ru")
+
+        self.assertTrue(report.baseline_accessible)
+        self.assertEqual(report.fatal_error, "")
+        self.assertIn("без HTTPS", events.questions[0])
+
+    def test_closed_port_80_keeps_the_address_block_explanation(self) -> None:
+        env = FakeEnv(network=lambda running, n: NO_CONNECT, candidates=[cand("tls")], port80_open=False)
+        report, _events = run(env)
+
+        self.assertIn("не отвечает", report.fatal_error)
+
+    def test_http_redirect_to_unreachable_https_is_not_an_open_site(self) -> None:
+        redirect = ProbeOutcome(rules.PROBE_OK, "HTTP 301", redirect_https=True)
+        env = FakeEnv(network=lambda running, n: NO_CONNECT, candidates=[cand("tls")],
+                      http=lambda running, n: redirect)
+        report, events = run(env)
+        self.assertFalse(report.baseline_accessible)
+        self.assertIn("перенаправляет на HTTPS", report.fatal_error)
+        self.assertEqual(events.questions, [])
+        self.assertEqual(env.sessions, [])
+
+    def test_http_fallback_checks_other_address_when_first_port_is_closed(self) -> None:
+        env = FakeEnv(network=lambda running, n: NO_CONNECT, candidates=[cand("web")])
+        env.probe_http = lambda host, addresses: [NO_CONNECT, self.STUB]
+        report, _events = run(env)
+        self.assertEqual(report.scan_protocol, "tcp_http")
+        self.assertEqual(report.fatal_error, "")
+        self.assertEqual(report.total_tested, 1)
+
+
+class QuicSearchTests(unittest.TestCase):
+    """Сайт по TCP открыт, а QUIC режут по имени — подбор сам идёт для QUIC."""
+
+    def test_quic_cut_by_name_is_searched_without_a_question(self) -> None:
+        env = FakeEnv(
+            network=lambda running, n: OK,
+            candidates=[cand("tls")],
+            quic_cut_by_name=True,
+            quic=lambda running, n: OK if running == "qfake" else TIMEOUT,
+        )
+        env.load_candidates = lambda protocol: [cand("qfake")] if protocol == "udp_quic" else [cand("tls")]
+        report, events = run(env, target="www.youtube.com")
+
+        self.assertEqual(events.questions, [])
+        self.assertEqual(report.scan_protocol, "udp_quic")
+        self.assertFalse(report.baseline_accessible)
+        result = events.results[0]
+        self.assertEqual((result.strategy_id, result.verdict), ("qfake", rules.VERDICT_WORKING))
+        self.assertIn("--filter-udp=443", result.apply_lines)
+        self.assertIn("--payload=quic_initial", result.apply_lines)
+        self.assertIn("--hostlist-domains=youtube.com", result.apply_lines)
+
+    def test_quic_that_works_leaves_the_usual_question(self) -> None:
+        env = FakeEnv(network=lambda running, n: OK, candidates=[cand("tls")], quic_cut_by_name=False)
+        report, events = run(env, FakeEvents(answer=False))
+
+        self.assertEqual(len(events.questions), 1)
+        self.assertTrue(report.baseline_accessible)
+        self.assertEqual(report.scan_protocol, "tcp_https")
+
+    def test_protocol_switch_preserves_mode_budget(self) -> None:
+        for protocol in ("tcp_http", "udp_quic"):
+            for mode, limit in (("smart", 5), ("quick", 30), ("standard", 80)):
+                with self.subTest(protocol=protocol, mode=mode):
+                    env = FakeEnv(
+                        network=lambda running, n: NO_CONNECT if protocol == "tcp_http" else OK,
+                        candidates=[cand(f"x{i}") for i in range(100)],
+                        http=lambda running, n: RESET,
+                        quic_cut_by_name=protocol == "udp_quic",
+                        quic=lambda running, n: TIMEOUT,
+                    )
+                    report, _events = run(env, mode=mode)
+                    self.assertEqual(report.scan_protocol, protocol)
+                    self.assertEqual(report.total_tested, limit)
+                    self.assertTrue(all(saved[0].startswith(protocol + "|") for saved in env.history_saves))

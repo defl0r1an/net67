@@ -6807,8 +6807,8 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': 'BlockCheck',
     },
     'onboarding.step.blockcheck.body': {
-        'ru': 'Проверяет, какие сайты блокируются и как именно, и подсказывает, что делать. На вкладке «Подбор стратегии» программа сама переберёт способы обхода для нужного сайта и предложит рабочий, а «DNS подмена» покажет, не подменяет ли провайдер адреса сайтов.',
-        'en': 'Checks which sites are blocked and how, and suggests what to do. On the Strategy search tab the app tries bypass methods for the site you need and offers one that works, and DNS spoofing shows whether your provider fakes site addresses.',
+        'ru': 'Проверяет доступность сайтов и подсказывает, что делать. «Подбор стратегии» ищет рабочий обход для нужного сайта и при необходимости переключается на HTTP или QUIC. «DNS подмена» проверяет, не подменяются ли адреса сайтов.',
+        'en': 'Checks site availability and suggests what to do. Strategy search finds a working bypass for the site and switches to HTTP or QUIC when needed. DNS spoofing checks whether site addresses are being replaced.',
     },
     'onboarding.step.log_analyzer.title': {
         'ru': 'Анализ лога winws2',

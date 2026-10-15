@@ -81,6 +81,25 @@ def _apply(feature, root: str, *, fakes_catalog_loader=_fakes_catalog, **kwargs)
 
 
 class StrategyScanApplyTests(unittest.TestCase):
+    def test_same_site_http_https_quic_profiles_coexist_and_reapply(self):
+        from profile.parser import parse_preset_text
+        from settings.mode import ENGINE_WINWS2
+
+        feature = _PresetFeature("--wf-tcp-out=443\n")
+        with TemporaryDirectory() as temp_dir:
+            for protocol in ("tcp_https", "tcp_http", "udp_quic"):
+                first = _apply(feature, temp_dir, scan_target="example.org", scan_protocol=protocol,
+                               strategy_args="--lua-desync=pass")
+                self.assertEqual(first.operation, "created")
+            for protocol in ("tcp_https", "tcp_http", "udp_quic"):
+                again = _apply(feature, temp_dir, scan_target="example.org", scan_protocol=protocol,
+                               strategy_args="--lua-desync=send:repeats=2")
+                self.assertEqual(again.operation, "updated")
+        preset = parse_preset_text(feature.saved_text, engine=ENGINE_WINWS2, source_name="Selected.txt")
+        self.assertEqual(len(preset.profiles), 3)
+        self.assertEqual(len({profile.match_signature for profile in preset.profiles}), 3)
+        self.assertEqual(feature.saved_text.count("--lua-desync=send:repeats=2"), 3)
+
     def test_apply_creates_profile_when_selected_preset_has_no_matching_profile(self) -> None:
         from profile.parser import parse_preset_text
         from settings.mode import ENGINE_WINWS2
@@ -239,6 +258,19 @@ class StrategyScanApplyTests(unittest.TestCase):
 
         self.assertEqual((first.operation, second.operation), ("created", "updated"))
         self.assertEqual(second.applied_profile, "youtube.com")
+
+    def test_http_only_site_gets_its_own_port_80_profile_and_updates_it(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            feature = _PresetFeature("--new\n--name=Общий\n--filter-tcp=80,443\n--hostlist-domains=vimeo.com\n--lua-desync=pass\n")
+            first = _apply(feature, temp_dir, scan_target="old-site.ru", scan_protocol="tcp_http",
+                           strategy_args="--lua-desync=fake:blob=fake_default_http")
+            second = _apply(feature, temp_dir, scan_target="old-site.ru", scan_protocol="tcp_http",
+                            strategy_args="--lua-desync=multisplit:pos=host+1")
+
+        self.assertEqual((first.operation, second.operation), ("created", "updated"))
+        self.assertIn("--filter-tcp=80\n--hostlist-domains=old-site.ru", feature.saved_text)
+        self.assertIn("--lua-desync=multisplit:pos=host+1", feature.saved_text)
+        self.assertNotIn("fake_default_http", feature.saved_text.split("--name=Общий")[0])
 
     def test_apply_to_composite_profile_writes_one_union_payload_and_resolves(self) -> None:
         from core.paths import AppPaths

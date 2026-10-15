@@ -91,3 +91,48 @@ class MessageTests(unittest.TestCase):
         skipped = check.apply_check_message("discord.com", check.CHECK_SKIPPED, "обход не запустился")
         self.assertEqual(skipped[0], "warning")
         self.assertIn("завершить не удалось", skipped[2])
+
+
+class ProtocolCheckTests(unittest.TestCase):
+    def test_checks_measured_protocol_without_https_volume(self):
+        for protocol, method, port, udp in (
+            ("tcp_http", "probe_http_addresses", 80, False),
+            ("udp_quic", "probe_quic_addresses", 443, True),
+        ):
+            with (
+                self.subTest(protocol=protocol),
+                patch("blockcheck.strategy_search.probes.resolve_target_addresses", return_value=(["1.1.1.1"], "")) as resolve,
+                patch(f"blockcheck.strategy_search.probes.{method}", return_value=[OK]) as probe,
+                patch("blockcheck.strategy_search.probes.probe_https_addresses") as https,
+                patch("blockcheck.strategy_search.probes.probe_volume") as volume,
+            ):
+                token = SocketCancel()
+                result = check.check_site("example.org", cancel=token, scan_protocol=protocol)
+                self.assertEqual(result.code, check.CHECK_OK)
+                resolve.assert_called_once_with("example.org", port, udp=udp)
+                probe.assert_called_once_with("example.org", ["1.1.1.1"], cancel=token)
+                https.assert_not_called()
+                volume.assert_not_called()
+
+    def test_redirect_does_not_claim_final_https_site_works(self):
+        redirect = ProbeOutcome(rules.PROBE_OK, "HTTP 301", redirect_https=True)
+        with (
+            patch("blockcheck.strategy_search.probes.resolve_target_addresses", return_value=(["1.1.1.1"], "")),
+            patch("blockcheck.strategy_search.probes.probe_http_addresses", return_value=[redirect]),
+        ):
+            result = check.check_site("example.org", cancel=SocketCancel(), scan_protocol="tcp_http")
+        self.assertEqual(result.code, check.CHECK_SKIPPED)
+        self.assertIn("конечного адреса", result.text)
+
+    def test_retry_preserves_protocol(self):
+        token = SocketCancel()
+        token.sleep = lambda seconds: True
+        with (
+            patch.object(check, "wait_until_running", return_value=True),
+            patch.object(check, "check_site", side_effect=[check.ApplyCheck(check.CHECK_FAILED), check.ApplyCheck(check.CHECK_OK)]) as probe,
+        ):
+            result = check.run_apply_check("example.org", is_running=lambda: True, restarting=False,
+                                           cancel=token, scan_protocol="udp_quic")
+        self.assertEqual(result.code, check.CHECK_OK)
+        self.assertEqual(len(probe.call_args_list), 2)
+        self.assertTrue(all(call.kwargs["scan_protocol"] == "udp_quic" for call in probe.call_args_list))

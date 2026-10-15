@@ -4,7 +4,7 @@ Can be used as a standalone page or embedded as a tab inside BlockCheck.
 Tests strategies one by one through winws2 + HTTPS probe.
 """
 
-from blockcheck.strategy_search.probe_profile import PROTOCOL_TCP_HTTPS, PROTOCOL_UDP_GAMES
+from blockcheck.strategy_search.probe_profile import PROTOCOL_TCP_HTTPS, PROTOCOL_UDP_GAMES, PROTOCOL_HTTP80, PROTOCOL_QUIC
 import logging
 from collections import deque
 from pathlib import Path
@@ -86,6 +86,7 @@ class StrategyScanPage(BasePage):
         self._bypass_is_running = bypass_is_running
         self._apply_check_runtime = OneShotWorkerRuntime()
         self._apply_check_host = ""
+        self._apply_check_protocol = PROTOCOL_TCP_HTTPS
         super().__init__(
             title=tr_catalog("page.blockcheck_public.title", default="Подбор стратегии"),
             subtitle=tr_catalog("page.blockcheck_public.subtitle",
@@ -563,7 +564,16 @@ class StrategyScanPage(BasePage):
     def prefill_target(self, target: str, *, protocol: str = PROTOCOL_TCP_HTTPS) -> None:
         """BlockCheck нашёл проблему: подставляет, что подбирать, но не запускает поиск."""
         if self._strategy_scan_run_runtime.is_running():
+            # Вкладка уже переключилась: сказать, почему цель не подставилась.
+            InfoBarHelper.info(
+                self.window(),
+                "Подбор уже идёт",
+                "Дождитесь конца или остановите его — потом подберите стратегию для нового сайта.",
+            )
             return
+        if self._scan_panel is not None and self._scan_panel.state not in ("", "idle"):
+            # Прошлый итог относится к другому сайту — не путать его с новой целью.
+            self._scan_panel.show_idle()
         index = self._protocol_combo.findData(protocol)
         if index >= 0 and index != self._protocol_combo.currentIndex():
             self._protocol_combo.setCurrentIndex(index)
@@ -1207,7 +1217,8 @@ class StrategyScanPage(BasePage):
 
     def _start_strategy_apply_worker(self, payload: dict) -> None:
         self._cancel_apply_check()
-        if str(payload.get("scan_protocol") or "") == PROTOCOL_TCP_HTTPS:
+        self._apply_check_protocol = str(payload.get("scan_protocol") or PROTOCOL_TCP_HTTPS)
+        if self._apply_check_protocol in (PROTOCOL_TCP_HTTPS, PROTOCOL_HTTP80, PROTOCOL_QUIC):
             self._apply_check_host = str(payload.get("probe_host") or payload.get("scan_target") or "")
         else:
             self._apply_check_host = ""
@@ -1274,9 +1285,10 @@ class StrategyScanPage(BasePage):
         from blockcheck.strategy_apply_check import StrategyApplyCheckWorker
 
         self._cancel_apply_check()
+        protocol = self._apply_check_protocol
         self._apply_check_runtime.start_qthread_worker(
             worker_factory=lambda request_id: StrategyApplyCheckWorker(
-                request_id, host, is_running=self._bypass_is_running, restarting=restarting),
+                request_id, host, is_running=self._bypass_is_running, restarting=restarting, scan_protocol=protocol),
             bind_worker=lambda worker: worker.completed.connect(self._on_apply_check_finished),
         )
         self._on_log(f"Проверяю {host} через ваш пресет после запуска обхода…")

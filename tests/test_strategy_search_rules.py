@@ -332,5 +332,27 @@ class HistoryTests(unittest.TestCase):
         self.assertNotIn("scan_resume", normalized)
 
 
+class HttpRuleTests(unittest.TestCase):
+    def test_stub_and_400_are_blocks_honest_answer_is_ok(self) -> None:
+        stub = rules.judge_http(host="site.ru", status=302, location="http://warning.rt.ru/?id=1")
+        self.assertEqual(stub.state, rules.PROBE_BLOCKED)
+        self.assertIn("заглушка", stub.reason)
+        self.assertEqual(rules.judge_http(host="site.ru", status=451).state, rules.PROBE_BLOCKED)
+        rejected = rules.judge_http(host="site.ru", status=400)
+        self.assertEqual(rejected.state, rules.PROBE_BLOCKED)
+        self.assertNotIn("фейков", rejected.reason)
+        redirect = rules.judge_http(host="site.ru", status=301, location="https://site.ru/")
+        self.assertTrue(redirect.ok)
+        self.assertTrue(redirect.redirect_https)
+        self.assertTrue(rules.judge_http(host="site.ru", status=200, body=b"<html>hello</html>").ok)
+
+    def test_silence_and_reset_are_blocks_no_connect_is_unreachable(self) -> None:
+        self.assertEqual(rules.judge_http(host="s.ru", status=None, failure="reset").state, rules.PROBE_BLOCKED)
+        self.assertTrue(rules.attempt_silent([rules.judge_http(host="s.ru", status=None, failure="timeout")]))
+        self.assertEqual(
+            rules.judge_http(host="s.ru", status=None, failure="timeout", connected=False).state, rules.PROBE_UNREACHABLE
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

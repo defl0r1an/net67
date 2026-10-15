@@ -39,6 +39,8 @@ from blockcheck.scan_models import StrategyProbeResult, StrategyScanReport
 from blockcheck.strategy_search import verdict as rules
 from blockcheck.strategy_search.ordering import Candidate, batch_for_mode, family_siblings, order_candidates
 from blockcheck.strategy_search.probe_profile import (
+    PROTOCOL_HTTP80,
+    PROTOCOL_QUIC,
     PROTOCOL_STUN_VOICE,
     PROTOCOL_TCP_HTTPS,
     PROTOCOL_UDP_GAMES,
@@ -156,6 +158,9 @@ class SearchEnvironment(Protocol):
     def resolve(self, host: str, port: int, *, udp: bool) -> tuple[list[str], str]: ...
     def probe_https(self, host: str, addresses: Sequence[str]) -> list[ProbeOutcome]: ...
     def probe_volume(self, host: str, address: str, answered: ProbeOutcome) -> ProbeOutcome: ...
+    def probe_http(self, host: str, addresses: Sequence[str]) -> list[ProbeOutcome]: ...
+    def probe_quic(self, host: str, addresses: Sequence[str]) -> list[ProbeOutcome]: ...
+    def quic_blocked_by_name(self, host: str, address: str) -> bool: ...
     def probe_udp(self, specs: Sequence[UdpProbeSpec]) -> list[tuple[UdpProbeSpec, ProbeOutcome]]: ...
     def tcp_port_open(self, address: str, port: int) -> bool: ...
     def cancel_probes(self) -> None: ...
@@ -225,6 +230,7 @@ class StrategySearch:
         self._protocol = request.scan_protocol
         self._target = _Target()
         self._running_step = ""
+        self._strategies_started = 0.0
 
     # --- Управление -----------------------------------------------------------
 
@@ -285,8 +291,16 @@ class StrategySearch:
 
             self._events.phase("Проверка без обхода")
             self._stage(STEP_BASELINE, "running", "Пробуем открыть без обхода")
+            protocol_before = self._protocol
             if not self._baseline(report):
                 return self._finish(report, working, failed, started, cancelled=self.cancelled)
+            if self._protocol != protocol_before:
+                # У HTTP и QUIC свои каталоги и история; HTTPS-результаты сюда не подходят.
+                key = self._history_key()
+                batch, total = self._select_batch(key)
+                report.total_available = total
+                report.scan_protocol = self._protocol
+                self._events.log(f"Подбор переходит на {self._protocol_label()}: проверим {len(batch)} из {total} стратегий")
             if self._target.forced:
                 self._stage(STEP_BASELINE, "skipped", "Открывается и без обхода — проверяем для сведения")
                 self._stage(STEP_NAMES, "skipped", "Открывается и без обхода")
@@ -308,12 +322,17 @@ class StrategySearch:
             seen = {candidate.strategy_id for candidate in batch}
             # Соседи могут менять порядок, но не расширять выбранный бюджет.
             ordered = list(batch) if self._request.mode == "smart" else self._ordered_candidates
+            self._strategies_started = self._env.monotonic()
             index = 0
             while queue and not self.cancelled:
                 candidate, rechecked = queue.popleft()
                 self._events.strategy_started(candidate.name, index, len(batch), candidate.args)
                 self._events.phase(f"[{index + 1}/{len(batch)}] {candidate.name}")
-                self._stage(STEP_STRATEGIES, "running", f"Проверяем {index + 1} из {len(batch)}: {candidate.name}")
+                self._stage(
+                    STEP_STRATEGIES,
+                    "running",
+                    f"Проверяем {index + 1} из {len(batch)}: {candidate.name}{self._time_left(index, len(batch))}",
+                )
                 run = self._test_strategy(candidate)
                 if self.cancelled and run.verdict == rules.VERDICT_CANCELLED:
                     break
@@ -366,6 +385,16 @@ class StrategySearch:
             except Exception:
                 logger.exception("strategy search post-cleanup failed")
             self._save_history(key, confirmed_ids, failed_ids)
+
+    def _time_left(self, index: int, total: int) -> str:
+        """« · осталось ≈ N мин» по среднему времени уже проверенных стратегий."""
+        if index < 3 or total <= index:
+            return ""
+        spent = self._env.monotonic() - self._strategies_started
+        left = spent / index * (total - index)
+        if left < 60:
+            return " · осталось меньше минуты"
+        return f" · осталось ≈ {round(left / 60)} мин"
 
     def _save_history(self, key: str, confirmed_ids: list[str], failed_ids: list[str]) -> None:
         """Дописать накопленное в историю и начать копить заново."""
@@ -477,9 +506,14 @@ class StrategySearch:
         decision = rules.decide_baseline(list(zip(addresses, outcomes)))
 
         if decision.state == rules.BASELINE_NOT_DPI:
+            http = self._baseline_http(report, host, addresses)
+            if http is not None:
+                return http
             raise ScanFatal(self._not_dpi_reason(host, addresses, decision.reason), STOP_ADDRESS_BLOCK)
         if decision.state == rules.BASELINE_OPEN:
             decision = self._recheck_open_baseline(host, addresses, outcomes, decision)
+        if decision.state == rules.BASELINE_OPEN and self._baseline_quic(host, decision.probe_addresses):
+            return True
         if decision.state == rules.BASELINE_OPEN:
             report.baseline_accessible = True
             self._stage(STEP_BASELINE, "skipped", "Открывается и без обхода")
@@ -540,19 +574,83 @@ class StrategySearch:
             )
         return decision
 
+    def _baseline_quic(self, host: str, addresses: Sequence[str]) -> bool:
+        """Сайт по TCP открыт — а QUIC? True — его режут по имени, подбор идёт для QUIC.
+
+        Браузер открывает YouTube и многие сайты быстрым QUIC (UDP 443) и,
+        если он молчит, переходит на обычное соединение — с задержкой при
+        открытии и в начале видео. Подбирать для QUIC есть смысл, только если
+        фильтр режет именно имя сайта: с посторонним именем тот же сервер
+        отвечает. Если сервер QUIC не знает вовсе — подбирать нечего.
+        """
+        address = next((item for item in addresses if ":" not in item), addresses[0] if addresses else "")
+        if not address or self.cancelled:
+            return False
+        self._events.log(f"  По TCP открыт — проверяем быстрый протокол QUIC (UDP 443) на {address}")
+        if not self._env.quic_blocked_by_name(host, address):
+            self._events.log("  Признаков блокировки QUIC по имени не найдено")
+            return False
+        self._protocol = PROTOCOL_QUIC
+        self._events.log(
+            f"  QUIC режут по имени: с именем {host} пакет пропадает, с другим именем сервер отвечает — "
+            "подбираем стратегию для QUIC"
+        )
+        self._target = _Target(host=host, addresses=(address,))
+        return True
+
+    def _baseline_http(self, report: StrategyScanReport, host: str, addresses: Sequence[str]) -> bool | None:
+        """Порт 443 молчит — может, это сайт без HTTPS.
+
+        None — это не сайт без HTTPS (дальше прежнее объяснение); True — подбор
+        идёт по HTTP; False — подбирать нечего, и пользователь отказался.
+
+        Порт 80 открыт и ответ на нём — заглушка или обрыв: фильтр режет обычный
+        HTTP, и для него есть свои стратегии. Открыт и отвечает честно — сайт
+        работает без шифрования и без обхода.
+        """
+        if not addresses:
+            return None
+        outcomes = self._env.probe_http(host, list(addresses))
+        for address, outcome in zip(addresses, outcomes):
+            self._events.log(f"  без обхода http://{host} ({address}): {self._describe(outcome)}")
+        decision = rules.decide_baseline(list(zip(addresses, outcomes)))
+        if decision.state == rules.BASELINE_NOT_DPI:
+            return None
+        self._protocol = PROTOCOL_HTTP80
+        report.scan_protocol = self._protocol
+        if decision.state == rules.BASELINE_OPEN:
+            if any(outcome.ok and outcome.redirect_https for outcome in outcomes):
+                raise ScanFatal(
+                    f"HTTP-адрес {host} перенаправляет на HTTPS, а подключиться по HTTPS не удалось. "
+                    "Работа сайта без HTTPS не подтверждена; проверьте адрес и доступность сервера.",
+                    STOP_OTHER,
+                )
+            report.baseline_accessible = True
+            self._stage(STEP_BASELINE, "skipped", "Сайт без HTTPS открывается и без обхода")
+            if not self._ask_continue(
+                f"{host} работает без HTTPS (только порт 80) и открывается без обхода — подбирать нечего."
+            ):
+                return False
+            self._target = _Target(host=host, addresses=decision.probe_addresses, forced=True)
+            return True
+        self._events.log(
+            f"  HTTPS недоступен, а HTTP даёт признаки блокировки ({decision.reason}) — подбираем стратегии для HTTP"
+        )
+        self._target = _Target(host=host, addresses=decision.probe_addresses)
+        return True
+
     def _not_dpi_reason(self, host: str, addresses: Sequence[str], reason: str) -> str:
         """Объяснение, почему стратегии не помогут, с проверкой порта 80."""
         address = addresses[0] if addresses else ""
         if address and self._env.tcp_port_open(address, 80):
             return (
                 f"Сервер {host} ({address}) не принимает подключение к порту 443, а порт 80 открыт. "
-                "Провайдер блокирует адрес целиком, ещё до шифрованного приветствия, где zapret "
-                "прячет имя сайта. Стратегии обхода DPI такую блокировку не снимают: нужен "
-                "прокси, VPN или другой адрес сервера."
+                "Получить ответ HTTP тоже не удалось. Причина не установлена: проверьте адрес, "
+                "сервер и соединение. Эти измерения не подтверждают блокировку по имени сайта."
             )
         return (
             f"Сервер {host} не отвечает ({reason}) ни на порт 443, ни на порт 80. "
-            "Адрес недоступен целиком — стратегии обхода DPI тут не помогут."
+            "Причина недоступности не установлена. Эти измерения не подтверждают блокировку по имени сайта."
         )
 
     def _udp_pool(self) -> list[UdpProbeSpec]:
@@ -639,10 +737,11 @@ class StrategySearch:
             games_paths = self._env.games_ipset_paths(self._request.udp_games_scope)
         from blockcheck.strategy_scan_targeting import profile_domain
 
+        site = self._protocol in (PROTOCOL_TCP_HTTPS, PROTOCOL_HTTP80, PROTOCOL_QUIC)
         return build_probe_profile(
             self._protocol,
             strategy_args=strategy_args,
-            match_domain=profile_domain(self._request.target) if self._protocol == PROTOCOL_TCP_HTTPS else self._request.target,
+            match_domain=profile_domain(self._request.target) if site else self._request.target,
             games_ipset_paths=games_paths,
             games_addresses=self._target.games_addresses,
             games_ports=self._target.games_ports,
@@ -650,6 +749,22 @@ class StrategySearch:
 
     def _probe_once(self, *, volume: bool = False) -> _Attempt:
         """Одна попытка. ``volume`` — короткие ответы добрать объёмом по соединению."""
+        if self._protocol == PROTOCOL_QUIC:
+            outcomes = self._env.probe_quic(self._target.host, self._target.addresses)
+            passed = rules.attempt_passed(outcomes)
+            # Молчание UDP не отличить от пропавшей сети: провал сверяется с
+            # обычными сайтами; повтор уже был внутри пробы.
+            return _Attempt(passed, rules.attempt_reason(outcomes), rules.attempt_time_ms(outcomes), not passed)
+        if self._protocol == PROTOCOL_HTTP80:
+            outcomes = self._env.probe_http(self._target.host, self._target.addresses)
+            passed = rules.attempt_passed(outcomes)
+            return _Attempt(
+                passed,
+                rules.attempt_reason(outcomes),
+                rules.attempt_time_ms(outcomes),
+                rules.attempt_needs_network_check(outcomes),
+                silent=not passed and rules.attempt_silent(outcomes),
+            )
         if self._protocol == PROTOCOL_TCP_HTTPS:
             host = self._target.host
             outcomes = self._env.probe_https(host, self._target.addresses)
@@ -830,6 +945,8 @@ class StrategySearch:
     def _protocol_label(self) -> str:
         return {
             PROTOCOL_TCP_HTTPS: "сайты (TCP/HTTPS)",
+            PROTOCOL_HTTP80: "сайт без HTTPS (HTTP, порт 80)",
+            PROTOCOL_QUIC: "быстрый протокол QUIC (UDP 443)",
             PROTOCOL_STUN_VOICE: "голосовые звонки (STUN)",
             PROTOCOL_UDP_GAMES: "игры (UDP)",
         }.get(self._protocol, self._protocol)
