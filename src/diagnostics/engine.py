@@ -79,7 +79,7 @@ from diagnostics.limits import (
 )
 from diagnostics.reach import check_reach as _check_reach, same_network
 from diagnostics.run_context import RECHECK_OPENED, RECHECK_SAME, RECHECK_UNSTABLE, Probe as _Probe, Run as _Run
-from diagnostics.run_context import Live as _Live, Steps as _Steps, Stopped as _Stopped
+from diagnostics.run_context import Live as _Live, Steps as _Steps, Stopped as _Stopped, submit_in_random_order
 from diagnostics.services import (
     GOOGLEVIDEO_FALLBACK_HOST,
     PROGRESS_STEPS,
@@ -411,6 +411,7 @@ def _run_probes(
 
     def _probe(*args, **kwargs) -> _Probe:
         try:
+            run.wait_start_turn()
             started = time.monotonic()
             probe = _probe_target(*args, **kwargs)
             probe.seconds = time.monotonic() - started
@@ -424,15 +425,16 @@ def _run_probes(
                     ready = done[0]
                 on_done(ready, total)
 
-    planned: list[tuple[str, Target, Future]] = []
+    jobs: list[tuple[str, Target, bool]] = []
     for key, service in services.items():
         for target in service.targets:
             if not full and target.discover_googlevideo:
                 target = Target(target.host, target.purpose, target.path, main=target.main)
             # Объём по одному соединению — это десятки запросов подряд: контрольные
             # сайты ими не нагружаем, их всё равно не блокируют.
-            volume = full and not service.control
-            planned.append((key, target, lane.submit(_probe, run, target, key, full=full, volume=volume)))
+            jobs.append((key, target, full and not service.control))
+    futures = submit_in_random_order(jobs, lambda job: lane.submit(_probe, run, job[1], job[0], full=full, volume=job[2]))
+    planned = [(key, target, future) for (key, target, _volume), future in zip(jobs, futures)]
 
     # Сначала дожидаемся всех, затем перепроверяем упавшие, и только потом печатаем:
     # перепроверка может изменить результат.

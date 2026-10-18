@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import diagnostics.engine as engine
-from diagnostics import net_access, reach, sections
+from diagnostics import net_access, reach, run_context, sections
 from utils.dns_wire import TYPE_AAAA
 from diagnostics.tls_probe import (
     KIND_CERT,
@@ -277,6 +277,8 @@ class _Net:
             return self.https(host, ip)
 
         return (
+            # Паузы между стартами сайтов — против узора на линии; в поддельной сети они только тормозят тесты.
+            patch.object(run_context, "SITE_START_GAP_S", (0.0, 0.0)),
             patch.object(
                 net_access,
                 "query_ipv4",
