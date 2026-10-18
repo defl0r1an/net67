@@ -329,6 +329,7 @@ class PageTabBar(QWidget):
                 self._layout.removeWidget(tab)
                 tab.deleteLater()
 
+        created = []
         for index, (key, title) in enumerate(wanted):
             tab = self._tabs.get(key)
             if tab is None:
@@ -337,6 +338,7 @@ class PageTabBar(QWidget):
                     lambda _checked=False, route=key: self.select(route)
                 )
                 self._tabs[key] = tab
+                created.append(tab)
             elif tab.text() != title:
                 tab.setText(title)
             self._layout.insertWidget(index, tab)
@@ -346,6 +348,18 @@ class PageTabBar(QWidget):
 
         # Одна страница — выбирать не из чего.
         self.setVisible(len(wanted) > 1)
+
+        # Строка обязана быть готова к возврату из метода, а не к
+        # следующему обороту цикла. Вкладку, вставленную в уже показанную
+        # строку, Qt показывает отложенным вызовом, а место ей раздаёт
+        # отложенным пересчётом раскладки. Тур, открыв страницу другого
+        # раздела, спрашивал вкладку сразу, получал «не видна» и
+        # пропускал шаг: «Назад» с «Диагностики» перелетал пять шагов
+        # «Инструментов» до самого раздела (18 октября 2026). Вперёд
+        # ошибка не проявлялась — строку успевал собрать предыдущий шаг.
+        for tab in created:
+            tab.show()
+        self._layout.activate()
 
     def select(self, route_key: str, *, notify: bool = True) -> None:
         key = str(route_key)

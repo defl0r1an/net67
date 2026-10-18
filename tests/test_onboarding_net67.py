@@ -432,6 +432,44 @@ class MenuStepsTests(unittest.TestCase):
         # Раздела нет на экране — шаг пропустится, а не подсветит пустоту.
         self.assertEqual(by_key["menu_diagnostics"].target(ctx), [])
 
+    def test_page_tabs_of_other_group_are_targets_right_after_switch(self) -> None:
+        """«Назад» с «Диагностики» перелетал пять шагов «Инструментов».
+
+        Тур открывает страницу другого раздела и сразу спрашивает её
+        вкладку, не отдавая управление циклу событий. Вкладки, вставленные в
+        уже показанную строку, Qt показывал только на следующем обороте, и
+        каждый шаг «Инструментов» считался шагом без цели (18 октября 2026).
+        """
+        from shell.tabs import PageTabBar
+        from ui.navigation.schema import get_page_route_key
+        from ui.onboarding.steps import TOUR_STEPS, TourContext
+
+        app = _app()
+        window = QWidget()
+        window.pageTabs = PageTabBar(window)
+        window.pageTabs.setGeometry(0, 40, 900, 34)
+        window.pageTabs.set_pages([
+            (get_page_route_key(PageName.BLOCKCHECK), "BlockCheck"),
+            (get_page_route_key(PageName.LOGS), "Журнал"),
+        ])
+        window.resize(900, 300)
+        window.show()
+        app.processEvents()
+        self.addCleanup(window.deleteLater)
+
+        window.pageTabs.set_pages([
+            (get_page_route_key(PageName.NETWORK), "Настройка DNS"),
+            (get_page_route_key(PageName.HOSTS), "Редактор hosts"),
+        ])
+        ctx = TourContext(window=window)
+        by_key = {step.key: step for step in TOUR_STEPS}
+        dns_tab = window.pageTabs.tabs[get_page_route_key(PageName.NETWORK)]
+        hosts_tab = window.pageTabs.tabs[get_page_route_key(PageName.HOSTS)]
+
+        self.assertEqual(by_key["hosts"].target(ctx), [hosts_tab])
+        # Подсветка ложится туда, где вкладка нарисуется, а не в угол строки.
+        self.assertGreater(hosts_tab.x(), dns_tab.x())
+
     def test_preset_details_are_an_optional_branch(self) -> None:
         from ui.onboarding.overlay import OnboardingOverlay
         from ui.onboarding.steps import TOUR_STEPS, TourContext
