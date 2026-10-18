@@ -302,7 +302,10 @@ class BasePage(_FluentScrollArea):
         if started_at is None:
             started_at = float(self.__dict__.get("_page_open_metric_started_at", 0.0) or 0.0)
         if started_at <= 0:
-            started_at = _time.perf_counter()
+            # Открытие не засекалось: страницу показали мимо page host
+            # (вкладкой, возвратом из трея). Отчёт не утверждает того, чего не
+            # измерил, — «0 мс» был бы такой же выдумкой, как и 16 минут.
+            return
         elapsed_ms = (_time.perf_counter() - started_at) * 1000.0
         first_show = bool(self.__dict__.get("_page_open_metric_first_show", True))
         phase = "first" if first_show else "repeat"
@@ -913,6 +916,11 @@ class BasePage(_FluentScrollArea):
         # спрятанных страниц с работающими таймерами — это сорок
         # пересчётов по 2600 песчинок в секунду впустую.
         self._stop_particles()
+        # Засечка открытия принадлежит одному показу. Вкладки открывают
+        # страницу мимо page host и новой засечки не ставят, и следующий
+        # показ мерил «готовность» от открытия часовой давности: в журнале
+        # было content.ready.repeat elapsed=961185ms (18 октября 2026).
+        self._page_open_metric_started_at = 0.0
         self._cancel_page_lifecycle(reason="hidden")
         self.cancel_page_loads(reason="hidden")
         try:

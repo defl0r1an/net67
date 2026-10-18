@@ -93,6 +93,34 @@ class UiPerformanceMetricsTests(unittest.TestCase):
 
         metric.assert_not_called()
 
+    def test_page_shown_without_open_mark_reports_nothing(self) -> None:
+        """Страницу открыли вкладкой, мимо page host: засечки нет — замера нет.
+
+        Раньше брался «старт» прошлого открытия, и в журнале появлялось
+        content.ready.repeat elapsed=961185ms — 16 минут «загрузки»
+        (18 октября 2026).
+        """
+        import os
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt6.QtWidgets import QApplication
+
+        from ui.pages.base_page import BasePage
+
+        QApplication.instance() or QApplication([])
+        page = BasePage("Проверка")
+        self.addCleanup(page.deleteLater)
+        page.show()
+        page._page_open_metric_started_at = 10.0
+        page.hide()
+        self.assertEqual(page._page_open_metric_started_at, 0.0)
+
+        page.show()
+        with patch("ui.pages.base_page.log_page_timing") as metric:
+            page.mark_content_ready(extra="показ вкладкой")
+
+        metric.assert_not_called()
+
     def test_base_page_marks_content_ready_after_target_paint_event(self) -> None:
         from ui.pages.base_page import BasePage
 
