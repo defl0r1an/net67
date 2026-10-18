@@ -126,14 +126,16 @@ def install_update_check(
             return
         if payload.get("has_update"):
             # Окно обновления строится в GUI-потоке и забирает фокус, поэтому
-            # ждёт паузы пользователя: не выскакивает посреди клика. При окне
-            # в трее ждать нечего — показываем, как и раньше.
+            # ждёт паузы пользователя: не выскакивает посреди клика. И ждёт,
+            # пока окно программы откроют: из трея или свёрнутого оно
+            # всплывало само по себе, без хозяина, поверх чужой работы —
+            # при автозапуске в трей это первое, что человек видел утром.
             version = str(payload.get("version") or "")
             release_notes = str(payload.get("release_notes") or "")
             idle_tasks.add(
                 "UpdateOfferDialog",
                 lambda: _on_update_found(version, release_notes, payload),
-                needs_shown_window=False,
+                needs_shown_window=True,
             )
             return
         _on_no_update(str(payload.get("version") or ""))

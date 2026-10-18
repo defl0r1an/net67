@@ -116,7 +116,7 @@ class PostStartupUpdateContractTests(unittest.TestCase):
 class PostStartupUpdateIdleQueueTests(unittest.TestCase):
     """Окна после запуска ждут паузы пользователя, а не срабатывают по таймеру."""
 
-    def test_update_offer_waits_for_user_pause_even_in_tray(self) -> None:
+    def test_update_offer_waits_for_user_pause_and_shown_window(self) -> None:
         from main import post_startup_update
 
         startup_host = _host()
@@ -133,10 +133,11 @@ class PostStartupUpdateIdleQueueTests(unittest.TestCase):
                 idle_tasks=idle_tasks,
             )
 
-        # Окно обновления забирает фокус: посреди клика оно мешало. При окне в
-        # трее ждать нечего — показывается, как и раньше.
+        # Окно обновления забирает фокус: посреди клика оно мешало. Из трея
+        # оно всплывало само по себе, без хозяина, — теперь ждёт, пока окно
+        # программы откроют.
         startup_host.ask_update.assert_not_called()
-        self.assertEqual([(name, needs) for name, _cb, _delay, needs in idle_tasks.tasks], [("UpdateOfferDialog", False)])
+        self.assertEqual([(name, needs) for name, _cb, _delay, needs in idle_tasks.tasks], [("UpdateOfferDialog", True)])
 
         idle_tasks.tasks[0][1]()
         startup_host.ask_update.assert_called_once()
