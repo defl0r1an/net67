@@ -106,7 +106,9 @@ def build_autostart_page_kwargs(*, page_name: PageName, autostart_feature, show_
     }
 
 
-def build_about_page_kwargs(*, page_name: PageName, external_actions_feature, show_page, ui_state_store) -> dict:
+def build_about_page_kwargs(
+    *, page_name: PageName, external_actions_feature, updater_feature, show_page, ui_state_store
+) -> dict:
     _ = page_name
 
     def _create_about_open_action_worker(request_id: int, *, action_name: str, parent=None):
@@ -135,6 +137,9 @@ def build_about_page_kwargs(*, page_name: PageName, external_actions_feature, sh
     return {
         "open_updates": lambda: show_page(PageName.SERVERS, allow_internal=True),
         "create_open_action_worker": _create_about_open_action_worker,
+        "create_whats_new_worker": lambda request_id, parent=None: updater_feature.create_whats_new_load_worker(
+            request_id, parent=parent
+        ),
         "ui_state_store": ui_state_store,
     }
 

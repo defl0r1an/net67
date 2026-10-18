@@ -88,7 +88,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     PageName.SUPPORT: PageDepsSpec(build_support_page_kwargs, features=("external_actions",)),
     PageName.ABOUT: PageDepsSpec(
         build_about_page_kwargs,
-        features=("external_actions",),
+        features=("external_actions", "updater"),
         actions=("show_page",),
         include_ui_state_store=True,
     ),

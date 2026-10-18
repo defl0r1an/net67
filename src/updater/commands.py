@@ -91,6 +91,52 @@ def pending_whats_new() -> tuple[str, list[dict]]:
     return pending_version, history
 
 
+def installed_release_history() -> tuple[str, list[dict]]:
+    """Изменения установленной версии — для кнопки «Что нового» в «О программе».
+
+    Сначала то, что окно обновления сохранило перед установкой: там все
+    пропущенные версии, и сеть не нужна. Нет сохранённого (поставили
+    установщиком вручную) — список выпусков GitHub: установленная версия
+    сверху, под ней несколько предыдущих. Ошибку сети пробрасывает — окно
+    скажет о ней человеку, а не покажет пустоту.
+    """
+    from config.build_info import APP_VERSION
+    from settings.store import get_whats_new_state
+    from updater.release_notes import build_history, version_key
+    from updater.server_config import GITHUB_REPO
+
+    version = str(APP_VERSION or "")
+    installed = version_key(version)
+    state = get_whats_new_state()
+    pending_version = str(state.get("pending_version") or "")
+    saved = [dict(item) for item in (state.get("pending_history") or ()) if isinstance(item, dict)]
+    try:
+        saved_matches = bool(pending_version) and version_key(pending_version) == installed
+    except ValueError:
+        saved_matches = False
+    if saved_matches and saved:
+        return version, saved
+
+    from updater.github_release import get_all_releases_with_exe
+
+    releases = [item for item in (get_all_releases_with_exe() or ()) if isinstance(item, dict)]
+    if not releases:
+        raise RuntimeError("список выпусков GitHub недоступен")
+    # «Новой» помечается только установленная версия: предыдущие идут под
+    # «Ранее». Для этого build_history нужна версия прямо под установленной.
+    older = []
+    for item in releases:
+        try:
+            key = version_key(item.get("version"))
+        except ValueError:
+            continue
+        if key < installed:
+            older.append(key)
+    previous = ".".join(str(part) for part in max(older)) if older else ""
+    history = list(build_history(releases, current_version=previous, target_version=version, repo=GITHUB_REPO))
+    return version, history
+
+
 def open_update_channel(channel: str) -> UpdateChannelActionResult:
     """Открывает телеграм-канал выпусков. Пока открывать нечего.
 

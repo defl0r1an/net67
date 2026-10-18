@@ -828,6 +828,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Настройка обновлений",
         "en": "Update Settings",
     },
+    "page.about.button.whats_new": {
+        "ru": "Что нового",
+        "en": "What's New",
+    },
     "page.about.button.open": {
         "ru": "Открыть",
         "en": "Open",

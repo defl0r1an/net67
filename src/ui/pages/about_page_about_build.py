@@ -30,6 +30,7 @@ class AboutPageAboutWidgets:
     about_app_name_label: object
     about_version_value_label: object
     update_btn: object
+    whats_new_btn: object = None
     # Ниже — остатки удалённых секций «Подписка» и «Обучение».
     # Всегда None; поля сохранены, потому что на них ссылается about_page.py.
     about_section_subscription_label: object = None
@@ -74,6 +75,7 @@ def build_about_page_about_content(
     app_version: str,
     make_section_label: Callable[[str], object],
     on_open_updates,
+    on_open_whats_new=None,
 ) -> AboutPageAboutWidgets:
     about_section_version_label = make_section_label(
         tr_fn("page.about.section.version", "Версия")
@@ -116,8 +118,16 @@ def build_about_page_about_content(
         tr_fn("page.about.button.update_settings", "Настройка обновлений"),
         icon=FluentIcon.SYNC,
     )
-    apply_about_buttons_accessibility(tr_fn=tr_fn, update_btn=update_btn)
     update_btn.clicked.connect(on_open_updates)
+
+    # «Что нового» после обновления показывается один раз. Закрыл не
+    # читая — перечитать было негде, кроме страницы выпуска на GitHub.
+    whats_new_btn = None
+    if on_open_whats_new is not None:
+        whats_new_btn = PushButton(tr_fn("page.about.button.whats_new", "Что нового"), icon=FluentIcon.INFO)
+        whats_new_btn.clicked.connect(on_open_whats_new)
+        version_layout.addWidget(whats_new_btn)
+    apply_about_buttons_accessibility(tr_fn=tr_fn, update_btn=update_btn, whats_new_btn=whats_new_btn)
     version_layout.addWidget(update_btn)
 
     version_card.add_layout(version_layout)
@@ -141,4 +151,5 @@ def build_about_page_about_content(
         about_app_name_label=about_app_name_label,
         about_version_value_label=about_version_value_label,
         update_btn=update_btn,
+        whats_new_btn=whats_new_btn,
     )

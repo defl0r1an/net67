@@ -59,6 +59,7 @@ class AboutPage(BasePage):
         open_updates,
         create_open_action_worker,
         ui_state_store,
+        create_whats_new_worker=None,
     ):
         super().__init__(
             "О программе",
@@ -72,6 +73,11 @@ class AboutPage(BasePage):
         self._open_updates_callback = open_updates
         self._create_about_open_action_worker = create_open_action_worker
         self._about_open_runtime = OneShotWorkerRuntime()
+        # Изменения установленной версии: с сохранённого перед установкой или
+        # из списка выпусков GitHub — второе идёт в сеть, поэтому в фоне.
+        self._create_whats_new_worker = create_whats_new_worker
+        self._whats_new_runtime = OneShotWorkerRuntime()
+        self.whats_new_btn = None
         self._about_open_state = QueuedWorkerState[tuple[str, str, str]](self._about_open_runtime)
         self._support_icon_label: QLabel | None = None
         self._support_discussions_card = None
@@ -251,9 +257,14 @@ class AboutPage(BasePage):
             self.update_btn.setText(
                 tr_catalog("page.about.button.update_settings", language=self._ui_language, default="Настройка обновлений")
             )
+            if self.whats_new_btn is not None:
+                self.whats_new_btn.setText(
+                    tr_catalog("page.about.button.whats_new", language=self._ui_language, default="Что нового")
+                )
             apply_about_buttons_accessibility(
                 tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
                 update_btn=self.update_btn,
+                whats_new_btn=self.whats_new_btn,
             )
 
             # Секции «Подписка» и кнопок Premium/KVN больше нет —
@@ -294,11 +305,13 @@ class AboutPage(BasePage):
             app_version=APP_VERSION,
             make_section_label=lambda text: _make_section_label(text),
             on_open_updates=self._open_updates_callback,
+            on_open_whats_new=self._request_whats_new if callable(self._create_whats_new_worker) else None,
         )
         self.about_section_version_label = widgets.about_section_version_label
         self.about_app_name_label = widgets.about_app_name_label
         self.about_version_value_label = widgets.about_version_value_label
         self.update_btn = widgets.update_btn
+        self.whats_new_btn = widgets.whats_new_btn
         self.about_section_subscription_label = widgets.about_section_subscription_label
         self.sub_status_icon = widgets.sub_status_icon
         self.sub_status_label = widgets.sub_status_label
@@ -520,6 +533,46 @@ class AboutPage(BasePage):
         if request is not None:
             self._start_about_open_action_worker(*request)
 
+    def _request_whats_new(self) -> None:
+        """«Что нового»: окно поверх программы, текст достаётся в фоне.
+
+        Второе нажатие, пока первое ещё грузит, нового запроса не ставит:
+        окно откроется одно.
+        """
+        factory = self._create_whats_new_worker
+        if not callable(factory) or self._cleanup_in_progress:
+            return
+        if self._whats_new_runtime.is_running():
+            return
+        self._whats_new_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: factory(request_id, parent=self),
+            on_loaded=self._on_whats_new_loaded,
+            on_failed=self._on_whats_new_failed,
+        )
+
+    def _on_whats_new_loaded(self, request_id: int, result) -> None:
+        if not self._whats_new_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        version, history = result if isinstance(result, tuple) and len(result) == 2 else ("", ())
+        if not history:
+            self._on_whats_new_failed(request_id, "нет текста ни одного выпуска")
+            return
+        try:
+            from updater.ui.update_dialog import show_whats_new
+
+            show_whats_new(self.window(), version=str(version or ""), history=history)
+        except Exception as exc:
+            self._on_whats_new_failed(request_id, str(exc))
+
+    def _on_whats_new_failed(self, request_id: int, error: str) -> None:
+        if not self._whats_new_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        self._show_about_open_error(
+            str(error or ""),
+            error_default="Не удалось получить список изменений: {error}",
+            raw_error_message="",
+        )
+
     def _show_about_open_error(self, error: str, *, error_default: str, raw_error_message: str) -> None:
         if not InfoBar:
             return
@@ -614,6 +667,8 @@ class AboutPage(BasePage):
         self._about_open_state_obj().reset()
         self._about_open_runtime.stop(blocking=False, warning_prefix="About open action worker")
         self._about_open_runtime.cancel()
+        self._whats_new_runtime.stop(blocking=False, warning_prefix="About whats-new worker")
+        self._whats_new_runtime.cancel()
 
         unsubscribe = getattr(self, "_ui_state_unsubscribe", None)
         if callable(unsubscribe):

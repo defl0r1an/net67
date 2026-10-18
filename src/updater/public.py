@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from updater.commands import (
+    installed_release_history,
     is_auto_update_enabled,
     open_update_channel,
     pending_whats_new,
@@ -22,6 +23,7 @@ from updater.commands import (
 # «Установить» в окне при запуске молча ничего не делала. Сверку фасадов с
 # их модулями держит tests/test_feature_facade_command_exports.py.
 __all__ = [
+    "installed_release_history",
     "is_auto_update_enabled",
     "open_update_channel",
     "pending_whats_new",

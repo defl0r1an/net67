@@ -76,6 +76,15 @@ class UpdaterFeature:
             parent=parent,
         )
 
+    def create_whats_new_load_worker(self, request_id: int, *, parent=None):
+        from updater.settings_workers import UpdaterWhatsNewLoadWorker
+
+        return UpdaterWhatsNewLoadWorker(
+            request_id,
+            load_history=self._commands().installed_release_history,
+            parent=parent,
+        )
+
     def create_update_channel_open_worker(self, request_id: int, *, channel: str, parent=None):
         from updater.settings_workers import UpdaterChannelOpenWorker
 

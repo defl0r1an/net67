@@ -47,6 +47,27 @@ class UpdaterAutoCheckLoadWorker(QThread):
         self.loaded.emit(self._request_id, enabled)
 
 
+class UpdaterWhatsNewLoadWorker(QThread):
+    """Достаёт изменения установленной версии — может сходить в сеть."""
+
+    loaded = pyqtSignal(int, object)
+    failed = pyqtSignal(int, str)
+
+    def __init__(self, request_id: int, *, load_history: Callable[[], Any], parent=None):
+        super().__init__(parent)
+        self._request_id = int(request_id)
+        self._load_history = load_history
+
+    def run(self) -> None:
+        try:
+            result = self._load_history()
+        except Exception as exc:
+            log(f"UpdaterWhatsNewLoadWorker: изменения версии не получены: {exc}", "WARNING")
+            self.failed.emit(self._request_id, str(exc))
+            return
+        self.loaded.emit(self._request_id, result)
+
+
 class UpdaterChannelOpenWorker(QThread):
     loaded = pyqtSignal(int, object)
     failed = pyqtSignal(int, str)
