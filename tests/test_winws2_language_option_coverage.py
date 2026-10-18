@@ -18,7 +18,7 @@ PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
-ZAPRET2_NFQWS = Path(__file__).parent / "fixtures" / "nfqws_b78b52c4_options.c"
+ZAPRET2_NFQWS = Path(__file__).parent / "fixtures" / "nfqws_dc41b274_options.c"
 
 _OPTION_RE = re.compile(r'\{"([a-z0-9-]+)",\s*(no_argument|required_argument|optional_argument)')
 _ARG_KIND = {"no_argument": "none", "required_argument": "required", "optional_argument": "optional"}
@@ -91,7 +91,7 @@ class Winws2OptionCatalogTests(unittest.TestCase):
         import hashlib
         import json
 
-        metadata = json.loads(ZAPRET2_NFQWS.with_name("nfqws_b78b52c4_engine.json").read_text(encoding="utf-8"))
+        metadata = json.loads(ZAPRET2_NFQWS.with_name("nfqws_dc41b274_engine.json").read_text(encoding="utf-8"))
         engine = Path(__file__).resolve().parents[1] / "exe" / "winws2.exe"
         self.assertEqual(hashlib.sha256(engine.read_bytes()).hexdigest(), metadata["sha256"], "После обновления движка обновите эталон опций по его коммиту")
 

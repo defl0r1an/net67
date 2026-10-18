@@ -1,5 +1,5 @@
-// Срез таблицы опций поставляемого winws2 v1.0.3 (b78b52c4).
-// https://raw.githubusercontent.com/bol-van/zapret2/b78b52c4cd7f843da3ff0848a3430afbd401bdf2/nfq2/nfqws.c
+// Срез таблицы опций поставляемого winws2 без Cygwin (форк движка, dc41b274).
+// https://git.zapret.moe/api/v1/repos/zapretdiscordyoutube/zapret2-fork/raw/nfq2/nfqws.c?ref=dc41b27493963bc8c8b77c7a2238ffef27443d35
 static const struct option long_options[] = {
 	[IDX_DEBUG] = {"debug", optional_argument, 0, 0},
 	[IDX_DRY_RUN] = {"dry-run", no_argument, 0, 0},
@@ -65,6 +65,10 @@ static const struct option long_options[] = {
 	[IDX_FILTER_L7] = {"filter-l7", required_argument, 0, 0},
 #ifdef HAS_FILTER_SSID
 	[IDX_FILTER_SSID] = {"filter-ssid", required_argument, 0, 0},
+	[IDX_FILTER_SSID_NEG] = {"filter-ssid-neg", optional_argument, 0, 0},
+#endif
+#ifdef __linux__
+	[IDX_FILTER_MARK] = {"filter-mark", required_argument, 0, 0},
 #endif
 	[IDX_IPSET] = {"ipset", required_argument, 0, 0},
 	[IDX_IPSET_IP] = {"ipset-ip", required_argument, 0, 0},
@@ -96,7 +100,9 @@ static const struct option long_options[] = {
 	[IDX_WF_SAVE] = {"wf-save", required_argument, 0, 0},
 	[IDX_WF_DUP_CHECK] = {"wf-dup-check", optional_argument, 0, 0},
 	[IDX_SSID_FILTER] = {"ssid-filter", required_argument, 0, 0},
+	[IDX_SSID_FILTER_NEG] = {"ssid-filter-neg", optional_argument, 0, 0},
 	[IDX_NLM_FILTER] = {"nlm-filter", required_argument, 0, 0},
+	[IDX_NLM_FILTER_NEG] = {"nlm-filter-neg", optional_argument, 0, 0},
 	[IDX_NLM_LIST] = {"nlm-list", optional_argument, 0, 0},
 #endif
 	[IDX_LAST] = {NULL, 0, NULL, 0},
