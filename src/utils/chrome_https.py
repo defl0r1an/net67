@@ -30,8 +30,12 @@ IP идти, а имя сайта уходит в SNI и в заголовок `
 
 from __future__ import annotations
 
+import functools
+import os
+import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
 from dataclasses import dataclass
 
 from utils.net_failure import FAILURE_OTHER, FAILURE_RESET, FAILURE_TIMEOUT, classify_code
@@ -236,7 +240,7 @@ class ChromeConnection:
         curl.impersonate(CHROME_TARGET, default_headers=False)
         curl.setopt(opt.HTTPHEADER, list(WINDOWS_HEADERS))
         curl.setopt(opt.RESOLVE, [f"{host}:{self.port}:{address}".encode()])
-        curl.setopt(opt.CAINFO, _ca_bundle().encode())
+        curl.setopt(opt.CAINFO, _ca_path_for_curl())
         # Заголовок Accept-Encoding остаётся браузерным; тело распаковывается, только
         # если нужно содержимое: иначе размер — это байты на проводе.
         curl.setopt(opt.HTTP_CONTENT_DECODING, 1 if decode_body else 0)
@@ -339,6 +343,7 @@ def chrome_get(
 
     try:
         _curl_api()
+        _ca_path_for_curl()
     except (ImportError, OSError) as error:
         # Без libcurl (не положили в сборку, антивирус убрал DLL) все пробы
         # BlockCheck и подбора падали бы исключением. Открываем сайт прежним
@@ -370,6 +375,22 @@ def chrome_get(
         exchange = connection.request(path, enough=_enough)
     finally:
         connection.close()
+    if exchange.error_code == _E_SSL_CACERT_BADFILE:
+        # libcurl не прочитал файл сертификатов — это поломка программы, а не
+        # сайта: засчитать её сайту значило бы написать «не открывается» про
+        # всё подряд. Открываем прежним запросом OpenSSL.
+        _note_curl_missing(OSError(exchange.message))
+        return tls_probe.https_get(
+            host,
+            ip,
+            path,
+            timeout=timeout,
+            port=port,
+            read_limit=read_limit,
+            read_timeout=read_timeout,
+            body_done=None if body_done is None else (lambda raw: body_done(_body_of(raw))),
+            cancel=cancel,
+        )
     progress = exchange.progress
 
     def _result(kind: str, detail: str = "", **extra):
@@ -428,3 +449,54 @@ def _ca_bundle() -> str:
     import certifi
 
     return certifi.where()
+
+
+# libcurl: «не удалось прочитать файл корневых сертификатов».
+_E_SSL_CACERT_BADFILE = 77
+
+
+@functools.lru_cache(maxsize=1)
+def _ca_path_for_curl() -> bytes:
+    """Путь к файлу сертификатов в том виде, в каком libcurl его откроет.
+
+    На Windows libcurl открывает файл в кодировке ANSI (на русской Windows —
+    cp1251), а путь ему отдавали в UTF-8. Сборка в папке с кириллицей
+    («C:\\исходникик 67 и запрета\\…», имя пользователя по-русски) получала
+    кашу вместо пути и ошибку 77 на каждом запросе: подбор писал «нет
+    интернета», BlockCheck — «не открывается» про все сайты (18 октября 2026).
+
+    Путь, который ANSI не выражает, заменяется коротким именем 8.3, а если и
+    оно не годится — копией файла в %ProgramData%\\net67. Ничего не вышло —
+    OSError, и chrome_get открывает сайт через OpenSSL.
+    """
+    path = _ca_bundle()
+    if sys.platform != "win32":
+        return os.fsencode(path)
+    try:
+        return path.encode("mbcs")
+    except UnicodeEncodeError:
+        pass
+    short = _short_path(path)
+    if short and short.isascii():
+        return short.encode("ascii")
+    target_dir = Path(os.environ.get("ProgramData") or r"C:\ProgramData") / "net67"
+    target = target_dir / "cacert.pem"
+    if not str(target).isascii():
+        raise OSError(f"нет пути к сертификатам, который понял бы libcurl: {path}")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    data = Path(path).read_bytes()
+    if not target.exists() or target.read_bytes() != data:
+        target.write_bytes(data)
+    return str(target).encode("ascii")
+
+
+def _short_path(path: str) -> str:
+    """Короткое имя 8.3 (только латиница), если на томе они включены; иначе пусто."""
+    try:
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = ctypes.windll.kernel32.GetShortPathNameW(str(path), buffer, len(buffer))
+        return buffer.value if 0 < length < len(buffer) else ""
+    except Exception:
+        return ""
