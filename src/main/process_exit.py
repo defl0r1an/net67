@@ -97,6 +97,16 @@ def stop_running_qt_threads(timeout_ms: int = THREAD_DRAIN_TIMEOUT_MS) -> list[Q
     for thread in threads:
         thread.requestInterruption()
         thread.quit()
+        # Поток, который спит на своём событии (WaitForMultipleObjects,
+        # threading.Event), ни requestInterruption, ни quit не слышит. Такие
+        # потоки дают request_stop — разбудить и не ждать; ждём ниже, общим
+        # сроком. Без него выход каждый раз стоял две секунды.
+        request_stop = getattr(thread, "request_stop", None)
+        if callable(request_stop):
+            try:
+                request_stop()
+            except Exception:
+                pass
 
     deadline = time.monotonic() + max(0, int(timeout_ms)) / 1000.0
     unfinished: list[QThread] = []

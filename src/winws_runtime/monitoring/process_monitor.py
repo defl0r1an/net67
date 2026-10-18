@@ -94,3 +94,12 @@ class ProcessMonitorThread(QThread):
         self._running = False
         self._stop_requested.set()
         self.quit()
+
+    def request_stop(self):
+        """Имя, по которому поток будит выход из программы.
+
+        Общая команда выхода (main/process_exit.py) знает только
+        requestInterruption и quit, а пауза между проверками ждёт своё
+        событие: поток досыпал до пяти секунд, выход ждал его до таймаута.
+        """
+        self.stop()

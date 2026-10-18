@@ -173,7 +173,15 @@ class NativePresetsDirWatcher(QThread):
         self.start()
         return True
 
-    def stop_watching(self, wait_ms: int = 2000) -> None:
+    def request_stop(self) -> None:
+        """Будит поток и просит выйти, не дожидаясь его.
+
+        Выход из программы останавливает потоки Qt общей командой
+        (main/process_exit.py), а та до этого метода не доходила: поток спит
+        в WaitForMultipleObjects и про requestInterruption не знает. Выход
+        ждал его до конца отпущенных двух секунд, и сторож писал
+        «Интерфейс не отвечает 2.2с» (18 октября 2026).
+        """
         kernel32 = self._kernel32
         stop_event = self._stop_event
         if kernel32 is not None and stop_event:
@@ -181,6 +189,9 @@ class NativePresetsDirWatcher(QThread):
                 kernel32.SetEvent(stop_event)
             except Exception:
                 pass
+
+    def stop_watching(self, wait_ms: int = 2000) -> None:
+        self.request_stop()
         try:
             self.wait(int(wait_ms))
         except Exception:
