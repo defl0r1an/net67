@@ -72,6 +72,17 @@ class ApplicationPaths:
         return self.root / "user" / "fakes"
 
     @property
+    def engine_state_dir(self) -> Path:
+        """Файлы, которые пишет сам winws2 (память подбора стратегий).
+
+        Движок после запуска понижает себе права и пишет только в каталог из
+        параметра --writable=user/winws2 пресета; создаёт его тоже он сам.
+        Путь — соседний с user/fakes: пресет ссылается на него строкой, и
+        winws2 разрешает её от корня программы.
+        """
+        return self.root / "user" / "winws2"
+
+    @property
     def lists_dir(self) -> Path:
         return self.root / "lists"
 

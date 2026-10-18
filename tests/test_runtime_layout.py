@@ -34,6 +34,7 @@ class RuntimeLayoutTests(unittest.TestCase):
             "exe_dir": root / "exe",
             "ico_dir": root / "ico",
             "json_dir": root / "json",
+            "engine_state_dir": root / "user" / "winws2",
             "lists_dir": root / "lists",
             "lists_base_dir": root / "lists" / "base",
             "lists_user_dir": root / "lists" / "user",
