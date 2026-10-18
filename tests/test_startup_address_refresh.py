@@ -246,11 +246,11 @@ class StartupAddressRefreshInstallTests(unittest.TestCase):
             def smart_check_applied(self, **kwargs):
                 calls.append(("smart", kwargs))
 
+            def smart_addresses_enabled(self):
+                return False
+
         gate = Mock()
-        with (
-            patch("hosts.public.smart_addresses_enabled", return_value=False),
-            patch("utils.probe_gate.try_background", gate),
-        ):
+        with patch("utils.probe_gate.try_background", gate):
             queued = self._run_install(
                 "main.post_startup_hosts_refresh",
                 "install_hosts_applied_selection_refresh",
@@ -273,11 +273,11 @@ class StartupAddressRefreshInstallTests(unittest.TestCase):
             def smart_check_applied(self, **kwargs):
                 calls.append(("smart", kwargs))
 
+            def smart_addresses_enabled(self):
+                return True
+
         permit = MagicMock()
-        with (
-            patch("hosts.public.smart_addresses_enabled", return_value=True),
-            patch("utils.probe_gate.try_background", return_value=permit),
-        ):
+        with patch("utils.probe_gate.try_background", return_value=permit):
             self._run_install(
                 "main.post_startup_hosts_refresh",
                 "install_hosts_applied_selection_refresh",
@@ -296,10 +296,10 @@ class StartupAddressRefreshInstallTests(unittest.TestCase):
             def smart_check_applied(self, **kwargs):
                 calls.append(("smart", kwargs))
 
-        with (
-            patch("hosts.public.smart_addresses_enabled", return_value=True),
-            patch("utils.probe_gate.try_background", return_value=None),
-        ):
+            def smart_addresses_enabled(self):
+                return True
+
+        with patch("utils.probe_gate.try_background", return_value=None):
             self._run_install(
                 "main.post_startup_hosts_refresh",
                 "install_hosts_applied_selection_refresh",

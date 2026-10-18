@@ -57,6 +57,7 @@ from ui.accessibility import set_control_accessibility, set_state_text
 from ui.animation_policy import are_live_animations_enabled
 from ui.fluent_widgets import SettingsCard
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from ui.fluent_widgets import set_tooltip
 from ui.widgets.win11_controls import Win11ToggleRow
 from ui.pages.base_page import BasePage
 from ui.theme import get_cached_qta_pixmap, get_theme_tokens
@@ -298,7 +299,8 @@ class HostsPage(BasePage):
             ),
             parent=self.content,
         )
-        self.smart_addresses_toggle.setToolTip(
+        set_tooltip(
+            self.smart_addresses_toggle,
             self._tr(
                 "page.hosts.smart_addresses.tooltip",
                 "Раз в шесть часов программа сама проверяет первый адрес каждого включённого сервиса "

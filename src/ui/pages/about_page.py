@@ -667,8 +667,10 @@ class AboutPage(BasePage):
         self._about_open_state_obj().reset()
         self._about_open_runtime.stop(blocking=False, warning_prefix="About open action worker")
         self._about_open_runtime.cancel()
-        self._whats_new_runtime.stop(blocking=False, warning_prefix="About whats-new worker")
-        self._whats_new_runtime.cancel()
+        whats_new_runtime = self.__dict__.get("_whats_new_runtime")
+        if whats_new_runtime is not None:
+            whats_new_runtime.stop(blocking=False, warning_prefix="About whats-new worker")
+            whats_new_runtime.cancel()
 
         unsubscribe = getattr(self, "_ui_state_unsubscribe", None)
         if callable(unsubscribe):

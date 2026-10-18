@@ -23,6 +23,7 @@
 --wf-raw-part=@windivert.filter/windivert_part.wireguard.txt
 
 --blob=stun_pat:@bin/stun.bin
+--blob=tls_google:@bin/tls_clienthello_www_google_com.bin
 --blob=quic_google:@bin/quic_initial_www_google_com.bin
 --blob=fake_default_udp:0x00000000000000000000000000000000
 

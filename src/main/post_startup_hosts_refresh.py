@@ -46,12 +46,16 @@ def install_hosts_applied_selection_refresh(
     def _run_smart_address_check() -> None:
         if not is_startup_host_alive(startup_host) or hosts_feature is None:
             return
-        from hosts.public import smart_addresses_enabled
         from utils.probe_gate import HOSTS_ADDRESSES, Why, try_background
 
         # Выключатель — раньше шлюза: шлюз записывает время проверки при выдаче
         # пропуска, и выключенная проверка не должна занимать его окно.
-        if not smart_addresses_enabled():
+        try:
+            enabled = bool(hosts_feature.smart_addresses_enabled())
+        except Exception as exc:
+            log(f"Умная проверка адресов hosts: настройка не прочитана: {exc}", "DEBUG")
+            return
+        if not enabled:
             return
         try:
             permit = try_background(HOSTS_ADDRESSES)

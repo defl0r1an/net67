@@ -33,6 +33,7 @@ class HostsFeature:
     create_smart_addresses_save_worker: Callable
     create_smart_recheck_worker: Callable
     smart_check_applied: Callable
+    smart_addresses_enabled: Callable
     load_geo_sites: Callable
     load_geo_services_for_site_list: Callable
 
@@ -193,6 +194,8 @@ def build_hosts_feature() -> HostsFeature:
         create_smart_recheck_worker=_create_smart_recheck_worker,
         # Ходит в сеть и пишет hosts: звать только из фонового потока.
         smart_check_applied=lambda **kwargs: _public().smart_check_applied(**kwargs),
+        # Читает файл настроек: звать только из фонового потока.
+        smart_addresses_enabled=lambda: _public().smart_addresses_enabled(),
         # Читает каталог hosts с диска: звать только из фонового потока.
         load_geo_sites=lambda: _public().load_geo_sites(),
         # Гео-сервисы, которым посвящён список сайтов. Тоже читает каталог с диска.
