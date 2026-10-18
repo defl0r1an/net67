@@ -17,6 +17,7 @@ from wizard.plans import (
     build_hosts_service_profiles,
     build_settings_plan,
     hosts_service_profiles,
+    normalize_hosts_groups,
     normalize_selection,
     wants_telegram_hosts,
 )
@@ -220,9 +221,16 @@ def apply_wizard(
             if hosts_groups is None
             else hosts_service_profiles(hosts_groups)
         )
-        hosts_problem = writers.apply_hosts(profiles)
-        if hosts_problem:
-            warnings.append(str(hosts_problem))
+        if not profiles and hosts_groups is not None and normalize_hosts_groups(hosts_groups):
+            # Группы отмечены, а сервисов ноль — каталог не прочитался. Пустой
+            # выбор теперь значит «ничего не включать» и ставит отметку
+            # умолчаний; отдать его сюда — записать ответ, которого человек
+            # не давал. Не пишем ничего: следующий запуск попробует снова.
+            warnings.append("Каталог сервисов hosts не прочитан: выбор не записан.")
+        else:
+            hosts_problem = writers.apply_hosts(profiles)
+            if hosts_problem:
+                warnings.append(str(hosts_problem))
         if writers.add_telegram_hosts is not None and wants_telegram_hosts(
             selected, hosts_groups
         ):

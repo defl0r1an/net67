@@ -84,6 +84,19 @@ def apply_now(selection: dict | None = None) -> tuple[bool, str]:
     except Exception as exc:
         return (False, f"модули hosts недоступны: {exc}")
 
+    if selection is not None and not selection:
+        # Пустой выбор настройки — ответ человека, а не поломка. Раньше он
+        # уходил в ветку «каталог сервисов пуст»: отметка версии не
+        # ставилась, и следующий же запуск сам прописывал в hosts умолчания
+        # каталога — ИИ и соцсети, которые человек только что снял (18
+        # октября 2026, тур с пустым вопросом про hosts). Файл не трогаем,
+        # как и при пропуске настройки, а отметку ставим.
+        try:
+            set_hosts_defaults_version(DEFAULTS_VERSION)
+        except Exception as exc:
+            return (False, f"ничего не выбрано, но отметка не сохранилась: {exc}")
+        return (True, "в настройке ничего не выбрано, файл hosts не тронут")
+
     try:
         if selection is None:
             selection = load_default_selection()
@@ -133,10 +146,13 @@ def apply_in_background(selection: dict | None = None) -> threading.Thread | Non
 
     def _run() -> None:
         ok, message = apply_now(selection)
+        # Без «по умолчанию»: сюда же приходит выбор из настройки, и строка
+        # «включены по умолчанию: ничего не выбрано» врала бы дважды.
+        source = "умолчания" if selection is None else "выбор из настройки"
         if ok:
-            log(f"Сервисы hosts включены по умолчанию: {message}", "INFO")
+            log(f"Сервисы hosts ({source}): {message}", "INFO")
         else:
-            log(f"Не удалось включить сервисы hosts по умолчанию: {message}", "⚠ WARNING")
+            log(f"Сервисы hosts ({source}) не записаны: {message}", "⚠ WARNING")
 
     thread = threading.Thread(target=_run, name="hosts-defaults", daemon=True)
     thread.start()
