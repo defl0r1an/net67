@@ -9,9 +9,14 @@
 - стратегия «работает», только если помогла на тех же адресах, которые без
   обхода были закрыты, и помогла несколько раз подряд;
 - «открылось» значит «прошёл объём», а не только «ответил»: фильтр режет
-  соединение после 16–20 КБ, а короткая страница этот порог не пересекает;
-- одна случайная тишина не губит стратегию, явный след DPI губит сразу;
-- сбой сети или падение winws2 не записывается в провал стратегии.
+  соединение где-то в окне ``FREEZE_MIN_BYTES``–``FREEZE_MAX_BYTES``
+  (``diagnostics.limits``, «обрыв на 16 КБ»), а короткая страница это окно
+  не пересекает;
+- первая попытка — отбор: её провал сразу «не работает». После первого
+  успеха одна случайная тишина стратегию не губит, явный след DPI губит;
+- в историю провалов не идут: провал при пропавшей сети, «Стоп», разовое
+  падение winws2 и запуск, на котором перехват не стал готов. Идёт падение
+  winws2, повторившееся на этой стратегии одинаково.
 """
 
 from __future__ import annotations
@@ -123,6 +128,8 @@ def judge_http(
     failure: str = "",
     connected: bool = True,
     elapsed_ms: float = 0.0,
+    body_cut: bool = False,
+    body_size: int = 0,
 ) -> ProbeOutcome:
     """Итог обычного HTTP-запроса к порту 80.
 
@@ -130,6 +137,8 @@ def judge_http(
     блокировкой считается и страница-заглушка (перенаправление на страницу о
     блокировке, код 451, текст о реестре — ``diagnostics.block_cause.stub_reason``),
     Код 400 также не считается успешным ответом при подборе.
+    ``body_cut`` — заголовок пришёл, а тело сброшено или замерло: это тоже
+    блокировка, хотя статус уже 200.
     """
     from diagnostics.block_cause import HttpFacts, stub_reason
 
@@ -147,6 +156,9 @@ def judge_http(
         return ProbeOutcome(PROBE_BLOCKED, "ответ HTTP оборвался", elapsed_ms, failure)
     if status == 400:
         return ProbeOutcome(PROBE_BLOCKED, "сервер ответил 400: запрос отклонён", elapsed_ms, FAILURE_HTTP)
+    if body_cut:
+        size_kb = max(1, round(body_size / 1024))
+        return ProbeOutcome(PROBE_BLOCKED, f"ответ оборвался на ~{size_kb} КБ", elapsed_ms, failure or FAILURE_RESET)
     redirects = 300 <= status < 400 and location.strip().lower().startswith("https://")
     return ProbeOutcome(PROBE_OK, f"HTTP {status}", elapsed_ms, redirect_https=redirects)
 
@@ -161,7 +173,7 @@ VOLUME_UNKNOWN = "unknown"
 
 
 def needs_volume(outcome: ProbeOutcome) -> bool:
-    """Адрес ответил, но так коротко, что обрыв после 16 КБ не мог проявиться."""
+    """Адрес ответил так коротко, что обрыв по объёму (окно ``FREEZE_*_BYTES``) не мог проявиться."""
     return outcome.ok and not outcome.volume and outcome.body_size < FREEZE_MAX_BYTES
 
 
