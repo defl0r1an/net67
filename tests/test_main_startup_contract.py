@@ -400,8 +400,8 @@ class StartupRuntimeSetupTests(unittest.TestCase):
             patch.object(entry, "_configure_window_appearance", side_effect=lambda *_: calls.append("appearance")),
             patch("startup.show_window_bridge.ShowWindowBridge", Bridge),
             patch(
-                "ui.gui_thread_priority.install_window_gil_priority",
-                side_effect=lambda _window: calls.append("gil_priority") or object(),
+                "ui.window_presence.install_window_presence",
+                side_effect=lambda _window: calls.append("window_presence") or object(),
             ),
             patch.object(
                 entry.QTimer,
@@ -429,7 +429,7 @@ class StartupRuntimeSetupTests(unittest.TestCase):
         self.assertLess(calls.index("appearance"), calls.index("install_post_startup"))
         self.assertLess(calls.index("bridge.start"), calls.index("install_post_startup"))
         # Приоритетом окна над фоном после запуска управляет видимость окна.
-        self.assertIn("gil_priority", calls)
+        self.assertIn("window_presence", calls)
 
     def test_post_startup_install_is_bound_to_interactive_ready(self) -> None:
         from main import entry
@@ -675,7 +675,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
             patch.object(post_startup, "install_startup_audit") as install_audit,
@@ -1826,7 +1825,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
         ):
@@ -1882,7 +1880,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
             patch.object(post_startup, "install_startup_audit"),
@@ -1939,7 +1936,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
         ):
@@ -2002,7 +1998,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
         ):
@@ -2065,7 +2060,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
         ):
@@ -2154,7 +2148,6 @@ class StartupRuntimeSetupTests(unittest.TestCase):
                 build_idle_ui_task_queue=Mock(return_value=_IDLE_TASKS),
             ),
             patch.object(post_startup, "install_cpu_diagnostic"),
-            patch.object(post_startup, "install_idle_memory_trim"),
             patch.object(post_startup, "install_qt_event_diagnostic_probe"),
             patch.object(post_startup, "install_global_exception_handler"),
         ):
