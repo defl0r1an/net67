@@ -20,6 +20,7 @@ from diagnostics.tls_probe import (
     ProbeResult,
     https_get,
 )
+from utils.chrome_https import chrome_get
 from diagnostics.verdict import (
     DnsState,
     Level,
@@ -291,7 +292,7 @@ class _Net:
                 "doh_lookup",
                 side_effect=self._doh,
             ),
-            patch.object(net_access, "https_get", side_effect=_https_get),
+            patch.object(net_access, "chrome_get", side_effect=_https_get),
             # Пауза перед повтором нужна настоящей сети; сценариям она только добавляет секунды.
             patch.object(reach, "RETRY_PAUSE_S", 0.0),
             # Уточнение причины ходит в сеть само: в сценариях движка оно подменено.
@@ -312,7 +313,7 @@ class _Net:
             # Подсети — десятки настоящих соединений: в сценариях движка их нет.
             patch.object(sections, "check_subnets", side_effect=self._subnets),
             # «Жив ли сайт снаружи» — запрос к серверу проекта: в сценариях его нет.
-            patch.object(engine.outside_check, "ask", side_effect=self._outside),
+            patch.object(sections.outside_check, "ask", side_effect=self._outside),
             patch.object(net_access, "hosts_file_ipv4", side_effect=lambda _host: self.hosts),
             # Чужой сертификат читается отдельным соединением — в сценариях движка сети нет.
             patch.object(engine.cert_owner, "collect", side_effect=self._cert),
@@ -872,7 +873,7 @@ class BlockcheckScopeTests(unittest.TestCase):
 
 
 class TlsProbeFailureTests(unittest.TestCase):
-    """Классификация сбоев на настоящих сокетах (без TLS-сервера)."""
+    """Классификация сбоев запроса «как Chrome» на настоящих сокетах (без TLS-сервера)."""
 
     def _server(self, behaviour):
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -893,7 +894,7 @@ class TlsProbeFailureTests(unittest.TestCase):
         return port
 
     def _get(self, port, timeout=1.0):
-        return https_get("example.com", "127.0.0.1", timeout=timeout, port=port)
+        return chrome_get("example.com", "127.0.0.1", timeout=timeout, port=port)
 
     def test_reset_during_handshake_is_reset_or_tls(self) -> None:
         def _rst(conn):

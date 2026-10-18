@@ -45,7 +45,6 @@ from diagnostics import (
     block_cause,
     cert_owner,
     net_access,
-    outside_check,
     protocol_probe,
     quic_probe,
     registry,
@@ -61,7 +60,6 @@ from diagnostics import report_text
 from diagnostics.levels import level_rank
 from diagnostics.report_upgrade import REPORT_VERSION
 from diagnostics.limits import (
-    OUTSIDE_NEEDS_S,
     FREEZE_MAX_BYTES,
     DISCOVERY_READ_BUDGET_S,
     DISCOVERY_TIMEOUT,
@@ -184,9 +182,9 @@ def _discover_googlevideo(run: _Run) -> tuple[tuple[str, ...], str]:
     candidates = list(net_access.browser_ipv4(run, YOUTUBE_HOST))
 
     for ip in candidates[:1]:
-        result = net_access.fetch(
-            run, YOUTUBE_HOST, ip, _WATCH_PAGE, timeout=DISCOVERY_TIMEOUT, read_limit=_WATCH_PAGE_MAX_BYTES, body_done=_done
-        )
+        # Имя видеосервера ищется в самой странице: её нужно распаковать.
+        page = dict(timeout=DISCOVERY_TIMEOUT, read_limit=_WATCH_PAGE_MAX_BYTES, body_done=_done, decode_body=True)
+        result = net_access.fetch(run, YOUTUBE_HOST, ip, _WATCH_PAGE, **page)
         if found:
             return tuple(found), "адрес видеосервера получен от YouTube"
         if late:
@@ -397,10 +395,12 @@ def _run_probes(
     emit: Emit,
     on_done: Callable[[int, int], None] | None = None,
     on_probe: Callable[[str, _Probe], None] | None = None,
+    ask_outside: bool = False,
 ) -> dict[str, list[_Probe]]:
     """Запускает все цели сразу и печатает их блоки по порядку.
 
     ``on_done(готово, всего)`` зовётся после каждой проверенной цели.
+    ``ask_outside`` — галочка человека: без неё ``sections.ask_outside`` не зовётся.
     """
     total = sum(len(service.targets) for service in services.values())
     lock = threading.Lock()
@@ -448,7 +448,8 @@ def _run_probes(
             done_probes.append((key, target, None, str(exc)))
     if full:
         done_probes = _recheck_failed(run, services, done_probes)
-        _ask_outside(run, services, done_probes)
+        if ask_outside:
+            sections.ask_outside(run, services, done_probes)
 
     collected: dict[str, list[_Probe]] = {key: [] for key in services}
     current_service = ""
@@ -465,31 +466,6 @@ def _run_probes(
             emit(line)
     emit("")
     return collected
-
-
-def _ask_outside(run: _Run, services: dict[str, Service], done_probes: list) -> None:
-    """Сайты без дороги и после перепроверки: живы ли они снаружи (сервер net67 DNS).
-
-    Только встроенные сайты: свои домены пользователя (ключ ``user:``) на сервер
-    не уходят. Контрольные не спрашиваются: по ним судят о сети целиком.
-    """
-    failed = [
-        probe
-        for key, _target, probe, _error in done_probes
-        if probe is not None
-        and probe.reach_state in (ReachState.IP_BLOCK, ReachState.DPI)
-        and not key.startswith("user:")
-        and not services[key].control
-    ]
-    if not failed or run.dns_cancelled() or run.deadline - time.monotonic() < OUTSIDE_NEEDS_S:
-        return
-    answers = outside_check.ask(
-        [probe.host for probe in failed],
-        server_ips=lambda: net_access.doh_lookup(run, outside_check.SERVER_HOST)[1],
-        cancel=run.probe_cancel,
-    )
-    for probe in failed:
-        probe.outside = answers.get(probe.host, "")
 
 
 def _recheck_failed(run: _Run, services: dict[str, Service], done_probes: list) -> list:
@@ -662,6 +638,7 @@ def run_blockcheck(
     check_dns_servers: Callable[..., dict] | None = None,
     progress: Callable[[str, int, int], None] | None = None,
     partial: Callable[[dict], None] | None = None,
+    ask_outside: bool = False,
 ) -> dict:
     """Проверка BlockCheck. Печатает отчёт через ``emit`` и возвращает итог для экрана.
 
@@ -673,6 +650,7 @@ def run_blockcheck(
     таким сайтам советуется hosts или DNS, а не подбор стратегии.
     ``check_dns_servers`` — проверка DNS-серверов для полной проверки: получает
     ``should_stop`` и возвращает ``{"level", "findings": [{"level", "text"}], "text"}``.
+    ``ask_outside`` — галочка сверки с сервером снаружи (``sections.ask_outside``).
     """
     from diagnostics.freeze_check import EVERY_AT_ONCE, check_freeze, summarize_freeze
     from diagnostics.voice_check import check_voice, summarize_voice
@@ -737,7 +715,7 @@ def run_blockcheck(
         # Сервис уходит на экран, как только проверены все его адреса, а не когда кончатся все сайты.
         on_probe = sections.live_services(services, verdict_of, lambda ready: live.put(services=ready))
         on_done = functools.partial(step, STEP_SITES)
-        collected = _run_probes(run, services, full=True, emit=emit, on_done=on_done, on_probe=on_probe)
+        collected = _run_probes(run, services, full=True, emit=emit, on_done=on_done, on_probe=on_probe, ask_outside=ask_outside)
         verdicts = {key: verdict_of(service, collected[key]) for key, service in services.items()}
         services_report = report_text.services_report(services, verdicts, collected)
         live.put(services=services_report)
