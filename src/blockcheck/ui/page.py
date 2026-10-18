@@ -320,22 +320,27 @@ class BlockcheckPage(BasePage):
         self._scope_combo = ComboBox()
         # userData — именованным: второй позиционный аргумент у qfluentwidgets —
         # значок, и значение терялось (старый выбор режима всегда давал «Полную»).
+        # Первыми и по умолчанию — сайты: их проверка ходит как браузер. «Глубокая
+        # диагностика» — по выбору человека: поиск места фильтра, пачки соединений,
+        # серии UDP и прочие пробы, которых браузер не делает.
         self._scope_combo.addItem(
-            tr_catalog("page.blockcheck.scope_main", default="Discord и YouTube"), userData=SCOPE_MAIN
+            tr_catalog("page.blockcheck.scope_all", default="Только сайты (быстро)"), userData=SCOPE_ALL
         )
         self._scope_combo.addItem(
-            tr_catalog("page.blockcheck.scope_all", default="Все сайты"), userData=SCOPE_ALL
+            tr_catalog("page.blockcheck.scope_main", default="Только Discord и YouTube (быстро)"), userData=SCOPE_MAIN
         )
-        self._scope_combo.addItem("Подробно: сайты и сеть", userData=SCOPE_FULL)
-        self._scope_combo.setCurrentIndex(1)
-        self._scope_combo.setMinimumWidth(260)
+        self._scope_combo.addItem(
+            tr_catalog("page.blockcheck.scope_full", default="Глубокая диагностика (около минуты)"), userData=SCOPE_FULL
+        )
+        self._scope_combo.setCurrentIndex(0)
+        self._scope_combo.setMinimumWidth(320)
         self._update_scope_combo_accessibility()
         self._scope_combo.currentIndexChanged.connect(self._update_scope_combo_accessibility)
         row.addWidget(self._scope_combo)
         row.addSpacing(8)
 
         self._status_label = CaptionLabel(
-            tr_catalog("page.blockcheck.ready", default="Проверяем так же, как браузер. Займёт 5–30 секунд")
+            tr_catalog("page.blockcheck.ready", default="Сайты — так, как их открыл бы браузер")
         )
         self._set_status_text(self._status_label.text())
         row.addWidget(self._status_label, 1)
@@ -1376,8 +1381,10 @@ class BlockcheckPage(BasePage):
             self._update_tabs_accessibility()
             # Карточки без шапок: set_title не вызывается, он добавил бы шапку обратно.
             self._scope_label.setText(_tr("page.blockcheck.scope", "Что проверить:"))
-            self._scope_combo.setItemText(0, _tr("page.blockcheck.scope_main", "Discord и YouTube"))
-            self._scope_combo.setItemText(1, _tr("page.blockcheck.scope_all", "Все сайты"))
+            # Порядок тот же, что при создании списка: сайты первые, глубокая диагностика последняя.
+            self._scope_combo.setItemText(0, _tr("page.blockcheck.scope_all", "Только сайты (быстро)"))
+            self._scope_combo.setItemText(1, _tr("page.blockcheck.scope_main", "Только Discord и YouTube (быстро)"))
+            self._scope_combo.setItemText(2, _tr("page.blockcheck.scope_full", "Глубокая диагностика (около минуты)"))
             self._update_scope_combo_accessibility()
             if self._domains_caption is not None:
                 self._domains_caption.setText(_tr("page.blockcheck.custom_domains", "Проверить ещё и свои домены:"))

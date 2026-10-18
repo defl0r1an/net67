@@ -88,7 +88,7 @@ class BlockcheckPageAccessibilityTests(unittest.TestCase):
         self.assertIn("BlockCheck, Подбор стратегии, Проверка домена или DNS подмена", page._tabs_pivot.accessibleDescription())
         self.assertEqual(
             page._scope_combo.accessibleName(),
-            "Что проверить BlockCheck, выбрано: Все сайты",
+            "Что проверить BlockCheck, выбрано: Только сайты (быстро)",
         )
         self.assertEqual(page._start_btn.text(), "Проверить")
         self.assertEqual(page._start_btn.accessibleName(), "Запустить BlockCheck")
@@ -120,7 +120,7 @@ class BlockcheckPageAccessibilityTests(unittest.TestCase):
 
         self.assertEqual(
             menu.view.item(0).data(Qt.ItemDataRole.AccessibleTextRole),
-            "Что проверить BlockCheck: Discord и YouTube, не выбран",
+            "Что проверить BlockCheck: Только сайты (быстро), выбран",
         )
 
     def test_cards_have_no_headers_to_save_space(self) -> None:
