@@ -1464,7 +1464,9 @@ class BlockcheckPage(BasePage):
         )
 
     def _on_past_check_loaded(self, request_id: int, report) -> None:
-        if self._past_report_runtime.is_current(request_id, sender=self.sender(), cleanup_in_progress=self._cleanup_in_progress):
+        # Устаревший ответ отсекает номер запроса: у нашего OneShotWorkerRuntime нет
+        # параметра sender, и он ронял нажатие на прошлую проверку (TypeError, 18.10).
+        if self._past_report_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             self._show_past_check(report)
 
     def _show_past_check(self, report) -> None:
