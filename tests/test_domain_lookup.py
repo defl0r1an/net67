@@ -113,6 +113,55 @@ class _Network:
             test.addCleanup(item.stop)
 
 
+class WaveTests(unittest.TestCase):
+    """Две волны: после того, что делает и браузер, подробный разбор идёт всегда."""
+
+    def _run(self, site_level):
+        net = _Network(self)
+        net.site = {"level": site_level, "headline": "example.com"}
+        asked: list[str] = []
+
+        def query(server, name, rtype, **kwargs):
+            asked.append(server)
+            return _fake_query(server, name, rtype, **kwargs)
+
+        canary: list[str] = []
+        with (
+            patch.object(engine, "query_server", query),
+            patch.object(engine, "canary_answered", lambda domain: canary.append(domain) or False),
+        ):
+            report = engine.run_domain_lookup("example.com", servers=[SECURE, GOOD])
+        return report, net, asked, canary
+
+    def test_open_site_with_honest_dns_still_gets_the_full_check(self) -> None:
+        report, net, asked, canary = self._run("ok")
+
+        self.assertEqual(net.site_calls, ["example.com"])
+        # Подробный разбор идёт всегда (решение пользователя 2026-10-17): общедоступные
+        # DNS-серверы, пробный запрос, пинг и путь — даже когда сайт открылся.
+        self.assertIn(GOOD.address, asked)
+        self.assertEqual(canary, ["example.com"])
+        self.assertIsNotNone(report.ping)
+        self.assertIsNotNone(report.route)
+        from dns.ui.domain_lookup_cards import KEY_PING, build_lookup_cards
+
+        ping_card = next(card for card in build_lookup_cards(report) if card.key == KEY_PING)
+        self.assertNotEqual(ping_card.status, "Подробный разбор не понадобился")
+
+    def test_closed_site_gets_the_full_check(self) -> None:
+        report, _net, asked, canary = self._run("fail")
+
+        self.assertIn(GOOD.address, asked)
+        self.assertEqual(canary, ["example.com"])
+        self.assertIsNotNone(report.ping)
+        self.assertIsNotNone(report.route)
+
+    def test_address_typed_by_hand_is_checked_in_full(self) -> None:
+        _Network(self)
+        report = engine.run_domain_lookup("93.184.216.34", servers=[SECURE, GOOD])
+        self.assertIsNotNone(report.ping)
+
+
 class TargetTests(unittest.TestCase):
     def test_links_ports_and_case_are_cleaned(self) -> None:
         cases = {
