@@ -1150,6 +1150,10 @@ def set_tg_proxy_auto_deeplink(value: bool) -> bool:
 
 
 __all__ = [
+    "get_hosts_smart_addresses",
+    "set_hosts_smart_addresses",
+    "get_probe_gate_last_run",
+    "set_probe_gate_last_run",
     "get_skipped_update_version",
     "set_skipped_update_version",
     "get_whats_new_state",
@@ -1537,6 +1541,28 @@ def add_tab_history_run(key: str, entry: dict[str, Any]) -> list[dict[str, Any]]
         section[key] = [*(runs if isinstance(runs, list) else []), _as_dict(entry)]
 
     return copy.deepcopy(update_blockcheck_settings(_append)[key])
+
+
+def get_hosts_smart_addresses() -> bool:
+    """Включена ли умная проверка адресов hosts (выключатель в редакторе hosts)."""
+    return _get_bool(("hosts", "smart_addresses"), False)
+
+
+def set_hosts_smart_addresses(enabled: bool) -> bool:
+    return _set_bool(("hosts", "smart_addresses"), bool(enabled))
+
+
+def get_probe_gate_last_run(kind: str) -> float:
+    """Когда была прошлая плановая проверка вида ``kind`` (utils.probe_gate); 0 — не было."""
+    value = _get_path_value(read_settings(), ("probe_gate", "last_run"), {}) or {}
+    try:
+        return max(float(value.get(str(kind)) or 0.0), 0.0)
+    except (TypeError, ValueError, AttributeError):
+        return 0.0
+
+
+def set_probe_gate_last_run(kind: str, when: float) -> None:
+    _update_settings(lambda data: data["probe_gate"]["last_run"].__setitem__(str(kind), float(when)))
 
 
 def get_hosts_engine() -> dict[str, Any]:

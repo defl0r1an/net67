@@ -21,6 +21,9 @@ from hosts.commands import (
     remove_adobe_domains,
     restore_hosts_permissions,
     save_user_selection,
+    set_smart_addresses_enabled,
+    smart_addresses_enabled,
+    smart_check_applied,
     write_hosts_file,
 )
 from hosts.geo_sites import GeoSites, load_geo_services_for_site_list, load_geo_sites
@@ -52,6 +55,9 @@ __all__ = [
     "remove_adobe_domains",
     "restore_hosts_permissions",
     "save_user_selection",
+    "set_smart_addresses_enabled",
+    "smart_addresses_enabled",
+    "smart_check_applied",
     "write_hosts_file",
 ]
 

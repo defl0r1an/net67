@@ -434,6 +434,7 @@ def normalize_hosts(data: object) -> dict[str, Any]:
         "active_domains": unique_str_list(raw.get("active_domains")),
         "selection": selection,
         "engine": _normalize_hosts_engine(raw.get("engine")),
+        "smart_addresses": as_bool(raw.get("smart_addresses"), False),
     }
 
 
@@ -734,6 +735,19 @@ def normalize_profile_identity(data: object) -> dict[str, Any]:
     }
 
 
+def normalize_probe_gate(data: object) -> dict[str, Any]:
+    last_run: dict[str, float] = {}
+    for key, value in as_dict(as_dict(data).get("last_run")).items():
+        name = str(key or "").strip()
+        try:
+            when = float(value)
+        except (TypeError, ValueError):
+            continue
+        if name and when > 0:
+            last_run[name] = when
+    return {"last_run": last_run}
+
+
 def normalize_settings(data: object) -> dict[str, Any]:
     raw = as_dict(data)
     return {
@@ -755,6 +769,7 @@ def normalize_settings(data: object) -> dict[str, Any]:
         "blockcheck": normalize_blockcheck(raw.get("blockcheck")),
         "folders": normalize_folders(raw.get("folders")),
         "profile_identity": normalize_profile_identity(raw.get("profile_identity")),
+        "probe_gate": normalize_probe_gate(raw.get("probe_gate")),
     }
 
 

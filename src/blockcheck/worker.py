@@ -72,6 +72,10 @@ class BlockcheckWorker(QObject):
         # проверку заново.
         self._running = True
         report = None
+        # Пропуск шлюза проб: пока идёт проверка, фоновые проверки сети ждут.
+        from utils.probe_gate import begin_user_run, end_user_run
+
+        probe_run = begin_user_run("blockcheck")
         try:
             from diagnostics.engine import run_blockcheck
 
@@ -107,6 +111,7 @@ class BlockcheckWorker(QObject):
                 self._close_run_log_action(self._run_log_file)
             except Exception:
                 pass
+            end_user_run(probe_run)
             self._running = False
         self.finished.emit(report)
 

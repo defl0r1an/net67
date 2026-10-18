@@ -29,6 +29,10 @@ class HostsFeature:
     create_file_save_worker: Callable
     create_address_check_worker: Callable
     create_profile_probe_worker: Callable
+    create_smart_addresses_load_worker: Callable
+    create_smart_addresses_save_worker: Callable
+    create_smart_recheck_worker: Callable
+    smart_check_applied: Callable
     load_geo_sites: Callable
     load_geo_services_for_site_list: Callable
 
@@ -141,6 +145,28 @@ def build_hosts_feature() -> HostsFeature:
 
         return HostsProfileProbeWorker(request_id, _probe, parent=parent)
 
+    def _create_smart_addresses_load_worker(request_id: int, parent=None):
+        return _call_worker(request_id, lambda: _public().smart_addresses_enabled(), name="smart_load", parent=parent)
+
+    def _create_smart_addresses_save_worker(request_id: int, enabled: bool, parent=None):
+        return _call_worker(
+            request_id,
+            lambda: _public().set_smart_addresses_enabled(bool(enabled)),
+            name="smart_save",
+            parent=parent,
+        )
+
+    def _create_smart_recheck_worker(request_id: int, names, parent=None):
+        from utils.probe_gate import Why
+
+        names = tuple(names or ())
+        return _call_worker(
+            request_id,
+            lambda: _public().smart_check_applied(why=Why.USER, recheck=names),
+            name="smart_recheck",
+            parent=parent,
+        )
+
     def _create_address_check_worker(request_id: int, parent=None):
         from hosts.address_worker import HostsAddressCheckWorker
 
@@ -162,6 +188,11 @@ def build_hosts_feature() -> HostsFeature:
         create_file_save_worker=_create_file_save_worker,
         create_address_check_worker=_create_address_check_worker,
         create_profile_probe_worker=_create_profile_probe_worker,
+        create_smart_addresses_load_worker=_create_smart_addresses_load_worker,
+        create_smart_addresses_save_worker=_create_smart_addresses_save_worker,
+        create_smart_recheck_worker=_create_smart_recheck_worker,
+        # Ходит в сеть и пишет hosts: звать только из фонового потока.
+        smart_check_applied=lambda **kwargs: _public().smart_check_applied(**kwargs),
         # Читает каталог hosts с диска: звать только из фонового потока.
         load_geo_sites=lambda: _public().load_geo_sites(),
         # Гео-сервисы, которым посвящён список сайтов. Тоже читает каталог с диска.

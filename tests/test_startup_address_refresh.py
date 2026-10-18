@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, Mock, patch
 
 
 def _managed_block(*rows: str) -> str:
@@ -229,6 +229,7 @@ class StartupAddressRefreshInstallTests(unittest.TestCase):
             patch.object(module, "enqueue_subsystem_task", side_effect=lambda q, n, t: queued.append((q, n, t))),
             patch.object(module, "bind_startup_gate", side_effect=lambda _signal, cb, is_ready: cb()),
             patch.object(module, "is_startup_host_alive", return_value=True),
+            patch.object(module, "schedule_after", side_effect=lambda *_args: None, create=True),
         ):
             getattr(module, install_name)(_Host(), log_startup_metric=lambda *_args: None, **feature_kwargs)
             for _queue, _name, target in queued:
@@ -242,12 +243,68 @@ class StartupAddressRefreshInstallTests(unittest.TestCase):
             def refresh_applied_selection(self):
                 calls.append("refresh")
 
-        queued = self._run_install(
-            "main.post_startup_hosts_refresh",
-            "install_hosts_applied_selection_refresh",
-            {"hosts_feature": FakeHostsFeature()},
-        )
-        self.assertEqual(queued, [("hosts", "HostsAppliedSelectionRefresh")])
+            def smart_check_applied(self, **kwargs):
+                calls.append(("smart", kwargs))
+
+        gate = Mock()
+        with (
+            patch("hosts.public.smart_addresses_enabled", return_value=False),
+            patch("utils.probe_gate.try_background", gate),
+        ):
+            queued = self._run_install(
+                "main.post_startup_hosts_refresh",
+                "install_hosts_applied_selection_refresh",
+                {"hosts_feature": FakeHostsFeature()},
+            )
+        self.assertEqual(queued, [("hosts", "HostsAppliedSelectionRefresh"), ("dns", "HostsSmartAddressCheck")])
+        # Выключатель выключен: в сеть не ходим и окно шлюза не занимаем.
+        self.assertEqual(calls, ["refresh"])
+        gate.assert_not_called()
+
+    def test_smart_check_runs_on_schedule_when_switched_on(self) -> None:
+        from utils.probe_gate import Why
+
+        calls: list[object] = []
+
+        class FakeHostsFeature:
+            def refresh_applied_selection(self):
+                calls.append("refresh")
+
+            def smart_check_applied(self, **kwargs):
+                calls.append(("smart", kwargs))
+
+        permit = MagicMock()
+        with (
+            patch("hosts.public.smart_addresses_enabled", return_value=True),
+            patch("utils.probe_gate.try_background", return_value=permit),
+        ):
+            self._run_install(
+                "main.post_startup_hosts_refresh",
+                "install_hosts_applied_selection_refresh",
+                {"hosts_feature": FakeHostsFeature()},
+            )
+        self.assertEqual(calls, ["refresh", ("smart", {"why": Why.SCHEDULE})])
+        permit.__exit__.assert_called_once()
+
+    def test_smart_check_waits_when_gate_says_no(self) -> None:
+        calls: list[object] = []
+
+        class FakeHostsFeature:
+            def refresh_applied_selection(self):
+                calls.append("refresh")
+
+            def smart_check_applied(self, **kwargs):
+                calls.append(("smart", kwargs))
+
+        with (
+            patch("hosts.public.smart_addresses_enabled", return_value=True),
+            patch("utils.probe_gate.try_background", return_value=None),
+        ):
+            self._run_install(
+                "main.post_startup_hosts_refresh",
+                "install_hosts_applied_selection_refresh",
+                {"hosts_feature": FakeHostsFeature()},
+            )
         self.assertEqual(calls, ["refresh"])
 
     def test_hosts_refresh_logs_why_nothing_changed(self) -> None:

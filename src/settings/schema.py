@@ -178,6 +178,10 @@ def default_hosts() -> dict[str, Any]:
         "active_domains": [],
         "selection": {},
         "engine": {"catalog": "", "checked_at": "", "suspects": [], "services": {}, "pool": {}},
+        # Умная проверка адресов (плановая, раз в шесть часов, и после
+        # включения плитки). Выключена: программа сама ходит по адресам и
+        # переписывает hosts, на рабочих компьютерах это решает человек.
+        "smart_addresses": False,
     }
 
 
@@ -308,6 +312,12 @@ def default_profile_identity() -> dict[str, Any]:
     }
 
 
+def default_probe_gate() -> dict[str, Any]:
+    # Шлюз проб (utils.probe_gate): когда была прошлая плановая проверка каждого вида,
+    # {"<вид>": время UNIX}. Перезапуск программы по нему не повторяет проверку.
+    return {"last_run": {}}
+
+
 def build_default_settings() -> dict[str, Any]:
     return {
         "version": SETTINGS_VERSION,
@@ -328,6 +338,7 @@ def build_default_settings() -> dict[str, Any]:
         "blockcheck": default_blockcheck(),
         "folders": default_folders(),
         "profile_identity": default_profile_identity(),
+        "probe_gate": default_probe_gate(),
     }
 
 CHECK_HISTORY_LIMIT = 50

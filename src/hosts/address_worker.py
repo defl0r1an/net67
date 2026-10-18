@@ -16,7 +16,13 @@ class HostsAddressCheckWorker(QThread):
     def run(self):
         from hosts import commands
         try:
-            prepared = commands.check_addresses(strict=True, fresh=True, commit=False, should_stop=lambda: self._cancelled)
+            from utils.probe_gate import Why, user_run
+
+            # Пропуск шлюза проб: пока человек ждёт результата, плановая проверка не идёт.
+            with user_run("hosts_addresses"):
+                prepared = commands.check_addresses(
+                    why=Why.USER, fresh=True, commit=False, should_stop=lambda: self._cancelled
+                )
             if self._cancelled or prepared is None:
                 return
             overlay, report = prepared

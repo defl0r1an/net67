@@ -451,22 +451,62 @@ def _fresh_addresses(host: str, want_ipv6: bool) -> list[str]:
     return found
 
 
-def check_addresses(selection: dict[str, str] | None = None, *, strict: bool = False, recheck=None, should_stop=None, fresh: bool = False, commit: bool = True):
+def check_addresses(selection: dict[str, str] | None = None, *, why=None, recheck=None, should_stop=None, fresh: bool = False, commit: bool = True):
     """Умный движок: проверяет адреса включённых сервисов и запоминает рабочие (hosts.address_engine).
 
-    ``selection`` — выбор «сервис → профиль»; None — сохранённый выбор. ``strict`` — человек
-    только что переключил сервис: мёртвый адрес убирается сразу, без второй проверки.
+    ``selection`` — выбор «сервис → профиль»; None — сохранённый выбор. ``why`` — повод
+    (``utils.probe_gate.Why``): ``USER`` (по умолчанию) — человек ждёт результата, мёртвый
+    адрес убирается сразу; ``SCHEDULE`` — плановая проверка: только первый записанный адрес
+    каждого имени, поиск замены лишь у сервиса, где тот не ответил.
     ``recheck`` — названия сервисов, которые проверить сейчас (None — все включённые).
     Сам файл hosts здесь не меняется: его переписывает refresh_applied_selection, если
     проверенные адреса отличаются от записанных.
     """
+    from utils.probe_gate import Why
+
     with _CHECK_LOCK:
         if fresh:
             _PROBE_CACHE.clear()
-        return _check_addresses(selection, strict=strict, recheck=recheck, should_stop=should_stop, commit=commit)
+        return _check_addresses(
+            selection, why=Why.USER if why is None else why, recheck=recheck, should_stop=should_stop, commit=commit
+        )
 
 
-def _check_addresses(selection: dict[str, str] | None, *, strict: bool, recheck, should_stop=None, commit: bool = True):
+def smart_addresses_enabled() -> bool:
+    """Включён ли выключатель «Умная проверка адресов» в редакторе hosts."""
+    try:
+        from settings.store import get_hosts_smart_addresses
+
+        return bool(get_hosts_smart_addresses())
+    except Exception:
+        return False
+
+
+def set_smart_addresses_enabled(enabled: bool) -> bool:
+    from settings.store import set_hosts_smart_addresses
+
+    return bool(set_hosts_smart_addresses(bool(enabled)))
+
+
+def smart_check_applied(*, why, recheck=None) -> HostsCommandResult:
+    """Умная проверка без человека у кнопки: проверить адреса и, если надо, переписать блок.
+
+    Плановая (``Why.SCHEDULE``) и после включения плитки (``Why.USER`` с ``recheck``).
+    Выключатель выключен — ничего не делает: программа сама по адресам не ходит и hosts
+    без спроса не переписывает. Чужие строки hosts не трогаются ни при каком исходе —
+    refresh_applied_selection правит только блок net67.
+    """
+    if not smart_addresses_enabled():
+        return HostsCommandResult(success=True, message="умная проверка адресов выключена", changed=False)
+    report = check_addresses(None, why=why, recheck=None if recheck is None else set(recheck))
+    if report is None or not bool(getattr(report, "changed", False)):
+        return HostsCommandResult(success=True, message=describe_address_check(report) if report else "", changed=False)
+    result = refresh_applied_selection()
+    note = describe_address_check(report)
+    return HostsCommandResult(success=bool(result.success), message=note or result.message, changed=bool(result.changed))
+
+
+def _check_addresses(selection: dict[str, str] | None, *, why, recheck, should_stop=None, commit: bool = True):
     global _OVERLAY_BEFORE_REFRESH
     import time
 
@@ -514,7 +554,7 @@ def _check_addresses(selection: dict[str, str] | None, *, strict: bool, recheck,
         resolve=lambda host, ipv6: [] if cancelled() else _fresh_addresses(host, ipv6),
         network_ok=internet_reachable,
         ipv6=bool(is_ipv6_available()),
-        strict=strict,
+        why=why,
         recheck=recheck,
         sweep=lambda addresses: {} if cancelled() else sweep(addresses),
     )

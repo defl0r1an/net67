@@ -57,6 +57,7 @@ from ui.accessibility import set_control_accessibility, set_state_text
 from ui.animation_policy import are_live_animations_enabled
 from ui.fluent_widgets import SettingsCard
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from ui.widgets.win11_controls import Win11ToggleRow
 from ui.pages.base_page import BasePage
 from ui.theme import get_cached_qta_pixmap, get_theme_tokens
 from ui.theme_semantic import get_semantic_palette
@@ -197,6 +198,16 @@ class HostsPage(BasePage):
         # и сотню соединений разом им слать незачем.
         self._address_runtime = OneShotWorkerRuntime()
         self._probe_runtime = OneShotWorkerRuntime()
+        # Умная проверка адресов: выключатель и перепроверка только что
+        # включённых сервисов. Состояние выключателя читается и пишется в
+        # фоне — это файл настроек.
+        self._smart_runtime = OneShotWorkerRuntime()
+        self._smart_save_runtime = OneShotWorkerRuntime()
+        self._smart_recheck_runtime = OneShotWorkerRuntime()
+        self._smart_enabled = False
+        self._smart_loaded = False
+        self._smart_recheck_queue: set[str] = set()
+        self._recheck_after_write: set[str] = set()
         self._probing: str | None = None
         self._probe_queue: list[str] = []
         self._probe_progress: tuple[int, int] = (0, 0)
@@ -276,6 +287,29 @@ class HostsPage(BasePage):
         self.address_check_status = CaptionLabel("", self.content)
         self.address_check_status.hide()
         self.add_widget(self.address_check_status)
+        self.smart_addresses_toggle = Win11ToggleRow(
+            "fa5s.magic",
+            self._tr("page.hosts.smart_addresses.title", "Умная проверка адресов"),
+            # Подпись карточки в одну строку: длинная обрезается многоточием.
+            # Подробности — в подсказке.
+            self._tr(
+                "page.hosts.smart_addresses.description",
+                "Ставит первым рабочий адрес: раз в 6 часов и после включения сервиса",
+            ),
+            parent=self.content,
+        )
+        self.smart_addresses_toggle.setToolTip(
+            self._tr(
+                "page.hosts.smart_addresses.tooltip",
+                "Раз в шесть часов программа сама проверяет первый адрес каждого включённого сервиса "
+                "и, если он не отвечает, ставит первым рабочий. После включения сервиса сразу "
+                "проверяет его адреса. Меняет только записи net67, ваши строки в hosts не трогает.",
+            )
+        )
+        self.smart_addresses_toggle.setChecked(False, block_signals=True)
+        self.smart_addresses_toggle.setEnabled(False)
+        self.smart_addresses_toggle.toggled.connect(self._on_smart_addresses_toggled)
+        self.add_widget(self.smart_addresses_toggle)
 
         # Поиск: появляется по Ctrl+F, прячется по Esc.
         self.search_edit = SearchLineEdit(self.content)
@@ -439,6 +473,7 @@ class HostsPage(BasePage):
     # ── жизненный цикл ───────────────────────────────────────
 
     def on_page_activated(self) -> None:
+        self._request_smart_addresses_state()
         if self._snapshot is None:
             cached = self._hosts.peek_page_snapshot()
             if cached is not None:
@@ -449,7 +484,17 @@ class HostsPage(BasePage):
         self._cleanup_in_progress = True
         self._probe_queue.clear()
         self._probing = None
-        for runtime in (self._snapshot_runtime, self._apply_runtime, self._restore_runtime, self._probe_runtime, self._address_runtime):
+        self._smart_recheck_queue.clear()
+        for runtime in (
+            self._snapshot_runtime,
+            self._apply_runtime,
+            self._restore_runtime,
+            self._probe_runtime,
+            self._address_runtime,
+            self._smart_runtime,
+            self._smart_save_runtime,
+            self._smart_recheck_runtime,
+        ):
             try:
                 runtime.stop(blocking=False, warning_prefix="Hosts worker")
                 runtime.cancel()
@@ -524,6 +569,7 @@ class HostsPage(BasePage):
         self._write_epoch += 1
         selection = draft.selection()
         adobe = draft.adobe if draft.adobe_changed else None
+        self._recheck_after_write |= self._newly_enabled(selection)
         self._render_changes()
         self._apply_runtime.start_qthread_worker(
             worker_factory=lambda request_id: self._hosts.create_apply_worker(request_id, selection, adobe, self),
@@ -554,6 +600,8 @@ class HostsPage(BasePage):
         if self._write_denied:
             self._write_denied = False
             self._render_access()
+        written, self._recheck_after_write = self._recheck_after_write, set()
+        self._request_smart_recheck(written)
         if snapshot is not None:
             # Записанное уходит из черновика само; остаётся только то, что
             # пользователь поменял во время записи.
@@ -574,8 +622,83 @@ class HostsPage(BasePage):
         if not self._apply_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
         self._applying = False
+        self._recheck_after_write = set()
         self._take_pending()
         self._fail_write(error, None)
+
+    # ── умная проверка адресов ───────────────────────────────
+
+    def _newly_enabled(self, selection: dict[str, str]) -> set[str]:
+        """Сервисы, которым эта запись включила профиль или сменила его."""
+        snapshot = self._snapshot
+        current = {entry.name: entry.current for entry in snapshot.services} if snapshot is not None else {}
+        return {name for name, profile in selection.items() if profile and profile != current.get(name)}
+
+    def _request_smart_addresses_state(self) -> None:
+        factory = getattr(self._hosts, "create_smart_addresses_load_worker", None)
+        if not callable(factory) or self._cleanup_in_progress or self._smart_loaded or self._smart_runtime.is_running():
+            return
+        self._smart_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: factory(request_id, self),
+            on_loaded=self._on_smart_addresses_loaded,
+        )
+
+    def _on_smart_addresses_loaded(self, request_id: int, enabled) -> None:
+        if not self._smart_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        self._smart_loaded = True
+        self._smart_enabled = bool(enabled)
+        self.smart_addresses_toggle.setChecked(self._smart_enabled, block_signals=True)
+        self.smart_addresses_toggle.setEnabled(True)
+
+    def _on_smart_addresses_toggled(self, enabled: bool) -> None:
+        factory = getattr(self._hosts, "create_smart_addresses_save_worker", None)
+        if not callable(factory) or self._cleanup_in_progress or not self._smart_loaded:
+            return
+        self._smart_enabled = bool(enabled)
+        self._smart_save_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: factory(request_id, bool(enabled), self),
+            on_failed=self._on_smart_addresses_save_failed,
+        )
+
+    def _on_smart_addresses_save_failed(self, request_id: int, error: str) -> None:
+        if not self._smart_save_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        # Не сохранилось — выключатель показывает то, что в настройках.
+        self._smart_loaded = False
+        self.smart_addresses_toggle.setEnabled(False)
+        self._request_smart_addresses_state()
+        self._show_error(self._tr("page.hosts.smart_addresses.save_failed", "Не удалось сохранить настройку"), error)
+
+    def _request_smart_recheck(self, names) -> None:
+        """После включения сервиса — проверка его адресов, если включена умная проверка.
+
+        Запись уже прошла с теми адресами, что известны сейчас: тумблер не ждёт
+        сети. Нашёлся порядок лучше — блок переписывается ещё раз, в фоне.
+        """
+        names = {str(name) for name in (names or ()) if name}
+        factory = getattr(self._hosts, "create_smart_recheck_worker", None)
+        if not names or not callable(factory) or not self._smart_enabled or self._cleanup_in_progress:
+            return
+        self._smart_recheck_queue |= names
+        if self._smart_recheck_runtime.is_running():
+            return
+        batch, self._smart_recheck_queue = tuple(sorted(self._smart_recheck_queue)), set()
+        self._smart_recheck_runtime.start_qthread_worker(
+            worker_factory=lambda request_id: factory(request_id, batch, self),
+            on_loaded=self._on_smart_recheck_finished,
+            on_finished=lambda *_args: self._request_smart_recheck(set(self._smart_recheck_queue)),
+        )
+
+    def _on_smart_recheck_finished(self, request_id: int, result) -> None:
+        if not self._smart_recheck_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            return
+        if bool(getattr(result, "changed", False)):
+            message = str(getattr(result, "message", "") or "")
+            if message:
+                self.address_check_status.setText(message)
+                self.address_check_status.show()
+            self._request_snapshot()
 
     def _fail_write(self, message: str, snapshot, *, access_denied: bool = False) -> None:
         """Запись не удалась: плитки возвращаются к тому, что реально в файле."""

@@ -84,6 +84,10 @@ class StrategyScanWorker(QObject):
         self._cancelled = False
         self._running = True
         report = None
+        # Пропуск шлюза проб: пока идёт подбор, фоновые проверки сети ждут.
+        from utils.probe_gate import begin_user_run, end_user_run
+
+        probe_run = begin_user_run("strategy_scan")
         try:
             self._start_run_log()
             probe_host = self._resolve_probe_host()
@@ -116,6 +120,7 @@ class StrategyScanWorker(QObject):
                 self._close_run_log_action(self._run_log_file)
             except Exception:
                 pass
+            end_user_run(probe_run)
             self._running = False
         self.scan_finished.emit(report)
         self.finished.emit(report)
