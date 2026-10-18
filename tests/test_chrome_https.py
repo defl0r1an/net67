@@ -31,11 +31,14 @@ class _Opt:
     VERBOSE = "verbose"
     DEBUGFUNCTION = "debug_fn"
     NOSIGNAL = "nosignal"
+    NOBODY = "nobody"
+    HTTPHEADER = "headers"
 
 
 class _Info:
     OS_ERRNO = "os_errno"
     RESPONSE_CODE = "response_code"
+    NUM_CONNECTS = "num_connects"
 
 
 class _CurlError(Exception):
@@ -64,7 +67,8 @@ def _api(script: _Script):
         def setopt(self, option, value):
             script.options[option] = value
 
-        def perform(self):
+        def perform(self, clear_headers=True, clear_resolve=True):
+            script.cleared = (clear_headers, clear_resolve)
             for kind, value in script.steps:
                 if kind == "debug":
                     script.options[_Opt.DEBUGFUNCTION](*value)
@@ -102,10 +106,14 @@ class ChromeHttpsTests(unittest.TestCase):
         result = _get(script, ip="2001:db8::5", read_limit=100)
 
         self.assertEqual(script.impersonated, chrome_https.CHROME_TARGET)
+        # Chrome на Windows с русским языком, а не профиль с Mac.
+        self.assertIn(b'sec-ch-ua-platform: "Windows"', script.options[_Opt.HTTPHEADER])
         self.assertEqual(script.options[_Opt.RESOLVE], [b"example.com:443:[2001:db8::5]"])
         # Тело не распаковывается: размер — байты на проводе.
         self.assertEqual(script.options[_Opt.HTTP_CONTENT_DECODING], 0)
         self.assertEqual((result.kind, result.status, result.body_size, result.tls_version), ("ok", 200, 10, "TLSv1.3"))
+        # Списки заголовков и адреса живут до закрытия соединения, а не до конца запроса.
+        self.assertEqual(script.cleared, (False, False))
 
     def test_page_content_can_be_asked_unpacked(self) -> None:
         script = _Script(HELLO, SECURED, OK_HEADER)
