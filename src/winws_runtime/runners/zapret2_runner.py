@@ -38,6 +38,39 @@ from .preset_runner_support import (
     remember_cache_entry,
 )
 from .constants import CREATE_NO_WINDOW
+
+
+#: ``--writable=<папка>`` в тексте пресета: значение без пробелов или в кавычках.
+_WRITABLE_RE = re.compile(r'(?<!\S)--writable=("[^"]+"|\S+)', re.IGNORECASE)
+
+
+def ensure_writable_dirs(text: str, work_dir: str) -> list[str]:
+    """Создаёт папки из ``--writable=`` пресета, пока движок не начал их разбирать.
+
+    winws2 разбирает --writable через realpath_any: несуществующую папку он
+    создаёт сам, но только если существует её родитель. Пресет white sni
+    просит user/winws2, а папки user/ у net67 может не быть — у zapret там
+    лежат настройки, у нас они в settings/. Движок отвечал «bad file
+    'user/winws2'», и пресет не запускался (0.24.67, 19 октября 2026).
+
+    Относительный путь — от рабочей папки движка, как его поймёт и сам
+    winws2. Возвращает созданные или уже существовавшие папки.
+    """
+    made: list[str] = []
+    for match in _WRITABLE_RE.finditer(str(text or "")):
+        value = match.group(1).strip().strip('"').strip()
+        if not value:
+            continue
+        path = value if os.path.isabs(value) else os.path.join(str(work_dir or ""), value)
+        path = os.path.normpath(path)
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as exc:
+            # Не вышло — движок сам скажет, что не так с путём; запуск не трогаем.
+            log(f"Папку для --writable={value} создать не удалось: {exc}", "WARNING")
+            continue
+        made.append(path)
+    return made
 from winws_runtime.health.process_health_check import (
     diagnose_startup_error,
     diagnose_winws_exit,
@@ -814,6 +847,7 @@ class Winws2StrategyRunner(StrategyRunnerBase):
         if not dry_run_artifact.launch_args:
             return True
 
+        ensure_writable_dirs(getattr(artifact, "normalized_text", ""), self.work_dir)
         cmd = [self.winws_exe, *dry_run_artifact.launch_args]
         attempts = _TRANSIENT_DRY_RUN_RETRIES + 1
         for attempt in range(attempts):
@@ -1015,6 +1049,7 @@ class Winws2StrategyRunner(StrategyRunnerBase):
                 log(message, "WARNING")
             return False
 
+        ensure_writable_dirs(getattr(artifact, "normalized_text", ""), self.work_dir)
         cmd = [self.winws_exe, *artifact.launch_args]
         start_label = "Preset switch" if preset_switch else "Starting"
 
