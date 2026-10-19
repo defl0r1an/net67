@@ -28,6 +28,9 @@ class TelegramProxySettingsText:
     hosts_group_title: str
     hosts_title: str
     hosts_hint: str
+    netgram_title: str
+    netgram_description: str
+    netgram_button: str
     hosts_state_checking: str
     hosts_state_none: str
     hosts_state_all: str
@@ -153,4 +156,10 @@ TELEGRAM_PROXY_SETTINGS_TEXT = TelegramProxySettingsText(
         "Проверяет соединение с серверами Telegram, локальный SOCKS5 прокси "
         "и возможные проблемы с маршрутом."
     ),
+    netgram_title="Нетграм — если прокси не помог",
+    netgram_description=(
+        "Клиент Telegram для сетей с DPI-ограничениями: обходит блокировки сам, без прокси. "
+        "Русский интерфейс."
+    ),
+    netgram_button="Скачать Нетграм",
 )

@@ -299,6 +299,7 @@ class TelegramProxyPage(BasePage):
             on_copy_fake_tls_nginx_config=self._on_copy_fake_tls_nginx_config,
             on_open_advanced_settings=self._on_open_advanced_settings,
             on_telegram_hosts_action=self._on_telegram_hosts_button_clicked,
+            on_open_netgram=self._on_open_netgram,
         )
         self._status_card = widgets.status_card
         self._status_dot = widgets.status_dot
@@ -308,6 +309,7 @@ class TelegramProxyPage(BasePage):
         self._setup_title_label = widgets.setup_title_label
         self._setup_open_btn = widgets.setup_open_btn
         self._setup_copy_btn = widgets.setup_copy_btn
+        self._setup_netgram_btn = widgets.setup_netgram_btn
         self._settings_card = widgets.settings_card
         self._host_port_row = widgets.host_port_row
         self._host_edit = widgets.host_edit
@@ -1355,6 +1357,16 @@ class TelegramProxyPage(BasePage):
             url,
             success_log=f"Opened deep link: {url}",
             error_prefix="Failed to open link",
+        )
+
+    def _on_open_netgram(self):
+        """Страница выпусков Нетграма в браузере."""
+        from config.urls import NETGRAM_URL
+
+        self._start_external_link_worker(
+            NETGRAM_URL,
+            success_log=f"Открыта страница Нетграма: {NETGRAM_URL}",
+            error_prefix="Не удалось открыть страницу Нетграма",
         )
 
     def create_external_link_worker(self, *, url: str, success_log: str, error_prefix: str):

@@ -21,6 +21,7 @@ from qfluentwidgets import (
 from ui.accessibility import remove_line_edit_buttons_from_tab_order, set_control_accessibility, set_state_text
 from ui.fluent_widgets import SettingsCard, enable_setting_card_group_auto_height, set_tooltip
 from ui.widgets.win11_controls import Win11ComboRow, Win11ControlRow, Win11ToggleRow
+from config.urls import NETGRAM_URL
 from telegram_proxy.ui.text_plan import TELEGRAM_PROXY_SETTINGS_TEXT
 
 
@@ -34,6 +35,7 @@ class TelegramProxySettingsPanelWidgets:
     setup_title_label: object
     setup_open_btn: object
     setup_copy_btn: object
+    setup_netgram_btn: object
     settings_card: object
     host_port_row: object
     host_edit: object
@@ -132,7 +134,7 @@ def build_action_row(
     return row, button
 
 
-def _build_status_card(*, status_dot_cls, on_toggle_proxy, on_open_in_telegram, on_copy_link):
+def _build_status_card(*, status_dot_cls, on_toggle_proxy, on_open_in_telegram, on_copy_link, on_open_netgram=None):
     text = TELEGRAM_PROXY_SETTINGS_TEXT
     status_card = SettingsCard()
 
@@ -193,8 +195,38 @@ def _build_status_card(*, status_dot_cls, on_toggle_proxy, on_open_in_telegram, 
 
     status_card.add_layout(setup_row)
 
-    # Строки «Не помогает прокси? Скачайте ZaStoGram» здесь нет: net67 не
-    # советует стороннюю сборку мессенджера вместо своего прокси.
+    # Запасной путь, если прокси не помог, — свой клиент Нетграм, а не
+    # чужая сборка мессенджера (у апстрима здесь ZaStoGram). Отдельной
+    # строкой с пояснением: он должен быть понятен без наведения мыши.
+    setup_netgram_btn = None
+    if on_open_netgram is not None and NETGRAM_URL:
+        status_card.add_widget(HorizontalSeparator())
+        netgram_row = QHBoxLayout()
+        netgram_row.setSpacing(12)
+        netgram_icon = IconWidget(FluentIcon.DOWNLOAD)
+        netgram_icon.setFixedSize(20, 20)
+        netgram_row.addWidget(netgram_icon)
+        netgram_text = QVBoxLayout()
+        netgram_text.setSpacing(2)
+        netgram_text.addWidget(StrongBodyLabel(text.netgram_title))
+        netgram_description_label = CaptionLabel(text.netgram_description)
+        netgram_description_label.setWordWrap(True)
+        netgram_text.addWidget(netgram_description_label)
+        netgram_row.addLayout(netgram_text, 1)
+
+        setup_netgram_btn = PushButton(text.netgram_button, icon=FluentIcon.DOWNLOAD)
+        setup_netgram_btn.setMinimumWidth(124)
+        set_tooltip(setup_netgram_btn, "Открыть страницу выпусков Нетграма на GitHub.")
+        set_control_accessibility(
+            setup_netgram_btn,
+            name=text.netgram_button,
+            description="Открывает в браузере страницу выпусков Нетграма — клиента Telegram с обходом блокировок.",
+        )
+        set_state_text(setup_netgram_btn, text.netgram_button)
+        setup_netgram_btn.clicked.connect(on_open_netgram)
+        netgram_row.addWidget(setup_netgram_btn)
+        status_card.add_layout(netgram_row)
+
     return (
         status_card,
         status_dot,
@@ -204,6 +236,7 @@ def _build_status_card(*, status_dot_cls, on_toggle_proxy, on_open_in_telegram, 
         setup_title_label,
         setup_open_btn,
         setup_copy_btn,
+        setup_netgram_btn,
     )
 
 
@@ -219,6 +252,7 @@ def build_telegram_proxy_settings_panel(
     on_copy_fake_tls_nginx_config,
     on_open_advanced_settings,
     on_telegram_hosts_action,
+    on_open_netgram=None,
 ) -> TelegramProxySettingsPanelWidgets:
     text = TELEGRAM_PROXY_SETTINGS_TEXT
     (
@@ -230,11 +264,13 @@ def build_telegram_proxy_settings_panel(
         setup_title_label,
         setup_open_btn,
         setup_copy_btn,
+        setup_netgram_btn,
     ) = _build_status_card(
         status_dot_cls=status_dot_cls,
         on_toggle_proxy=on_toggle_proxy,
         on_open_in_telegram=on_open_in_telegram,
         on_copy_link=on_copy_link,
+        on_open_netgram=on_open_netgram,
     )
     layout.addWidget(status_card)
 
@@ -385,6 +421,7 @@ def build_telegram_proxy_settings_panel(
         setup_title_label=setup_title_label,
         setup_open_btn=setup_open_btn,
         setup_copy_btn=setup_copy_btn,
+        setup_netgram_btn=setup_netgram_btn,
         settings_card=settings_card,
         host_port_row=host_port_row,
         host_edit=host_edit,
