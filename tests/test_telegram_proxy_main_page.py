@@ -93,9 +93,9 @@ class TelegramProxyMainPageTests(unittest.TestCase):
             self.assertTrue(card.isAncestorOf(widget))
 
     def test_netgram_row_opens_its_releases(self) -> None:
-        """Запасной путь, если прокси не помог, — свой клиент Нетграм.
+        """Запасной путь, если прокси не помог, — свой клиент netgram.
 
-        У апстрима на этом месте ZaStoGram; владелец попросил Нетграм и
+        У апстрима на этом месте ZaStoGram; владелец попросил netgram и
         ссылку на список выпусков, а не на последний (19 октября 2026).
         """
         from unittest.mock import patch
@@ -106,6 +106,7 @@ class TelegramProxyMainPageTests(unittest.TestCase):
         button = page._setup_netgram_btn
 
         self.assertIsNotNone(button)
+        self.assertEqual(button.text(), "Скачать netgram")
         self.assertTrue(page._status_card.isAncestorOf(button))
         self.assertEqual(NETGRAM_URL, "https://github.com/defl0r1an/netgram/releases")
         with patch.object(page, "_start_external_link_worker") as start:

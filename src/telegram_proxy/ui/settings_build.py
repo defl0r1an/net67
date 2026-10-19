@@ -195,7 +195,7 @@ def _build_status_card(*, status_dot_cls, on_toggle_proxy, on_open_in_telegram, 
 
     status_card.add_layout(setup_row)
 
-    # Запасной путь, если прокси не помог, — свой клиент Нетграм, а не
+    # Запасной путь, если прокси не помог, — свой клиент netgram, а не
     # чужая сборка мессенджера (у апстрима здесь ZaStoGram). Отдельной
     # строкой с пояснением: он должен быть понятен без наведения мыши.
     setup_netgram_btn = None
@@ -216,11 +216,11 @@ def _build_status_card(*, status_dot_cls, on_toggle_proxy, on_open_in_telegram, 
 
         setup_netgram_btn = PushButton(text.netgram_button, icon=FluentIcon.DOWNLOAD)
         setup_netgram_btn.setMinimumWidth(124)
-        set_tooltip(setup_netgram_btn, "Открыть страницу выпусков Нетграма на GitHub.")
+        set_tooltip(setup_netgram_btn, "Открыть страницу выпусков netgram на GitHub.")
         set_control_accessibility(
             setup_netgram_btn,
             name=text.netgram_button,
-            description="Открывает в браузере страницу выпусков Нетграма — клиента Telegram с обходом блокировок.",
+            description="Открывает в браузере страницу выпусков netgram — клиента Telegram с обходом блокировок.",
         )
         set_state_text(setup_netgram_btn, text.netgram_button)
         setup_netgram_btn.clicked.connect(on_open_netgram)

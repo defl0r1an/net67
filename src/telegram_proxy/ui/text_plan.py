@@ -156,10 +156,12 @@ TELEGRAM_PROXY_SETTINGS_TEXT = TelegramProxySettingsText(
         "Проверяет соединение с серверами Telegram, локальный SOCKS5 прокси "
         "и возможные проблемы с маршрутом."
     ),
-    netgram_title="Нетграм — если прокси не помог",
+    # Имя — как пишет себя сам проект (README defl0r1an/netgram): строчными
+    # латинскими. Кириллицей «Нетграм» оно было по ошибке (19 октября 2026).
+    netgram_title="netgram — если прокси не помог",
     netgram_description=(
         "Клиент Telegram для сетей с DPI-ограничениями: обходит блокировки сам, без прокси. "
         "Русский интерфейс."
     ),
-    netgram_button="Скачать Нетграм",
+    netgram_button="Скачать netgram",
 )

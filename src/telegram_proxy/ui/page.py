@@ -1360,13 +1360,13 @@ class TelegramProxyPage(BasePage):
         )
 
     def _on_open_netgram(self):
-        """Страница выпусков Нетграма в браузере."""
+        """Страница выпусков netgram в браузере."""
         from config.urls import NETGRAM_URL
 
         self._start_external_link_worker(
             NETGRAM_URL,
-            success_log=f"Открыта страница Нетграма: {NETGRAM_URL}",
-            error_prefix="Не удалось открыть страницу Нетграма",
+            success_log=f"Открыта страница netgram: {NETGRAM_URL}",
+            error_prefix="Не удалось открыть страницу netgram",
         )
 
     def create_external_link_worker(self, *, url: str, success_log: str, error_prefix: str):
