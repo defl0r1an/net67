@@ -18,6 +18,9 @@ from main.post_startup_idle_tasks import (  # noqa: E402
     BACKGROUND_WAIT_MAX_MS,
     BUSY_POLL_MS,
     HIDDEN_POLL_MS,
+    HIDDEN_WARM_AFTER_S,
+    HIDDEN_WARM_GAP_MS,
+    HIDDEN_WARM_IDLE_MS,
     SPECULATIVE_IDLE_MS,
     SPECULATIVE_POLL_MS,
     IDLE_REQUIRED_MAX_MS,
@@ -43,6 +46,7 @@ class _World:
         self.mouse_pressed = False
         self.idle_ms: int | None = 10_000
         self.background_busy = False
+        self.return_settle_ms = 0
 
     def build(self) -> IdleUiTaskQueue:
         queue = IdleUiTaskQueue(
@@ -52,6 +56,7 @@ class _World:
             is_background_busy=lambda: self.background_busy,
             is_app_active=lambda: self.app_active,
             mouse_pressed=lambda: self.mouse_pressed,
+            return_settle_ms=lambda: self.return_settle_ms,
             clock=lambda: self.now,
         )
         # Таймер подменён: тест сам решает, когда «сработал» тик, и видит,
@@ -65,6 +70,127 @@ class _World:
 
 def _armed_ms(queue: IdleUiTaskQueue) -> int:
     return int(queue._timer.start.call_args.args[0])
+
+
+class IdleUiTaskQueueHiddenWarmupTests(unittest.TestCase):
+    """Запуск в трей: страницы про запас собираются и при скрытом окне, но тихо и один раз."""
+
+    def _queue(self, world: _World, *names: str):
+        world.shown = False
+        queue = world.build()
+        ran: list[str] = []
+        for name in names:
+            queue.add(name, lambda name=name: ran.append(name), speculative=True)
+        return queue, ran
+
+    def test_hidden_window_builds_nothing_during_the_first_two_minutes(self) -> None:
+        world = _World()
+        world.idle_ms = 10 * 60_000
+        queue, ran = self._queue(world, "page")
+        world.advance(int(HIDDEN_WARM_AFTER_S * 1000) - 1_000)
+
+        queue._on_timer()
+
+        self.assertEqual(ran, [])
+        self.assertEqual(_armed_ms(queue), HIDDEN_POLL_MS)
+
+    def test_page_is_built_when_hidden_long_enough_and_the_user_is_away(self) -> None:
+        world = _World()
+        world.idle_ms = HIDDEN_WARM_IDLE_MS
+        queue, ran = self._queue(world, "page")
+        world.advance(int(HIDDEN_WARM_AFTER_S * 1000) + 1)
+
+        queue._on_timer()
+
+        self.assertEqual(ran, ["page"])
+
+    def test_page_waits_while_the_user_works_even_with_a_hidden_window(self) -> None:
+        world = _World()
+        world.idle_ms = HIDDEN_WARM_IDLE_MS - 1
+        queue, ran = self._queue(world, "page")
+        world.advance(int(HIDDEN_WARM_AFTER_S * 1000) + 1)
+
+        queue._on_timer()
+
+        self.assertEqual(ran, [])
+
+        world.idle_ms = None  # время простоя неизвестно: ничего не строим втихую
+        queue._on_timer()
+        self.assertEqual(ran, [])
+
+    def test_pages_are_built_one_by_one_with_a_long_pause(self) -> None:
+        world = _World()
+        world.idle_ms = 10 * 60_000
+        queue, ran = self._queue(world, "one", "two")
+        world.advance(int(HIDDEN_WARM_AFTER_S * 1000) + 1)
+
+        queue._on_timer()
+
+        self.assertEqual(ran, ["one"])
+        self.assertGreaterEqual(_armed_ms(queue), HIDDEN_WARM_GAP_MS)
+
+    def test_a_task_that_is_not_a_spare_page_still_waits_for_the_window(self) -> None:
+        world = _World()
+        world.idle_ms = 10 * 60_000
+        world.shown = False
+        queue = world.build()
+        ran: list[str] = []
+        queue.add("ordinary", lambda: ran.append("x"))  # не «про запас»: нужна видимому окну
+        world.advance(int(HIDDEN_WARM_AFTER_S * 1000) + 1)
+
+        queue._on_timer()
+
+        self.assertEqual(ran, [])
+
+
+class IdleUiTaskQueueReturnSettleTests(unittest.TestCase):
+    """Сразу после возврата окна из долгого фона отложенные задачи ждут."""
+
+    def test_tasks_wait_out_the_settle_time_after_the_window_returns(self) -> None:
+        world = _World()
+        world.return_settle_ms = 7_000
+        queue = world.build()
+        ran: list[str] = []
+        queue.add("page", lambda: ran.append("page"), speculative=True)
+        world.idle_ms = 60_000  # человек давно не трогал мышь: раньше задача шла бы сразу
+
+        queue._on_timer()
+
+        self.assertEqual(ran, [])
+        self.assertEqual(_armed_ms(queue), 7_000)
+
+        world.return_settle_ms = 0
+        queue._on_timer()
+        self.assertEqual(ran, ["page"])
+
+    def test_ordinary_tasks_wait_too_and_short_settle_polls_not_faster_than_busy_poll(self) -> None:
+        world = _World()
+        world.return_settle_ms = 50
+        queue = world.build()
+        ran: list[str] = []
+        queue.add("whats_new", lambda: ran.append("x"))
+
+        queue._on_timer()
+
+        self.assertEqual(ran, [])
+        self.assertEqual(_armed_ms(queue), BUSY_POLL_MS)
+
+    def test_hidden_window_is_not_affected_by_the_settle_time(self) -> None:
+        world = _World()
+        world.shown = False
+        world.return_settle_ms = 9_000
+        queue = world.build()
+        ran: list[str] = []
+        queue.add("update_window", lambda: ran.append("u"), needs_shown_window=False)
+
+        queue._on_timer()
+
+        self.assertEqual(ran, ["u"])
+
+    def test_default_queue_reads_the_shared_presence_state(self) -> None:
+        import inspect
+
+        self.assertIs(inspect.signature(IdleUiTaskQueue.__init__).parameters["return_settle_ms"].default, idle_tasks.return_settle_remaining_ms)
 
 
 class IdleUiTaskQueueBackgroundTests(unittest.TestCase):
@@ -407,6 +533,10 @@ class IdleUiTaskQueueRealTimerTests(unittest.TestCase):
             idle_ms=lambda: 10_000,
             is_app_active=lambda: True,
             mouse_pressed=lambda: False,
+            # Не общий core.runtime.presence: тесты, показавшие главное окно в том же
+            # процессе, оставляют там «окно вернулось из долгого фона», и очередь
+            # честно ждёт 10 с — дольше, чем этот тест слушает таймер.
+            return_settle_ms=lambda: 0,
         )
         loop = QEventLoop()
         queue.add("page", lambda: (ran.append("page"), loop.quit()))
