@@ -299,6 +299,11 @@ class SystemTrayManager:
     native tray icon через Shell_NotifyIcon без Qt-tray слоя.
     """
 
+    # Меню собирается и прогревается заранее, когда окно уже построено и
+    # запуск не спешит: иначе первое открытие после долгого простоя читало
+    # шрифты и код рисования с диска прямо под щелчком по значку.
+    PREWARM_MENU_DELAY_MS = 6000
+
     def __init__(self, window_port, icon_path, app_version, *, tray_feature):
         self.window_port = window_port
         self._tray_feature = tray_feature
@@ -381,6 +386,7 @@ class SystemTrayManager:
         self._taskbar_created_message = self._message_window.taskbar_created_message
         self._add_icon()
         self._connect_proxy_status_signal()
+        QTimer.singleShot(self.PREWARM_MENU_DELAY_MS, self.prewarm_menu)
 
     def _load_icon_handle(self, icon_path: str):
         if sys.platform != "win32":
@@ -532,6 +538,25 @@ class SystemTrayManager:
             "launch_phase": launch_phase,
             "tg_proxy_label": tg_label,
         }
+
+    def prewarm_menu(self) -> None:
+        """Создаёт меню и один раз рисует его в картинку (на экран не выводит).
+
+        Первое открытие после долгого простоя было медленным: шрифты, их
+        метрики и код рисования подгружались с диска прямо под щелчком по
+        значку (в журнале апстрима меню рисовалось 2–3 с). Заранее
+        прогретое меню открывается из памяти.
+        """
+        try:
+            menu = self._ensure_qt_menu()
+            if menu.isVisible():
+                return
+            self._apply_menu_style(menu)
+            self._sync_menu_state(self._build_menu_state())
+            self._update_menu_widths(menu)
+            menu.grab()
+        except Exception as e:
+            log(f"Не удалось заранее подготовить меню трея: {e}", "DEBUG")
 
     def show_context_menu(self, anchor_x: int | None = None, anchor_y: int | None = None) -> None:
         menu = self._ensure_qt_menu()

@@ -50,6 +50,65 @@ class TrayMenuContractTests(unittest.TestCase):
         manager.show_context_menu.assert_called_once_with(anchor_x=None, anchor_y=None)
         manager._schedule_visibility_toggle.assert_not_called()
 
+    def _prewarm_manager(self, create_menu):
+        import tray
+
+        manager = tray.SystemTrayManager.__new__(tray.SystemTrayManager)
+        manager.window_port = SimpleNamespace(create_menu=create_menu, is_visible=Mock(return_value=False))
+        manager._tray_feature = SimpleNamespace(
+            launch_state=Mock(return_value=(False, "")),
+            telegram_proxy_label=Mock(return_value="Telegram Proxy: выкл"),
+        )
+        manager._menu = None
+        manager._show_window_action = None
+        manager._tg_proxy_action = None
+        manager._exit_stop_action = None
+        manager._network_status_action = None
+        manager._network_ok = None
+        manager._network_latency_ms = 0.0
+        manager._tray_menu_min_width = 336
+        manager._tray_submenu_min_width = 240
+        return manager
+
+    def test_menu_is_built_and_drawn_before_the_first_click(self) -> None:
+        from qfluentwidgets import RoundMenu
+
+        menus = []
+
+        def create_menu():
+            menu = RoundMenu(parent=None)
+            self.addCleanup(menu.deleteLater)
+            menu.grab = Mock(wraps=menu.grab)
+            menus.append(menu)
+            return menu
+
+        manager = self._prewarm_manager(create_menu)
+
+        with patch("tray.log") as log:
+            manager.prewarm_menu()
+
+        log.assert_not_called()  # прогрев дошёл до конца, а не проглотил ошибку
+        self.assertEqual(len(menus), 1)
+        menus[0].grab.assert_called_once()
+        self.assertFalse(menus[0].isVisible())  # на экран прогрев ничего не выводит
+        # Первый щелчок открывает уже созданное меню, а не строит новое.
+        self.assertIs(manager._ensure_qt_menu(), menus[0])
+
+    def test_prewarm_failure_is_swallowed(self) -> None:
+        manager = self._prewarm_manager(Mock(side_effect=RuntimeError("нет экрана")))
+
+        manager.prewarm_menu()  # не падает
+
+        self.assertIsNone(manager._menu)
+
+    def test_native_backend_schedules_the_prewarm(self) -> None:
+        import inspect
+
+        import tray
+
+        source = inspect.getsource(tray.SystemTrayManager._create_native_backend)
+        self.assertIn("prewarm_menu", source)
+
     def test_round_tray_menu_uses_global_hairline_fix(self) -> None:
         import tray
         from qfluentwidgets import Action, RoundMenu
