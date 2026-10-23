@@ -87,6 +87,7 @@ class StrategyScanPage(BasePage):
         self._apply_check_runtime = OneShotWorkerRuntime()
         self._apply_check_host = ""
         self._apply_check_protocol = PROTOCOL_TCP_HTTPS
+        self._apply_check_companions: tuple[str, ...] = ()
         super().__init__(
             title=tr_catalog("page.blockcheck_public.title", default="Подбор стратегии"),
             subtitle=tr_catalog("page.blockcheck_public.subtitle",
@@ -1214,6 +1215,11 @@ class StrategyScanPage(BasePage):
         probe_host = str((getattr(result, "raw_data", None) or {}).get("probe_host") or "")
         if probe_host:
             payload["probe_host"] = probe_host
+        # Остальные имена сервиса (у YouTube — видеосервер и превью): после «Применить»
+        # проверяются вместе с сайтом.
+        companions = tuple((getattr(result, "raw_data", None) or {}).get("companions") or ())
+        if companions:
+            payload["companions"] = companions
         state = self._strategy_apply_state_obj()
         if state.is_busy():
             state.pending = dict(payload)
@@ -1226,8 +1232,10 @@ class StrategyScanPage(BasePage):
         self._apply_check_protocol = str(payload.get("scan_protocol") or PROTOCOL_TCP_HTTPS)
         if self._apply_check_protocol in (PROTOCOL_TCP_HTTPS, PROTOCOL_HTTP80, PROTOCOL_QUIC):
             self._apply_check_host = str(payload.get("probe_host") or payload.get("scan_target") or "")
+            self._apply_check_companions = tuple(payload.get("companions") or ())
         else:
             self._apply_check_host = ""
+            self._apply_check_companions = ()
 
         def worker_factory(request_id: int):
             return self.create_strategy_apply_worker(
@@ -1292,9 +1300,11 @@ class StrategyScanPage(BasePage):
 
         self._cancel_apply_check()
         protocol = self._apply_check_protocol
+        companions = self._apply_check_companions
         self._apply_check_runtime.start_qthread_worker(
             worker_factory=lambda request_id: StrategyApplyCheckWorker(
-                request_id, host, is_running=self._bypass_is_running, restarting=restarting, scan_protocol=protocol),
+                request_id, host, is_running=self._bypass_is_running, restarting=restarting, scan_protocol=protocol,
+                companions=companions),
             bind_worker=lambda worker: worker.completed.connect(self._on_apply_check_finished),
         )
         self._on_log(f"Проверяю {host} через ваш пресет после запуска обхода…")

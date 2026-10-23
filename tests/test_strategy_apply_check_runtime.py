@@ -51,7 +51,7 @@ def _ensure_callback(runtime):
 
 
 def test_applying_while_scan_owns_engine_cannot_start_second_engine():
-    runtime = SimpleNamespace(is_strategy_scan_active=lambda: True, is_running=Mock(), start=Mock(), restart=Mock())
+    runtime = SimpleNamespace(is_strategy_scan_active=lambda: True, is_running=Mock(), start=Mock(), stop=Mock(), restart=Mock())
     assert _ensure_callback(runtime)() == "scan_running"
     runtime.start.assert_not_called()
     runtime.restart.assert_not_called()
@@ -60,7 +60,7 @@ def test_applying_while_scan_owns_engine_cannot_start_second_engine():
 def test_apply_restarts_active_engine_and_starts_inactive_engine():
     for running, result in ((True, "restarting"), (False, "started")):
         runtime = SimpleNamespace(is_strategy_scan_active=lambda: False, is_running=lambda: running,
-                                  start=Mock(return_value=True), restart=Mock(return_value=True))
+                                  start=Mock(return_value=True), stop=Mock(return_value=True), restart=Mock(return_value=True))
         assert _ensure_callback(runtime)() == result
         (runtime.restart if running else runtime.start).assert_called_once()
         (runtime.start if running else runtime.restart).assert_not_called()

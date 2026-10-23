@@ -368,6 +368,19 @@ class RunTests(unittest.TestCase):
         self.assertEqual(plans.build_status(report).tone, plans.TONE_ERROR)
 
 
+class NamedCertificateTests(unittest.TestCase):
+    def test_named_certificate_failure_blames_the_name_only_when_the_site_does_not_open(self) -> None:
+        failed = CertNames("timeout", (), "", "сервер не ответил вовремя")
+        with patch.object(engine, "fetch_cert_names", lambda ip, server_name=None: failed):
+            blocked = engine._lookup_cert("142.251.151.4", engine.SOURCE_CERT_NAMED, "www.youtube.com", False)
+            opens = engine._lookup_cert("142.251.151.4", engine.SOURCE_CERT_NAMED, "www.youtube.com", True)
+
+        self.assertIn("блокируют по имени", blocked.detail)
+        self.assertNotIn("блокируют", opens.detail)
+        self.assertIn("сам сайт при этом открывается", opens.detail)
+        self.assertIn("сервер не ответил вовремя", opens.detail)
+
+
 class PlansTests(unittest.TestCase):
     def _report(self) -> engine.DomainLookupReport:
         _Network(self)

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import html
 import re
 import time
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 from blockcheck.hosts import host_of
 
@@ -32,6 +32,11 @@ _WATCH_URLS: tuple[str, ...] = (
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ&hl=en",
     "https://www.youtube.com/watch?v=Qr1zDbHATw0&t=8s&hl=en",
 )
+_STREAMING_URL_RE = re.compile(
+    r'(?i)"serverAbrStreamingUrl"\s*:\s*"https?:(?:\\/\\/|//)((?:rr|r)\d+---sn-[a-z0-9-]+\.googlevideo\.com)'
+)
+# Адрес, по которому плеер сам замеряет скорость до узла: настоящий, подписанный под ваш адрес и отвечает без входа.
+_PROBE_URL_RE = re.compile(r'"probeUrl"\s*:\s*"(https:[^"]+)"')
 _GOOGLEVIDEO_RR_RE = re.compile(
     r"(?i)\b((?:rr|r)\d+(?:---|\.)sn-[a-z0-9-]+\.googlevideo\.com)\b"
 )
@@ -78,6 +83,50 @@ def _fetch_report_mapping(url: str, timeout: float) -> str:
         return response.raw.read(2048, decode_content=True).decode("utf-8", errors="ignore")
 
 
+def fetch_mapped_host_at(address: str, host: str, *, timeout: float = 3.0) -> str:
+    """Узел вашей сети по ответу редиректора, спрошенного по готовому адресу (обычный HTTP, порт 80).
+
+    Имя редиректора у закрытых сетей может не разрешаться системным DNS, поэтому адрес приходит снаружи:
+    из файла hosts, DNS системы или шифрованного эталона.
+    """
+    import socket
+
+    request = f"GET /report_mapping?di=no HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n"
+    try:
+        with socket.create_connection((address, 80), timeout=timeout) as sock:
+            sock.settimeout(timeout)
+            sock.sendall(request.encode("ascii"))
+            data = b""
+            while len(data) < 4096:
+                chunk = sock.recv(2048)
+                if not chunk:
+                    break
+                data += chunk
+    except OSError:
+        return ""
+    head, _, body = data.partition(b"\r\n\r\n")
+    if not head.startswith(b"HTTP/1.1 200") and not head.startswith(b"HTTP/1.0 200"):
+        return ""
+    return parse_report_mapping(body.decode("utf-8", errors="ignore"))
+
+
+def fetch_mapped_host(*, timeout: float = 3.0, cancelled: Callable[[], bool] | None = None) -> str:
+    """Узел вашей сети по ответу редиректора (обычный HTTP). Пусто — не ответил или ответ не похож на настоящий."""
+    is_cancelled = cancelled or (lambda: False)
+    # У каждого адреса свой срок: один молчащий адрес не должен съедать время второго.
+    each = max(0.1, float(timeout))
+    for url in _REPORT_MAPPING_URLS:
+        if is_cancelled():
+            break
+        try:
+            host = parse_report_mapping(_fetch_report_mapping(url, each))
+        except Exception:  # заглушка провайдера, обрыв или нет requests: остаётся страница ролика
+            continue
+        if host:
+            return host
+    return ""
+
+
 # Apex-домен не является видеосервером: прямая проверка всегда падает,
 # работают только rr*-поддомены или служебный redirector.
 _BARE_GOOGLEVIDEO_HOSTS = frozenset({"googlevideo.com", "www.googlevideo.com"})
@@ -96,6 +145,23 @@ def normalize_googlevideo_host(value: str | None) -> str:
     return host
 
 
+def extract_probe_url(page: str) -> tuple[str, str]:
+    """(узел, путь с параметрами) из ``probeUrl`` страницы ролика. Пусто — адреса замера в странице нет."""
+    match = _PROBE_URL_RE.search(str(page or ""))
+    if match is None:
+        return "", ""
+    try:
+        import json
+
+        url = json.loads(f'"{match.group(1)}"')
+    except ValueError:
+        return "", ""
+    parsed = urlparse(url)
+    host = normalize_googlevideo_host(parsed.hostname or "")
+    path = f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
+    return (host, path) if host and path.startswith("/") else ("", "")
+
+
 def extract_googlevideo_hosts(page: str) -> tuple[str, ...]:
     """Извлекает CDN-имена из обычных и URL-кодированных данных YouTube."""
     decoded = html.unescape(str(page or ""))
@@ -107,7 +173,10 @@ def extract_googlevideo_hosts(page: str) -> tuple[str, ...]:
 
     hosts: list[str] = []
     seen: set[str] = set()
-    for match in _GOOGLEVIDEO_RR_RE.finditer(decoded):
+    # Адрес потоковой передачи плеера идёт первым: именно с этого узла он и будет качать видео.
+    streaming = _STREAMING_URL_RE.search(decoded)
+    matches = ([streaming] if streaming else []) + list(_GOOGLEVIDEO_RR_RE.finditer(decoded))
+    for match in matches:
         host = normalize_googlevideo_host(match.group(1))
         if not host or host in seen:
             continue

@@ -537,13 +537,15 @@ class BlockcheckApplyTests(unittest.TestCase):
 
     def test_apply_to_multi_branch_profile_writes_one_union_payload(self) -> None:
         # Как выбор готовой стратегии на странице: у profile-а одна стратегия,
-        # поверх веток пишется один --payload с объединением их типов.
+        # поверх веток пишется один --payload с объединением их типов. Сайт —
+        # не из быстрых карточек: у YouTube «свой» profile покрывает ещё
+        # видеосервер и превью (см. test_youtube_apply_covers_the_whole_service).
         text = "\n".join(
             (
                 "--wf-tcp-out=80,443",
-                "--name=YouTube",
+                "--name=Example",
                 "--filter-tcp=80,443",
-                "--hostlist-domains=www.youtube.com",
+                "--hostlist-domains=example.org",
                 "--out-range=-d8",
                 "--payload=tls_client_hello",
                 "--lua-desync=multisplit:pos=1",
@@ -554,7 +556,7 @@ class BlockcheckApplyTests(unittest.TestCase):
         )
         store = _PresetStore(text)
 
-        result = self._apply(store)
+        result = self._apply(store, scan_target="example.org")
 
         self.assertEqual(result.operation, "updated")
         self.assertEqual(
@@ -562,9 +564,9 @@ class BlockcheckApplyTests(unittest.TestCase):
             "\n".join(
                 (
                     "--wf-tcp-out=80,443",
-                    "--name=YouTube",
+                    "--name=Example",
                     "--filter-tcp=80,443",
-                    "--hostlist-domains=www.youtube.com",
+                    "--hostlist-domains=example.org",
                     "--out-range=-d8",
                     "--payload=tls_client_hello,http_req",
                     "--lua-desync=fake:blob=tls_google",
@@ -577,9 +579,9 @@ class BlockcheckApplyTests(unittest.TestCase):
         text = "\n".join(
             (
                 "--wf-tcp-out=80,443",
-                "--name=YouTube",
+                "--name=Example",
                 "--filter-tcp=80,443",
-                "--hostlist-domains=www.youtube.com",
+                "--hostlist-domains=example.org",
                 "--out-range=-d8",
                 "--payload=http_req",
                 "--lua-desync=multisplit:pos=1",
@@ -588,7 +590,7 @@ class BlockcheckApplyTests(unittest.TestCase):
         )
         store = _PresetStore(text)
 
-        result = self._apply(store)
+        result = self._apply(store, scan_target="example.org")
 
         self.assertEqual(result.operation, "updated")
         self.assertEqual(
@@ -597,6 +599,36 @@ class BlockcheckApplyTests(unittest.TestCase):
                 "--lua-desync=multisplit:pos=1", "--lua-desync=fake:blob=tls_google"
             ),
         )
+
+    def test_youtube_apply_covers_the_whole_service(self) -> None:
+        # Подбор по карточке YouTube проверяет страницу, видеосервер и превью, и
+        # profile пишется на все три имени. Прежний profile на одно имя не «свой»:
+        # его настройки не переписываются, новый встаёт выше и перехватывает цель.
+        old = "\n".join(("--name=YouTube", "--filter-tcp=443", "--hostlist-domains=www.youtube.com", "--lua-desync=pass", ""))
+        store = _PresetStore(old)
+        from blockcheck.strategy_search.probe_profile import build_probe_profile
+
+        apply_lines = tuple(
+            build_probe_profile(
+                "tcp_https",
+                strategy_args="--lua-desync=fake:blob=tls_google",
+                # Как у подбора: цель и остальные имена сервиса через запятую.
+                match_domain="www.youtube.com,googlevideo.com,ytimg.com",
+            ).apply_lines()
+        )
+
+        result = self._apply(store, apply_lines=apply_lines)
+
+        self.assertEqual(result.operation, "created")
+        first = store.text.split("--new")[0]
+        self.assertIn("--hostlist-domains=www.youtube.com,googlevideo.com,ytimg.com", first)
+        self.assertIn(old.strip(), store.text)
+
+        again = self._apply(store, apply_lines=apply_lines)
+
+        # Повторное «Применить» обновляет тот же profile, а не плодит копии.
+        self.assertEqual(again.operation, "updated")
+        self.assertEqual(store.text.count("googlevideo.com"), 1)
 
     def test_unconfirmed_write_is_an_error_not_success(self) -> None:
         store = _PresetStore("--name=A\n--filter-tcp=443\n--hostlist=lists/a.txt\n--lua-desync=pass\n", persist=False)

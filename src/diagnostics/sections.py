@@ -17,6 +17,7 @@ from concurrent.futures import Future
 from dataclasses import replace
 
 from diagnostics import (
+    block_cause,
     block_kind,
     filter_habits,
     filter_place,
@@ -28,14 +29,17 @@ from diagnostics import (
     quic_probe,
     registry,
     report_text,
+    selectivity,
     self_check,
     speed_check,
     subnet_whitelist,
     system_state,
+    tcp_stats,
     udp_burst,
     upload_probe,
 )
 from diagnostics import problems as problem_rules
+from diagnostics.privacy import mask_ip, mask_prefix, mask_public_ip
 from diagnostics.limits import FILTER_MAX_TTL, FREEZE_READ_TIMEOUT, OUTSIDE_NEEDS_S
 from diagnostics.run_context import Probe, Run, Stopped
 from diagnostics.services import Service
@@ -233,12 +237,6 @@ def check_ipv6(run: Run) -> ipv6_check.Ipv6Verdict:
     return ipv6_check.judge(facts)
 
 
-IPV6_ICON = {
-    ipv6_check.IPV6_OK: "✅",
-    ipv6_check.IPV6_ABSENT: "ℹ️",
-    ipv6_check.IPV6_BROKEN: "⚠️",
-    ipv6_check.IPV6_UNKNOWN: "❔",
-}
 
 
 _CLOCK_HOST = "www.google.com"
@@ -277,17 +275,9 @@ def check_system(
     return (*items, extra) if extra is not None else items
 
 
-SYSTEM_ICON = {
-    system_state.LEVEL_OK: "✅",
-    system_state.LEVEL_INFO: "ℹ️",
-    system_state.LEVEL_WARN: "⚠️",
-    system_state.LEVEL_FAIL: "❌",
-    system_state.LEVEL_UNKNOWN: "❔",
-}
 
 
 DNS_FINDING_LEVEL = {"fail": Level.FAIL, "warn": Level.WARN}
-_DNS_FINDING_ICON = {"ok": "✅", "info": "ℹ️", "warn": "⚠️", "fail": "❌"}
 
 
 def dns_finding_parts(finding: dict) -> dict:
@@ -318,20 +308,13 @@ def finish_dns_servers(run: Run, future: Future, emit: Emit) -> dict | None:
         for item in result.get("findings") or ()
         if item.get("text")
     ]
-    emit("")
-    emit("━━━━━━━━ DNS-серверы ━━━━━━━━")
-    for finding in findings:
-        emit(f"{_DNS_FINDING_ICON.get(finding['level'], 'ℹ️')} {finding['text']}")
     text = str(result.get("text") or "")
-    for line in text.splitlines():
-        emit(f"   {line}")
     return {"level": str(result.get("level") or "unknown"), "findings": findings, "text": text}
 
 
 def find_filter_place(
     run: Run,
     collected: dict[str, list[Probe]],
-    emit: Emit,
     *,
     zapret_running: bool | None = None,
     other_tools=(),
@@ -411,8 +394,6 @@ def find_filter_place(
     place.update(filter_place.mechanisms(verdicts, _dns_place(run, _trace)))
     if shown is None and plain is not None and hops:
         place["host"], place["address"] = plain.host, plain.reach.ip
-    for line in filter_place.lines(place):
-        emit(line)
     return place
 
 
@@ -465,39 +446,6 @@ def dns_problems(dns_servers: dict | None) -> list[dict]:
     return found
 
 
-def emit_freeze(freeze, emit: Emit) -> None:
-    """Раздел «Обрыв на 16–20 КБ» текстового отчёта."""
-    if freeze is None:
-        return
-    marks = {"ok": "✅", "freeze": "❌", "unknown": "❔"}
-    rows = [(marks[item.state.value], item.name, item.text) for item in freeze.servers]
-    for line in report_text.section_lines("Обрыв на 16–20 КБ", freeze, rows):
-        emit(line)
-
-
-def emit_telegram(telegram, emit: Emit) -> None:
-    """Раздел «Telegram: дата-центры» текстового отчёта."""
-    if telegram is None:
-        return
-    marks = {"ok": "✅", "fail": "❌", "unknown": "❔"}
-    rows = [
-        (marks[report_text.telegram_state(item)], f"{item.center.name} ({item.center.address})", report_text.telegram_text(item))
-        for item in telegram.servers
-    ]
-    for line in report_text.section_lines("Telegram: дата-центры", telegram, rows):
-        emit(line)
-
-
-def emit_system(system, emit: Emit) -> None:
-    """Раздел «Состояние системы» текстового отчёта."""
-    if not system:
-        return
-    emit("")
-    emit("━━━━━━━━ Состояние системы ━━━━━━━━")
-    for item in system:
-        emit(f"{SYSTEM_ICON[item.level]} {item.title}: {item.text}")
-
-
 def check_subnets(run: Run, emit: Emit) -> subnet_whitelist.SubnetVerdict | None:
     """Подтверждение «белых списков» по десяткам сетей; строка в текстовый отчёт."""
     facts = subnet_whitelist.collect(submit=run.net_lane.submit, cancel=run.probe_cancel)
@@ -510,25 +458,6 @@ def check_subnets(run: Run, emit: Emit) -> subnet_whitelist.SubnetVerdict | None
         }[verdict.code]
         emit(f"ℹ️ Подсети: {verdict.text} — {meaning}")
     return verdict
-
-
-def emit_network(network, emit: Emit) -> None:
-    """Раздел «Ваша сеть» текстового отчёта."""
-    if network is None:
-        return
-    emit("")
-    emit("━━━━━━━━ Ваша сеть ━━━━━━━━")
-    for item in network["lines"]:
-        emit(f"{'⚠️' if item['state'] == 'warn' else 'ℹ️'} {item['name']}: {item['text']}")
-
-
-def emit_voice(voice, emit: Emit) -> None:
-    """Раздел «Голосовые звонки» текстового отчёта."""
-    if voice is None:
-        return
-    rows = [("✅" if item.answered else ("❌" if item.decided else "❔"), item.name, item.text) for item in voice.servers]
-    for line in report_text.section_lines("Голосовые звонки (UDP)", voice, rows):
-        emit(line)
 
 
 def _dns_place(run: Run, trace: Callable):
@@ -562,7 +491,7 @@ HABIT_TIMEOUT_S = 2.0
 ECH_HOST = "www.cloudflare.com"
 
 
-def check_filter_habits(run: Run, collected: dict[str, list[Probe]], emit: Emit, *, tools=()) -> dict | None:
+def check_filter_habits(run: Run, collected: dict[str, list[Probe]], *, tools=()) -> dict | None:
     """Как работает фильтр: какое дробление приветствия проходит и режется ли ECH.
 
     ``tools`` — запущенные net67, VPN и другие программы обхода: пробы идут через
@@ -614,8 +543,6 @@ def check_filter_habits(run: Run, collected: dict[str, list[Probe]], emit: Emit,
     report = filter_habits.summarize(splits, ech, tools=tools)
     if report is None:
         return None
-    for line in filter_habits.lines(report):
-        emit(line)
     return report
 
 
@@ -624,7 +551,7 @@ def tcp_reset_seen(probe: Probe) -> bool:
     return probe.reach is not None and probe.reach.kind == KIND_RESET
 
 
-def _name_speed(run: Run, collected: dict[str, list[Probe]], services, emit: Emit) -> dict | None:
+def _name_speed(run: Run, collected: dict[str, list[Probe]], services) -> dict | None:
     """Замедление по имени сайта — у сайтов, которые открылись. None — проверять нечего или контроль не вышел."""
     labels: dict[str, str] = {}
     # Имён проверяется немного: сначала главный адрес каждого сервиса, затем вторые адреса
@@ -656,11 +583,6 @@ def _name_speed(run: Run, collected: dict[str, list[Probe]], services, emit: Emi
     else:
         headline = "Замедления по имени сайта не видно: с именами сайтов скорость та же, что с обычным"
     slow = slow + cut
-    emit(f"ℹ️ Замедление по имени: контроль {name_speed.SERVER_HOST} — {name_speed.speed_text(control)}")
-    for item in verdicts:
-        icon = {name_speed.SLOW: "⚠️", name_speed.CUT: "⚠️", name_speed.FINE: "✅"}.get(item.code, "❔")
-        emit(f"{icon} {labels[item.name]} ({item.name}): {item.text}")
-    emit(f"{'⚠️' if slow else '✅'} {headline}")
     states = {name_speed.SLOW: "warn", name_speed.CUT: "warn", name_speed.FINE: "ok"}
     return {
         "level": "warn" if slow else "ok",
@@ -680,9 +602,48 @@ def _name_speed(run: Run, collected: dict[str, list[Probe]], services, emit: Emi
     }
 
 
-def check_name_speed(run: Run, collected: dict[str, list[Probe]], services, emit: Emit) -> dict | None:
+def _matrix_cell(run: Run) -> Callable[[str, str], selectivity.Cell]:
+    """Одна ячейка таблицы: приветствие TLS 1.3 и первый пакет QUIC с этим именем на этом адресе."""
+
+    def cell(name: str, ip: str) -> selectivity.Cell:
+        hello = block_cause.tls_hello(ip, name or None, cancel=run.probe_cancel, version=block_cause.TLS_1_3)
+        quic_ms = quic_probe.quic_hello(ip, name or None, cancel=run.probe_cancel)
+        if hello.answered:
+            tls = selectivity.ANSWERED
+        elif hello.kind in (block_cause.HELLO_RESET, block_cause.HELLO_TIMEOUT):
+            tls = selectivity.CUT
+        else:
+            tls = selectivity.UNKNOWN
+        quic = selectivity.ANSWERED if quic_ms is not None else selectivity.CUT
+        return selectivity.Cell(tls, quic, hello.ms, quic_ms)
+
+    return cell
+
+
+def annotate_selectivity(run: Run, report: list[dict], collected: dict[str, list[Probe]], services) -> None:
+    """Таблица «имя × адрес × протокол» у сервисов с сигналом беды: блокировка избирательна, судить по одному адресу нельзя."""
+    for item in report:
+        key = str(item.get("key") or "")
+        probes = collected.get(key) or []
+        if not probes or services[key].control or run.dns_cancelled():
+            continue
+        quic_codes = [probe.quic.code if probe.quic else "" for probe in probes]
+        causes = [probe.cause.code if probe.cause else "" for probe in probes]
+        if not selectivity.needs_matrix(quic_codes, causes, [probe.unstable for probe in probes]):
+            continue
+        ordered = sorted(probes, key=lambda probe: not probe.target.main)
+        addresses = [(probe.host, probe.reach.ip) for probe in ordered if probe.reach is not None and probe.reach.ip]
+        facts = selectivity.collect(
+            [probe.host for probe in ordered], addresses, _matrix_cell(run), submit=run.submit, should_stop=run.dns_cancelled
+        )
+        verdict = selectivity.judge(facts)
+        if verdict is not None:
+            item["selectivity"] = verdict.as_dict()
+
+
+def check_name_speed(run: Run, collected: dict[str, list[Probe]], services) -> dict | None:
     """Замер потока по имени для проверки одного сайта («Проверка домена»): сам сайт и его видеосервер."""
-    return _name_speed(run, collected, services, emit)
+    return _name_speed(run, collected, services)
 
 
 def speed_problems(speed: dict | None, *, zapret_running: bool | None) -> list[dict]:
@@ -719,7 +680,7 @@ def speed_problems(speed: dict | None, *, zapret_running: bool | None) -> list[d
 CROWD_RESERVE_S = 10.0
 
 
-def check_crowd(run: Run, collected: dict[str, list[Probe]], services, emit: Emit, *, tools=()) -> dict | None:
+def check_crowd(run: Run, collected: dict[str, list[Probe]], services, *, tools=()) -> dict | None:
     """Замирает ли сайт от нескольких соединений сразу (см. ``diagnostics.crowd_probe``).
 
     Идёт самой последней: проба сама может остановить сайт на пару минут. При
@@ -776,12 +737,6 @@ def check_crowd(run: Run, collected: dict[str, list[Probe]], services, emit: Emi
     verdict = crowd_probe.judge(facts)
     if verdict is None:
         return None
-    emit("")
-    emit("━━━━━━━━ Несколько соединений сразу ━━━━━━━━")
-    icons = {crowd_probe.CROWD_NONE: "✅", crowd_probe.CROWD_FREEZE: "⚠️", crowd_probe.CROWD_STUCK: "⚠️"}
-    emit(f"{icons.get(verdict.code, '❔')} {report_text.sentence(verdict.text)}")
-    if verdict.advice:
-        emit(f"   👉 {verdict.advice}")
     levels = {crowd_probe.CROWD_NONE: "ok", crowd_probe.CROWD_FREEZE: "warn", crowd_probe.CROWD_STUCK: "warn"}
     return {
         "state": verdict.code,
@@ -804,6 +759,40 @@ def check_crowd(run: Run, collected: dict[str, list[Probe]], services, emit: Emi
     }
 
 
+def check_quic_fallback(run: Run, collected: dict[str, list[Probe]], services, *, visit=None) -> dict | None:
+    """Цена отката с QUIC на TCP у сайта, который открывается по TCP, а QUIC режут (см. ``diagnostics.quic_fallback``).
+
+    Только когда на компьютере есть Edge или Chrome и хотя бы у одного сайта QUIC закрыт или молчит; браузер
+    открывает один такой сайт по два раза с QUIC и без него.
+    """
+    from blockcheck import browser_check
+    from diagnostics import quic_fallback
+
+    visit = visit or browser_check.open_in_browser
+    if visit is browser_check.open_in_browser and not browser_check.find_browser():
+        return None
+    site = next(
+        (
+            probe
+            for key, probes in collected.items()
+            if not services[key].control
+            for probe in probes
+            if probe.target.main
+            and probe.reach_state == ReachState.OK
+            and probe.quic is not None
+            and probe.quic.code in (quic_probe.QUIC_BLOCKED_BY_NAME, quic_probe.QUIC_SILENT)
+        ),
+        None,
+    )
+    if site is None or run.dns_cancelled():
+        return None
+    facts = quic_fallback.collect(site.host, visit=visit, cancelled=run.dns_cancelled)
+    if run.dns_cancelled():
+        return None
+    verdict = quic_fallback.judge(facts)
+    return {**verdict.as_dict(), "label": next(services[key].label for key, probes in collected.items() if site in probes)}
+
+
 def crowd_problems(crowd: dict | None, *, zapret_running: bool | None) -> list[dict]:
     """Проблема «сайт замирает от нескольких соединений сразу». Пусто — такого нет."""
     if not crowd or crowd.get("level") != "warn":
@@ -822,12 +811,16 @@ def crowd_problems(crowd: dict | None, *, zapret_running: bool | None) -> list[d
     ]
 
 
-def check_speed(run: Run, emit: Emit, collected=None, services=None) -> dict | None:
+def check_speed(run: Run, collected=None, services=None) -> dict | None:
     """Скорость зарубежных серверов против российских и замедление по имени сайта.
 
     Идёт последней, когда остальная нагрузка спала. ``collected`` и ``services`` —
     проверенные сайты: у открывшихся ищется замедление по имени.
     """
+
+    # Доля повторных передач за загрузку с каждого сервера: серверы качаются по очереди, счётчики системы
+    # за это время — по одной загрузке (см. ``diagnostics.tcp_stats``).
+    losses: dict[str, tcp_stats.LossVerdict] = {}
 
     def download(server: speed_check.SpeedServer) -> tuple[int, float] | None:
         ip = net_access.known_address(run, server.host)
@@ -835,15 +828,17 @@ def check_speed(run: Run, emit: Emit, collected=None, services=None) -> dict | N
             return None
         started = time.monotonic()
         stop_at = started + speed_check.SAMPLE_SECONDS
-        result = net_access.fetch(
-            run,
-            server.host,
-            ip,
-            server.path,
-            read_limit=speed_check.SAMPLE_BYTES,
-            # Качаем не дольше отведённого: на медленной линии три мегабайта шли бы минуту.
-            body_done=lambda _body: time.monotonic() >= stop_at,
-        )
+        with tcp_stats.measure() as window:
+            result = net_access.fetch(
+                run,
+                server.host,
+                ip,
+                server.path,
+                read_limit=speed_check.SAMPLE_BYTES,
+                # Качаем не дольше отведённого: на медленной линии три мегабайта шли бы минуту.
+                body_done=lambda _body: time.monotonic() >= stop_at,
+            )
+        losses[server.host] = window.verdict()
         if not result.ok:
             return None
         return int(result.body_size), time.monotonic() - started
@@ -852,14 +847,8 @@ def check_speed(run: Run, emit: Emit, collected=None, services=None) -> dict | N
     if not samples:
         return None
     report = speed_check.summarize_speed(samples)
-    emit("")
-    emit("━━━━━━━━ Скорость ━━━━━━━━")
-    for item in samples:
-        place = "Россия" if item.server.domestic else "за границей"
-        emit(f"{'ℹ️' if item.kbps is not None else '❔'} {item.server.name} ({place}): {speed_check.speed_text(item.kbps)}")
-    emit(f"{report_text.LEVEL_ICON[report.level]} {report.headline}")
     slow = report.level == Level.WARN
-    names = _name_speed(run, collected, services, emit) if collected and services else None
+    names = _name_speed(run, collected, services) if collected and services else None
     return {
         "level": report.level.value,
         "headline": report.headline,
@@ -872,6 +861,8 @@ def check_speed(run: Run, emit: Emit, collected=None, services=None) -> dict | N
                 "kbps": None if item.kbps is None else round(item.kbps, 1),
                 "state": "unknown" if item.kbps is None else ("warn" if slow and not item.server.domestic else "ok"),
                 "text": speed_check.speed_text(item.kbps),
+                # Потери на линии за эту загрузку; нет — счётчики системы прочитать не удалось.
+                "retransmits": losses[item.server.host].as_dict() if item.server.host in losses else None,
             }
             for item in samples
         ],
@@ -897,12 +888,14 @@ def check_network(run: Run, other_tools) -> dict:
     owner = facts.owner
     provider = " · ".join(part for part in ((owner.owner if owner else ""), (f"AS{owner.asn}" if owner and owner.asn else "")) if part)
     return {
-        "external_ip": facts.external_ip,
+        # В отчёт идёт скрытый адрес: им делятся; провайдер, сеть и страна остаются.
+        "external_ip": mask_ip(facts.external_ip),
         "country": facts.country,
         "provider": provider,
         "asn": owner.asn if owner else "",
-        "prefix": owner.prefix if owner else "",
-        "local_ip": facts.local_ip,
+        "prefix": mask_prefix(owner.prefix) if owner else "",
+        "local_ip": mask_public_ip(facts.local_ip),
+        "ip_masked": bool(facts.external_ip),
         "lines": [{"state": line.state, "name": line.name, "text": line.text} for line in lines],
     }
 
