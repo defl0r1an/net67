@@ -47,8 +47,31 @@ class ApplyCheck:
     text: str = ""
 
 
-def check_site(host: str, *, cancel, scan_protocol: str = PROTOCOL_TCP_HTTPS) -> ApplyCheck:
-    """Открыть сайт так же, как подбор: адреса из разных подсетей, объём по соединению."""
+def check_companions(hosts, *, cancel) -> ApplyCheck:
+    """Остальные имена сервиса (видеосервер, превью) открываются так же, как и сам сайт. ``CHECK_OK`` — все."""
+    from blockcheck.strategy_search import probes
+    from blockcheck.strategy_search import verdict as rules
+
+    for host in hosts:
+        addresses, error = probes.resolve_target_addresses(host, 443)
+        stubs = set(probes.stub_addresses(addresses))
+        picked = [address for address in addresses if address not in stubs][:2]
+        if error or not picked:
+            continue
+        outcomes = probes.probe_https_addresses(host, picked, cancel=cancel)
+        if cancel.cancelled:
+            return ApplyCheck(CHECK_SKIPPED, "проверку остановили")
+        if not rules.attempt_passed(outcomes):
+            return ApplyCheck(CHECK_FAILED, f"{host}: {rules.attempt_reason(outcomes)}")
+    return ApplyCheck(CHECK_OK)
+
+
+def check_site(host: str, *, cancel, scan_protocol: str = PROTOCOL_TCP_HTTPS, companions=()) -> ApplyCheck:
+    """Открыть сайт так же, как подбор: адреса из разных подсетей, объём по соединению; затем остальные имена сервиса.
+
+    Остальные имена (видеосервер, превью) проверяются только для HTTPS: подбор
+    по HTTP или QUIC искал стратегию для одного этого протокола сайта.
+    """
     from blockcheck.strategy_search import probes
     from blockcheck.strategy_search import verdict as rules
 
@@ -77,6 +100,9 @@ def check_site(host: str, *, cancel, scan_protocol: str = PROTOCOL_TCP_HTTPS) ->
     if rules.attempt_passed(outcomes):
         if scan_protocol != PROTOCOL_TCP_HTTPS:
             return ApplyCheck(CHECK_OK, "HTTP, порт 80" if scan_protocol == PROTOCOL_HTTP80 else "QUIC, UDP 443")
+        other = check_companions(companions, cancel=cancel)
+        if other.code != CHECK_OK:
+            return other
         unknown = any(outcome.volume == rules.VOLUME_UNKNOWN for outcome in outcomes)
         return ApplyCheck(CHECK_OK, "объём не проверен: сайт отвечает коротко" if unknown else "")
     return ApplyCheck(CHECK_FAILED, rules.attempt_reason(outcomes))
@@ -107,6 +133,7 @@ def run_apply_check(
     cancel,
     scan_protocol: str = PROTOCOL_TCP_HTTPS,
     open_browser=None,
+    companions=(),
 ) -> ApplyCheck:
     """Дождаться обхода и проверить сайт; при провале — ещё раз чуть позже; открылся — и в браузере.
 
@@ -115,11 +142,11 @@ def run_apply_check(
     """
     if not wait_until_running(is_running, restarting=restarting, sleep=cancel.sleep, cancelled=lambda: cancel.cancelled):
         return ApplyCheck(CHECK_SKIPPED, "обход не запустился за время ожидания")
-    check = check_site(host, cancel=cancel, scan_protocol=scan_protocol)
+    check = check_site(host, cancel=cancel, scan_protocol=scan_protocol, companions=companions)
     if check.code == CHECK_FAILED:
         if not cancel.sleep(RESTART_SETTLE_SECONDS):
             return ApplyCheck(CHECK_SKIPPED, "проверку остановили")
-        check = check_site(host, cancel=cancel, scan_protocol=scan_protocol)
+        check = check_site(host, cancel=cancel, scan_protocol=scan_protocol, companions=companions)
     if check.code != CHECK_OK or scan_protocol == PROTOCOL_HTTP80:
         return check
     return _confirm_in_browser(
@@ -148,7 +175,7 @@ class StrategyApplyCheckWorker(QThread):
     completed = pyqtSignal(int, str, str, str)
 
     def __init__(self, request_id: int, host: str, *, is_running, restarting: bool,
-                 scan_protocol: str = PROTOCOL_TCP_HTTPS) -> None:
+                 scan_protocol: str = PROTOCOL_TCP_HTTPS, companions=()) -> None:
         super().__init__()
         from utils.socket_cancel import SocketCancel
 
@@ -157,6 +184,7 @@ class StrategyApplyCheckWorker(QThread):
         self._scan_protocol = scan_protocol
         self._is_running = is_running
         self._restarting = bool(restarting)
+        self._companions = tuple(str(name) for name in companions or ())
         self._cancel = SocketCancel()
 
     def cancel(self) -> None:
@@ -168,7 +196,8 @@ class StrategyApplyCheckWorker(QThread):
     def run(self) -> None:
         try:
             check = run_apply_check(self._host, is_running=self._is_running, restarting=self._restarting,
-                                    cancel=self._cancel, scan_protocol=self._scan_protocol)
+                                    cancel=self._cancel, scan_protocol=self._scan_protocol,
+                                    companions=self._companions)
         except Exception:  # проверка — подсказка, её сбой не должен ронять окно
             logger.exception("Не удалось проверить сайт после применения стратегии")
             check = ApplyCheck(CHECK_SKIPPED, "подробности ошибки записаны в журнал")

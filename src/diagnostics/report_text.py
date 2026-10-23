@@ -56,7 +56,6 @@ def fail_text(probe: Probe) -> str:
 LEVEL_ICON = {Level.OK: "✅", Level.WARN: "⚠️", Level.FAIL: "❌", Level.UNKNOWN: "❔"}
 
 
-DNS_ICON = {DnsState.OK: "✅", DnsState.SPOOFED: "❌", DnsState.LOCAL: "ℹ️", DnsState.UNKNOWN: "❔"}
 
 
 SOURCE_NOTE = {
@@ -72,8 +71,15 @@ def ips_text(ips: tuple[str, ...], limit: int = 3) -> str:
     return f"{shown} и ещё {len(ips) - limit}" if len(ips) > limit else shown
 
 
+def not_probed(probe: Probe) -> bool:
+    """Адрес не проверялся вовсе (видеосервера YouTube найти не удалось): сказать нечего, кроме причины."""
+    return probe.reach is None and probe.reach_state == ReachState.UNKNOWN and bool(probe.discovery_note)
+
+
 def reach_text(probe: Probe) -> str:
     """Одна строка: открывается ли адрес и почему нет."""
+    if not_probed(probe):
+        return "не проверялся"
     result = probe.reach
     source = SOURCE_NOTE.get(probe.reach_source, "")
     if probe.reach_state == ReachState.OK and result is not None:
@@ -117,30 +123,21 @@ def dns_detail(probe: Probe) -> str:
     return " · ".join(parts)
 
 
-def dns_lines(probe: Probe, indent: str) -> list[str]:
-    judgement = probe.judgement
-    lines: list[str] = []
-    if judgement is not None:
-        lines.append(f"{indent}{DNS_ICON[judgement.state]} DNS: {judgement.reason}")
-    lines.append(f"{indent}   {dns_detail(probe)}")
-    return lines
-
-
 def sentence(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
 def probe_lines(probe: Probe, *, full: bool) -> list[str]:
-    title = f"{probe.host} — {probe.target.purpose}"
-    if not full:
-        lines = [title]
-        if probe.discovery_note:
-            lines.append(f"  ℹ️ {probe.discovery_note}")
-        lines.extend(dns_lines(probe, "  "))
-        return lines
+    """Адрес сайта строками журнала. Строки идут из общего модуля слов, как на карточке и в «Проверке домена».
 
-    # Строки идут из общего модуля слов — те же, что на карточке сайта и в «Проверке домена».
-    return service_view.render_text(service_view.target_sections(target_report(probe)))
+    Короткая проверка только сверяет DNS, поэтому показывает из строк адреса лишь то, что к нему относится.
+    """
+    sections = service_view.target_sections(target_report(probe))
+    if full:
+        return service_view.render_text(sections)
+    first = sections[0]
+    rows = tuple(row for row in first.rows if row.title in service_view.DNS_ROWS)
+    return service_view.render_text([service_view.ViewSection(first.title, rows)])
 
 
 def short_text(probe: Probe) -> str:
@@ -160,8 +157,8 @@ def target_report(probe: Probe) -> dict:
         "ok": probe.reach_state == ReachState.OK,
         "text": reach_text(probe),
         "short": short_text(probe),
-        "dns_state": probe.judgement.state.value if probe.judgement else "",
-        "dns_reason": probe.judgement.reason if probe.judgement else "",
+        "dns_state": probe.judgement.state.value if probe.judgement and not not_probed(probe) else "",
+        "dns_reason": probe.judgement.reason if probe.judgement and not not_probed(probe) else "",
         # Вид блокировки одним словом (ip / sni / cut16 / …) и его название.
         "kind": probe.kind,
         "kind_title": block_kind.kind_info(probe.kind).title if probe.kind else "",
@@ -210,7 +207,7 @@ def target_report(probe: Probe) -> dict:
         "stages": dict(probe.stages),
         "note": probe.discovery_note,
         # Какие адреса вернули hosts, DNS системы и эталон: на чём держится вывод про DNS.
-        "dns_detail": dns_detail(probe),
+        "dns_detail": "" if not_probed(probe) else dns_detail(probe),
     }
 
 
@@ -225,15 +222,6 @@ def telegram_text(item: telegram_check.DcResult) -> str:
 
 def telegram_state(item: telegram_check.DcResult) -> str:
     return "unknown" if item.connected is None else ("ok" if item.connected else "fail")
-
-
-def section_lines(title: str, report, rows) -> list[str]:
-    icon = {Level.OK: "✅", Level.WARN: "⚠️", Level.FAIL: "❌", Level.UNKNOWN: "❔"}
-    lines = ["", f"━━━━━━━━ {title} ━━━━━━━━"]
-    for mark, name, text in rows:
-        lines.append(f"{mark} {name}: {text}")
-    lines.append(f"{icon[report.level]} {report.headline}")
-    return lines
 
 
 def section_report(report, rows) -> dict:

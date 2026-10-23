@@ -246,6 +246,9 @@ def build_blockcheck_page_kwargs(
         "create_geo_sites_worker": _create_geo_sites_worker,
         "ensure_bypass_for_strategy": _ensure_bypass_for_strategy,
         "bypass_is_running": runtime_feature.is_running,
+        # «С обходом и без»: обход переключается на вторую проверку и возвращается, как был.
+        "start_bypass": runtime_feature.start,
+        "stop_bypass": runtime_feature.stop,
         # «Поймали провайдера на подмене DNS» → кнопка ведёт на «Настройка DNS».
         "open_dns_settings": (lambda: show_page(PageName.NETWORK)) if show_page is not None else None,
     }

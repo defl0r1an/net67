@@ -43,45 +43,52 @@ from datetime import datetime
 
 from diagnostics import (
     block_cause,
+    block_view,
     cert_owner,
     net_access,
     protocol_probe,
     quic_probe,
     registry,
+    report_text,
     sections,
     system_state,
     telegram_check,
     transfer_probe,
-    udp_burst,
+    video_nodes,
     volume_probe,
 )
 from diagnostics import problems as problem_rules
 from diagnostics.problems import has_spoofing as _has_spoofing
-from diagnostics import report_text
 from diagnostics.levels import level_rank
-from diagnostics.report_upgrade import REPORT_VERSION
 from diagnostics.limits import (
-    FREEZE_MAX_BYTES,
-    DISCOVERY_READ_BUDGET_S,
-    DISCOVERY_TIMEOUT,
     DNS_ATTEMPTS,
-    REGISTRY_WAIT_S,
+    FREEZE_MAX_BYTES,
     RECHECK_AT_ONCE,
     RECHECK_LIGHT_AT_ONCE,
     RECHECK_NEEDS_S,
     RECHECK_SITES,
+    REGISTRY_WAIT_S,
     RUN_DEADLINE,
     RUN_DEADLINE_ALL,
     RUN_DEADLINE_FULL,
     SITES_AT_ONCE,
-    VIDEO_SERVERS,
 )
-from diagnostics.reach import check_reach as _check_reach, same_network
-from diagnostics.run_context import RECHECK_OPENED, RECHECK_SAME, RECHECK_UNSTABLE, Probe as _Probe, Run as _Run
-from diagnostics.run_context import Live as _Live, Steps as _Steps, Stopped as _Stopped, submit_in_random_order
-from diagnostics.services import (
+from diagnostics.reach import check_reach as _check_reach
+from diagnostics.reach import same_network
+from diagnostics.report_upgrade import REPORT_VERSION
+from diagnostics.run_context import RECHECK_OPENED, RECHECK_SAME, RECHECK_UNSTABLE
+from diagnostics.run_context import Live as _Live
+from diagnostics.run_context import Probe as _Probe
+from diagnostics.run_context import Run as _Run
+from diagnostics.run_context import Steps as _Steps
+from diagnostics.run_context import Stopped as _Stopped
+from diagnostics.run_context import submit_in_random_order
+from diagnostics.services import (  # noqa: F401  (GOOGLEVIDEO_FALLBACK_HOST отсюда берут и тесты)
     GOOGLEVIDEO_FALLBACK_HOST,
     PROGRESS_STEPS,
+    SCOPE_ALL,
+    SCOPE_FULL,
+    SCOPE_MAIN,
     STEP_DNS_SERVERS,
     STEP_FILTER,
     STEP_HOSTINGS,
@@ -89,19 +96,17 @@ from diagnostics.services import (
     STEP_SITES,
     STEP_SYSTEM,
     STEP_VOICE,
-    SCOPE_ALL,
-    SCOPE_FULL,
-    SCOPE_MAIN,
-    SCOPE_TITLES as _SCOPE_TITLES,
-    YOUTUBE_HOST,
     Service,
     Target,
     build_services,
     site_service,
 )
+from diagnostics.services import (
+    SCOPE_TITLES as _SCOPE_TITLES,
+)
 from diagnostics.tls_probe import (
-    KIND_CERT,
     KIND_CANCELLED,
+    KIND_CERT,
 )
 from diagnostics.verdict import (
     DnsState,
@@ -137,18 +142,18 @@ BODY_PROBE_BYTES = 64 * 1024
 
 DNS_TYPE_A = TYPE_A
 
-_WATCH_PAGE = "/watch?v=jNQXAC9IVRw&hl=en"
-_WATCH_PAGE_MAX_BYTES = 2_000_000
 
 
 # Разделы отчёта, которые заполняются по ходу проверки.
-_REPORT_SECTIONS = ("services", "voice", "freeze", "telegram", "network", "speed", "ipv6", "dns_servers", "filter", "habits", "crowd")
+_REPORT_SECTIONS = ("services", "voice", "freeze", "telegram", "network", "speed", "ipv6", "dns_servers", "filter", "habits", "crowd", "quic_fallback")
 # Сколько потоков нужно одной цели в худшем случае: сама цель, три запроса к
 # DNS системы, два эталона (A и AAAA) по запросу на каждый эталонный сервер и
 # несколько HTTPS-запросов, четыре пробы уточнения причины, три пакета QUIC и пять
 # потоков на TLS 1.2 / TLS 1.3 / «как Chrome» / HTTP. Задачи ждут друг
 # друга внутри одного пула, поэтому
 # нехватка потоков — это не «медленнее», а взаимная блокировка.
+# Как называется видеосервер в отчёте, когда настоящий узел найти не удалось.
+GOOGLEVIDEO_NO_NODE_HOST = "видеосервер googlevideo.com"
 _WORKERS_PER_TARGET = 28 + 2 * len(REFERENCE_RESOLVERS)
 
 
@@ -158,43 +163,10 @@ _WORKERS_PER_TARGET = 28 + 2 * len(REFERENCE_RESOLVERS)
 
 
 def _discover_googlevideo(run: _Run) -> tuple[tuple[str, ...], str]:
-    """Видеосерверы, которые YouTube выдаёт этой сети. (хосты, пояснение)."""
-    from blockcheck.googlevideo_discovery import extract_googlevideo_hosts
-
-    found: list[str] = []
-    # Когда начали читать страницу и вышел ли срок чтения.
-    reading: list[float] = []
-    late: list[bool] = []
-
-    def _done(body: bytes) -> bool:
-        if b"googlevideo" in body:
-            hosts = extract_googlevideo_hosts(body.decode("utf-8", errors="ignore"))
-            if hosts:
-                found.extend(hosts[:VIDEO_SERVERS])
-                return True
-        if not reading:
-            reading.append(time.monotonic())
-        if time.monotonic() - reading[0] >= DISCOVERY_READ_BUDGET_S:
-            late.append(True)
-            return True
-        return False
-
-    # Адрес YouTube — тот, которым воспользовался бы браузер.
-    candidates = list(net_access.browser_ipv4(run, YOUTUBE_HOST))
-
-    for ip in candidates[:1]:
-        # Имя видеосервера ищется в самой странице: её нужно распаковать.
-        page = dict(timeout=DISCOVERY_TIMEOUT, read_limit=_WATCH_PAGE_MAX_BYTES, body_done=_done, decode_body=True)
-        result = net_access.fetch(run, YOUTUBE_HOST, ip, _WATCH_PAGE, **page)
-        if found:
-            return tuple(found), "адрес видеосервера получен от YouTube"
-        if late:
-            return (GOOGLEVIDEO_FALLBACK_HOST,), "страница YouTube грузилась слишком медленно, поэтому проверяем общий адрес"
-        if result.ok:
-            return (GOOGLEVIDEO_FALLBACK_HOST,), "YouTube не назвал видеосервер, поэтому проверяем общий адрес"
-        if result.kind == KIND_CANCELLED:
-            break
-    return (GOOGLEVIDEO_FALLBACK_HOST,), "страница YouTube не открылась, поэтому проверяем общий адрес видеосерверов"
+    """Видеосерверы, которые YouTube выдаёт этой сети. (хосты, пояснение); источники — ``diagnostics.video_nodes``."""
+    nodes = video_nodes.discover(run)
+    run.video_goodput = nodes.goodput
+    return nodes.hosts, nodes.note
 
 
 def _merge_dns_answers(answers: list[DnsAnswer]) -> tuple[DnsAnswer, int]:
@@ -219,15 +191,40 @@ def _probe_target(run: _Run, target: Target, service: str, *, full: bool, volume
     if not target.discover_googlevideo:
         return _probe_host(run, target, service, target.host, "", full=full, volume=volume)
     hosts, note = _discover_googlevideo(run)
-    first = probe = _probe_host(run, target, service, hosts[0], note, full=full, volume=volume)
+    if not hosts:
+        # Настоящего видеосервера нет: общий адрес googlevideo.com им не служит, проверять нечего.
+        unknown = _Probe(target=target, service=service, host=GOOGLEVIDEO_NO_NODE_HOST, discovery_note=note)
+        unknown.reach_state = ReachState.UNKNOWN
+        return unknown
+    nodes = video_nodes.VideoNodes(hosts, ("",) * len(hosts), note)
+    first = probe = _probe_host(run, target, service, nodes.hosts[0], nodes.note, full=full, volume=volume)
     # Один видеосервер не ответил — плеер взял бы следующий. Проверяем так же.
-    for host in hosts[1:]:
+    for host in nodes.hosts[1:]:
         if probe.reach_state == ReachState.OK or run.dns_cancelled():
             break
         probe = _probe_host(
-            run, target, service, host, f"{note}; первый видеосервер не ответил, проверен запасной", full=full, volume=volume
+            run, target, service, host, f"{nodes.note}; первый видеосервер не ответил, проверен запасной", full=full, volume=volume
         )
-    return probe if probe.reach_state == ReachState.OK else first
+    best = probe if probe.reach_state == ReachState.OK else first
+    if full and best.reach is not None and best.reach_state == ReachState.OK:
+        _describe_node(run, nodes, best, volume=volume, target=target, service=service)
+        if volume:
+            video_nodes.goodput_volume(run, best)
+    return best
+
+
+def _describe_node(run: _Run, nodes, probe: _Probe, *, volume: bool, target: Target, service: str) -> None:
+    """Чей это узел и ведёт ли себя запасной иначе: так видно, дело в узле или в линии."""
+    notes = [probe.discovery_note]
+    owner = video_nodes.owner_note(run, probe.reach.ip)
+    if owner:
+        notes.append(owner)
+    spare_hosts = [host for host in nodes.hosts if host != probe.host]
+    if volume and probe.transfer is not None and probe.transfer.level == "warn" and spare_hosts and not run.dns_cancelled():
+        spare = _probe_host(run, target, service, spare_hosts[0], "", full=True, volume=True)
+        if spare.reach_state == ReachState.OK:
+            notes.append(video_nodes.spare_note(probe, spare))
+    probe.discovery_note = "; ".join(note for note in notes if note)
 
 
 def _probe_host(
@@ -434,8 +431,6 @@ def _run_probes(
     jobs: list[tuple[str, Target, bool]] = []
     for key, service in services.items():
         for target in service.targets:
-            if not full and target.discover_googlevideo:
-                target = Target(target.host, target.purpose, target.path, main=target.main)
             # Объём по одному соединению — это десятки запросов подряд: контрольные
             # сайты ими не нагружаем, их всё равно не блокируют.
             jobs.append((key, target, full and not service.control))
@@ -681,6 +676,14 @@ def run_blockcheck(
         other_tools, in_path = setting.other_tools, setting.in_path
         # Разделы, которых в этом режиме нет или которые не удались, в отчёте остаются пустыми.
         live = _Live(partial, fresh=lambda: {"step_seconds": step.seconds()}, scope=scope, environment=environment)
+
+        def show(key: str, data):
+            """Раздел отчёта: в журнал строками и на экран словарём — из одних и тех же данных."""
+            for line in block_view.text_lines(key, data):
+                emit(line)
+            live.put(**{key: data})
+            return data
+
         live.data.update(report_version=REPORT_VERSION, zapret_running=zapret_running, zapret_line=zapret_line)
         live.data.update(dict.fromkeys(_REPORT_SECTIONS), other_bypass_tools=list(other_tools), tools_in_path=list(in_path), partial=True)
 
@@ -737,27 +740,20 @@ def run_blockcheck(
 
         freeze_facts = _settle(run, freeze_future, emit, "Обрыв на 16–20 КБ")
         freeze = summarize_freeze(freeze_facts, zapret_running=zapret_running) if freeze_facts is not None else None
-        sections.emit_freeze(freeze, emit)
-        live.put(freeze=report_text.freeze_report(freeze))
+        show("freeze", report_text.freeze_report(freeze))
 
         voice_facts = _settle(run, voice_future, emit, "Голосовые серверы")
         voice = summarize_voice(voice_facts) if voice_facts is not None else None
-        sections.emit_voice(voice, emit)
 
         burst = _settle(run, burst_future, emit, "Серия пакетов UDP")
-        for line in udp_burst.lines(burst):
-            emit(line)
-        live.put(voice=report_text.voice_report(voice, burst))
+        show("voice", report_text.voice_report(voice, burst))
 
         ipv6 = _settle(run, ipv6_future, emit, "IPv6")
         if ipv6 is not None:
-            emit("━━━━━━━━ IPv6 ━━━━━━━━")
-            emit(f"{sections.IPV6_ICON[ipv6.code]} IPv6 {ipv6.text}")
-            live.put(ipv6={"state": ipv6.code, "text": ipv6.text})
+            show("ipv6", {"state": ipv6.code, "text": ipv6.text})
 
         system: tuple[system_state.SystemItem, ...] = tuple(_settle(run, system_future, emit, "Состояние системы") or ())
-        sections.emit_system(system, emit)
-        live.put(system=report_text.system_report(system))
+        show("system", report_text.system_report(system))
 
         telegram_facts = _settle(run, telegram_future, emit, "Дата-центры Telegram")
         telegram = (
@@ -765,40 +761,38 @@ def run_blockcheck(
             if telegram_facts is not None
             else None
         )
-        sections.emit_telegram(telegram, emit)
+        show("telegram", report_text.telegram_report(telegram))
 
-        network = _settle(run, network_future, emit, "Ваша сеть")
-        sections.emit_network(network, emit)
-        live.put(telegram=report_text.telegram_report(telegram), network=network)
+        network = show("network", _settle(run, network_future, emit, "Ваша сеть"))
 
-        dns_servers = sections.finish_dns_servers(run, dns_future, emit) if dns_future is not None else None
-        live.put(dns_servers=dns_servers)
+        dns_servers = show("dns_servers", sections.finish_dns_servers(run, dns_future, emit) if dns_future is not None else None)
         if full:
             step(STEP_FILTER, 0, 1)
-        filter_place = (
+        show(
+            "filter",
             sections.find_filter_place(
                 run,
                 collected,
-                emit,
                 zapret_running=zapret_running,
                 other_tools=in_path,
                 own_asn=str((network or {}).get("asn") or ""),
             )
             if full
-            else None
+            else None,
         )
         extra = full and not run.dns_cancelled()
         local = (["net67"] if zapret_running else []) + list(in_path)
-        habits_call = functools.partial(sections.check_filter_habits, run, collected, emit, tools=local)
-        habits = _attempt(emit, "Как работает фильтр", habits_call) if extra else None
+        habits_call = functools.partial(sections.check_filter_habits, run, collected, tools=local)
+        show("habits", _attempt(emit, "Как работает фильтр", habits_call) if extra else None)
         if full:
             step(STEP_FILTER)
-        speed_call = functools.partial(sections.check_speed, run, emit, collected, services)
-        speed = _attempt(emit, "Скорость", speed_call) if full and not run.dns_cancelled() else None
+        speed_call = functools.partial(sections.check_speed, run, collected, services)
+        speed = show("speed", _attempt(emit, "Скорость", speed_call) if full and not run.dns_cancelled() else None)
         # Последней — проба, которая сама может остановить сайт на пару минут.
-        crowd_call = functools.partial(sections.check_crowd, run, collected, services, emit, tools=local)
-        crowd = _attempt(emit, "Несколько соединений сразу", crowd_call) if full and not run.dns_cancelled() else None
-        live.put(filter=filter_place, habits=habits, speed=speed, crowd=crowd)
+        crowd_call = functools.partial(sections.check_crowd, run, collected, services, tools=local)
+        crowd = show("crowd", _attempt(emit, "Несколько соединений сразу", crowd_call) if full and not run.dns_cancelled() else None)
+        quic_call = functools.partial(sections.check_quic_fallback, run, collected, services)
+        show("quic_fallback", _attempt(emit, "Откат QUIC", quic_call) if full and not run.dns_cancelled() else None)
 
         reference = run.reference_report()
         # Признак «белых списков» по контрольным сайтам проверяется по десяткам сетей:
@@ -826,11 +820,18 @@ def run_blockcheck(
             problems, burst=burst, dns_servers=dns_servers, speed=speed, crowd=crowd, zapret_running=zapret_running
         )
 
+        dns_view = block_view.dns_block({"reference": reference, "spoofed_hosts": spoofed})
+        if dns_view is not None:
+            for line in block_view.render_block_text(dns_view):
+                emit(line)
+
         registry_index = registry_wait(REGISTRY_WAIT_S, run.probe_cancel)
         if run.stopped():
             raise _Stopped()
         services_report = registry.annotate(services_report, registry_index)
-        for line in registry.lines(services_report, registry_index):
+        sections.annotate_selectivity(run, services_report, collected, services)
+        registry_summary = registry.summary(registry_index)
+        for line in block_view.text_lines("registry", registry_summary):
             emit(line)
         emit(step.line(report_text.STEP_TITLES))
         elapsed = time.monotonic() - started
@@ -841,7 +842,7 @@ def run_blockcheck(
 
         return live.put(
             services=services_report,
-            registry=registry.summary(registry_index),
+            registry=registry_summary,
             problems=problems,
             working=working,
             spoofed_hosts=spoofed,
@@ -877,7 +878,8 @@ def check_site(host: str, *, should_stop: ShouldStop | None = None, emit: Emit |
         report = report_text.services_report(services, verdicts, collected)
         # Сайт может открываться, а поток к нему — придерживаться или обрываться по имени (так «крутит
         # загрузку» видео). Соединение этого не покажет: нужен замер потока с именем сайта и видеосервера.
-        names = sections.check_name_speed(run, collected, services, emit or (lambda _line: None))
+        names = sections.check_name_speed(run, collected, services)
+        sections.annotate_selectivity(run, report, collected, services)
         registry_index = registry_wait(REGISTRY_WAIT_S, run.probe_cancel)
         if run.stopped():
             raise _Stopped()
