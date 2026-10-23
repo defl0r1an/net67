@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from diagnostics import service_view
 from diagnostics.path_trace import FILTER_FOUND, judge_filter
 from diagnostics.quic_probe import QUIC_BLOCKED_BY_NAME, QUIC_OK, QUIC_SILENT
 from dns.domain_lookup import (
@@ -674,20 +675,8 @@ def build_site_lines(report: DomainLookupReport) -> list[str]:
     if not site:
         return []
     lines = ["", "=== Как открывается сайт ===", str(site.get("headline") or "")]
-    for target in site.get("targets") or ():
-        lines.append(f"{target.get('host', '')}: {target.get('text', '')}")
-        lines += [f"    {item.get('title', '')}: {item.get('text', '')}" for item in target.get("protocols") or ()]
-        for title, key in (("Как блокируют", "cause_text"), ("QUIC (UDP 443)", "quic_text"), ("DNS", "dns_reason")):
-            if target.get(key):
-                lines.append(f"    {title}: {target[key]}")
-        registry = target.get("registry") or {}
-        if registry.get("listed"):
-            lines.append("    Реестр РКН: сайт в реестре")
-    names = site.get("names") or {}
-    if names.get("items"):
-        lines.append(f"Поток по имени: {names.get('headline', '')}")
-        lines.append(f"    контроль {names.get('server', '')} под своим именем: {names.get('control', '')}")
-        lines += [f"    {item.get('host', '')}: {item.get('text', '')}" for item in names["items"]]
+    # Те же разделы и слова, что на карточке сайта: их решает один модуль.
+    lines += service_view.render_text(service_view.service_sections(site))
     advice = hosts_advice(report)
     if advice:
         lines.append(f"Что поможет: {advice}")

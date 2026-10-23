@@ -387,6 +387,123 @@ class PlansTests(unittest.TestCase):
         self.assertEqual(summary.tone, plans.TONE_ERROR)
         self.assertIn("4 из 5", summary.text)
 
+    def test_text_report_carries_transfer_and_path_of_the_main_address(self) -> None:
+        steps = [
+            {"key": "dns", "title": "DNS", "level": "ok", "text": "ответ DNS совпал с эталоном", "confidence": "high"},
+            {"key": "data", "title": "Передача", "level": "warn", "text": "ответ пришёл после паузы", "confidence": "medium"},
+            {"key": "quic", "title": "QUIC", "level": "unknown", "text": "не проверялся", "confidence": ""},
+        ]
+        target = {"host": "youtube.com", "main": True, "text": "открывается", "path": steps,
+                  "transfer": {"code": "pause", "level": "warn", "text": "пауза 2,9 с перед первым байтом"}}
+        site = {"headline": "открывается", "targets": [target, dict(target, host="other.com", main=False)]}
+
+        text = plans.build_text_report(self._youtube_report(site))
+
+        self.assertIn("   ⚠️ Скорость ответа: пауза 2,9 с перед первым байтом", text)
+        self.assertIn("   ✅ DNS: ответ DNS совпал с эталоном (уверенность высокая)", text)
+        self.assertIn("   ⚠️ Передача: ответ пришёл после паузы (уверенность средняя)", text)
+        self.assertIn("   ❔ QUIC: не проверялся\n", text)
+        # Путь печатается один раз — для главного адреса, а не для каждого.
+        self.assertEqual(text.count("Путь запроса"), 1)
+
+    def test_text_report_of_an_old_site_record_has_no_new_lines(self) -> None:
+        site = {"headline": "открывается", "targets": [{"host": "youtube.com", "main": True, "text": "открывается"}]}
+
+        text = plans.build_text_report(self._youtube_report(site))
+
+        self.assertNotIn("Путь запроса", text)
+        self.assertNotIn("Скорость ответа", text)
+
+    def _youtube_report(self, site: dict | None = None) -> engine.DomainLookupReport:
+        """Случай 2026-10-13: фильтр отвечает «домена нет» вместо 8.8.8.8, Windows верит и адрес не получает."""
+        answers = engine.annotate_answers(
+            [
+                engine.ResolverAnswer(engine.DnsServer("Windows", "", engine.SERVER_WINDOWS), STATUS_NXDOMAIN, elapsed_ms=8.0),
+                engine.ResolverAnswer(
+                    engine.DnsServer("Google", "8.8.8.8", engine.SERVER_SYSTEM), STATUS_NXDOMAIN, forged=True, elapsed_ms=6.0
+                ),
+                engine.ResolverAnswer(engine.DnsServer("Google", "8.8.4.4", engine.SERVER_SYSTEM), STATUS_OK, ipv4=("64.233.165.93",)),
+                engine.ResolverAnswer(
+                    engine.DnsServer("Google (шифрованный)", "8.8.8.8", engine.SERVER_DOH), STATUS_OK, ipv4=("64.233.165.190",)
+                ),
+            ]
+        )
+        return engine.DomainLookupReport(
+            target="youtube.com",
+            kind=engine.KIND_DOMAIN,
+            answers=answers,
+            primary_ip=engine.pick_primary_ip(answers),
+            site=site,
+            finished=True,
+            elapsed_s=10.1,
+        )
+
+    def test_forged_denial_from_own_dns_is_named_with_the_cure(self) -> None:
+        report = self._youtube_report()
+
+        summary = plans.build_dns_summary(report)
+        rows = {(row.server, row.address): row for row in plans.build_answer_rows(report)}
+        windows, forged = rows[("Windows (как видят программы)", "—")], rows[("Системный DNS · Google", "8.8.8.8")]
+
+        self.assertEqual(report.primary_ip, "64.233.165.93")
+        self.assertEqual(summary.tone, plans.TONE_WARNING)
+        self.assertIn("подставной «такого домена нет»", summary.text)
+        self.assertIn("Системный DNS · Google", summary.text)
+        self.assertIn("DNS этого компьютера", summary.text)
+        self.assertIn("«Настройка DNS»", summary.text)
+        self.assertIn(engine.NOTE_FORGED, forged.result)
+        self.assertEqual(windows.level, engine.LEVEL_WARN)
+        self.assertIn("браузер и программы сайт не найдут", windows.result)
+
+    def test_status_and_history_name_the_dns_trouble_instead_of_all_is_well(self) -> None:
+        site = {"level": "warn", "headline": "youtube.com открывается"}
+        report = self._youtube_report(site)
+
+        status = plans.build_status(report)
+        entry = plans.build_history_entry(report)
+
+        self.assertEqual(status.tone, plans.TONE_WARNING)
+        self.assertIn("Windows адрес сайта не получает", status.text)
+        self.assertEqual(entry["level"], "warn")
+        self.assertIn("Windows адрес сайта не получает", entry["headline"])
+
+    def test_closed_site_leads_the_status_and_the_history(self) -> None:
+        site = {"level": "fail", "headline": "youtube.com не открывается: блокировка по имени"}
+        report = self._youtube_report(site)
+
+        status = plans.build_status(report)
+        entry = plans.build_history_entry(report)
+
+        self.assertEqual(status.tone, plans.TONE_ERROR)
+        self.assertIn("не открывается: блокировка по имени", status.text)
+        self.assertEqual(entry["headline"], site["headline"])
+        self.assertIn("Windows адрес сайта не получает", entry["problems"][1])
+
+    def test_forged_denial_at_foreign_server_is_not_blamed_on_this_computer(self) -> None:
+        answers = engine.annotate_answers(
+            [
+                engine.ResolverAnswer(engine.DnsServer("Windows", "", engine.SERVER_WINDOWS), STATUS_OK, ipv4=("1.2.3.4",)),
+                engine.ResolverAnswer(engine.DnsServer("OpenDNS", "208.67.222.222"), STATUS_NXDOMAIN, tcp_ipv4=("1.2.3.4",)),
+            ]
+        )
+        report = engine.DomainLookupReport(
+            target="example.com", kind=engine.KIND_DOMAIN, answers=answers, primary_ip="1.2.3.4", finished=True
+        )
+
+        self.assertIn("DNS этого компьютера среди них нет", plans.build_dns_summary(report).text)
+        self.assertEqual(plans.own_dns_trouble(report), "")
+        self.assertEqual(plans.build_status(report).tone, plans.TONE_SUCCESS)
+
+    def test_system_server_is_not_shown_with_its_address_twice(self) -> None:
+        named = engine.ResolverAnswer(engine.DnsServer("Google", "8.8.8.8", engine.SERVER_SYSTEM), STATUS_OK, ipv4=("1.1.1.1",))
+        unnamed = engine.ResolverAnswer(engine.DnsServer("", "10.0.0.1", engine.SERVER_SYSTEM), STATUS_OK, ipv4=("1.1.1.1",))
+        legacy = engine.ResolverAnswer(engine.DnsServer("10.0.0.2", "10.0.0.2", engine.SERVER_SYSTEM), STATUS_OK, ipv4=("1.1.1.1",))
+        report = engine.DomainLookupReport(target="example.com", kind=engine.KIND_DOMAIN, answers=(named, unnamed, legacy))
+
+        self.assertEqual(
+            [row.server for row in plans.build_answer_rows(report)], ["Системный DNS · Google", "Системный DNS", "Системный DNS"]
+        )
+
     def test_ping_lines_show_loss_and_times(self) -> None:
         lines = plans.build_ping_lines(self._report())
 

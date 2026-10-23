@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import socket
 import threading
 import time
@@ -22,6 +23,7 @@ from diagnostics.tls_probe import (
 )
 from utils.chrome_https import chrome_get
 from diagnostics.verdict import (
+    ADVICE_HOSTS_STALE,
     DnsState,
     Level,
     ReachState,
@@ -481,7 +483,8 @@ class EngineScenarioTests(unittest.TestCase):
         self.assertFalse(result["dns_poisoning_detected"])
         self.assertEqual(result["services"][0]["level"], "fail")
         self.assertIn("Подбор стратегии", text)
-        hosts_order = [line.split(" ")[1] for line in lines if line.startswith("❌ ") and "." in line.split(" ")[1]]
+        # Заголовок раздела адреса: «имя — для чего»; порядок разделов — порядок проверки.
+        hosts_order = [line.split(" ")[0] for line in lines if re.match(r"[a-z0-9.-]+\.[a-z]+ — ", line)]
         self.assertEqual(hosts_order[:3], ["discord.com", "gateway.discord.gg", "cdn.discordapp.com"])
 
     def test_site_blocked_over_ipv4_but_open_over_ipv6_is_reported_as_working(self) -> None:
@@ -649,6 +652,19 @@ class EngineMixedAnswerTests(unittest.TestCase):
         self.assertIn("hosts", verdict.headline)
         self.assertTrue(any("hosts" in item for item in verdict.advice))
         self.assertFalse(any("антивирус" in item for item in verdict.advice))
+
+    def test_stale_hosts_advice_is_kept_when_another_address_is_blocked_too(self) -> None:
+        verdict = summarize_service(
+            "Discord",
+            [
+                TargetOutcome("discord.com", "сайт", ReachState.OK, DnsState.LOCAL, main=True, hosts_stale=True),
+                TargetOutcome("cdn.discordapp.com", "картинки", ReachState.DPI, DnsState.OK),
+            ],
+            zapret_running=True,
+        )
+
+        self.assertIn("не работают картинки", verdict.headline)
+        self.assertIn(ADVICE_HOSTS_STALE, verdict.advice)
 
     def test_user_domains_only_in_all_sites_scope(self) -> None:
         self.assertNotIn("user:example.org", engine.build_services("main", ["example.org"]))

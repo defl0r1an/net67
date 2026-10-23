@@ -24,6 +24,7 @@ from qfluentwidgets import (
 import dns.domain_lookup_plans as plans
 from app.ui_texts import tr as tr_catalog
 from blockcheck.ui.check_results import _HeightKeeper
+from blockcheck.ui.quick_service_cards import QuickServiceCards
 from log.log import log
 from ui.accessibility import set_control_accessibility, set_state_text
 from ui.fluent_widgets import SettingsCard, set_tooltip
@@ -213,6 +214,12 @@ class DomainLookupPage(BasePage):
         row.addWidget(self.report_button)
         self.control_card.add_layout(row)
 
+        # Известные сервисы одним нажатием: адрес подставляется и проверка запускается сразу.
+        self.quick_cards = QuickServiceCards(self.control_card, for_site_check=True)
+        self.quick_cards.picked.connect(self._on_quick_service)
+        self.target_input.textChanged.connect(self.quick_cards.set_target)
+        self.control_card.add_widget(self.quick_cards)
+
         self.external_check = CheckBox("", self.control_card)
         self.external_check.setChecked(True)
         self.control_card.add_widget(self.external_check)
@@ -360,6 +367,7 @@ class DomainLookupPage(BasePage):
         self.start_button.setEnabled(not running)
         self.stop_button.setVisible(running)
         self.target_input.setEnabled(not running)
+        self.quick_cards.setEnabled(not running)
         self.external_check.setEnabled(not running)
         self.report_button.setEnabled(self._report is not None and not running)
         self.progress_bar.setVisible(running)
@@ -368,6 +376,13 @@ class DomainLookupPage(BasePage):
         else:
             self.progress_bar.stop()
         set_state_text(self.progress_bar, "Проверка домена: выполняется" if running else "Проверка домена: не выполняется")
+
+    def _on_quick_service(self, address: str) -> None:
+        """Карточка сервиса: подставить адрес и сразу проверить."""
+        if self._closed or self._running:
+            return
+        self.set_target(address)
+        self.start_lookup()
 
     def set_target(self, target: str) -> None:
         self.target_input.setText(str(target or ""))
