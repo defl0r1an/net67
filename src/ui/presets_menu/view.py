@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
-from PyQt6.QtWidgets import QApplication, QListView
+from PyQt6.QtWidgets import QAbstractItemView, QApplication, QListView
 
 from .common import (
     PRESET_DROP_MARKER_PROPERTY,
@@ -18,6 +18,9 @@ from qfluentwidgets import ListView
 
 
 SCREEN_READER_LIST_NAME_PROPERTY = "screenReaderListName"
+# Роли, смена которых не меняет размер плитки: пометка активного пресета и её
+# текст для экранного диктора. Размер плитки задаёт delegate по ширине списка.
+_SIZE_NEUTRAL_ROLES = frozenset({PresetListModel.ActiveRole, int(Qt.ItemDataRole.AccessibleTextRole)})
 
 
 class LinkedWheelListView(ListView):
@@ -34,6 +37,8 @@ class LinkedWheelListView(ListView):
         self._drag_start_pos: QPoint | None = None
         self._drag_source: tuple[str, str] | None = None
         self._draggable_kinds = {str(kind) for kind in (draggable_kinds or {"preset"})}
+        # Область, которую сейчас перерисовывает paintEvent (None — вне его).
+        self._paint_region = None
         # Пресеты укладываются слева направо с переносом: в широком окне они
         # встают в несколько столбцов. Ширину плиток задаёт PresetListDelegate,
         # заголовок папки всегда занимает линию целиком.
@@ -49,6 +54,38 @@ class LinkedWheelListView(ListView):
         if not self.isWrapping() or not callable(column_layout):
             return 1
         return int(column_layout()[0])
+
+    def dataChanged(self, top_left, bottom_right, roles=()):  # noqa: N802
+        # QListView при любой смене данных при неодинаковых размерах строк
+        # заново раскладывает все плитки и перерисовывает весь список. Смена
+        # метки активного пресета размер не меняет: достаточно обновить строки.
+        if roles and all(int(role) in _SIZE_NEUTRAL_ROLES for role in roles):
+            QAbstractItemView.dataChanged(self, top_left, bottom_right, roles)
+            return
+        super().dataChanged(top_left, bottom_right, roles)
+
+    def paintEvent(self, event):  # noqa: N802
+        # QListView зовёт delegate для каждой плитки в объемлющем прямоугольнике
+        # всей грязной области, хотя рисовать Qt позволит только саму область:
+        # при наведении, когда гаснут несколько далёких строк, это десятки
+        # лишних плиток за кадр. Delegate спрашивает область и пропускает те,
+        # что в неё не попали.
+        self._paint_region = event.region()
+        delegate = self.itemDelegate()
+        begin_frame = getattr(delegate, "begin_frame", None)
+        if callable(begin_frame):
+            begin_frame()
+        try:
+            super().paintEvent(event)
+        finally:
+            self._paint_region = None
+            end_frame = getattr(delegate, "end_frame", None)
+            if callable(end_frame):
+                end_frame()
+
+    def paint_region(self):
+        """Перерисовываемая сейчас область окна списка; None — вне paintEvent."""
+        return self._paint_region
 
     def resizeEvent(self, event):  # noqa: N802
         if event.size().width() != event.oldSize().width():

@@ -216,8 +216,14 @@ def contrast_ratio(foreground: QColor, background: QColor) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
-_contrast_color_cache: dict[tuple, str] = {}
 _to_qcolor_cache: dict[tuple[str, str], QColor] = {}
+
+# Результат зависит только от четырёх значений, а плитки зовут функцию на каждой
+# перерисовке с одними и теми же цветами. Прозрачность фона в ключ не идёт —
+# считается по непрозрачному фону, и раньше одна и та же пара цветов при
+# разной прозрачности плодила записи; предел — чтобы кэш не рос бесконечно.
+_CONTRAST_CACHE: dict[tuple, str] = {}
+_CONTRAST_CACHE_LIMIT = 1024
 
 
 def pick_contrast_color(
@@ -227,17 +233,27 @@ def pick_contrast_color(
     *,
     minimum_ratio: float = 2.4,
 ) -> str:
-    bg_rgba = background_color.rgba() if isinstance(background_color, QColor) else str(background_color)
-    cache_key = (preferred_color, bg_rgba, tuple(fallback_colors), minimum_ratio)
-    cached = _contrast_color_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
     bg = QColor(background_color)
     if not bg.isValid():
         bg = QColor("#000000")
     bg.setAlpha(255)
+    cache_key = (str(preferred_color or ""), bg.rgb(), tuple(str(c or "") for c in fallback_colors), float(minimum_ratio))
+    cached = _CONTRAST_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    result = _pick_contrast_color_uncached(preferred_color, bg, fallback_colors, minimum_ratio)
+    if len(_CONTRAST_CACHE) >= _CONTRAST_CACHE_LIMIT:
+        _CONTRAST_CACHE.clear()
+    _CONTRAST_CACHE[cache_key] = result
+    return result
 
+
+def _pick_contrast_color_uncached(
+    preferred_color: str,
+    bg: QColor,
+    fallback_colors: list[str],
+    minimum_ratio: float,
+) -> str:
     candidates: list[str] = []
     for raw in [preferred_color, *fallback_colors]:
         value = str(raw or "").strip()
@@ -253,19 +269,14 @@ def pick_contrast_color(
         color.setAlpha(255)
         ratio = contrast_ratio(color, bg)
         if ratio >= minimum_ratio:
-            res = color.name(QColor.NameFormat.HexRgb)
-            _contrast_color_cache[cache_key] = res
-            return res
+            return color.name(QColor.NameFormat.HexRgb)
         if ratio > best_ratio:
             best_ratio = ratio
             best_color = color
 
     if best_color is not None:
-        res = best_color.name(QColor.NameFormat.HexRgb)
-    else:
-        res = "#f5f5f5" if relative_luminance(bg) < 0.45 else "#111111"
-    _contrast_color_cache[cache_key] = res
-    return res
+        return best_color.name(QColor.NameFormat.HexRgb)
+    return "#f5f5f5" if relative_luminance(bg) < 0.45 else "#111111"
 
 
 def to_qcolor(value, fallback_hex: str = "#000000") -> QColor:

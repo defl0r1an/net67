@@ -25,7 +25,14 @@ from .common import (
     to_qcolor,
     tr_text,
 )
-from .model import PresetListModel
+from .model import PresetListModel, TileValues
+
+
+# Флаги выравнивания собираются один раз: на каждой плитке их «или» заново
+# проходило через Python-перечисления.
+_ALIGN_LEFT_VCENTER = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+_ALIGN_RIGHT_VCENTER = int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+_ALIGN_CENTER = int(Qt.AlignmentFlag.AlignCenter)
 
 
 class PresetListDelegate(QStyledItemDelegate):
@@ -59,6 +66,9 @@ class PresetListDelegate(QStyledItemDelegate):
     # Запас к системному времени двойного щелчка: одиночный щелчок включает
     # пресет только когда второй уже точно не придёт.
     _DOUBLE_CLICK_MARGIN_MS = 30
+    # Сколько плитка остаётся подсвеченной после включения: бегунок едет 760 мс.
+    # Если включение сорвалось, подсветка сама погаснет.
+    _CLICK_HIGHLIGHT_AFTER_ACTIVATION_MS = 1200
 
     def __init__(self, view: QListView, *, language_scope: str = "winws2", help_name_role: str = "name"):
         super().__init__(view)
@@ -78,7 +88,14 @@ class PresetListDelegate(QStyledItemDelegate):
         self._pending_shake_rotation = 0
         self._pending_shake_timer = QTimer(self)
         self._pending_shake_timer.timeout.connect(self._advance_pending_shake)
+        self._frame_tokens = None
         self._pending_activation = ""
+        # Плитка, по которой только что щёлкнули: подсвечена сразу, хотя
+        # включится после ожидания двойного щелчка.
+        self._click_highlight = ""
+        self._click_highlight_timer = QTimer(self)
+        self._click_highlight_timer.setSingleShot(True)
+        self._click_highlight_timer.timeout.connect(self._clear_click_highlight)
         self._press_timer = QElapsedTimer()
         self._skip_release = False
         self._activation_timer = QTimer(self)
@@ -176,6 +193,35 @@ class PresetListDelegate(QStyledItemDelegate):
             self._cached_sizes.clear()
             self._cached_elided_names.clear()
 
+    def begin_frame(self) -> None:
+        """Список начинает перерисовку: токены темы за неё не изменятся."""
+        self._frame_tokens = get_theme_tokens()
+
+    def end_frame(self) -> None:
+        self._frame_tokens = None
+
+    def _tokens(self):
+        tokens = self._frame_tokens
+        return tokens if tokens is not None else get_theme_tokens()
+
+    def _tile_values(self, index: QModelIndex):
+        """Данные плитки: одним обращением к модели, если она это умеет."""
+        getter = getattr(index.model(), "tile_values", None)
+        if callable(getter):
+            values = getter(index.row())
+            if values is not None:
+                return values
+        return TileValues(
+            name=self._shown_name(index),
+            is_active=bool(index.data(PresetListModel.ActiveRole)),
+            is_pinned=bool(index.data(PresetListModel.PinnedRole)),
+            rating=int(index.data(PresetListModel.RatingRole) or 0),
+            file_name=str(index.data(PresetListModel.FileNameRole) or ""),
+            icon_color=str(index.data(PresetListModel.IconColorRole) or ""),
+            is_remote=bool(index.data(PresetListModel.RemoteRole)),
+            remote_state=str(index.data(PresetListModel.RemoteStateRole) or ""),
+        )
+
     def _shown_name(self, index: QModelIndex) -> str:
         """Имя без начала, которое повторяет заголовок папки над плиткой."""
         name = str(index.data(PresetListModel.NameRole) or "")
@@ -244,6 +290,12 @@ class PresetListDelegate(QStyledItemDelegate):
         return size if size is not None else QSize(self._cached_layout_columns[1], self._ROW_HEIGHT)
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+        # Плитка вне перерисовываемой области всё равно была бы обрезана: не
+        # тратим на неё Python-код (картинка не меняется).
+        region_of_paint = getattr(self._view, "paint_region", None)
+        region = region_of_paint() if callable(region_of_paint) else None
+        if region is not None and not region.intersects(option.rect):
+            return
         kind = index.data(PresetListModel.KindRole)
 
         if kind == "folder":
@@ -330,13 +382,45 @@ class PresetListDelegate(QStyledItemDelegate):
         # отсчитывает двойной щелчок от первого нажатия — ждём столько же.
         self._pending_activation = item_id
         since_press = self._press_timer.elapsed() if self._press_timer.isValid() else 0
-        wait = QApplication.doubleClickInterval() - since_press + self._DOUBLE_CLICK_MARGIN_MS
-        self._activation_timer.start(max(self._DOUBLE_CLICK_MARGIN_MS, wait))
+        wait = max(self._DOUBLE_CLICK_MARGIN_MS, QApplication.doubleClickInterval() - since_press + self._DOUBLE_CLICK_MARGIN_MS)
+        self._activation_timer.start(wait)
+        # Включение ждёт, не придёт ли второй щелчок, а человек должен увидеть,
+        # что щелчок принят, сразу.
+        self._set_click_highlight(item_id, wait + self._CLICK_HIGHLIGHT_AFTER_ACTIVATION_MS)
         return True
 
     def _cancel_pending_activation(self) -> None:
         self._activation_timer.stop()
         self._pending_activation = ""
+        self._clear_click_highlight()
+
+    def _set_click_highlight(self, file_name: str, lifetime_ms: int) -> None:
+        previous = self._click_highlight
+        self._click_highlight = str(file_name or "")
+        self._click_highlight_timer.start(int(lifetime_ms))
+        if previous != self._click_highlight:
+            self._update_preset_row_by_file_name(previous)
+        self._update_preset_row_by_file_name(self._click_highlight)
+
+    def _clear_click_highlight(self) -> None:
+        self._click_highlight_timer.stop()
+        previous, self._click_highlight = self._click_highlight, ""
+        self._update_preset_row_by_file_name(previous)
+
+    def _update_preset_row_by_file_name(self, file_name: str) -> None:
+        file_name = str(file_name or "").strip()
+        if not file_name:
+            return
+        model = self._view.model()
+        finder = getattr(model, "find_preset_row", None)
+        if not callable(finder):
+            return
+        try:
+            row = int(finder(file_name))
+        except Exception:
+            return
+        if row >= 0:
+            self._update_preset_row_view(model.index(row, 0))
 
     def _emit_pending_activation(self) -> None:
         item_id = self._pending_activation
@@ -470,7 +554,7 @@ class PresetListDelegate(QStyledItemDelegate):
         tokens = get_theme_tokens()
 
         painter.setPen(to_qcolor(tokens.fg_muted, "#9aa2af"))
-        painter.drawText(rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), text)
+        painter.drawText(rect, _ALIGN_LEFT_VCENTER, text)
 
         line_y = rect.center().y()
         text_width = painter.fontMetrics().horizontalAdvance(text)
@@ -538,20 +622,18 @@ class PresetListDelegate(QStyledItemDelegate):
         painter.save()
         tokens = get_theme_tokens()
         painter.setPen(to_qcolor(tokens.fg_muted, "#9aa2af"))
-        painter.drawText(option.rect, int(Qt.AlignmentFlag.AlignCenter), text)
+        painter.drawText(option.rect, _ALIGN_CENTER, text)
         painter.restore()
 
     def _paint_preset_row(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        tokens = get_theme_tokens()
+        tokens = self._tokens()
         rect = self._tile_rect(option.rect)
 
-        name = self._shown_name(index)
-        is_active = bool(index.data(PresetListModel.ActiveRole))
-        is_pinned = bool(index.data(PresetListModel.PinnedRole))
-        rating = int(index.data(PresetListModel.RatingRole) or 0)
+        values = self._tile_values(index)
+        name, is_active, is_pinned, rating = values.name, values.is_active, values.is_pinned, values.rating
         marker = self._view.property(PRESET_DROP_MARKER_PROPERTY)
         try:
             drag_marker_row = int(marker.get("row", -1)) if isinstance(marker, dict) else -1
@@ -562,7 +644,8 @@ class PresetListDelegate(QStyledItemDelegate):
         hovered = option.state & QStyle.StateFlag.State_MouseOver
         focused = bool(option.state & QStyle.StateFlag.State_HasFocus)
         pressed = self._pressed_row == index.row()
-        file_name = str(index.data(PresetListModel.FileNameRole) or "")
+        file_name = values.file_name
+        clicked = bool(file_name) and file_name == self._click_highlight
         # Кнопки не шумят на всём списке: они видны только на плитке под
         # мышью или с клавиатурным фокусом.
         revealed = (
@@ -578,14 +661,17 @@ class PresetListDelegate(QStyledItemDelegate):
         row_paint = paint_profile_hover_row(
             painter,
             rect,
-            active=is_active and not drag_marker_visible,
+            # Щёлкнутая плитка подсвечена как включённая сразу, а когда бегунок
+            # доедет, подсветка уже на месте и не загорается заново.
+            active=(is_active or clicked) and not drag_marker_visible,
             hovered=bool(hovered) or focused,
             pressed=pressed,
             show_active_marker=False,
-            active_reveal=motion.row_reveal(index) if motion is not None else None,
+            active_reveal=None if clicked else (motion.row_reveal(index) if motion is not None else None),
             residual_active=motion.row_residual(index) if motion is not None else 0.0,
             hover_level=hover_motion.hover_level(index) if live_hover else None,
             sheen=hover_motion.sheen_progress(index) if live_hover else None,
+            tokens=tokens,
         )
         bg = row_paint.background
 
@@ -603,7 +689,7 @@ class PresetListDelegate(QStyledItemDelegate):
             icon_name, wanted_color = "fa5s.check-circle", str(tokens.accent_hex)
         else:
             icon_name = "fa5s.file-alt"
-            wanted_color = normalize_preset_icon_color(str(index.data(PresetListModel.IconColorRole) or ""))
+            wanted_color = normalize_preset_icon_color(values.icon_color)
         icon_color = pick_contrast_color(wanted_color, bg, [tokens.accent_hex, tokens.fg], minimum_ratio=2.6)
         paint_icon_motion(
             painter,
@@ -656,12 +742,12 @@ class PresetListDelegate(QStyledItemDelegate):
         else:
             name_metrics = None
         painter.setPen(to_qcolor(tokens.fg, "#f5f5f5"))
-        painter.drawText(name_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), elided_name)
+        painter.drawText(name_rect, _ALIGN_LEFT_VCENTER, elided_name)
 
-        if bool(index.data(PresetListModel.RemoteRole)):
+        if values.is_remote:
             if name_metrics is None:
                 name_metrics = QFontMetrics(name_font)
-            remote_state = str(index.data(PresetListModel.RemoteStateRole) or "")
+            remote_state = values.remote_state
             cloud_left = name_rect.left() + name_metrics.horizontalAdvance(elided_name) + 6
             if cloud_left + 14 <= name_rect.right():
                 cloud_color = tokens.fg_faint
@@ -689,7 +775,7 @@ class PresetListDelegate(QStyledItemDelegate):
             painter.setPen(to_qcolor(tokens.fg_muted, "#b7bec8"))
             painter.drawText(
                 rating_rect,
-                int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
+                _ALIGN_RIGHT_VCENTER,
                 str(rating),
             )
         if pin_mark_rect.isValid():
