@@ -606,8 +606,20 @@ def _matrix_cell(run: Run) -> Callable[[str, str], selectivity.Cell]:
     """Одна ячейка таблицы: приветствие TLS 1.3 и первый пакет QUIC с этим именем на этом адресе."""
 
     def cell(name: str, ip: str) -> selectivity.Cell:
-        hello = block_cause.tls_hello(ip, name or None, cancel=run.probe_cancel, version=block_cause.TLS_1_3)
-        quic_ms = quic_probe.quic_hello(ip, name or None, cancel=run.probe_cancel)
+        # TLS и QUIC идут одновременно, и сроки короче обычных: таблица сравнивает десятки сочетаний, и при
+        # блокировке каждое молчание стоит целого срока. Два пакета QUIC оставлены: одно молчание UDP ничего не доказывает.
+        quic_future = run.submit(
+            quic_probe.quic_hello,
+            ip,
+            name or None,
+            attempts=2,
+            timeout=selectivity.QUIC_TIMEOUT_S,
+            cancel=run.probe_cancel,
+        )
+        hello = block_cause.tls_hello(
+            ip, name or None, cancel=run.probe_cancel, version=block_cause.TLS_1_3, timeout=selectivity.TLS_TIMEOUT_S
+        )
+        quic_ms = quic_future.result()
         if hello.answered:
             tls = selectivity.ANSWERED
         elif hello.kind in (block_cause.HELLO_RESET, block_cause.HELLO_TIMEOUT):
@@ -629,10 +641,19 @@ def annotate_selectivity(run: Run, report: list[dict], collected: dict[str, list
             continue
         quic_codes = [probe.quic.code if probe.quic else "" for probe in probes]
         causes = [probe.cause.code if probe.cause else "" for probe in probes]
-        if not selectivity.needs_matrix(quic_codes, causes, [probe.unstable for probe in probes]):
+        # Адреса сайта разошлись: на одних соединение открылось, на других сброшено — это тоже сигнал.
+        mixed = [
+            "адреса дают разный исход"
+            for probe in probes
+            if {kind == "ok" for _ip, kind in getattr(probe, "tried", ())} == {True, False}
+        ]
+        if not selectivity.needs_matrix(quic_codes, causes, [probe.unstable for probe in probes] + mixed):
             continue
         ordered = sorted(probes, key=lambda probe: not probe.target.main)
         addresses = [(probe.host, probe.reach.ip) for probe in ordered if probe.reach is not None and probe.reach.ip]
+        # Адреса, которые перебирал сам сайт: одно имя на каждом из них, чтобы видеть, какой пускает, а какой нет.
+        for probe in ordered:
+            addresses.extend((probe.host, ip) for ip, _kind in getattr(probe, "tried", ()) if ip and ":" not in ip)
         facts = selectivity.collect(
             [probe.host for probe in ordered], addresses, _matrix_cell(run), submit=run.submit, should_stop=run.dns_cancelled
         )

@@ -381,6 +381,16 @@ class NamedCertificateTests(unittest.TestCase):
         self.assertIn("сервер не ответил вовремя", opens.detail)
 
 
+class OpenedAddressTests(unittest.TestCase):
+    def test_address_stage_follows_the_address_that_opened_the_site(self) -> None:
+        site = {"targets": [{"main": True, "ok": True, "address": "142.251.153.4"}, {"main": False, "ok": True, "address": "9.9.9.9"}]}
+
+        self.assertEqual(engine.opened_address(site), "142.251.153.4")
+        self.assertEqual(engine.opened_address({"targets": [{"main": True, "ok": False, "address": "1.1.1.1"}]}), "")
+        self.assertEqual(engine.opened_address({"targets": [{"main": True, "ok": True, "address": "2001:db8::1"}]}), "")
+        self.assertEqual(engine.opened_address(None), "")
+
+
 class PlansTests(unittest.TestCase):
     def _report(self) -> engine.DomainLookupReport:
         _Network(self)
