@@ -76,9 +76,17 @@ class NoBundledCopyTests(unittest.TestCase):
                 self.assertNotIn("docs.local_site", text)
 
     def test_docs_card_and_tour_use_the_site(self) -> None:
-        card = (PROJECT_ROOT / "src" / "presets" / "ui" / "control" / "shared_builders.py").read_text(encoding="utf-8")
+        # Плитка «Документация» на «Обходе» открывает тот же сайт, что и вики:
+        # адрес один — DOCS_URL из branding.py.
+        from branding import DOCS_URL as brand_url
+        from config.urls import DOCS_URL
+        from docs import wiki_site
+
+        tile = (PROJECT_ROOT / "src" / "presets" / "ui" / "control" / "control_page_shared.py").read_text(encoding="utf-8")
         tour = (PROJECT_ROOT / "src" / "ui" / "onboarding" / "overlay.py").read_text(encoding="utf-8")
-        self.assertIn("from docs.wiki_site import open_in_browser", card)
+        self.assertIn("from config.urls import DOCS_URL", tile)
+        self.assertEqual(DOCS_URL, brand_url)
+        self.assertEqual(wiki_site.base_url(), brand_url)
         self.assertIn("from docs.wiki_site import page_url", tour)
 
     def test_builds_do_not_ship_the_wiki(self) -> None:

@@ -115,9 +115,19 @@ class LookTests(unittest.TestCase):
 
 class VisibleUpdateTests(unittest.TestCase):
     def test_updater_shows_the_installer_window(self) -> None:
+        import ast
+
         source = (ROOT / "src" / "updater" / "update_pipeline.py").read_text(encoding="utf-8")
         self.assertIn('"/SILENT"', source)
-        self.assertNotIn('"/VERYSILENT"', source)
+        # /VERYSILENT — только там, где ход установки показывает окно-продолжение
+        # (updater/install_splash.py): без него установщик виден, как и раньше.
+        tree = ast.parse(source)
+        quiet = next(
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "quiet_installer_arguments"
+        )
+        outside = source.replace(ast.get_source_segment(source, quiet), "")
+        self.assertNotIn('"/VERYSILENT"', outside)
         # Без вопросов и без отмены: окно только показывает ход.
         for flag in ('"/AUTOUPDATE"', '"/SUPPRESSMSGBOXES"', '"/NOCANCEL"'):
             self.assertIn(flag, source)
