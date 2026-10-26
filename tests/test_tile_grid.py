@@ -100,6 +100,19 @@ class TileGridTests(unittest.TestCase):
         self.assertEqual(grid.columns(), 3)
         self.assertEqual(tiles[2].x(), tiles[0].width() + 12)
 
+    def test_max_width_keeps_tiles_equal_and_left_aligned(self) -> None:
+        # Доли не действуют: две плитки на широком окне не растягиваются в полосы.
+        grid, tiles = self._grid(2, width=1800, weights=(1.9, 1.4), max_tile_width=360)
+
+        self.assertEqual(grid.columns(), 2)
+        self.assertEqual([tile.width() for tile in tiles], [360, 360])
+        self.assertEqual([tile.x() for tile in tiles], [0, 372])
+
+    def test_max_width_still_shrinks_tiles_in_a_narrow_grid(self) -> None:
+        grid, tiles = self._grid(2, width=600, max_tile_width=360)
+
+        self.assertEqual([tile.width() for tile in tiles], [294, 294])
+
     def test_fixed_row_height(self) -> None:
         grid, tiles = self._grid(2, width=600, row_height=72)
 

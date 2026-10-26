@@ -279,7 +279,9 @@ class ControlTopSummaryTilesTests(unittest.TestCase):
         self.assertEqual([item.is_clickable() for item in items], [True, True])
         self.assertEqual(self.summary.columns(), 2)
         self.assertEqual({item.height() for item in items}, {summary_module.TILE_ROW_HEIGHT})
-        self.assertGreater(self.summary.preset_item.width(), self.summary.profiles_item.width())
+        self.assertEqual(
+            [item.width() for item in items], [summary_module.TILE_MAX_WIDTH] * 2
+        )
         self.assertFalse(self.summary.mode_item.isVisible())
         self.assertFalse(self.summary.premium_item.isVisible())
 

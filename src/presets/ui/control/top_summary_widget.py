@@ -28,6 +28,12 @@ PENDING_CHANGE_DELAY_MS = 220
 TILE_MARGIN_X = 14
 TILE_MARGIN_Y = 10
 TILE_MIN_WIDTH = 170
+#: Предел ширины плитки сводки.
+#:
+#: Растянутые на широкое окно, две плитки становились полосами через всю
+#: страницу (владелец, 26 октября 2026). В 360 влезает подпись, имя
+#: пресета средней длины и полоса из пяти значков профилей с «+N».
+TILE_MAX_WIDTH = 360
 TILE_ROW_HEIGHT = 72
 # Ряд значков сервисов в плитке «Профили»: значки выскакивают по очереди.
 STRIP_ICON_SIZE = 18
@@ -404,7 +410,13 @@ class ControlTopSummaryWidget(TileGrid):
     premiumClicked = pyqtSignal()
 
     def __init__(self, *, language: str, mode_value: str, initial_icon_delay_ms: int = 0, parent=None):
-        super().__init__(parent, min_tile_width=TILE_MIN_WIDTH, spacing=12, row_height=TILE_ROW_HEIGHT)
+        super().__init__(
+            parent,
+            min_tile_width=TILE_MIN_WIDTH,
+            max_tile_width=TILE_MAX_WIDTH,
+            spacing=12,
+            row_height=TILE_ROW_HEIGHT,
+        )
         self._language = str(language or "ru")
         self._mode_value = str(mode_value or "")
         self._preset_value = ""
@@ -453,9 +465,9 @@ class ControlTopSummaryWidget(TileGrid):
         # подписки в продукте нет. Оба виджета остаются скрытыми: на них
         # ссылаются retranslate() и страницы.
         self.mode_item.setVisible(False)
-        # Плитка пресета шире: в ней самое длинное значение.
-        self.add_tile(self.preset_item, weight=1.9)
-        self.add_tile(self.profiles_item, weight=1.4)
+        # Плитки одной ширины, см. TILE_MAX_WIDTH.
+        self.add_tile(self.preset_item)
+        self.add_tile(self.profiles_item)
 
         self._profile_roll = QVariantAnimation(self)
         self._profile_roll.setEasingCurve(QEasingCurve.Type.OutCubic)

@@ -8,6 +8,10 @@
 ``TileGrid`` ставит плитки в ряд на всю ширину. Если в один ряд плитки
 стали бы у́же допустимого, сетка переносит их на следующие ряды. Высота
 сетки всегда ровно по содержимому.
+
+С ``max_tile_width`` плитки одной ширины и не шире предела: ряд прижат
+влево, остаток ширины остаётся пустым. Две плитки, растянутые на
+широкий экран, читались как полосы через всю страницу.
 """
 
 from __future__ import annotations
@@ -195,10 +199,20 @@ class SoftTile(QWidget):
 class TileGrid(QWidget):
     """Раскладывает дочерние плитки в ряды на всю ширину."""
 
-    def __init__(self, parent=None, *, min_tile_width: int = 200, spacing: int = 12, row_height: int = 0):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        min_tile_width: int = 200,
+        max_tile_width: int = 0,
+        spacing: int = 12,
+        row_height: int = 0,
+    ):
         super().__init__(parent)
         self._tiles: list[tuple[QWidget, float]] = []
         self._min_tile_width = max(40, int(min_tile_width))
+        # 0 — без предела: плитки делят всю ширину.
+        self._max_tile_width = max(0, int(max_tile_width))
         self._spacing = max(0, int(spacing))
         self._row_height = max(0, int(row_height))
         self._columns = 0
@@ -206,7 +220,10 @@ class TileGrid(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def add_tile(self, tile: QWidget, *, weight: float = 1.0) -> None:
-        """weight — во сколько раз плитка шире соседей, пока все стоят в один ряд."""
+        """weight — во сколько раз плитка шире соседей, пока все стоят в один ряд.
+
+        При ``max_tile_width`` доли не действуют: все плитки одной ширины.
+        """
         tile.setParent(self)
         self._tiles.append((tile, max(0.1, float(weight))))
         tile.installEventFilter(self)
@@ -231,7 +248,10 @@ class TileGrid(QWidget):
             rows: list[list[tuple[QWidget, int]]] = []
             for start in range(0, len(tiles), columns):
                 chunk = tiles[start : start + columns]
-                if columns == len(tiles):
+                if self._max_tile_width:
+                    tile_width = min(self._max_tile_width, room // columns)
+                    rows.append([(tile, tile_width) for tile, _weight in chunk])
+                elif columns == len(tiles):
                     # Всё в один ряд: плитки делят ширину по своим долям.
                     total = sum(weight for _tile, weight in chunk)
                     rows.append([(tile, int(room * weight / total)) for tile, weight in chunk])
