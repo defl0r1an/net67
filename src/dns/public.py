@@ -11,8 +11,11 @@ from dns.commands import (
     mark_isp_dns_warning_shown,
     measure_dns_latency,
     migrate_outdated_dns_addresses,
+    repair_local_proxy,
     reset_to_auto,
     save_custom_server,
+    start_local_proxy,
+    stop_local_proxy_if_unused,
     warm_state,
 )
 from dns.dns_providers import DNS_PROVIDERS
@@ -34,7 +37,10 @@ __all__ = [
     "mark_isp_dns_warning_shown",
     "measure_dns_latency",
     "migrate_outdated_dns_addresses",
+    "repair_local_proxy",
     "reset_to_auto",
     "save_custom_server",
+    "start_local_proxy",
+    "stop_local_proxy_if_unused",
     "warm_state",
 ]

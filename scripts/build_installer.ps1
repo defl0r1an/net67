@@ -33,6 +33,7 @@ $required = @(
     "exe\winws.exe",
     "exe\winws2.exe",
     "exe\WinDivert.dll",
+    "exe\dnscrypt-proxy.exe",
     "lua\zapret-lib.lua",
     "lists\base\discord.txt",
     "bin\tls_clienthello_www_google_com.bin",

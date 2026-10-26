@@ -41,9 +41,15 @@ STATUS_BLOCKED — обычные запросы блокируются или �
 которые подменяют адреса закрытых для России сервисов; доверия к ним меньше,
 чем к крупным компаниям, и страница пишет об этом рядом с названием группы.
 
-Режимы встроенного dnscrypt-proxy (группа «Шифрованные» в исходном списке)
-net67 не берёт: это ещё одна чужая программа внутри сборки, её добавлять
-только по отдельному решению владельца.
+Группа «Шифрованные» — не серверы, а режимы встроенного движка
+dnscrypt-proxy (dns.local_proxy): ключ "local_proxy" называет режим, а адрес
+у всех один — 127.0.0.1, сам этот компьютер. Выбор такой плитки сначала
+запускает движок и только потом прописывает адаптеру 127.0.0.1. Замер
+скорости, проверка серверов и поиск сервера по адресу эти записи пропускают
+(network_providers()): какой режим работает, знает только сам движок.
+
+Раньше net67 эту группу не брал: это ещё одна чужая программа внутри
+сборки. Владелец решил взять её 26 октября 2026.
 
 Основные адреса (первый в "ipv4") не должны повторяться: по нему программа
 узнаёт, какой сервер стоит на адаптере. Это и остальные правила списка
@@ -58,8 +64,38 @@ STATUS_BLOCKED = "blocked"
 STATUS_AT_RISK = "at_risk"
 STATUSES = (STATUS_BLOCKED, STATUS_AT_RISK)
 
+LOCAL_PROXY_GROUP = "Шифрованные"
 
 DNS_PROVIDERS = {
+    LOCAL_PROXY_GROUP: {
+        "DNSCrypt": {
+            "ipv4": ["127.0.0.1"],
+            "ipv6": ["::1"],
+            "desc": "Шифрует запросы",
+            "icon": "fa5s.key",
+            "color": "#22d3ee",
+            "dnssec": True,
+            "local_proxy": "dnscrypt",
+        },
+        "DNSCrypt анонимный": {
+            "ipv4": ["127.0.0.1"],
+            "ipv6": ["::1"],
+            "desc": "Скрывает ваш адрес",
+            "icon": "fa5s.user-secret",
+            "color": "#a3e635",
+            "dnssec": True,
+            "local_proxy": "anonymized",
+        },
+        "ODoH": {
+            "ipv4": ["127.0.0.1"],
+            "ipv6": ["::1"],
+            "desc": "Через HTTPS, пробный",
+            "icon": "fa5s.mask",
+            "color": "#f472b6",
+            "dnssec": True,
+            "local_proxy": "odoh",
+        },
+    },
     "Популярные": {
         "Cloudflare": {
             "ipv4": ["1.1.1.1", "1.0.0.1"],
@@ -495,6 +531,32 @@ def is_encrypted_only(data: dict) -> bool:
     return bool(data.get("encrypted_only"))
 
 
+def proxy_mode_for(data: dict, *, doh_supported: bool) -> str:
+    """Режим встроенного шифрованного DNS, через который надо ставить эту плитку. Пусто — ставить адресами.
+
+    У плитки-режима ("local_proxy") он есть всегда. Обычный сервер с шифрованным
+    адресом ("doh") идёт через посредника только там, где Windows сама шифровать
+    DNS не умеет (Windows 10): в Windows 11 запросы к нему шифрует сама система,
+    а без посредника в Windows 10 они шли бы открытым текстом. Так плитка одна,
+    а путь она выбирает сама.
+    """
+    from dns.local_proxy_catalog import MODE_DOH
+
+    mode = str(data.get("local_proxy") or "")
+    if mode:
+        return mode
+    if doh_supported or not proxy_upstreams(data):
+        return ""
+    return MODE_DOH
+
+
+def proxy_upstreams(data: dict) -> tuple:
+    """Серверы плитки для режима DoH встроенного посредника; пусто — нет шаблона DoH или адреса IPv4."""
+    from dns.local_proxy_catalog import doh_upstreams
+
+    return doh_upstreams(str(data.get("doh") or ""), data.get("ipv4") or (), dnssec=bool(data.get("dnssec")))
+
+
 def find_provider_by_address(address: str) -> tuple[str, str, dict] | None:
     """(группа, название, данные) сервера, которому принадлежит адрес (IPv4 или IPv6)."""
     wanted = str(address or "").strip().lower()
@@ -517,13 +579,29 @@ def catalog_problems() -> list[str]:
     DoH задан адресом https (у сервера только с шифрованием он обязателен),
     пометка состояния — из известных.
     """
+    from dns.local_proxy_catalog import MODES
+
     problems: list[str] = []
     names: set[str] = set()
     owners: dict[str, str] = {}
+    modes: set[str] = set()
     for group, name, data in iter_providers():
         if name in names:
             problems.append(f"{name}: название повторяется")
         names.add(name)
+        mode = str(data.get("local_proxy", ""))
+        if mode or group == LOCAL_PROXY_GROUP:
+            # Режим встроенного движка: адрес у всех один — этот компьютер.
+            if mode not in MODES or mode in modes or group != LOCAL_PROXY_GROUP:
+                problems.append(f"{name}: неверный или повторный режим шифрованного DNS «{mode}»")
+            modes.add(mode)
+            if list(data.get("ipv4", ())) != ["127.0.0.1"] or list(data.get("ipv6", ())) != ["::1"]:
+                problems.append(f"{name}: у режима шифрованного DNS адреса должны быть 127.0.0.1 и ::1")
+            if data.get("doh") or data.get("dot") or data.get("status"):
+                problems.append(f"{name}: у режима шифрованного DNS не бывает DoH, DoT и пометки состояния")
+            if not str(data.get("desc", "")).strip() or not str(data.get("icon", "")).strip():
+                problems.append(f"{name}: нет пояснения или значка")
+            continue
         ipv4 = [str(item) for item in data.get("ipv4", ())]
         ipv6 = [str(item) for item in data.get("ipv6", ())]
         if not ipv4:

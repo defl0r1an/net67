@@ -32,7 +32,14 @@ from app.ui_texts import tr as tr_catalog
 from dns import page_plans as dns_page_plans
 from dns import custom_servers
 from dns.custom_servers import CUSTOM_DNS_CATEGORY, build_dns_providers_with_custom
-from dns.dns_providers import DNS_PROVIDERS, STATUS_AT_RISK, STATUS_BLOCKED, is_encrypted_only
+from dns.dns_providers import (
+    DNS_PROVIDERS,
+    LOCAL_PROXY_GROUP,
+    STATUS_AT_RISK,
+    STATUS_BLOCKED,
+    is_encrypted_only,
+    proxy_mode_for,
+)
 from dns.ui.now_panel import AdapterChip, DnsNowPanel, NowState
 from dns.ui.provider_grid import ADD_TILE_KEY, DnsProviderGrid, DnsTile, GridTexts
 from log.log import log
@@ -49,6 +56,7 @@ RECOMMENDED_PROVIDER = ("Безопасные", "Quad9")
 
 # Группы из dns_providers → ключ перевода подписи.
 GROUP_TEXT_KEYS = {
+    LOCAL_PROXY_GROUP: ("page.network.group.encrypted", "Шифрованные"),
     "Популярные": ("page.network.group.popular", "Популярные"),
     "Безопасные": ("page.network.group.secure", "Безопасные"),
     "Малоизвестные": ("page.network.group.lesser_known", "Малоизвестные"),
@@ -57,6 +65,10 @@ GROUP_TEXT_KEYS = {
 }
 # Короткое пояснение справа от названия группы.
 GROUP_NOTE_KEYS = {
+    LOCAL_PROXY_GROUP: (
+        "page.network.group.encrypted.note",
+        "запросы шифрует встроенный dnscrypt-proxy — их не подменить и не закрыть по имени",
+    ),
     "Малоизвестные": ("page.network.group.lesser_known.note", "реже попадают под блокировки"),
     "Для ИИ": ("page.network.group.ai.note", "серверы сообщества — доверия к ним меньше"),
 }
@@ -110,6 +122,9 @@ class NetworkPage(BasePage):
         self._adapters: tuple = ()
         self._ipv6_available = False
         self._doh_supported = False
+        # Режим работающего шифрованного DNS; по нему находится его плитка.
+        self._local_proxy_mode = ""
+        self._local_proxy_server = ""
         self._loaded = False
         self._load_started = False
         self._closed = False
@@ -363,6 +378,8 @@ class NetworkPage(BasePage):
         self._adapters = tuple(getattr(state, "adapters", ()) or ())
         self._ipv6_available = bool(getattr(state, "ipv6_available", False))
         self._doh_supported = bool(getattr(state, "doh_supported", False))
+        self._local_proxy_mode = str(getattr(state, "local_proxy_mode", "") or "")
+        self._local_proxy_server = str(getattr(state, "local_proxy_server", "") or "")
         self._loaded = True
         self._set_custom_servers(getattr(state, "custom_servers", ()) or (), render=False)
         if [adapter.guid for adapter in self._adapters] != known or not known:
@@ -397,6 +414,8 @@ class NetworkPage(BasePage):
         return dns_page_plans.build_current_dns_plan(
             adapters=self._selected_adapter_objects(),
             providers=self._providers,
+            local_proxy_mode=self._local_proxy_mode,
+            local_proxy_server=self._local_proxy_server,
         )
 
     def _render(self) -> None:
@@ -509,9 +528,14 @@ class NetworkPage(BasePage):
             for name, data in items.items():
                 address = self._primary_address(data)
                 encrypted_only = is_encrypted_only(data)
-                if encrypted_only:
+                local_proxy = bool(data.get("local_proxy"))
+                # Обычная плитка, которую программа поставит через встроенный шифрованный DNS:
+                # Windows сама шифровать не умеет, а у сервера есть шифрованный адрес.
+                via_proxy = not local_proxy and bool(proxy_mode_for(data, doh_supported=self._doh_supported))
+                if encrypted_only or local_proxy:
                     # Обычный запрос замера такой сервер не примет: «нет ответа» на
-                    # плитке выдало бы его устройство за блокировку.
+                    # плитке выдало бы его устройство за блокировку. Режим
+                    # шифрованного DNS живёт на этом компьютере — замерять нечего.
                     latency, latency_ms = "", 0.0
                 elif self._measuring and address not in self._latency:
                     latency, latency_ms = "measuring", 0.0
@@ -529,7 +553,25 @@ class NetworkPage(BasePage):
                     tooltip_lines.append(measured)
                 if status in STATUS_TOOLTIP_KEYS:
                     tooltip_lines.append(self._t(*STATUS_TOOLTIP_KEYS[status]))
-                if encrypted_only:
+                if local_proxy:
+                    tooltip_lines.append(
+                        self._t(
+                            "page.network.tile.local_proxy",
+                            "Программа запустит на компьютере службу dnscrypt-proxy и пропишет адаптеру "
+                            "адрес 127.0.0.1. Если шифрованные серверы не ответят, DNS не изменится.",
+                        )
+                    )
+                if via_proxy:
+                    tooltip_lines.append(
+                        self._t(
+                            "page.network.tile.via_proxy",
+                            "Эта Windows сама шифровать DNS не умеет, поэтому программа поставит сервер через "
+                            "встроенный шифрованный DNS: запустит службу dnscrypt-proxy и пропишет адаптеру адрес "
+                            "127.0.0.1. Если шифрованный путь до сервера закрыт, сервер встанет обычным адресом — "
+                            "программа об этом скажет.",
+                        )
+                    )
+                if encrypted_only and not via_proxy:
                     tooltip_lines.append(
                         self._t(
                             "page.network.tile.encrypted_only",
@@ -541,6 +583,14 @@ class NetworkPage(BasePage):
                             "page.network.tile.encrypted_only.unsupported",
                             "Принимает только шифрованные запросы, а эта Windows сама шифровать DNS не умеет "
                             "(нужна Windows 11): здесь сервер работать не будет.",
+                        )
+                    )
+                if local_proxy:
+                    tooltip_lines.append(
+                        self._t(
+                            "page.network.tile.local_proxy",
+                            "Программа запустит на компьютере службу dnscrypt-proxy и пропишет адаптеру "
+                            "адрес 127.0.0.1. Если шифрованные серверы не ответят, DNS не изменится.",
                         )
                     )
                 group_note = self._group_note(group)
@@ -574,12 +624,12 @@ class NetworkPage(BasePage):
                         selected=(name == chosen) if chosen else (name == current and self._pending_choice is None),
                         pending=name == chosen,
                         has_ipv6=bool(ipv6),
-                        has_doh=self._doh_supported and bool(data.get("doh")),
+                        has_doh=bool(data.get("doh")) and (self._doh_supported or via_proxy),
                         has_dnssec=bool(data.get("dnssec")),
                         custom=custom,
                         latency=latency,
                         latency_ms=latency_ms,
-                        fastest=bool(fastest_address) and address == fastest_address,
+                        fastest=bool(fastest_address) and address == fastest_address and not local_proxy,
                         tooltip="\n".join(tooltip_lines),
                         status=status,
                     )
@@ -664,7 +714,8 @@ class NetworkPage(BasePage):
         adapters = self._ready_adapters()
         if adapters is None:
             return
-        if is_encrypted_only(data) and not self._doh_supported:
+        proxy_mode = proxy_mode_for(data, doh_supported=self._doh_supported)
+        if is_encrypted_only(data) and not self._doh_supported and not proxy_mode:
             # Обычный DNS такой сервер не принимает: с ним не открылся бы ни один сайт.
             self._info(
                 "warning",
@@ -686,6 +737,7 @@ class NetworkPage(BasePage):
                 "name": name,
                 "data": dict(data),
                 "ipv6_available": self._ipv6_available,
+                "proxy_mode": proxy_mode,
             }
         )
 
@@ -707,6 +759,7 @@ class NetworkPage(BasePage):
             name=str(payload.get("name") or ""),
             data=payload.get("data") or {},
             ipv6_available=bool(payload.get("ipv6_available", False)),
+            proxy_mode=str(payload.get("proxy_mode") or ""),
             parent=self,
         )
 
@@ -802,7 +855,9 @@ class NetworkPage(BasePage):
             address
             for group in self._providers.values()
             for data in group.values()
+            # Режим шифрованного DNS живёт на этом компьютере: замерять дорогу до него незачем.
             if not is_encrypted_only(data)
+            and not data.get("local_proxy")
             and (address := self._primary_address(data))
             and (":" not in address or self._ipv6_available)
         ]
@@ -871,7 +926,7 @@ class NetworkPage(BasePage):
         best_name, best_ms = "", None
         for group in self._providers.values():
             for name, data in group.items():
-                value = self._latency.get(self._primary_address(data))
+                value = None if data.get("local_proxy") else self._latency.get(self._primary_address(data))
                 if value is not None and (best_ms is None or value < best_ms):
                     best_name, best_ms = name, value
         if not self._latency:

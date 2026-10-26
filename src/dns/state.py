@@ -15,6 +15,10 @@ class DnsState:
     # Свои DNS-серверы пользователя из настроек (записи dns.custom_servers).
     custom_servers: tuple[dict, ...] = ()
     line_check: LineCheck | None = None
+    # Режим работающего шифрованного DNS (dns.local_proxy) или пустая строка.
+    local_proxy_mode: str = ""
+    # Название плитки, чей сервер работает через шифрованный DNS в режиме DoH; иначе пусто.
+    local_proxy_server: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +28,8 @@ class DnsCommandResult:
     affected_count: int = 0
     total_count: int = 0
     warning: str = ""
+    # Движок шифрованного DNS слушает ещё и ::1 (ответ start_local_proxy).
+    listen_ipv6: bool = False
 
 
 @dataclass(frozen=True, slots=True)

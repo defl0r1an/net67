@@ -310,21 +310,78 @@ class DnsPageTests(unittest.TestCase):
         tile = {tile.key: tile for tile in self._provider_tiles(page)}["Wikimedia DNS"]
         self.assertIn("Принимает только шифрованные запросы: Windows 11 спрашивает его по DoH", tile.tooltip)
 
-    def test_encrypted_only_server_is_refused_where_windows_cannot_encrypt(self) -> None:
-        """Обычный DNS такой сервер не принимает: на Windows 10 с ним пропал бы весь интернет."""
+    def test_tile_with_encrypted_address_goes_through_the_engine_where_windows_cannot_encrypt(self) -> None:
+        """Плитка одна, путь выбирает сама: в Windows 10 — через встроенный шифрованный DNS."""
         page = self._page(state=replace(STATE, doh_supported=False))
+        tiles = {tile.key: tile for tile in self._provider_tiles(page)}
 
+        # Сервер только с шифрованием раньше в Windows 10 не ставился вовсе.
         page.grid.activated.emit("DNS-AI")
+        self.assertEqual(page._apply_lane.request.call_args.args[0]["proxy_mode"], "doh")
+        self.info_bar.warning.assert_not_called()
+        self.assertNotIn("здесь сервер работать не будет", tiles["DNS-AI"].tooltip)
 
-        page._apply_lane.request.assert_not_called()
+        for name in ("Cloudflare", "Quad9"):
+            with self.subTest(name=name):
+                page.grid.activated.emit(name)
+                self.assertEqual(page._apply_lane.request.call_args.args[0]["proxy_mode"], "doh")
+                # Метка шифрования на плитке честная: запросы и правда пойдут шифрованными.
+                self.assertTrue(tiles[name].has_doh)
+                self.assertIn("через встроенный шифрованный DNS", tiles[name].tooltip)
+
+        # Плитка-режим остаётся собой, а в Windows 11 обычные плитки шифрует сама система.
+        page.grid.activated.emit("DNSCrypt")
+        self.assertEqual(page._apply_lane.request.call_args.args[0]["proxy_mode"], "dnscrypt")
+        modern = self._page(state=replace(STATE, doh_supported=True))
+        modern.grid.activated.emit("Cloudflare")
+        self.assertEqual(modern._apply_lane.request.call_args.args[0]["proxy_mode"], "")
+        modern_tile = {tile.key: tile for tile in self._provider_tiles(modern)}["Cloudflare"]
+        self.assertTrue(modern_tile.has_doh)
+        self.assertNotIn("через встроенный шифрованный DNS", modern_tile.tooltip)
+
+    def test_ordinary_tile_is_selected_while_the_engine_serves_its_server(self) -> None:
+        local = replace(ETHERNET, static_ipv4=("127.0.0.1",), static_ipv6=("::1",))
+        state = replace(
+            STATE, adapters=(local, WIFI_ADAPTER, SPARE_ADAPTER), doh_supported=False,
+            local_proxy_mode="doh", local_proxy_server="Cloudflare",
+        )
+
+        page = self._page(state=state)
+        page.now_panel._chips[WIFI].setChecked(False)
+
+        self.assertEqual([tile.key for tile in self._provider_tiles(page) if tile.selected], ["Cloudflare"])
+
+    def test_encrypted_dns_tile_is_selected_by_the_running_mode(self) -> None:
+        local = replace(ETHERNET, static_ipv4=("127.0.0.1",), static_ipv6=("::1",))
+        adapters = (local, WIFI_ADAPTER, SPARE_ADAPTER)
+
+        page = self._page(state=replace(STATE, adapters=adapters, local_proxy_mode="anonymized"))
+        page.now_panel._chips[WIFI].setChecked(False)
+        selected = [tile.key for tile in self._provider_tiles(page) if tile.selected]
+        self.assertEqual(selected, ["DNSCrypt анонимный"])
+        self.assertEqual(page.now_panel.title_label.text(), "DNSCrypt анонимный")
+
+        # Движок не работает: 127.0.0.1 на адаптере — чужой локальный DNS, а не наш режим.
+        page = self._page(state=replace(STATE, adapters=adapters, local_proxy_mode=""))
+        page.now_panel._chips[WIFI].setChecked(False)
+        self.assertEqual([tile.key for tile in self._provider_tiles(page) if tile.selected], [])
+        self.assertEqual(page.now_panel.title_label.text(), "Свой DNS")
+
+    def test_choosing_encrypted_dns_sends_its_mode_to_the_worker(self) -> None:
+        page = self._page()
+
+        page.grid.activated.emit("DNSCrypt")
+
+        payload = page._apply_lane.request.call_args.args[0]
+        self.assertEqual(payload["data"]["local_proxy"], "dnscrypt")
+        self.assertEqual(payload["data"]["ipv4"], ["127.0.0.1"])
+        self.assertIn("dnscrypt-proxy", {tile.key: tile for tile in self._provider_tiles(page)}["DNSCrypt"].tooltip)
+
+        # Движок не ответил: страница показывает причину, DNS не менялся.
+        failed = page_plans.NetworkProviderDnsPlan(valid=False, ipv4=[], ipv6=[], log_level="WARNING", log_message="Порт 53 занят")
+        page._on_apply_done(payload, {"plan": failed, "state": STATE})
+        self.assertEqual(self.info_bar.warning.call_args.kwargs["content"], "Порт 53 занят")
         self.assertIsNone(page._pending_choice)
-        self.assertEqual(self.info_bar.warning.call_args.kwargs["title"], "DNS-AI работает только в Windows 11")
-        tile = {tile.key: tile for tile in self._provider_tiles(page)}["DNS-AI"]
-        self.assertIn("здесь сервер работать не будет", tile.tooltip)
-
-        # Обычный сервер на той же Windows применяется как всегда.
-        page.grid.activated.emit("Quad9")
-        self.assertEqual(page._apply_lane.request.call_args.args[0]["name"], "Quad9")
 
     def test_isp_warning_looks_only_at_connected_adapters(self) -> None:
         self.assertTrue(page_plans.should_show_isp_dns_warning([WIFI_ADAPTER, SPARE_ADAPTER], warning_already_shown=False))
@@ -428,12 +485,17 @@ class DnsPageTests(unittest.TestCase):
         page.now_panel.measure_button.click()
         self.assertEqual(page._latency_lane.request.call_count, 1)
         unmeasured = {"Wikimedia DNS", "DNS-AI"}
-        network_tiles = [tile for tile in self._provider_tiles(page) if tile.key not in unmeasured]
+        network_tiles = [
+            tile for tile in self._provider_tiles(page) if tile.key not in unmeasured and tile.address != "127.0.0.1"
+        ]
         self.assertEqual({tile.latency for tile in network_tiles}, {"measuring"})
         # Серверы только с шифрованием на обычный запрос замера не отвечают: их не спрашивают.
         self.assertEqual({tile.latency for tile in self._provider_tiles(page) if tile.key in unmeasured}, {""})
         self.assertNotIn("185.71.138.138", servers)
         self.assertNotIn("192.144.59.14", servers)
+        # Режимы шифрованного DNS живут на этом компьютере и не замеряются.
+        self.assertNotIn("127.0.0.1", servers)
+        self.assertEqual({tile.latency for tile in self._provider_tiles(page) if tile.address == "127.0.0.1"}, {""})
 
         page._on_latency_done(DnsLatencyReport(results={"1.1.1.1": 30.0, "8.8.8.8": 9.6, "9.9.9.9": None}))
 
@@ -648,7 +710,7 @@ class DnsPageTests(unittest.TestCase):
         self.assertEqual(page.now_panel.measure_button.text(), "Measure speed")
         self.assertEqual(page.now_panel.title_label.text(), "Adapters use different DNS")
         self.assertEqual(page.grid.tiles()[0].title, "Automatic")
-        self.assertEqual(page.grid.tiles()[1].title, "Popular")
+        self.assertEqual(page.grid.tiles()[1].title, "Encrypted")
         self.assertEqual(page.now_panel.flush_button.text(), "Flush DNS cache")
 
     def test_cleanup_closes_every_lane(self) -> None:

@@ -86,6 +86,16 @@ class ApplicationPaths:
         return self.root / "user" / "winws2"
 
     @property
+    def dnscrypt_dir(self) -> Path:
+        """Копия dnscrypt-proxy, его настройки и журнал (dns.local_proxy).
+
+        Служба шифрованного DNS запускает движок отсюда, а не из exe: обновление
+        программы заменяет exe, и служба, держащая файл, его бы не отдала.
+        Установщик эту папку не трогает.
+        """
+        return self.root / "user" / "dnscrypt"
+
+    @property
     def lists_dir(self) -> Path:
         return self.root / "lists"
 

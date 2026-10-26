@@ -46,7 +46,19 @@ def load_state() -> DnsState:
         doh_supported=winapi.is_doh_supported(),
         custom_servers=tuple(load_custom_servers()),
         line_check=load_line_check(),
+        local_proxy_mode=_local_proxy_mode(),
+        local_proxy_server=_local_proxy_server(),
     )
+
+
+def _local_proxy_mode() -> str:
+    try:
+        from dns import local_proxy
+
+        return local_proxy.active_mode()
+    except Exception as exc:
+        log(f"DNS: не удалось узнать режим шифрованного DNS: {exc}", "DEBUG")
+        return ""
 
 
 def load_custom_servers() -> list[dict]:
@@ -69,6 +81,16 @@ def write_doh_templates() -> dict[str, str] | None:
     if not winapi.is_doh_supported():
         return None
     return {**custom_doh_templates(load_custom_servers()), **doh_templates()}
+
+
+def _local_proxy_server() -> str:
+    try:
+        from dns import local_proxy
+
+        return local_proxy.active_server()
+    except Exception as exc:
+        log(f"DNS: не удалось узнать сервер шифрованного DNS: {exc}", "DEBUG")
+        return ""
 
 
 def warm_state() -> DnsState:
@@ -142,6 +164,49 @@ def flush_dns_cache() -> DnsCommandResult:
     return DnsCommandResult(success=False, message="Windows не смогла очистить кэш DNS")
 
 
+# ── шифрованный DNS (встроенный dnscrypt-proxy) ───────────────────────────
+
+
+def _static_addresses() -> list[str]:
+    """Все адреса DNS, прописанные вручную на адаптерах страницы."""
+    return [
+        address
+        for adapter in load_state().adapters
+        for address in (*adapter.static_ipv4, *adapter.static_ipv6)
+    ]
+
+
+def start_local_proxy(mode: str, *, upstreams=(), server_name: str = "") -> DnsCommandResult:
+    """Запускает шифрованный DNS; адаптеры не трогает — их пишет apply_dns после успеха.
+
+    upstreams и server_name — серверы и название плитки для режима DoH.
+    """
+    from dns import local_proxy
+
+    result = local_proxy.start(mode, upstreams=tuple(upstreams), server_name=server_name)
+    if not result.success:
+        log(f"DNS: шифрованный DNS ({mode}) не запущен: {result.message}", "WARNING")
+    return DnsCommandResult(success=result.success, message=result.message, listen_ipv6=result.listen_ipv6)
+
+
+def stop_local_proxy_if_unused() -> bool:
+    """После смены DNS: движок убирается, если на 127.0.0.1 больше никто не смотрит."""
+    from dns import local_proxy
+
+    return local_proxy.stop_if_unused(_static_addresses())
+
+
+def repair_local_proxy() -> str:
+    """Проверка шифрованного DNS при запуске программы (см. local_proxy.repair)."""
+    from dns import local_proxy
+
+    summary = local_proxy.repair(_static_addresses())
+    if summary:
+        log(f"DNS: {summary}", "INFO")
+        winapi.flush_resolver_cache()
+    return summary
+
+
 def adapters_with_static_dns() -> tuple[DnsAdapter, ...]:
     return tuple(adapter for adapter in load_state().adapters if not adapter.is_automatic)
 
@@ -153,7 +218,10 @@ __all__ = [
     "flush_dns_cache",
     "load_custom_servers",
     "load_state",
+    "repair_local_proxy",
     "reset_to_auto",
+    "start_local_proxy",
+    "stop_local_proxy_if_unused",
     "warm_state",
     "write_doh_templates",
 ]

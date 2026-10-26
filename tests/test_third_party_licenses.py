@@ -25,6 +25,7 @@ REQUIRED = {
     "движок обхода": ("winws", "bol-van"),
     "перехват пакетов": ("WinDivert", "LGPL"),
     "клиент туннеля": ("AmneziaWG", "MIT"),
+    "шифрованный DNS": ("dnscrypt-proxy", "ISC", "Frank Denis"),
     "ядро ссылок": ("Xray", "MPL"),
     "оформление": ("Nora", "Sandakan Nipunajith"),
     "библиотека интерфейса": ("PyQt6", "GPL"),

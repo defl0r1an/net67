@@ -14,6 +14,7 @@ from dns.dns_providers import (
     find_provider_by_address,
     is_encrypted_only,
     iter_providers,
+    network_providers,
 )
 from dns.page_plans import find_provider_for_dns
 
@@ -56,7 +57,57 @@ class DnsProvidersCatalogTests(unittest.TestCase):
         """По первому адресу на адаптере программа узнаёт именно этот сервер."""
         for _group, name, data in iter_providers():
             with self.subTest(provider=name):
-                self.assertEqual(find_provider_for_dns(DNS_PROVIDERS, data["ipv4"], data.get("ipv6", [])), name)
+                mode = data.get("local_proxy", "")
+                self.assertEqual(find_provider_for_dns(DNS_PROVIDERS, data["ipv4"], data.get("ipv6", []), mode), name)
+
+    def test_encrypted_modes_share_one_local_address_and_stay_out_of_network_lists(self) -> None:
+        modes = {data["local_proxy"]: name for _group, name, data in iter_providers() if data.get("local_proxy")}
+
+        self.assertEqual(set(modes), {"dnscrypt", "anonymized", "odoh"})
+        self.assertEqual(list(DNS_PROVIDERS)[0], "Шифрованные")
+        # Без работающего движка 127.0.0.1 — не наш режим.
+        self.assertIsNone(find_provider_for_dns(DNS_PROVIDERS, ["127.0.0.1"], ["::1"]))
+        self.assertEqual(find_provider_for_dns(DNS_PROVIDERS, [], ["::1"], "odoh"), "ODoH")
+        self.assertNotIn("Шифрованные", network_providers())
+        self.assertEqual(sum(len(group) for group in network_providers().values()) + 3, len(list(iter_providers())))
+        self.assertIsNone(find_provider_by_address("127.0.0.1"))
+        self.assertNotIn("127.0.0.1", doh_templates())
+
+    def test_broken_encrypted_mode_is_reported(self) -> None:
+        broken = copy.deepcopy(DNS_PROVIDERS)
+        broken["Шифрованные"]["ODoH"]["local_proxy"] = "dnscrypt"
+        broken["Шифрованные"]["DNSCrypt"]["ipv4"] = ["127.0.0.2"]
+        broken["Популярные"]["Cloudflare"]["local_proxy"] = "odoh"
+
+        with patch.object(dns_providers, "DNS_PROVIDERS", broken):
+            problems = "\n".join(catalog_problems())
+
+        self.assertIn("ODoH: неверный или повторный режим шифрованного DNS «dnscrypt»", problems)
+        self.assertIn("DNSCrypt: у режима шифрованного DNS адреса должны быть 127.0.0.1 и ::1", problems)
+        self.assertIn("Cloudflare: неверный или повторный режим", problems)
+
+    def test_tile_picks_its_own_way_to_encrypt(self) -> None:
+        """Плитка одна: в Windows 11 шифрует сама система, в Windows 10 — встроенный шифрованный DNS."""
+        from dns.dns_providers import proxy_mode_for, proxy_upstreams
+
+        cloudflare = DNS_PROVIDERS["Популярные"]["Cloudflare"]
+        dnscrypt = DNS_PROVIDERS[dns_providers.LOCAL_PROXY_GROUP]["DNSCrypt"]
+
+        self.assertEqual(proxy_mode_for(cloudflare, doh_supported=True), "")
+        self.assertEqual(proxy_mode_for(cloudflare, doh_supported=False), "doh")
+        # На каждый адрес IPv4 плитки — свой сервер движка.
+        self.assertEqual([item.name for item in proxy_upstreams(cloudflare)], ["doh-1", "doh-2"])
+        # Плитка-режим всегда идёт через движок, своим режимом.
+        self.assertEqual(proxy_mode_for(dnscrypt, doh_supported=True), "dnscrypt")
+        self.assertEqual(proxy_mode_for(dnscrypt, doh_supported=False), "dnscrypt")
+        # Без шифрованного адреса или без IPv4 через движок не поставить: остаётся обычный путь.
+        self.assertEqual(proxy_mode_for({"ipv4": ["9.9.9.9"]}, doh_supported=False), "")
+        self.assertEqual(proxy_mode_for({"ipv6": ["2620:fe::fe"], "doh": "https://dns.quad9.net/dns-query"}, doh_supported=False), "")
+        # Каждый сервер списка с шифрованным адресом в Windows 10 идёт через движок.
+        for group, name, data in iter_providers():
+            if data.get("doh"):
+                with self.subTest(name=name):
+                    self.assertEqual(proxy_mode_for(data, doh_supported=False), "doh")
 
     def test_blocked_and_at_risk_marks(self) -> None:
         marks = {name: data.get("status", "") for _group, name, data in iter_providers()}

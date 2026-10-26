@@ -1948,6 +1948,22 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Для ИИ",
         "en": "For AI",
     },
+    "page.network.group.encrypted": {
+        "ru": "Шифрованные",
+        "en": "Encrypted",
+    },
+    "page.network.group.encrypted.note": {
+        "ru": "запросы шифрует встроенный dnscrypt-proxy — их не подменить и не закрыть по имени",
+        "en": "queries are encrypted by the built-in dnscrypt-proxy — they cannot be replaced or blocked by name",
+    },
+    "page.network.tile.local_proxy": {
+        "ru": "Программа запустит на компьютере службу dnscrypt-proxy и пропишет адаптеру адрес 127.0.0.1. Если шифрованные серверы не ответят, DNS не изменится.",
+        "en": "The program starts the dnscrypt-proxy service on this computer and sets the adapter DNS to 127.0.0.1. If the encrypted servers do not answer, DNS is left unchanged.",
+    },
+    "page.network.tile.via_proxy": {
+        "ru": "Эта Windows сама шифровать DNS не умеет, поэтому программа поставит сервер через встроенный шифрованный DNS: запустит службу dnscrypt-proxy и пропишет адаптеру адрес 127.0.0.1. Если шифрованный путь до сервера закрыт, сервер встанет обычным адресом — программа об этом скажет.",
+        "en": "This Windows cannot encrypt DNS itself, so the program sets the server through the built-in encrypted DNS: it starts the dnscrypt-proxy service and sets the adapter DNS to 127.0.0.1. If the encrypted path to the server is closed, the server is set by its plain address — the program will say so.",
+    },
     "page.network.group.ai.note": {
         "ru": "серверы сообщества — доверия к ним меньше",
         "en": "community servers — trust them less",

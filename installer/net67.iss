@@ -94,7 +94,7 @@ Name: "startmenuicon"; Description: "Создать ярлык в меню «П�
 ; Один такой запуск, и установщик разослал бы двадцати менеджерам чужой
 ; settings.json поверх их собственного.
 Source: "{#SourceDir}\*"; DestDir: "{app}"; \
-  Excludes: "_internal,_internal\*,logs\*,tmp\*,settings\*,lists\user\*,presets\winws1\*,presets\winws2\*"; \
+  Excludes: "_internal,_internal\*,logs\*,tmp\*,settings\*,lists\user\*,presets\winws1\*,presets\winws2\*,user\dnscrypt\*"; \
   Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Рабочая версия остаётся на месте до проверки полной распаковки.
@@ -102,6 +102,8 @@ Source: "{#SourceDir}\_internal\*"; DestDir: "{app}\_internal.new"; Flags: ignor
 
 ; Лежит рядом с приложением: деинсталлятор зовёт его до удаления файлов.
 Source: "clear_hosts.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+; Снимает службу шифрованного DNS и возвращает адаптерам автоматический DNS.
+Source: "remove_dnscrypt.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Dirs]
 ; Папки, куда приложение пишет само. Создаём пустыми, чтобы первый запуск
@@ -390,6 +392,17 @@ begin
     hosts именно здесь: после удаления звать будет нечего. }
   if CurUninstallStep = usUninstall then
   begin
+    { Шифрованный DNS (src\dns\local_proxy.py) - раньше всего и без
+      вопроса: адаптер, оставленный на 127.0.0.1 без службы, - это
+      компьютер без интернета сразу после удаления. Служба работает из
+      папки user\dnscrypt установки, поэтому снимаем её, пока файлы
+      на месте. }
+    ScriptPath := ExpandConstant('{app}\tools\remove_dnscrypt.ps1');
+    if FileExists(ScriptPath) then
+      Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+           '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"',
+           '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
     ScriptPath := ExpandConstant('{app}\tools\clear_hosts.ps1');
     if FileExists(ScriptPath) then
     begin
