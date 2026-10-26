@@ -25,6 +25,7 @@ from qfluentwidgets.common.font import setFont
 
 from ui.accessibility import set_state_text
 from ui.widgets.action_tile import ActionTile
+from ui.widgets.icon_loop import icon_loop_conductor
 from ui.widgets.tile_grid import TileGrid
 
 
@@ -57,7 +58,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
     return (
         QuickActionSpec(
             key="tour",
-            icon_name="fa5s.graduation-cap",
+            icon_name="tour",
             icon_color="#b39ddb",
             title=("page.control.onboarding_tour.title", "Как пользоваться программой"),
             content=("page.control.quick.tour.desc", "Пошаговая экскурсия по программе"),
@@ -65,7 +66,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
         ),
         QuickActionSpec(
             key="bypass_tour",
-            icon_name="fa5s.route",
+            icon_name="bypass",
             icon_color="#9fa8da",
             title=("page.control.bypass_tour.title", "Как работает обход"),
             content=("page.control.quick.bypass_tour.desc", "Схемы: как провайдер узнаёт сайт"),
@@ -73,7 +74,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
         ),
         QuickActionSpec(
             key="internet_cleanup",
-            icon_name="fa5s.network-wired",
+            icon_name="network_reset",
             icon_color="#4cc38a",
             title=("page.control.internet_cleanup.title", "Сбросить сеть Windows"),
             content=("page.control.quick.internet_cleanup.desc", "DNS, прокси и Winsock — если сеть сломалась"),
@@ -81,7 +82,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
         ),
         QuickActionSpec(
             key="folder",
-            icon_name="fa5s.folder-open",
+            icon_name="folder",
             icon_color="#f5c04d",
             title=(f"{text_prefix}.button.open_folder", "Открыть папку"),
             content=("page.control.quick.folder.desc", "Папка программы и её файлов"),
@@ -89,7 +90,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
         ),
         QuickActionSpec(
             key="docs",
-            icon_name="fa5s.book",
+            icon_name="docs",
             icon_color="#8ab4f8",
             title=("page.control.docs.title", "Документация"),
             content=("page.control.quick.docs.desc", "Справка: установка, обход, решение проблем"),
@@ -97,7 +98,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
         ),
         QuickActionSpec(
             key="updates",
-            icon_name="fa5s.sync-alt",
+            icon_name="updates",
             icon_color="#7ee2b8",
             title=("page.control.updates.title", "Обновления"),
             content=("page.control.quick.updates.desc", "Проверить версию и обновиться"),
@@ -105,7 +106,7 @@ def quick_action_specs(text_prefix: str) -> tuple[QuickActionSpec, ...]:
         ),
         QuickActionSpec(
             key="source",
-            icon_name="fa5b.github",
+            icon_name="git",
             icon_color="#c9d1d9",
             title=("page.control.source.title", "Исходный код"),
             content=("page.control.quick.source.desc", "Репозиторий net67 на GitHub"),
@@ -127,6 +128,7 @@ def build_quick_actions(*, tr_fn, text_prefix: str, handlers: dict, parent=None)
         max_tile_width=QUICK_ACTION_MAX_WIDTH,
         spacing=12,
     )
+    conductor = icon_loop_conductor(parent if parent is not None else grid)
     tiles: dict[str, ActionTile] = {}
     for spec in quick_action_specs(text_prefix):
         tile = ActionTile(
@@ -139,6 +141,8 @@ def build_quick_actions(*, tr_fn, text_prefix: str, handlers: dict, parent=None)
         )
         tile.clicked.connect(handlers[spec.key])
         grid.add_tile(tile)
+        # Значки плиток по очереди играют свои жесты — в общей очереди со сводкой.
+        conductor.register(tile.icon_widget())
         tiles[spec.key] = tile
     return QuickActionWidgets(title_label=title_label, grid=grid, tiles=tiles)
 

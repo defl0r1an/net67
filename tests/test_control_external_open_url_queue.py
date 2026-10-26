@@ -39,6 +39,27 @@ class ControlExternalOpenUrlQueueTests(unittest.TestCase):
         self.assertNotIn("self._external_open_url_pending = []", ensure_source)
         self.assertNotIn("self._external_open_url_start_scheduled = False", ensure_source)
 
+    def test_source_and_docs_tiles_open_through_the_worker(self) -> None:
+        # Браузер запускает фоновая задача, а не поток окна: webbrowser.open
+        # на холодной системе думает заметную долю секунды.
+        for method, url in (
+            (_Page._open_source_code, "https://github.com/defl0r1an/net67"),
+            (_Page._open_docs, "https://defl0r1an.github.io/net67/"),
+        ):
+            with self.subTest(url=url):
+                page = _Page()
+                page._external_open_url_runtime = _Runtime(running=False)
+                page._external_open_url_pending = []
+                page.create_external_open_url_worker = Mock()
+
+                method(page)
+
+                page.create_external_open_url_worker.assert_called_once_with(0, url=url)
+                self.assertEqual(
+                    page._external_open_url_runtime.started,
+                    [page.create_external_open_url_worker.return_value],
+                )
+
     def test_external_open_url_keeps_all_pending_requests(self) -> None:
         page = _Page()
         page._external_open_url_runtime = _Runtime(running=True)

@@ -10,6 +10,7 @@ from app.ui_texts import tr as tr_catalog
 from presets.ui.control.top_summary_plan import build_premium_summary, build_profiles_value
 from ui.accessibility import set_control_accessibility, set_state_text
 from ui.animation_policy import are_live_animations_enabled
+from ui.widgets.icon_loop import icon_loop_conductor
 from ui.widgets.motion_icon import MotionIcon
 from ui.widgets.tile_grid import CHEVRON_ROOM, SoftTile, TileGrid
 
@@ -35,6 +36,7 @@ TILE_MIN_WIDTH = 170
 #: пресета средней длины и полоса из пяти значков профилей с «+N».
 TILE_MAX_WIDTH = 360
 TILE_ROW_HEIGHT = 72
+SUMMARY_ICON_SIZE = 24
 # Ряд значков сервисов в плитке «Профили»: значки выскакивают по очереди.
 STRIP_ICON_SIZE = 18
 STRIP_STEP = 24
@@ -81,7 +83,7 @@ class ControlTopSummaryItem(SoftTile):
         parent=None,
     ):
         super().__init__(parent, clickable=clickable)
-        self._icon_name = str(icon_name or "fa5s.circle")
+        self._icon_name = str(icon_name or "preset")
         self._shown_value = ""
         self._strip: tuple[tuple[str, str], ...] = ()
         self._strip_t = 1.0
@@ -377,19 +379,18 @@ class ControlTopSummaryItem(SoftTile):
         painter.end()
 
     def _refresh_icon(self, tokens=None) -> None:
-        from ui.theme import get_cached_qta_pixmap, get_theme_tokens
+        from ui.theme import get_theme_tokens
 
         if self.__dict__.get("_icon_override") is not None:
             return
         theme_tokens = tokens or get_theme_tokens()
-        accent_hex = str(getattr(theme_tokens, "accent_hex", "") or "")
+        accent_hex = str(getattr(theme_tokens, "accent_hex", "") or "") or "#5caee8"
         icon_key = (self._icon_name, accent_hex)
         if self.__dict__.get("_last_icon_theme_key") == icon_key:
             return
         self.__dict__["_last_icon_theme_key"] = icon_key
-        self._icon_label.setPixmap(
-            get_cached_qta_pixmap(self._icon_name, color=accent_hex, size=22)
-        )
+        # Свой значок из линий (ui.widgets.line_icons), а не шрифтовой: чёткий на любом масштабе.
+        self._icon_label.set_line_icon(self._icon_name, color=accent_hex, size=SUMMARY_ICON_SIZE)
 
     def _apply_theme_refresh(self, tokens=None, force: bool = False) -> None:
         if force:
@@ -428,20 +429,20 @@ class ControlTopSummaryWidget(TileGrid):
         self._premium_days: int | None = None
 
         self.preset_item = ControlTopSummaryItem(
-            icon_name="fa5s.folder-open",
+            icon_name="preset",
             prominent=True,
             clickable=True,
             initial_icon_delay_ms=initial_icon_delay_ms,
             parent=self,
         )
         self.profiles_item = ControlTopSummaryItem(
-            icon_name="fa5s.list-ul",
+            icon_name="profiles",
             clickable=True,
             initial_icon_delay_ms=initial_icon_delay_ms,
             parent=self,
         )
         self.mode_item = ControlTopSummaryItem(
-            icon_name="fa5s.shield-alt",
+            icon_name="mode",
             initial_icon_delay_ms=initial_icon_delay_ms,
             parent=self,
         )
@@ -450,7 +451,7 @@ class ControlTopSummaryWidget(TileGrid):
         # retranslate() и presets/ui/control/*/page.py, поэтому убирать
         # атрибут целиком нельзя.
         self.premium_item = ControlTopSummaryItem(
-            icon_name="fa5s.star",
+            icon_name="star",
             clickable=False,
             initial_icon_delay_ms=initial_icon_delay_ms,
             parent=self,
@@ -465,6 +466,11 @@ class ControlTopSummaryWidget(TileGrid):
         # подписки в продукте нет. Оба виджета остаются скрытыми: на них
         # ссылаются retranslate() и страницы.
         self.mode_item.setVisible(False)
+        # Значки плиток по очереди играют свои короткие жесты. Очередь общая
+        # со страницей: значки быстрых действий ждут в ней же.
+        conductor = icon_loop_conductor(parent if parent is not None else self)
+        for item in (self.preset_item, self.profiles_item):
+            conductor.register(item._icon_label)
         # Плитки одной ширины, см. TILE_MAX_WIDTH.
         self.add_tile(self.preset_item)
         self.add_tile(self.profiles_item)

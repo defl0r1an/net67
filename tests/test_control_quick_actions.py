@@ -169,6 +169,21 @@ class QuickActionsTests(unittest.TestCase):
         self.assertEqual(list(specs), KEYS)
         self.assertTrue(specs["folder"].accessible_name[0].startswith("page.winws2_control"))
 
+    def test_icon_is_darker_in_light_theme_and_follows_theme_switch(self) -> None:
+        from qfluentwidgets import Theme, setTheme
+
+        tile = self.widgets.tiles["tour"]
+        tile._start_icon()
+        self.addCleanup(setTheme, Theme.DARK)
+
+        setTheme(Theme.DARK)
+        self.assertEqual(tile.shown_icon_color(), QColor("#b39ddb"))
+        setTheme(Theme.LIGHT)
+        light = tile.shown_icon_color()
+        self.assertLess(light.lightness(), QColor("#b39ddb").lightness())
+        tile._apply_icon(force=True)
+        self.assertFalse(tile._icon.pixmap().isNull())
+
     def test_simple_view_hides_only_the_reset_tile(self) -> None:
         self.assertIn("internet_cleanup_card", HIDDEN_IN_SIMPLE_VIEW)
         for name in ("onboarding_tour_card", "bypass_tour_card", "folder_card", "docs_card"):
