@@ -214,15 +214,20 @@ class HeroButtonPolishTests(unittest.TestCase):
         button.stop_pulse()
 
     def test_breathing_is_tied_to_the_running_state(self) -> None:
-        """Иначе кнопка дышала бы и на застрявшем запуске, и на ошибке."""
-        import inspect
+        """Иначе кнопка дышала бы и на застрявшем запуске, и на ошибке.
 
-        from oneclick.ui import button as button_module
+        С 26 октября 2026 главная кнопка — сцена (ui/widgets/bypass_scene.py):
+        ореол кнопки и логотип дышат только в фазе «running», а её «одна
+        кнопка» ставит ровно для работающего обхода.
+        """
+        from oneclick.state import OneClickState
+        from oneclick.ui.button import scene_look
 
-        source = inspect.getsource(button_module.OneClickButton._apply_state)
-
-        self.assertIn("start_pulse", source)
-        self.assertIn("stop_pulse", source)
+        for state in OneClickState:
+            with self.subTest(state=state):
+                phase, _color = scene_look(state)
+                self.assertEqual(phase == "running", state is OneClickState.RUNNING)
+        self.assertEqual(scene_look(OneClickState.PREPARING, stopping=True)[0], "stopping")
 
 
 if __name__ == "__main__":

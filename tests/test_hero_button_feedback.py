@@ -6,8 +6,13 @@
 узнать было негде.
 
 Здесь три отдельных требования, и тесты держат каждое по отдельности:
-цвет круга различает состояния, нажатие меняет размер, а время идёт
-внутри самого круга, а не строкой под ним.
+цвет кнопки различает состояния, нажатие видно, а время работы стоит
+рядом с состоянием.
+
+26 октября 2026 круг заменила сцена в духе zapret (ui/widgets/bypass_scene.py):
+кнопка питания в стене блокировки. Требования те же, держат их теперь
+цвет и фаза сцены, просадка кнопки под нажатием и плашка времени у
+заголовка.
 """
 
 from __future__ import annotations
@@ -85,172 +90,94 @@ class HeroButtonTests(unittest.TestCase):
         self.addCleanup(button.deleteLater)
         return button
 
-    @staticmethod
-    def _fill(widget) -> str:
-        """Цвет заливки круга.
-
-        Раньше он читался из таблицы стилей. Теперь круг рисует себя сам
-        — с переходом от блика сверху к тени снизу и кольцом по краю, —
-        потому что плоское пятно одного цвета человек назвал монотонным.
-        Таблица стилей задаёт только прозрачный текст.
-        """
-        return str(widget.button._net67_fill).lower()
-
-    @staticmethod
-    def _ring(widget) -> str:
-        return str(widget.button._net67_ring).lower()
-
-    def test_colour_differs_between_off_and_running(self) -> None:
-        """Иначе состояние приходится вычитывать из подписи."""
+    def test_colour_and_phase_follow_the_state(self) -> None:
+        """Выключено — красная стена, запуск — янтарь, работает — зелёный, сбой — снова красный."""
         from oneclick.state import OneClickState
+        from oneclick.ui import button as module
 
         widget = self._button()
+        scene = widget.button
+        for state, phase, color in (
+            (OneClickState.OFF, "stopped", module.SCENE_COLOR_STOPPED),
+            (OneClickState.PREPARING, "starting", module.SCENE_COLOR_BUSY),
+            (OneClickState.CHECKING, "starting", module.SCENE_COLOR_BUSY),
+            (OneClickState.RUNNING, "running", module.SCENE_COLOR_RUNNING),
+            (OneClickState.ERROR, "failed", module.SCENE_COLOR_STOPPED),
+        ):
+            with self.subTest(state=state):
+                widget._apply_state(state, "")
+                self.assertEqual(scene.phase(), phase)
+                self.assertEqual(scene.target_color().name(), color)
 
-        widget._apply_state(OneClickState.OFF, "")
-        off = self._fill(widget)
-        widget._apply_state(OneClickState.RUNNING, "")
-        running = self._fill(widget)
-
-        self.assertNotEqual(off, running)
-
-    def test_running_uses_the_shell_accent(self) -> None:
-        """Один акцент на всё приложение, а не свой цвет у каждой кнопки."""
-        from oneclick.state import OneClickState
-        from shell.theme import DARK
-
-        widget = self._button()
-
-        widget._apply_state(OneClickState.RUNNING, "")
-
-        self.assertEqual(self._fill(widget), DARK.accent.lower())
-
-    def test_error_is_red(self) -> None:
-        """Ошибку человек должен видеть, не читая мелкий текст."""
-        from oneclick.state import OneClickState
-
-        widget = self._button()
-
-        widget._apply_state(OneClickState.ERROR, "")
-        red, green, blue = (
-            int(self._fill(widget).lstrip("#")[index : index + 2], 16)
-            for index in (0, 2, 4)
-        )
-
-        self.assertGreater(red, green + 0x40)
-        self.assertGreater(red, blue + 0x40)
-
-    def test_ring_lights_up_under_the_press(self) -> None:
-        """Отклик на нажатие не только в размере: кольцо вспыхивает."""
+    def test_stopping_runs_the_comet_backwards(self) -> None:
+        """Остановка — своя фаза: комета идёт против часовой стрелки, кнопка «выдыхает»."""
         from oneclick.state import OneClickState
 
         widget = self._button()
         widget._apply_state(OneClickState.RUNNING, "")
+        widget._stopping = True
+        widget._apply_state(OneClickState.PREPARING, "")
 
-        widget.button.pressed.emit()
-        values = []
-        deadline = time.time() + 0.35
-        while time.time() < deadline:
-            _APP.processEvents()
-            values.append(widget.button._net67_glow)
-            time.sleep(0.01)
+        self.assertEqual(widget.button.phase(), "stopping")
+        self.assertEqual(widget.state_label.text(), "Останавливаем...")
 
-        self.assertGreater(max(values), 0.5)
-
-    def test_icon_makes_a_full_turn_when_state_flips(self) -> None:
-        """Полный оборот, а не половина: состояний два, вид должен быть один."""
+    def test_busy_button_does_not_take_a_second_press(self) -> None:
+        """Две изменяющие систему команды одновременно запускать нельзя."""
         from oneclick.state import OneClickState
 
         widget = self._button()
-        widget._apply_state(OneClickState.OFF, "")
+        widget._apply_state(OneClickState.PREPARING, "")
+        self.assertFalse(widget.button.is_click_enabled())
 
         widget._apply_state(OneClickState.RUNNING, "")
-        angles = []
-        deadline = time.time() + 0.8
-        while time.time() < deadline:
-            _APP.processEvents()
-            angles.append(widget.button._net67_spin)
-            time.sleep(0.01)
+        self.assertTrue(widget.button.is_click_enabled())
 
-        self.assertGreater(max(angles), 300.0)
-        self.assertEqual(widget.button._net67_spin, 0.0)
-
-    def test_circle_is_not_a_flat_patch(self) -> None:
-        """Заливка с переходом: у круга должен читаться объём."""
-        from oneclick.state import OneClickState
+    def test_press_shrinks_the_button_and_release_clicks_it(self) -> None:
+        """Отклик на нажатие: кнопка в стене проседает, отпускание — это и есть нажатие."""
+        from PyQt6.QtCore import QPointF, Qt
+        from PyQt6.QtGui import QMouseEvent
+        from PyQt6.QtCore import QEvent
 
         widget = self._button()
-        widget._apply_state(OneClickState.OFF, "")
-        _APP.processEvents()
+        scene = widget.button
+        clicks: list[int] = []
+        scene.clicked.connect(lambda: clicks.append(1))
+        center = QPointF(scene.gate_center())
 
-        image = widget.button.grab().toImage()
-        top = image.pixelColor(44, 12).lightnessF()
-        bottom = image.pixelColor(44, 80).lightnessF()
+        def send(kind):
+            event = QMouseEvent(kind, center, center, Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+            if kind == QEvent.Type.MouseButtonPress:
+                scene.mousePressEvent(event)
+            else:
+                scene.mouseReleaseEvent(event)
 
-        self.assertGreater(top, bottom)
+        send(QEvent.Type.MouseButtonPress)
+        self.assertTrue(scene.is_pressed())
+        send(QEvent.Type.MouseButtonRelease)
+        self.assertFalse(scene.is_pressed())
+        self.assertEqual(clicks, [1])
 
-    def test_press_shrinks_the_circle_and_release_restores_it(self) -> None:
-        """То самое ощущение удара по кнопке, которого человек не находил."""
-        from oneclick.state import OneClickState
-
-        widget = self._button()
-        widget._apply_state(OneClickState.RUNNING, "")
-        before = widget.button.width()
-
-        widget.button.pressed.emit()
-        sizes = self._drain(widget, seconds=0.4)
-
-        self.assertLess(min(sizes), before)
-
-        widget.button.released.emit()
-        self._drain(widget, seconds=0.4)
-
-        self.assertEqual(widget.button.width(), before)
-
-    def test_press_is_animated_not_instant(self) -> None:
-        """Скачок между двумя размерами читается как дефект отрисовки."""
-        from oneclick.state import OneClickState
+    def test_scene_is_the_main_button_for_tour_and_title_badge(self) -> None:
+        """Тур и метка в заголовке ищут главную кнопку по имени ``button``."""
+        from ui.widgets.bypass_scene import BypassScene
 
         widget = self._button()
-        widget._apply_state(OneClickState.RUNNING, "")
 
-        widget.button.pressed.emit()
-        sizes = self._drain(widget, seconds=0.4)
+        self.assertIsInstance(widget.button, BypassScene)
+        self.assertTrue(widget.button.is_clickable())
 
-        self.assertGreaterEqual(len(set(sizes)), 3)
-
-    @staticmethod
-    def _drain(widget, *, seconds: float) -> list[int]:
-        sizes: list[int] = []
-        deadline = time.time() + seconds
-        while time.time() < deadline:
-            _APP.processEvents()
-            sizes.append(widget.button.width())
-            time.sleep(0.01)
-        return sizes
-
-    def test_timer_lives_inside_the_circle(self) -> None:
-        """Просили «прям на кнопке», а не строкой под ней."""
+    def test_timer_stands_next_to_the_state(self) -> None:
+        """Время работы — плашкой у заголовка «Обход работает»."""
         from oneclick.state import OneClickState
 
         widget = self._button()
 
         widget._apply_state(OneClickState.RUNNING, "")
 
-        self.assertIs(widget.uptime_label.parent(), widget.button)
+        self.assertIs(widget.uptime_label.parentWidget(), widget.card)
         self.assertFalse(widget.uptime_label.isHidden())
         self.assertEqual(widget.uptime_label.text(), "0:00")
-
-    def test_icon_steps_aside_for_the_digits(self) -> None:
-        """В круге 88 пикселей значок и цифры вместе не читаются."""
-        from oneclick.state import OneClickState
-
-        widget = self._button()
-
-        widget._apply_state(OneClickState.OFF, "")
-        self.assertFalse(widget.button.icon().isNull())
-
-        widget._apply_state(OneClickState.RUNNING, "")
-        self.assertTrue(widget.button.icon().isNull())
+        self.assertEqual(widget.state_label.text(), "Обход работает")
 
     def test_timer_disappears_when_protection_stops(self) -> None:
         """Застывшее время на выключенной защите — прямая ложь."""
@@ -281,17 +208,19 @@ class HeroButtonTests(unittest.TestCase):
 
         self.assertEqual(widget.uptime_label.text(), "0:00")
 
-    def test_digits_follow_the_circle_when_it_shrinks(self) -> None:
-        """Иначе на нажатии время выезжает за край круга."""
-        from oneclick.state import OneClickState
+    def test_narrow_window_puts_the_scene_above_the_text(self) -> None:
+        """В узком окне сцена встаёт отдельной строкой на всю ширину."""
+        from PyQt6.QtWidgets import QApplication
 
         widget = self._button()
-        widget._apply_state(OneClickState.RUNNING, "")
+        widget.resize(1000, 200)
+        QApplication.processEvents()
+        self.assertFalse(widget.card.is_stacked())
 
-        widget._set_hero_size(70)
-
-        self.assertEqual(widget.uptime_label.width(), 70)
-
+        widget.resize(500, 300)
+        QApplication.processEvents()
+        self.assertTrue(widget.card.is_stacked())
+        self.assertTrue(widget.button.is_stretched())
 
 if __name__ == "__main__":
     unittest.main()

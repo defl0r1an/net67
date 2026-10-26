@@ -5,6 +5,13 @@
 доменов по сети. Выполнять их в UI-потоке нельзя: окно замёрзнет на
 десятки секунд. Поэтому вся работа уходит в QThread, а интерфейс
 обновляется по сигналам.
+
+Вид — карточка, как у zapret (просьба владельца, 26 октября 2026): слева
+сцена обхода (ui/widgets/bypass_scene.py) — логотип, стена блокировки с
+кнопкой питания и сайты; справа крупная строка состояния, время работы и
+пояснение. Раньше здесь был одинокий круг по центру: что именно он
+включает и почему сайты не открываются, из него видно не было, а сцена
+показывает это сама — пакеты бьются о стену или проходят сквозь неё.
 """
 
 from __future__ import annotations
@@ -12,8 +19,8 @@ from __future__ import annotations
 import time as _time
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
-from qfluentwidgets import BodyLabel, PrimaryPushButton
+from PyQt6.QtWidgets import QBoxLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from qfluentwidgets import BodyLabel
 
 from log.log import log
 from oneclick.autostart import initial_button_state
@@ -41,46 +48,24 @@ _STATE_TEXT = {
     OneClickState.ERROR: "Не удалось запустить обход",
 }
 
-def _hero_icon(state=None):
-    """Значок для круга. None — если библиотека значков недоступна.
+#: Цвета кнопки в стене по состоянию — те же, что у zapret: работает —
+#: зелёный, запуск и остановка — янтарный, выключено и сбой — красный.
+#: Красная стена при выключенном обходе — и есть блокировка: так её и видно.
+SCENE_COLOR_RUNNING = "#6ccb5f"
+SCENE_COLOR_BUSY = "#f5a623"
+SCENE_COLOR_STOPPED = "#ff6b6b"
 
-    В работающем состоянии значка нет вовсе: там идёт отсчёт времени,
-    и значок с цифрами в круге не уживается.
-    """
+
+def scene_look(state: OneClickState, *, stopping: bool = False) -> tuple[str, str]:
+    """(фаза сцены, цвет кнопки) для состояния «одной кнопки»."""
     if state is OneClickState.RUNNING:
-        return None
-    try:
-        from qfluentwidgets import FluentIcon
+        return "running", SCENE_COLOR_RUNNING
+    if state in (OneClickState.PREPARING, OneClickState.CHECKING):
+        return ("stopping" if stopping else "starting"), SCENE_COLOR_BUSY
+    if state is OneClickState.ERROR:
+        return "failed", SCENE_COLOR_STOPPED
+    return "stopped", SCENE_COLOR_STOPPED
 
-        return FluentIcon.POWER_BUTTON
-    except Exception:
-        return None
-
-
-def _refresh_hero_icon(button, state) -> None:
-    try:
-        from PyQt6.QtGui import QIcon
-
-        from ui.widgets.hero_control import _apply_contrasting_icon
-
-        icon = _hero_icon(state)
-        if icon is None:
-            button.setIcon(QIcon())
-            return
-        _apply_contrasting_icon(button, icon)
-    except Exception:
-        # Значок — не единственный признак: под кругом крупная строка
-        # состояния. Не получилось — кнопка остаётся рабочей.
-        pass
-
-
-#: Ширина колонки с подписями под кнопкой.
-#:
-#: Раскладка выровнена по центру, и метка без явной ширины сжимается до
-#: ширины круга — 88 пикселей. Сообщение о переадресации в Telegram
-#: рвалось там по два слова в строку. 420 — примерно шестьдесят знаков в
-#: строке, то есть комфортная длина для чтения.
-TEXT_COLUMN_WIDTH = 420
 
 #: Через сколько после появления кнопки сверяемся с состоянием обхода.
 #:
@@ -89,14 +74,6 @@ TEXT_COLUMN_WIDTH = 420
 #: обхода уже подняться, чтобы кнопка сразу показала правильное «Обход
 #: включён», а не «выключен».
 AUTOSTART_DELAY_MS = 900
-
-#: Ниже этой ширины колонку не сжимаем — иначе строка снова рвётся в
-#: столбик.
-TEXT_COLUMN_MIN_WIDTH = 160
-
-#: Отступ от краёв окна, который колонка обязана оставить.
-TEXT_COLUMN_SIDE_PADDING = 24
-
 
 #: В этих состояниях кнопка занята и нажатие игнорируется.
 _BUSY = (OneClickState.PREPARING, OneClickState.CHECKING)
@@ -120,79 +97,61 @@ class OneClickButton(QWidget):
         self._availability_runtime = OneShotWorkerRuntime()
         self._closed = False
 
-        # Главный экран: круг по центру, состояние крупной строкой под
-        # ним. Раньше кнопка стояла слева, а состояние текстом справа, и
-        # рядом жила ещё карточка «Статус работы» — три места про одно и
-        # то же, которые регулярно расходились.
-        from ui.widgets.hero_control import HERO_BUTTON_SIZE, make_round, make_round_button_class
+        # Карточка: сцена слева, справа состояние, время работы и пояснение.
+        # В узком окне StatusHeroCard сама ставит сцену строкой над текстом.
+        from presets.ui.control.status_hero_card import StatusHeroCard
+        from oneclick.ui.uptime_pill import UptimePill
+        from ui.widgets.bypass_scene import BypassScene
 
-        self._hero_size = HERO_BUTTON_SIZE
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 8, 0, 4)
+        outer.setSpacing(0)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 22, 0, 10)
-        layout.setSpacing(10)
-        layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.card = StatusHeroCard(self)
+        outer.addWidget(self.card)
+        row = QBoxLayout(QBoxLayout.Direction.LeftToRight, self.card)
+        row.setContentsMargins(16, 14, 16, 14)
+        row.setSpacing(18)
 
-        button_cls = make_round_button_class(PrimaryPushButton)
-        self.button = button_cls(_BUTTON_TEXT[OneClickState.OFF])
+        # Кнопка питания живёт в стене сцены. Имя ``button`` осталось от
+        # круга: по нему тур подсвечивает главную кнопку, а метка в заголовке
+        # узнаёт, ушла ли кнопка за край страницы (shell/launch_badge_handoff.py).
+        self.button = BypassScene(self.card)
+        self.button.set_clickable(True)
         self.button.clicked.connect(self._on_clicked)
-        make_round(self.button, size=HERO_BUTTON_SIZE, icon=_hero_icon())
-        layout.addWidget(self.button, 0, Qt.AlignmentFlag.AlignHCenter)
+        row.addWidget(self.button, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        # Ширина колонки под подписями. Раскладка выровнена по центру, и
-        # без явной ширины метка сжимается до ширины круга — 88 пикселей.
-        # Строка «Сейчас откроется Telegram и предложит включить прокси
-        # net67 — подтвердите в его окне» рвалась там по два слова в
-        # строку и вылезала за пределы колонки.
-        # Ширина не жёсткая, а пересчитывается в resizeEvent. Жёсткие 420
-        # пикселей переживали не всякое окно: в простом виде и на узком
-        # экране колонка оказывалась шире самой страницы, и длинные
-        # сообщения — «Telegram Desktop не запущен, поэтому прокси не
-        # поднимался...» — уезжали за рамку.
+        text = QVBoxLayout()
+        text.setContentsMargins(0, 0, 0, 0)
+        text.setSpacing(4)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(10)
         self.state_label = BodyLabel(_STATE_TEXT[OneClickState.OFF])
-        self.state_label.setWordWrap(True)
-        self.state_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(self.state_label, 0, Qt.AlignmentFlag.AlignHCenter)
-
-        self.detail_label = QLabel("")
-        self.detail_label.setWordWrap(True)
-        self.detail_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(self.detail_label, 0, Qt.AlignmentFlag.AlignHCenter)
-
-        self._apply_text_column_width(TEXT_COLUMN_WIDTH)
-
+        title_row.addWidget(self.state_label)
         # Сколько защита уже работает. Отсчёт идёт от момента входа в
         # состояние RUNNING, а не от запуска программы: человека
         # интересует именно время работы обхода.
-        #
-        # Время рисуется внутри самого круга, а не строкой под ним:
-        # просили «прям на кнопке». Пока обход работает, значок
-        # уступает место цифрам — иначе в круге диаметром 88 пикселей
-        # рядом не помещается ничего читаемого, а о том, что нажатие
-        # выключает, говорит крупная строка состояния ниже.
-        self.uptime_label = QLabel("", self.button)
-        self.uptime_label.setObjectName("net67Uptime")
-        self.uptime_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.uptime_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.uptime_label.setGeometry(0, 0, HERO_BUTTON_SIZE, HERO_BUTTON_SIZE)
-        self.uptime_label.hide()
+        self.uptime_label = UptimePill(self.card)
+        title_row.addWidget(self.uptime_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        title_row.addStretch(1)
+        text.addLayout(title_row)
+
+        # Пояснение переносится по словам: сообщения бывают длинными —
+        # «Сейчас откроется Telegram и предложит включить прокси net67 —
+        # подтвердите в его окне».
+        self.detail_label = QLabel("")
+        self.detail_label.setWordWrap(True)
+        text.addWidget(self.detail_label)
+        row.addLayout(text, 1)
+
+        self.card.set_stacking_layout(row)
+        self.card.bind_scene(self.button)
 
         self._running_since: float | None = None
         self._uptime_timer = QTimer(self)
         self._uptime_timer.setInterval(1000)
         self._uptime_timer.timeout.connect(self._refresh_uptime)
-
-        # Отклик на нажатие: круг проседает и возвращается. Человек
-        # просил чувствовать удар по кнопке — цвета для этого мало,
-        # потому что цвет меняется уже по факту запуска, через секунды.
-        self._hero_size = HERO_BUTTON_SIZE
-        self._press_animation = None
-        self.button.pressed.connect(lambda: self._pulse(HERO_BUTTON_SIZE - 8))
-        self.button.pressed.connect(lambda: self._glow(1.0))
-        self.button.released.connect(lambda: self._pulse(HERO_BUTTON_SIZE))
-        self.button.released.connect(lambda: self._glow(0.0))
-        self._spin_animation = None
-        self._glow_animation = None
 
         self._apply_theme()
         self._apply_state(OneClickState.OFF, "")
@@ -310,29 +269,6 @@ class OneClickButton(QWidget):
         # из заголовка или трея.
         QTimer.singleShot(0, self._catch_up_with_runtime)
 
-    @staticmethod
-    def text_column_width_for(available_width: int) -> int:
-        """Ширина колонки с подписями при такой ширине окна.
-
-        Колонка не шире 420 пикселей (комфортная строка для чтения), не
-        шире доступного места за вычетом полей и не уже 160 — на этом
-        пороге строка начинает рваться в столбик, что читается хуже
-        любого переполнения.
-        """
-        room = int(available_width) - TEXT_COLUMN_SIDE_PADDING
-        if room < TEXT_COLUMN_MIN_WIDTH:
-            return TEXT_COLUMN_MIN_WIDTH
-        return min(TEXT_COLUMN_WIDTH, room)
-
-    def _apply_text_column_width(self, width: int) -> None:
-        for label in (self.state_label, self.detail_label):
-            if label.width() != width:
-                label.setFixedWidth(width)
-
-    def resizeEvent(self, event):  # noqa: N802 — имя от Qt
-        super().resizeEvent(event)
-        self._apply_text_column_width(self.text_column_width_for(self.width()))
-
     def _apply_theme(self) -> None:
         tokens = get_theme_tokens()
         self.detail_label.setStyleSheet(
@@ -360,96 +296,6 @@ class OneClickButton(QWidget):
             return
         self.uptime_label.setText(self.format_uptime(_time.monotonic() - self._running_since))
 
-    def _pulse(self, target: int) -> None:
-        """Плавно меняет диаметр круга под нажатием.
-
-        Меняем именно фиксированный размер, а не геометрию: кнопка живёт
-        в раскладке, и та немедленно вернула бы ей прежние координаты.
-        Раскладка выровнена по центру, поэтому круг проседает симметрично.
-        """
-        from PyQt6.QtCore import QEasingCurve, QVariantAnimation
-
-        from ui.animation_policy import start_managed_animation
-
-        target = int(target)
-        if target == self._hero_size:
-            return
-
-        if self._press_animation is not None:
-            self._press_animation.stop()
-
-        animation = QVariantAnimation(self)
-        animation.setStartValue(int(self._hero_size))
-        animation.setEndValue(target)
-        animation.setDuration(110)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        animation.valueChanged.connect(self._set_hero_size)
-        self._press_animation = animation
-        start_managed_animation(animation)
-        # Если анимации выключены, длительность обнуляется и кадров не
-        # будет вовсе — размер тогда ставим сами.
-        if animation.duration() <= 0:
-            self._set_hero_size(target)
-
-    def _spin(self) -> None:
-        """Проворот значка при переключении.
-
-        Полный оборот, а не полповорота: обход либо включён, либо нет,
-        и значок должен вернуться в то же положение. Половинчатый
-        поворот оставлял бы кнопку в двух разных видах для одного и
-        того же состояния.
-        """
-        from PyQt6.QtCore import QEasingCurve, QVariantAnimation
-
-        from ui.animation_policy import start_managed_animation
-
-        if self._spin_animation is not None:
-            self._spin_animation.stop()
-
-        animation = QVariantAnimation(self)
-        animation.setStartValue(0.0)
-        animation.setEndValue(360.0)
-        animation.setDuration(520)
-        animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
-        animation.valueChanged.connect(
-            lambda value: self.button.set_spin(float(value))
-        )
-        animation.finished.connect(lambda: self.button.set_spin(0.0))
-        self._spin_animation = animation
-        start_managed_animation(animation)
-        if animation.duration() <= 0:
-            self.button.set_spin(0.0)
-
-    def _glow(self, target: float) -> None:
-        """Вспышка кольца под нажатием и затухание после."""
-        from PyQt6.QtCore import QEasingCurve, QVariantAnimation
-
-        from ui.animation_policy import start_managed_animation
-
-        if self._glow_animation is not None:
-            self._glow_animation.stop()
-
-        current = float(getattr(self.button, "_net67_glow", 0.0))
-        animation = QVariantAnimation(self)
-        animation.setStartValue(current)
-        animation.setEndValue(float(target))
-        animation.setDuration(160 if target else 280)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        animation.valueChanged.connect(
-            lambda value: self.button.set_glow(float(value))
-        )
-        self._glow_animation = animation
-        start_managed_animation(animation)
-        if animation.duration() <= 0:
-            self.button.set_glow(float(target))
-
-    def _set_hero_size(self, value) -> None:
-        size = max(1, int(value))
-        self._hero_size = size
-        self.button.setFixedSize(size, size)
-        self.uptime_label.setGeometry(0, 0, size, size)
-        self._apply_button_colour(self._state, get_theme_tokens())
-
     def _sync_uptime_for_state(self, state: OneClickState) -> None:
         """Запускает и останавливает отсчёт вместе с обходом."""
         if state is OneClickState.RUNNING:
@@ -462,7 +308,6 @@ class OneClickButton(QWidget):
                 self._running_since = shared_since() or _time.monotonic()
             self._refresh_uptime()
             self.uptime_label.show()
-            self.uptime_label.raise_()
             if not self._uptime_timer.isActive():
                 self._uptime_timer.start()
             return
@@ -474,7 +319,6 @@ class OneClickButton(QWidget):
 
     def _apply_state(self, state: OneClickState, detail: str) -> None:
         tokens = get_theme_tokens()
-        was_running = self._state is OneClickState.RUNNING
         self._state = state
 
         if state not in _BUSY:
@@ -483,48 +327,25 @@ class OneClickButton(QWidget):
         button_text = "Остановка..." if self._stopping and state is OneClickState.PREPARING else _BUTTON_TEXT.get(state, "Включить обход")
         state_text = "Останавливаем..." if self._stopping and state is OneClickState.PREPARING else _STATE_TEXT.get(state, "")
 
-        self.button.setText(button_text)
-        self.button.setEnabled(state not in _BUSY)
+        self.button.set_click_enabled(state not in _BUSY)
         self.state_label.setText(state_text)
         self.detail_label.setText(str(detail or ""))
         self.detail_label.setVisible(bool(detail))
 
-        # Цвет самой кнопки зависит от состояния: выключено — приглушённая
-        # поверхность, работает — акцент, ошибка — красный. Без этого
-        # нажатие не читается вообще, а состояние приходится вычитывать
-        # из подписи.
-        self._apply_button_colour(state, tokens)
+        # Сцена показывает состояние сама: пакеты бьются о красную стену,
+        # трещит дуга запуска или ворота открыты и поток идёт к сайтам.
+        phase, color = scene_look(state, stopping=self._stopping)
+        self.button.set_color(color)
+        self.button.set_phase(phase)
         self._sync_uptime_for_state(state)
 
-        # Дыхание круга живёт на работающем обходе и во время фаз
-        # запуска/остановки («Останавливаем…», «Запускаем…»). Пульсация даёт
-        # визуальное подтверждение, что команда принята и система работает.
-        try:
-            if state is OneClickState.RUNNING or state in _BUSY:
-                self.button.start_pulse()
-            else:
-                self.button.stop_pulse()
-        except Exception:
-            pass
-
-        # Проворот на каждом переходе «работает — не работает»: именно
-        # он сообщает, что нажатие сделало своё дело.
-        if was_running != (state is OneClickState.RUNNING):
-            try:
-                self._spin()
-            except Exception:
-                pass
-
-        color = {
-            OneClickState.RUNNING: tokens.accent_hex,
-            OneClickState.ERROR: tokens.fg_muted,
+        title_color = {
+            OneClickState.RUNNING: SCENE_COLOR_RUNNING,
+            OneClickState.ERROR: SCENE_COLOR_STOPPED,
         }.get(state, tokens.fg)
         self.state_label.setStyleSheet(
-            f"QLabel {{ color: {color}; font-weight: 600; font-size: 19px; }}"
+            f"QLabel {{ color: {title_color}; font-weight: 600; font-size: 19px; }}"
         )
-        # Значок меняется вместе с состоянием: круг с «пуском» при
-        # выключенной защите и с «паузой» при работающей.
-        _refresh_hero_icon(self.button, state)
 
         label = f"{state_text}. {detail}".strip()
         set_state_text(self, label)
@@ -534,47 +355,6 @@ class OneClickButton(QWidget):
             description=label,
         )
         self.stateChanged.emit(state)
-
-    def _apply_button_colour(self, state: OneClickState, tokens) -> None:
-        from shell.theme import palette
-
-        try:
-            colors = palette(not tokens.is_light)
-        except Exception:
-            return
-
-        fill = {
-            OneClickState.RUNNING: colors.accent,
-            OneClickState.ERROR: "#c1121f",
-        }.get(state, colors.surface_hover)
-        ink = colors.on_accent if state is OneClickState.RUNNING else colors.text
-        if state is OneClickState.ERROR:
-            ink = "#ffffff"
-
-        ring = (
-            colors.accent
-            if (state is OneClickState.RUNNING or (self._stopping and state in _BUSY))
-            else colors.border_strong
-        )
-        if state is OneClickState.ERROR:
-            ring = "#ff6b6b"
-
-        try:
-            # Круг рисует себя сам, см. make_round_button_class. Таблица
-            # стилей остаётся ради прозрачного текста: сам текст кнопки
-            # читают программы экранного доступа, а показывать его внутри
-            # круга нельзя — он туда не помещается.
-            self.button.setStyleSheet(
-                "QPushButton { border: none; background: transparent;"
-                " color: transparent; padding: 0px; }"
-            )
-            self.button.set_hero_colors(fill=fill, ring=ring)
-            self.uptime_label.setStyleSheet(
-                f"QLabel#net67Uptime {{ color: {ink}; background: transparent;"
-                " font-size: 19px; font-weight: 700; }"
-            )
-        except Exception:
-            pass
 
     # ──────────────────────────────────────────────────────────────────
 
@@ -629,7 +409,7 @@ class OneClickButton(QWidget):
             self._apply_state(state, str(message or ""))
             # Настройки ещё применяются: две изменяющие систему команды
             # одновременно запускать нельзя. Проверка сайтов сюда не входит.
-            self.button.setEnabled(False)
+            self.button.set_click_enabled(False)
 
     def _on_finished(self, state, message: str) -> None:
         self._apply_state(state, str(message or ""))

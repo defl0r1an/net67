@@ -6558,14 +6558,18 @@ TEXTS_ONBOARDING_NET67: dict[str, dict[str, str]] = {
     },
     "onboarding.step.oneclick.body": {
         "ru": (
-            "«Включить обход» — главная кнопка программы. Она сама проверяет, не мешают ли "
+            "«Включить обход» — главная кнопка программы, круглая кнопка в стене блокировки. "
+            "Пока обход выключен, пакеты разбиваются о стену, а когда он работает — проходят "
+            "сквозь неё к сайтам. Кнопка сама проверяет, не мешают ли "
             "другие программы обхода, запускает движок, прописывает адреса выбранных сервисов "
             "в файл hosts и, если вы это включили, поднимает прокси для Telegram.\n\n"
             "Повторное нажатие выключает ровно то, что кнопка включила. Ваши настройки при этом "
             "не меняются."
         ),
         "en": (
-            "Enable bypass is the main button of the program. It checks that no other bypass "
+            "Enable bypass is the main button of the program: the round button in the blocking "
+            "wall. While the bypass is off, packets break against the wall; while it works, they "
+            "pass through it to the sites. The button checks that no other bypass "
             "tools get in the way, starts the engine, writes the addresses of the selected "
             "services into the hosts file and, if you turned it on, starts the Telegram proxy.\n\n"
             "Pressing it again turns off exactly what it turned on. Your settings stay as they are."
