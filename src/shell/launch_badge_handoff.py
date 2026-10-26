@@ -196,6 +196,11 @@ class LaunchBadgeHandoff(QObject):
         except Exception:
             return None, None
         hero = getattr(page, "oneclick_button", None) if page is not None else None
+        # Главная кнопка — сцена (ui/widgets/bypass_scene.py); летит и прячется
+        # только кнопка питания из её стены, а не вся сцена.
+        circle = getattr(hero, "handoff_circle", None)
+        if callable(circle):
+            return page, circle()
         return page, getattr(hero, "button", None)
 
     def _watch(self, obj) -> None:

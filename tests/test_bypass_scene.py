@@ -234,6 +234,79 @@ class BypassSceneTests(unittest.TestCase):
                 self.assertEqual(blocked.call_count, expected)
         self.assertLess(scene_module.FAILED_LOGO_OPACITY, 1.0)
 
+    def test_digits_take_turns_to_hop_when_the_logo_throws(self) -> None:
+        """Залп о стену: «6» подкидывает первый пакет, «7» второй, «6» третий."""
+        scene = self._scene("stopped")
+        starts, span = scene_module.BLOCKED_PACKET_STARTS, scene_module.BLOCKED_PACKET_SPAN
+        hop = scene_module.DIGIT_HOP_SHARE / 2
+        with mock.patch.object(scene, "is_beating", return_value=True):
+            for index, expected in ((0, "six"), (1, "seven"), (2, "six")):
+                with self.subTest(packet=index):
+                    scene._pulse_phase = starts[index] + span * hop
+                    six, seven = scene.digit_offsets()
+                    up, still = (six, seven) if expected == "six" else (seven, six)
+                    self.assertAlmostEqual(up, -scene_module.DIGIT_HOP, places=3)
+                    self.assertEqual(still, 0.0)
+            # Вернувшийся домой пакет — цифра чуть приседает.
+            back = scene_module.BLOCKED_BACK_END
+            scene._pulse_phase = starts[0] + span * (back + (1.0 - back) * 0.25)
+            self.assertGreater(scene.digit_offsets()[0], 0.0)
+
+    def test_digits_hop_on_outgoing_packets_and_rest_after_a_failure(self) -> None:
+        scene = self._scene("running")
+        with mock.patch.object(scene, "is_beating", return_value=True):
+            hops = []
+            for step in range(200):
+                scene._flow_time = step * 0.03
+                hops.append(min(scene.digit_offsets()))
+            self.assertLess(min(hops), -1.0)
+            self.assertGreaterEqual(min(hops), -scene_module.DIGIT_FLOW_HOP - 1e-6)
+
+            scene.set_phase("failed")
+            scene._pulse_phase = scene_module.BLOCKED_PACKET_STARTS[0] + 0.01
+            self.assertEqual(scene.digit_offsets(), (0.0, 0.0))
+
+    def test_logo_is_split_into_plate_and_two_digits(self) -> None:
+        from PyQt6.QtGui import QColor, QImage, QPainter, QFont
+
+        image = QImage(60, 60, QImage.Format.Format_ARGB32)
+        image.fill(QColor("#171717"))
+        painter = QPainter(image)
+        painter.setPen(QColor("#f4f4f3"))
+        font = QFont()
+        font.setPixelSize(40)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(image.rect(), 0x84, "67")
+        painter.end()
+
+        plate, six, seven = scene_module._logo_layers(image, 1.0)
+        plate_img, six_img, seven_img = plate.toImage(), six.toImage(), seven.toImage()
+        # Плашка без цифр, цифры — каждая по свою сторону стыка.
+        self.assertLess(max(QColor(plate_img.pixel(x, 30)).lightness() for x in range(60)), 40)
+        six_cols = [x for x in range(60) for y in range(60) if QColor.fromRgba(six_img.pixel(x, y)).alpha() > 128]
+        seven_cols = [x for x in range(60) for y in range(60) if QColor.fromRgba(seven_img.pixel(x, y)).alpha() > 128]
+        self.assertTrue(six_cols and seven_cols)
+        self.assertLess(sum(six_cols) / len(six_cols), sum(seven_cols) / len(seven_cols))
+
+    def test_power_button_is_its_own_widget_over_the_wall(self) -> None:
+        """Кнопку можно снять и спрятать отдельно: так её забирает метка в заголовке."""
+        scene = self._scene("stopped")
+        scene.resize(420, scene_module.SCENE_HEIGHT)
+        knob = scene.knob
+
+        self.assertEqual(knob.parentWidget(), scene)
+        # QRect.center() у чётной стороны отстаёт на точку — сверяем дробный центр.
+        self.assertEqual(scene_module.QRectF(knob.geometry()).center(), scene_module.QPointF(scene.gate_center()))
+        self.assertTrue(knob.testAttribute(scene_module.Qt.WidgetAttribute.WA_TransparentForMouseEvents))
+        # Щелчок по кнопке ловит сцена, а не виджет поверх.
+        clicks = []
+        scene.set_clickable(True)
+        scene.clicked.connect(lambda: clicks.append(1))
+        scene.click()
+        self.assertEqual(clicks, [1])
+        self.assertFalse(knob.grab().isNull())
+
     def test_logo_breathes_with_the_flow_frames_only_while_running(self) -> None:
         scene = self._scene("running")
         quarter = int(scene_module.BREATH_PERIOD_S * 250)

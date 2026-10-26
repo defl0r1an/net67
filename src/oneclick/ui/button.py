@@ -48,12 +48,17 @@ _STATE_TEXT = {
     OneClickState.ERROR: "Не удалось запустить обход",
 }
 
-#: Цвета кнопки в стене по состоянию — те же, что у zapret: работает —
-#: зелёный, запуск и остановка — янтарный, выключено и сбой — красный.
-#: Красная стена при выключенном обходе — и есть блокировка: так её и видно.
+#: Цвета кнопки в стене по состоянию: работает — зелёный, запуск и
+#: остановка — янтарный, сбой — красный.
+#:
+#: Выключенный обход сначала был красным, как у zapret. Владелец попросил
+#: серый (26 октября 2026): выключено — это покой, а не тревога, и красный
+#: на главной при каждом открытии программы читался как ошибка. Красным
+#: остался только сорвавшийся запуск.
 SCENE_COLOR_RUNNING = "#6ccb5f"
 SCENE_COLOR_BUSY = "#f5a623"
-SCENE_COLOR_STOPPED = "#ff6b6b"
+SCENE_COLOR_STOPPED = "#8b919b"
+SCENE_COLOR_FAILED = "#ff6b6b"
 
 
 def scene_look(state: OneClickState, *, stopping: bool = False) -> tuple[str, str]:
@@ -63,7 +68,7 @@ def scene_look(state: OneClickState, *, stopping: bool = False) -> tuple[str, st
     if state in (OneClickState.PREPARING, OneClickState.CHECKING):
         return ("stopping" if stopping else "starting"), SCENE_COLOR_BUSY
     if state is OneClickState.ERROR:
-        return "failed", SCENE_COLOR_STOPPED
+        return "failed", SCENE_COLOR_FAILED
     return "stopped", SCENE_COLOR_STOPPED
 
 
@@ -121,9 +126,13 @@ class OneClickButton(QWidget):
         self.button.clicked.connect(self._on_clicked)
         row.addWidget(self.button, 0, Qt.AlignmentFlag.AlignVCenter)
 
+        # Текст стоит по середине высоты сцены. Без растяжек сверху и снизу
+        # лишняя высота карточки уходила самим подписям: заголовок прилипал
+        # к верху, пояснение — к низу, и между ними зияла дыра.
         text = QVBoxLayout()
         text.setContentsMargins(0, 0, 0, 0)
         text.setSpacing(4)
+        text.addStretch(1)
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(10)
@@ -143,6 +152,7 @@ class OneClickButton(QWidget):
         self.detail_label = QLabel("")
         self.detail_label.setWordWrap(True)
         text.addWidget(self.detail_label)
+        text.addStretch(1)
         row.addLayout(text, 1)
 
         self.card.set_stacking_layout(row)
@@ -279,6 +289,15 @@ class OneClickButton(QWidget):
         self._apply_theme()
         self._apply_state(self._state, self.detail_label.text())
 
+    def handoff_circle(self):
+        """Что улетает в метку заголовка, когда кнопка уходит из вида.
+
+        Только сама кнопка питания из стены: полёт вписывает снимок в
+        квадрат, и сцена 330×88 целиком сплющивалась в полоску
+        (shell/launch_badge_handoff.py).
+        """
+        return self.button.knob
+
     @property
     def state(self) -> OneClickState:
         return self._state
@@ -341,7 +360,7 @@ class OneClickButton(QWidget):
 
         title_color = {
             OneClickState.RUNNING: SCENE_COLOR_RUNNING,
-            OneClickState.ERROR: SCENE_COLOR_STOPPED,
+            OneClickState.ERROR: SCENE_COLOR_FAILED,
         }.get(state, tokens.fg)
         self.state_label.setStyleSheet(
             f"QLabel {{ color: {title_color}; font-weight: 600; font-size: 19px; }}"

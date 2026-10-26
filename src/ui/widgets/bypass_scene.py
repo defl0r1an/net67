@@ -22,6 +22,17 @@
 лапой; логотип их просто принимает и выпускает, поэтому позы и жесты
 талисмана здесь не нужны.
 
+Логотип не картинка целиком: плашка и цифры «6» и «7» разделены
+(``_logo_layers``), и цифры подпрыгивают, когда логотип бросает пакет —
+по очереди, как будто подкидывают его (просьба владельца, 26 октября 2026).
+
+Кнопка питания — отдельный дочерний виджет (``GateKnob``) поверх стены.
+Метка в заголовке забирает главную кнопку к себе, когда та уходит из
+вида, и возвращает обратно полётом снимка (shell/launch_badge_handoff.py).
+Снимок вписывается в квадрат: у круглой кнопки, что стояла здесь раньше,
+так и было, а сцена 330×88, снятая целиком, сплющивалась в полоску. Теперь
+летит и прячется только сама кнопка, а логотип и стена остаются на месте.
+
 Кадры идут, только пока сцена видна, окно не свёрнуто и включены «живые
 анимации». В остановленном состоянии это короткий залп и пауза (таймер
 между залпами одиночный), а на ходу перерисовываются только дорожки,
@@ -38,8 +49,8 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QEasingCurve, QPoint, QPointF, QRect, QRectF, QSize, Qt, QVariantAnimation, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QRegion
-from PyQt6.QtWidgets import QApplication, QSizePolicy
+from PyQt6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegion
+from PyQt6.QtWidgets import QApplication, QSizePolicy, QWidget
 
 from qfluentwidgets import isDarkTheme
 
@@ -76,6 +87,19 @@ BREATH_PERIOD_S = 3.6
 BREATH_SCALE = 0.035
 # Сорвавшийся запуск: логотип тускнеет до этой непрозрачности.
 FAILED_LOGO_OPACITY = 0.55
+# Прыжок цифры, когда логотип бросает пакет, px, и какую долю пути пакета он длится.
+DIGIT_HOP = 4.0
+DIGIT_HOP_SHARE = 0.2
+# Цифра чуть приседает, когда пакет возвращается в логотип, px.
+DIGIT_CATCH_DIP = 1.5
+# В потоке цифры подпрыгивают на каждый вылетевший пакет — ниже, чем в залпе:
+# пакетов много, и полный прыжок на каждый превратил бы логотип в дрожь.
+DIGIT_FLOW_HOP = 2.5
+# Где искать стык цифр: доля ширины логотипа.
+DIGIT_SPLIT_FROM = 0.44
+DIGIT_SPLIT_TO = 0.6
+# Насколько далеко от кнопки дотягиваются её кольцо «вздоха» и свечение, px.
+KNOB_REACH = 44
 # Период, с которым дышит ореол работающей кнопки, секунды.
 HALO_PERIOD_S = 2.8
 RAW_COLOR = QColor(150, 156, 168)
@@ -143,6 +167,81 @@ def _app_logo() -> QIcon:
         return QIcon()
 
 
+def _logo_layers(image: QImage, ratio: float) -> tuple[QPixmap, QPixmap, QPixmap]:
+    """(плашка, «6», «7») из картинки логотипа — чтобы цифры двигались сами по себе.
+
+    Плашка тёмная, цифры светлые: доля «светлоты» точки и есть доля цифры
+    в ней (на сглаженных краях они смешаны). Цифры стоят впритык, поэтому
+    граница между ними ищется в каждой строке своя — самая тёмная точка у
+    середины знака.
+    """
+    source = image.convertToFormat(QImage.Format.Format_ARGB32)
+    width, height = source.width(), source.height()
+    plate_color = QColor(source.pixel(width // 2, max(0, height // 16)))
+    lightest = max(
+        (QColor(source.pixel(x, y)).lightness() for y in range(height) for x in range(width)),
+        default=255,
+    )
+    base = plate_color.lightness()
+    span = max(1, lightest - base)
+    glyph_color = QColor(244, 244, 243)
+
+    plate = QImage(width, height, QImage.Format.Format_ARGB32)
+    six = QImage(width, height, QImage.Format.Format_ARGB32)
+    seven = QImage(width, height, QImage.Format.Format_ARGB32)
+    for layer in (plate, six, seven):
+        layer.fill(Qt.GlobalColor.transparent)
+    lo, hi = int(width * DIGIT_SPLIT_FROM), max(int(width * DIGIT_SPLIT_FROM) + 1, int(width * DIGIT_SPLIT_TO))
+    for y in range(height):
+        shares = []
+        for x in range(width):
+            pixel = QColor.fromRgba(source.pixel(x, y))
+            share = max(0.0, min(1.0, (pixel.lightness() - base) / span))
+            shares.append((pixel.alpha(), share))
+        split = min(range(lo, hi), key=lambda x: shares[x][1])
+        for x, (alpha, share) in enumerate(shares):
+            if alpha <= 0:
+                continue
+            under = QColor(plate_color)
+            under.setAlpha(alpha)
+            plate.setPixelColor(x, y, under)
+            if share <= 0.0:
+                continue
+            glyph = QColor(glyph_color)
+            glyph.setAlpha(round(alpha * share))
+            (six if x < split else seven).setPixelColor(x, y, glyph)
+    layers = []
+    for layer in (plate, six, seven):
+        pixmap = QPixmap.fromImage(layer)
+        pixmap.setDevicePixelRatio(ratio)
+        layers.append(pixmap)
+    return layers[0], layers[1], layers[2]
+
+
+class GateKnob(QWidget):
+    """Кнопка питания в стене — отдельным виджетом поверх сцены.
+
+    Рисует её сама сцена (``BypassScene.paint_knob``); виджет нужен, чтобы
+    кнопку можно было снять и спрятать отдельно от логотипа и стены. Мышь
+    проходит сквозь него: нажатия ловит сцена.
+    """
+
+    def __init__(self, scene: "BypassScene"):
+        super().__init__(scene)
+        self._scene = scene
+        # Фокуса у простого виджета нет и так: с клавиатуры кнопку жмёт сцена.
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        _ = event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.translate(-self.x(), -self.y())
+        self._scene.paint_knob(painter)
+        painter.end()
+
+
 class BypassScene(PulsingDot):
     """Выключатель обхода с живой картинкой: пакеты, стена и кнопка в ней."""
 
@@ -165,8 +264,10 @@ class BypassScene(PulsingDot):
         self._beat.setInterval(SCENE_FRAME_MS)
 
         self._logo = _app_logo()
-        self._logo_cache: tuple[float, QPixmap] | None = None
+        self._logo_cache: tuple[float, tuple[QPixmap, QPixmap, QPixmap] | None] | None = None
         self._breath = 0.0
+        # Сила удара пакета о стену в текущем кадре: от неё вспыхивает и кнопка.
+        self._impact = 0.0
 
         # Политика фокуса обычного виджета: к ней сцена вернётся, если перестанет быть кнопкой.
         self._plain_focus_policy = self.focusPolicy()
@@ -216,6 +317,17 @@ class BypassScene(PulsingDot):
         self._shake.setDuration(SHAKE_MS)
         self._shake.valueChanged.connect(self._on_shake_value)
         self._shake.finished.connect(self._on_shake_finished)
+
+        self.knob = GateKnob(self)
+        self._place_knob()
+
+    def _place_knob(self) -> None:
+        center = self.gate_center()
+        self.knob.setGeometry(center.x() - KNOB_REACH, center.y() - KNOB_REACH, KNOB_REACH * 2, KNOB_REACH * 2)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._place_knob()
 
     def set_stretched(self, stretched: bool) -> None:
         """Растянуть сцену на всю доступную ширину (узкое окно) или вернуть обычную."""
@@ -531,6 +643,48 @@ class BypassScene(PulsingDot):
         if self.__dict__.get("_breath"):
             self._breath = 0.0
 
+    def digit_offsets(self) -> tuple[float, float]:
+        """Насколько сейчас подпрыгнули «6» и «7», px (меньше нуля — вверх).
+
+        В залпе о стену цифры по очереди подкидывают пакеты и приседают,
+        когда пакет возвращается домой. В потоке — короткий прыжок на каждый
+        вылетевший пакет. После сбоя логотип ничего не бросает.
+        """
+        six = seven = 0.0
+        if not self.is_beating() or self._phase == "failed":
+            return six, seven
+
+        def add(index: int, value: float) -> None:
+            nonlocal six, seven
+            if index % 2 == 0:
+                six = value if abs(value) > abs(six) else six
+            else:
+                seven = value if abs(value) > abs(seven) else seven
+
+        if self._is_flowing():
+            left, right, _top, _bottom = self._lanes()
+            _direction, speed, offsets = FLOW_LANES[1]
+            for index, offset in enumerate(offsets):
+                x = self._flow_x(1, speed, offset, left, right)
+                s = (x - (left - BIRTH_DEPTH)) / 22.0
+                if 0.0 <= s < 1.0:
+                    add(index, -DIGIT_FLOW_HOP * math.sin(math.pi * s))
+            return six, seven
+
+        phase = self._pulse_phase
+        for index, fate in enumerate(BLOCKED_FATES):
+            leg = self._blocked_leg(index, phase)
+            if leg is None:
+                continue
+            u, _k = leg
+            if u < DIGIT_HOP_SHARE:
+                add(index, -DIGIT_HOP * math.sin(math.pi * u / DIGIT_HOP_SHARE))
+            elif fate == "home" and u > BLOCKED_BACK_END:
+                after = (u - BLOCKED_BACK_END) / (1.0 - BLOCKED_BACK_END)
+                if after < 0.5:
+                    add(index, DIGIT_CATCH_DIP * math.sin(math.pi * after / 0.5))
+        return six, seven
+
     def _start_beat(self) -> None:
         if self._can_animate() and self._is_flowing():
             # Поток продолжается с того места, где остановился, без рывка.
@@ -641,14 +795,28 @@ class BypassScene(PulsingDot):
         else:
             self._paint_wall(painter, center, color, open_t, impact)
         self._paint_link(painter, center, color, open_t)
+        # Саму кнопку рисует GateKnob поверх — в том же проходе перерисовки.
+        self._impact = impact
+        painter.end()
+
+    def paint_knob(self, painter: QPainter) -> None:
+        """Кнопка питания: кольцо «вздоха», свечение, круг со значком и комета.
+
+        Зовётся из GateKnob с ``painter`` в координатах сцены.
+        """
+        if self._shake_t > 0.0:
+            t = self._shake_t
+            painter.translate(4.0 * math.sin(6 * math.pi * t) * (1.0 - t), 0.0)
+        center = QPointF(self.gate_center())
+        color = self._shown_color
+        impact = self._impact
         if self._phase == "running" and self.is_beating():
             # Ореол работающей кнопки мягко дышит.
             impact = 0.5 + 0.5 * math.sin(2 * math.pi * self._flow_time / HALO_PERIOD_S)
         self._paint_pop_ring(painter, center, color)
-        self._paint_button(painter, center, impact, still=still)
+        self._paint_button(painter, center, impact, still=self._is_still())
         if self._phase in BUSY_PHASES:
             self._paint_spinner(painter, center, color)
-        painter.end()
 
     def _is_still(self) -> bool:
         """Неподвижные части сцены сейчас действительно не меняются."""
@@ -658,8 +826,8 @@ class BypassScene(PulsingDot):
             and self._fade.state() != QVariantAnimation.State.Running
         )
 
-    def _logo_pixmap(self) -> QPixmap | None:
-        """Логотип в точках экрана; пересчитывается только при смене масштаба."""
+    def _logo_pixmaps(self) -> tuple[QPixmap, QPixmap, QPixmap] | None:
+        """(плашка, «6», «7») в точках экрана; пересчитываются только при смене масштаба."""
         if self._logo.isNull():
             return None
         ratio = float(self.devicePixelRatioF() or 1.0)
@@ -667,27 +835,32 @@ class BypassScene(PulsingDot):
         if cached is not None and cached[0] == ratio:
             return cached[1]
         side = max(1, round(LOGO_SIZE * ratio * (1.0 + BREATH_SCALE)))
-        pixmap = self._logo.pixmap(QSize(side, side))
-        pixmap.setDevicePixelRatio(ratio)
-        self._logo_cache = (ratio, pixmap)
-        return pixmap
+        image = self._logo.pixmap(QSize(side, side)).toImage()
+        layers = _logo_layers(image, ratio) if not image.isNull() else None
+        self._logo_cache = (ratio, layers)
+        return layers
 
     def _paint_logo(self, painter: QPainter) -> None:
-        """Логотип у левого края: дышит, пока обход работает, и тускнеет после сбоя."""
-        pixmap = self._logo_pixmap()
+        """Логотип у левого края: дышит, пока обход работает, цифры подкидывают пакеты, после сбоя тускнеет."""
+        layers = self._logo_pixmaps()
         rect = self.logo_rect()
-        if pixmap is None or pixmap.isNull():
+        if layers is None:
             # Значка нет (сборка без иконки): рисуем нейтральный кружок того же размера.
             painter.setBrush(QColor(RAW_COLOR))
             painter.drawEllipse(rect.center(), LOGO_SIZE * 0.42, LOGO_SIZE * 0.42)
             return
+        plate, six, seven = layers
         scale = 1.0 + BREATH_SCALE * self._breath if self._phase == "running" else 1.0
         size = LOGO_SIZE * scale
         target = QRectF(rect.center().x() - size / 2, rect.center().y() - size / 2, size, size)
+        six_dy, seven_dy = self.digit_offsets()
         painter.save()
         if self._phase == "failed":
             painter.setOpacity(FAILED_LOGO_OPACITY)
-        painter.drawPixmap(target, pixmap, QRectF(pixmap.rect()))
+        source = QRectF(plate.rect())
+        painter.drawPixmap(target, plate, source)
+        painter.drawPixmap(target.translated(0.0, six_dy), six, source)
+        painter.drawPixmap(target.translated(0.0, seven_dy), seven, source)
         painter.restore()
 
     def _paint_ground(self, painter, center, left, right, top, bottom, gate, color, open_t: float) -> None:
@@ -1024,4 +1197,4 @@ class BypassScene(PulsingDot):
         painter.setPen(Qt.PenStyle.NoPen)
 
 
-__all__ = ["BypassScene", "BUSY_PHASES", "KNOWN_PHASES"]
+__all__ = ["BypassScene", "BUSY_PHASES", "GateKnob", "KNOWN_PHASES"]

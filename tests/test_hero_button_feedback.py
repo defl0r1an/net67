@@ -91,7 +91,7 @@ class HeroButtonTests(unittest.TestCase):
         return button
 
     def test_colour_and_phase_follow_the_state(self) -> None:
-        """Выключено — красная стена, запуск — янтарь, работает — зелёный, сбой — снова красный."""
+        """Выключено — серое, запуск — янтарь, работает — зелёный, сбой — красный."""
         from oneclick.state import OneClickState
         from oneclick.ui import button as module
 
@@ -102,7 +102,7 @@ class HeroButtonTests(unittest.TestCase):
             (OneClickState.PREPARING, "starting", module.SCENE_COLOR_BUSY),
             (OneClickState.CHECKING, "starting", module.SCENE_COLOR_BUSY),
             (OneClickState.RUNNING, "running", module.SCENE_COLOR_RUNNING),
-            (OneClickState.ERROR, "failed", module.SCENE_COLOR_STOPPED),
+            (OneClickState.ERROR, "failed", module.SCENE_COLOR_FAILED),
         ):
             with self.subTest(state=state):
                 widget._apply_state(state, "")
@@ -156,6 +156,51 @@ class HeroButtonTests(unittest.TestCase):
         send(QEvent.Type.MouseButtonRelease)
         self.assertFalse(scene.is_pressed())
         self.assertEqual(clicks, [1])
+
+    def test_off_state_is_calm_grey_not_an_alarm(self) -> None:
+        """Красный на каждом открытии программы читался как ошибка."""
+        from PyQt6.QtGui import QColor
+
+        from oneclick.ui import button as module
+
+        stopped = QColor(module.SCENE_COLOR_STOPPED)
+        self.assertLess(stopped.hsvSaturation(), 40)
+        self.assertNotEqual(module.SCENE_COLOR_STOPPED, module.SCENE_COLOR_FAILED)
+
+    def test_only_the_power_button_flies_into_the_title_badge(self) -> None:
+        """Снимок полёта вписывается в квадрат: сцена целиком сплющивалась в полоску."""
+        from shell.launch_badge_handoff import LaunchBadgeHandoff
+
+        widget = self._button()
+        knob = widget.handoff_circle()
+
+        self.assertIs(knob, widget.button.knob)
+        self.assertEqual(knob.width(), knob.height())
+        self.assertTrue(knob.geometry().contains(widget.button.gate_center()))
+
+        class _Page:
+            oneclick_button = widget
+
+        with __import__("unittest").mock.patch("ui.window_adapter.get_loaded_page", return_value=_Page()):
+            page, circle = LaunchBadgeHandoff._default_locate(object())
+        self.assertIs(circle, knob)
+
+    def test_text_stands_in_the_middle_of_the_scene_height(self) -> None:
+        """Лишняя высота карточки не растаскивает заголовок и пояснение по краям."""
+        from PyQt6.QtWidgets import QApplication
+
+        from oneclick.state import OneClickState
+
+        widget = self._button()
+        widget.resize(1000, 200)
+        widget._apply_state(OneClickState.RUNNING, "Работает, проверенные сайты открываются")
+        QApplication.processEvents()
+
+        title = widget.state_label.geometry()
+        detail = widget.detail_label.geometry()
+        self.assertLessEqual(detail.top() - title.bottom(), 12)
+        middle = (title.top() + detail.bottom()) / 2
+        self.assertAlmostEqual(middle, widget.button.geometry().center().y(), delta=8)
 
     def test_scene_is_the_main_button_for_tour_and_title_badge(self) -> None:
         """Тур и метка в заголовке ищут главную кнопку по имени ``button``."""
