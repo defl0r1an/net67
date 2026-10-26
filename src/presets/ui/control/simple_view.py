@@ -31,8 +31,9 @@ HIDDEN_IN_SIMPLE_VIEW: tuple[str, ...] = (
     "additional_settings_section_label",
     "additional_settings_card",
     "last_status_message_card",
-    "extra_section_label",
-    "extra_card",
+    # Плитка «Сбросить сеть Windows» из «Быстрых действий»: сетка плиток
+    # отдаёт её место соседям, пока она скрыта.
+    "internet_cleanup_card",
 )
 
 #: Строки карточки «Настройки программы», которые не нужны в простом виде.
@@ -61,7 +62,6 @@ _SPACING_ATTR = "_simple_view_spacings"
 _SETTING_GROUPS: tuple[str, ...] = (
     "program_settings_card",
     "additional_settings_card",
-    "extra_card",
 )
 
 

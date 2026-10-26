@@ -186,10 +186,28 @@ class ControlPageActionMixin:
             return getattr(self, "onboarding_tour_card", None)
         return None
 
-    def _open_connection_test(self) -> None:
-        handler = getattr(self, "_open_connection_test_callback", None)
-        if callable(handler):
-            handler()
+    def _open_docs(self) -> None:
+        from config.urls import DOCS_URL
+
+        self._request_external_open_url(
+            DOCS_URL,
+            error_title="Документация",
+            error_default="Не удалось открыть документацию: {error}",
+        )
+
+    def _open_source_code(self) -> None:
+        from config.urls import SOURCE_CODE_URL
+
+        self._request_external_open_url(
+            SOURCE_CODE_URL,
+            error_title="Исходный код",
+            error_default="Не удалось открыть страницу net67 на GitHub: {error}",
+        )
+
+    def _open_updates(self) -> None:
+        from updater.open_page import open_updates_page
+
+        open_updates_page()
 
     def _open_folder(self) -> None:
         handler = getattr(self, "_open_folder_callback", None)

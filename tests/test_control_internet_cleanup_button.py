@@ -3,10 +3,20 @@ from __future__ import annotations
 import inspect
 import unittest
 
+import presets.ui.control.zapret2.page as zapret2_page
+from presets.ui.control.quick_actions import quick_action_specs
 from presets.ui.control.windows_features.runtime import ControlPageWindowsFeatureMixin
 
 
 class ControlInternetCleanupButtonTests(unittest.TestCase):
+    def test_control_page_adds_internet_cleanup_action_tile(self) -> None:
+        keys = [spec.key for spec in quick_action_specs("page.winws2_control")]
+        self.assertIn("internet_cleanup", keys)
+
+        source = inspect.getsource(zapret2_page.Zapret2ModeControlPage._build_ui)
+        self.assertIn("build_quick_actions(", source)
+        self.assertIn('"internet_cleanup": self._on_internet_cleanup_clicked', source)
+        self.assertIn('self.internet_cleanup_card = quick_actions.tiles["internet_cleanup"]', source)
 
     def test_windows_feature_mixin_waits_for_internet_cleanup_worker_on_cleanup(self) -> None:
         source = inspect.getsource(ControlPageWindowsFeatureMixin._stop_internet_cleanup_worker)

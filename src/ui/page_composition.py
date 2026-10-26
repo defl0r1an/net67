@@ -37,7 +37,6 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
         actions=(
             "set_status",
             "request_exit",
-            "open_connection_test",
             "open_folder",
             "show_page",
             # Кнопка «Показать» обучающего тура. Без этого действия сборщик

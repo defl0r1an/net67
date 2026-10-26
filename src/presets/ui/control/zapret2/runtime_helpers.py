@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.ui_texts import tr as tr_catalog
+from presets.ui.control.quick_actions import apply_quick_actions_language
 from presets.ui.control.control_page_runtime_shared import (
     apply_program_settings_toggles,
     apply_status_plan as apply_status_plan_shared,
@@ -61,9 +62,8 @@ def apply_profile_language(
     language: str,
     start_btn,
     stop_and_exit_btn,
-    test_card,
-    internet_cleanup_card,
-    folder_card,
+    quick_action_tiles=None,
+    quick_actions_title=None,
     additional_settings_notice,
     fakes_card=None,
     program_settings_card,
@@ -135,41 +135,11 @@ def apply_profile_language(
         tr_catalog("page.winws2_control.card.advanced", language=language, default="Дополнительные настройки")
     )
 
-    connection_test_title = tr_catalog("page.winws2_control.button.connection_test", language=language, default="Тест соединения")
-    connection_test_desc = tr_catalog("page.winws2_control.button.connection_test.desc", language=language, default="Проверить доступность сети и состояние обхода")
-    test_card.setTitle(connection_test_title)
-    test_card.setContent(connection_test_desc)
-    set_button_text_accessibility(
-        test_card.button,
-        tr_catalog("page.winws2_control.button.open", language=language, default="Открыть"),
-        accessible_name=tr_catalog("page.winws2_control.button.connection_test.accessible_name", language=language, default="Открыть тест соединения"),
-        description=connection_test_desc,
-    )
-
-    internet_cleanup_title = tr_catalog("page.control.internet_cleanup.title", language=language, default="Сбросить сеть Windows")
-    internet_cleanup_desc = tr_catalog(
-        "page.control.internet_cleanup.desc",
-        language=language,
-        default="Сбросить TCP/IP, кэш DNS, прокси и Winsock. После этого понадобится перезагрузка",
-    )
-    internet_cleanup_card.setTitle(internet_cleanup_title)
-    internet_cleanup_card.setContent(internet_cleanup_desc)
-    set_button_text_accessibility(
-        internet_cleanup_card.button,
-        tr_catalog("page.control.internet_cleanup.button", language=language, default="Сбросить"),
-        accessible_name=tr_catalog("page.control.internet_cleanup.accessible_name", language=language, default="Сбросить сеть Windows"),
-        description=internet_cleanup_desc,
-    )
-
-    folder_title = tr_catalog("page.winws2_control.button.open_folder", language=language, default="Открыть папку")
-    folder_desc = tr_catalog("page.winws2_control.button.open_folder.desc", language=language, default="Перейти в папку программы и служебных файлов")
-    folder_card.setTitle(folder_title)
-    folder_card.setContent(folder_desc)
-    set_button_text_accessibility(
-        folder_card.button,
-        tr_catalog("page.winws2_control.button.open", language=language, default="Открыть"),
-        accessible_name=tr_catalog("page.winws2_control.button.open_folder.accessible_name", language=language, default="Открыть папку программы"),
-        description=folder_desc,
+    apply_quick_actions_language(
+        tr_fn=lambda key, default: tr_catalog(key, language=language, default=default),
+        text_prefix="page.winws2_control",
+        title_label=quick_actions_title,
+        tiles=quick_action_tiles,
     )
 
 

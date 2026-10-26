@@ -186,6 +186,62 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Определение состояния процесса",
         "en": "Detecting process state",
     },
+    "page.control.section.quick_actions": {
+        "ru": "Быстрые действия",
+        "en": "Quick actions",
+    },
+    "page.control.quick.tour.desc": {
+        "ru": "Пошаговая экскурсия по программе",
+        "en": "A step-by-step tour of the app",
+    },
+    "page.control.quick.bypass_tour.desc": {
+        "ru": "Схемы: как провайдер узнаёт сайт",
+        "en": "Diagrams: how the provider spots a site",
+    },
+    "page.control.quick.internet_cleanup.desc": {
+        "ru": "DNS, прокси и Winsock — если сеть сломалась",
+        "en": "DNS, proxy and Winsock — if the network broke",
+    },
+    "page.control.quick.folder.desc": {
+        "ru": "Папка программы и её файлов",
+        "en": "The app folder and its files",
+    },
+    "page.control.docs.title": {
+        "ru": "Документация",
+        "en": "Documentation",
+    },
+    "page.control.docs.accessible_name": {
+        "ru": "Открыть документацию",
+        "en": "Open the documentation",
+    },
+    "page.control.quick.docs.desc": {
+        "ru": "Справка: установка, обход, решение проблем",
+        "en": "Help: setup, bypass, troubleshooting",
+    },
+    "page.control.updates.title": {
+        "ru": "Обновления",
+        "en": "Updates",
+    },
+    "page.control.updates.accessible_name": {
+        "ru": "Открыть раздел обновлений",
+        "en": "Open the updates page",
+    },
+    "page.control.quick.updates.desc": {
+        "ru": "Проверить версию и обновиться",
+        "en": "Check the version and update",
+    },
+    "page.control.source.title": {
+        "ru": "Исходный код",
+        "en": "Source code",
+    },
+    "page.control.source.accessible_name": {
+        "ru": "Открыть исходный код net67 на GitHub",
+        "en": "Open the net67 source code on GitHub",
+    },
+    "page.control.quick.source.desc": {
+        "ru": "Репозиторий net67 на GitHub",
+        "en": "The net67 repository on GitHub",
+    },
     "page.control.summary.preset.caption": {
         "ru": "Текущий пресет",
         "en": "Current preset",
@@ -445,10 +501,6 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.winws1_control.advanced.debug_log.desc": {
         "ru": "Записывает логи winws в папку logs",
         "en": "Writes winws logs to the logs folder",
-    },
-    "page.winws1_control.section.additional": {
-        "ru": "Дополнительные действия",
-        "en": "Additional actions",
     },
     "page.winws1_control.button.connection_test": {
         "ru": "Тест соединения",
@@ -3711,10 +3763,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Дополнительные настройки",
         "en": "Additional Settings",
     },
-    "page.winws2_control.section.additional": {
-        "ru": "Дополнительно",
-        "en": "Additional",
-    },
     "page.winws2_control.status.checking": {
         "ru": "Проверка...",
         "en": "Checking...",
@@ -6130,24 +6178,24 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
         "ru": (
             "Нажмите «Запустить net67» и откройте нужный сайт. Не открылся — попробуйте другой пресет "
             "или другую стратегию в профилях.\n\n"
-            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» на этой карточке."
+            "Эту экскурсию можно пройти ещё раз: нажмите на эту плитку."
         ),
         "en": (
             "Press Start net67 and open the site you need. If it does not open, try another preset or "
             "another strategy in the profiles.\n\n"
-            "You can take this tour again with the Show button on this card."
+            "You can take this tour again: just click this tile."
         ),
     },
     "onboarding.step.finish.body_no_target": {
         "ru": (
             "Запустите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или другую "
             "стратегию в профилях.\n\n"
-            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» на главной странице программы."
+            "Эту экскурсию можно пройти ещё раз плиткой «Как пользоваться программой» на вкладке «Обход»."
         ),
         "en": (
             "Start the bypass and open the site you need. If it does not open, try another preset or "
             "another strategy in the profiles.\n\n"
-            "You can take this tour again with the Show button on the main page."
+            "You can take this tour again with the How to use the app tile on the Bypass tab."
         ),
     },
     "page.control.onboarding_tour.title": {
@@ -6158,7 +6206,6 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
         "ru": "Пошаговая экскурсия: как устроен net67, что такое пресеты, профили и стратегии и где что находится",
         "en": "A step-by-step tour: how net67 works, what presets, profiles and strategies are and where everything is",
     },
-    "page.control.onboarding_tour.button": {"ru": "Показать", "en": "Show"},
     "page.control.onboarding_tour.accessible_name": {
         "ru": "Показать обучающий тур",
         "en": "Show the guided tour",
@@ -6528,12 +6575,11 @@ TEXTS_ONBOARDING_NET67: dict[str, dict[str, str]] = {
     "onboarding.step.program_settings.body": {
         "ru": (
             "Здесь включается запуск net67 вместе с Windows: программа стартует сама и прячется "
-            "в трей — к значку возле часов. Тут же кнопка «Показать», которая проведёт эту "
-            "экскурсию ещё раз."
+            "в трей — к значку возле часов."
         ),
         "en": (
             "Here you can start net67 together with Windows: the program starts on its own and "
-            "hides in the tray, next to the clock. The Show button here runs this tour again."
+            "hides in the tray, next to the clock."
         ),
     },
     "onboarding.step.view_switch.title": {
@@ -6681,12 +6727,12 @@ TEXTS_ONBOARDING_NET67: dict[str, dict[str, str]] = {
         "ru": (
             "Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните "
             "в диагностику: BlockCheck подскажет, в чём дело.\n\n"
-            "Эту экскурсию можно пройти ещё раз кнопкой «Показать» в «Настройках программы»."
+            "Эту экскурсию можно пройти ещё раз плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход»."
         ),
         "en": (
             "Press Enable bypass and open the site you need. If something does not open, check the "
             "diagnostics: BlockCheck will tell you what is wrong.\n\n"
-            "You can take this tour again with the Show button in Program settings."
+            "You can take this tour again with the How to use the app tile in Quick actions on the Bypass tab."
         ),
     },
     "page.control.onboarding_tour.desc": {
@@ -6747,8 +6793,8 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': 'While you read, net67 checks which popular services open without the bypass. No need to wait: it does not change any settings, it just shows what your provider does.',
     },
     'onboarding.step.finish.body_setup': {
-        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
     'onboarding.step.bell.title': {
         'ru': 'Уведомления',
@@ -6851,12 +6897,12 @@ TEXTS_ONBOARDING_NET67_MENU: dict[str, dict[str, str]] = {
         'en': 'The simple view is on: one button and nothing else. The Advanced settings button in the title bar opens the rest — presets, hosts, DNS, the Telegram proxy, VPN and diagnostics.\n\nPress Turn on advanced settings and the tour will walk through these sections. The same button brings the simple view back: in the advanced view it says Simple mode. If one button is enough for you, press Next.',
     },
     'onboarding.step.finish.body': {
-        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
     'onboarding.step.finish.body_no_target': {
-        'ru': 'Включите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или загляните в «Диагностику».\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Turn the bypass on and open the site you need. If it does not open, try another preset or look into Diagnostics.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Включите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или загляните в «Диагностику».\n\nПройти экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Turn the bypass on and open the site you need. If it does not open, try another preset or look into Diagnostics.\n\nYou can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
 }
 
@@ -6888,8 +6934,8 @@ TEXTS_ONBOARDING_NET67_BYPASS: dict[str, dict[str, str]] = {
         'en': 'Now you know the essentials',
     },
     'onboarding.step.bypass_finish.body': {
-        'ru': 'Провайдер узнаёт сайт по имени в самом начале соединения, а обход прячет это имя: режет пакет, переставляет куски, подсовывает фейки. Ни один приём не работает везде — поэтому стратегий много.\n\nПройти экскурсию ещё раз можно кнопкой «Показать» в строке «Как работает обход» в «Настройках программы» на главной.',
-        'en': 'The provider recognises a site by its name at the very start of a connection, and the bypass hides that name: it splits the packet, reorders the pieces, slips in fakes. No trick works everywhere — that is why there are so many strategies.\n\nYou can take this tour again with the Show button in the How the bypass works row of Program settings on the main page.',
+        'ru': 'Провайдер узнаёт сайт по имени в самом начале соединения, а обход прячет это имя: режет пакет, переставляет куски, подсовывает фейки. Ни один приём не работает везде — поэтому стратегий много.\n\nПройти экскурсию ещё раз можно плиткой «Как работает обход» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'The provider recognises a site by its name at the very start of a connection, and the bypass hides that name: it splits the packet, reorders the pieces, slips in fakes. No trick works everywhere — that is why there are so many strategies.\n\nYou can take this tour again with the How the bypass works tile in Quick actions on the Bypass tab.',
     },
     'onboarding.action.bypass_tour': {
         'ru': 'Как работает обход',
@@ -6912,12 +6958,12 @@ TEXTS_ONBOARDING_NET67_BYPASS: dict[str, dict[str, str]] = {
         'en': 'Show the bypass tour',
     },
     'onboarding.step.finish.body': {
-        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nХотите понять, как обход обманывает провайдера, — нажмите «Как работает обход». Пройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nWant to know how the bypass fools the provider? Press How the bypass works. You can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nХотите понять, как обход обманывает провайдера, — нажмите «Как работает обход». Пройти эту экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nWant to know how the bypass fools the provider? Press How the bypass works. You can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
     'onboarding.step.finish.body_no_target': {
-        'ru': 'Включите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или загляните в «Диагностику».\n\nКак обход обманывает провайдера, покажет «Как работает обход». Пройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Turn the bypass on and open the site you need. If it does not open, try another preset or look into Diagnostics.\n\nHow the bypass fools the provider is shown in How the bypass works. You can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Включите обход и откройте нужный сайт. Не открылся — попробуйте другой пресет или загляните в «Диагностику».\n\nКак обход обманывает провайдера, покажет «Как работает обход». Пройти эту экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Turn the bypass on and open the site you need. If it does not open, try another preset or look into Diagnostics.\n\nHow the bypass fools the provider is shown in How the bypass works. You can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
     'onboarding.step.finish.body_setup': {
         'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nХотите понять, как обход обманывает провайдера, — нажмите «Как работает обход».',
@@ -6926,12 +6972,12 @@ TEXTS_ONBOARDING_NET67_BYPASS: dict[str, dict[str, str]] = {
     # Для тех, кто прошёл подробный разбор пресета: схемы техник они уже
     # видели, и кнопки «Как работает обход» на карточке нет.
     'onboarding.step.finish.body_explained': {
-        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Нажмите «Включить обход» и откройте нужный сайт. Если что-то не открылось, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти эту экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
     'onboarding.step.finish.body_setup_explained': {
-        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти эту экскурсию ещё раз можно кнопкой «Показать» в «Настройках программы» на главной.',
-        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the Show button in Program settings on the main page.',
+        'ru': 'Настройки сохранены. Осталось нажать «Включить обход» и открыть нужный сайт. Если что-то не откроется, загляните в «Диагностику»: BlockCheck подскажет, в чём дело.\n\nПройти эту экскурсию ещё раз можно плиткой «Как пользоваться программой» в «Быстрых действиях» на вкладке «Обход».',
+        'en': 'Settings are saved. Now press Turn on bypass and open the site you need. If something does not open, look into Diagnostics: BlockCheck will tell you why.\n\nYou can take this tour again with the How to use the app tile in Quick actions on the Bypass tab.',
     },
 }
 

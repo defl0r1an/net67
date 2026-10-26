@@ -35,6 +35,9 @@ BOLVAN_URL = "https://github.com/bol-van/zapret-win-bundle"
 #: последний: так просил владелец (19 октября 2026), там видно и историю.
 NETGRAM_URL = "https://github.com/defl0r1an/netgram/releases"
 
+#: Исходный код net67 — плитка «Исходный код» в «Быстрых действиях».
+SOURCE_CODE_URL = "https://github.com/defl0r1an/net67"
+
 #: Каналы обращения в поддержку.
 #:
 #: Исходный проект переехал с GitHub Discussions на задачи Forgejo и
@@ -129,6 +132,7 @@ __all__ = [
     "PRESET_INFO_URL",
     "PROFILE_INFO_URL",
     "PROFILE_REQUEST_FORM_URL",
+    "SOURCE_CODE_URL",
     "SUPPORT_DISCUSSIONS_URL",
     "SUPPORT_ISSUES_URL",
     "WINWS_LOG_ANALYZER_INFO_URL",

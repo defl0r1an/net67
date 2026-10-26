@@ -37,6 +37,7 @@ from presets.ui.control.control_page_runtime_shared import (
     set_visible_if_changed,
 )
 from presets.ui.control.windows_features.runtime import ControlPageWindowsFeatureMixin
+from presets.ui.control.quick_actions import build_quick_actions
 from presets.ui.control.top_summary_widget import ControlTopSummaryWidget
 from ui.widgets.hero_control import make_round_button_class
 from presets.ui.control.refresh_runtime_state import create_refresh_runtime
@@ -104,7 +105,6 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         remember_tray_close_mode,
         set_status,
         request_exit,
-        open_connection_test,
         open_folder,
         open_presets,
         open_preset_setup,
@@ -136,13 +136,14 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self._remember_tray_close_mode = remember_tray_close_mode
         self._set_status_callback = set_status
         self._request_exit_callback = request_exit
-        self._open_connection_test_callback = open_connection_test
         self._open_folder_callback = open_folder
         self._open_presets_callback = open_presets
         self._open_preset_setup_callback = open_preset_setup
         self._create_external_open_url_worker = create_external_open_url_worker
         self._start_onboarding_tour_callback = start_onboarding_tour
         self.onboarding_tour_card = None
+        self.quick_actions_title = None
+        self.quick_actions_grid = None
         self._ui_state_store = None
         self._ui_state_unsubscribe = None
         self._program_settings_runtime_unsubscribe = None
@@ -169,14 +170,11 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.last_status_message_dot = None
         self.last_status_message_title = None
         self.last_status_message_label = None
-        self.extra_section_label = None
-        self.extra_card = None
-        self.test_card = None
+        self.bypass_tour_card = None
         self.internet_cleanup_card = None
         self.folder_card = None
-        self.test_btn = None
-        self.internet_cleanup_btn = None
-        self.folder_btn = None
+        self.docs_card = None
+        self.quick_action_tiles = {}
         self._build_ui()
         self.bind_ui_state_store(ui_state_store)
         self._after_ui_built()
@@ -430,6 +428,34 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.top_summary.presetClicked.connect(self._open_presets_callback)
         self.top_summary.profilesClicked.connect(self._open_preset_setup_page)
         self.add_widget(self.top_summary)
+
+        # Быстрые действия плитками — сразу под сводкой, см. quick_actions.py.
+        self.add_spacing(24)
+        quick_actions = build_quick_actions(
+            tr_fn=lambda key, default: tr_catalog(key, language=self._ui_language, default=default),
+            text_prefix="page.winws2_control",
+            handlers={
+                "tour": self._start_onboarding_tour,
+                "bypass_tour": self._start_bypass_tour,
+                "internet_cleanup": self._on_internet_cleanup_clicked,
+                "folder": self._open_folder,
+                "docs": self._open_docs,
+                "updates": self._open_updates,
+                "source": self._open_source_code,
+            },
+            parent=self.content,
+        )
+        self.quick_actions_title = quick_actions.title_label
+        self.quick_actions_grid = quick_actions.grid
+        self.quick_action_tiles = quick_actions.tiles
+        self.add_widget(self.quick_actions_title)
+        self.add_spacing(12)
+        self.onboarding_tour_card = quick_actions.tiles["tour"]
+        self.bypass_tour_card = quick_actions.tiles["bypass_tour"]
+        self.internet_cleanup_card = quick_actions.tiles["internet_cleanup"]
+        self.folder_card = quick_actions.tiles["folder"]
+        self.docs_card = quick_actions.tiles["docs"]
+        self.add_widget(self.quick_actions_grid)
         _log_startup_winws2_control_metric("_build_ui.top_summary", (_time.perf_counter() - _t_top_summary) * 1000)
         self.add_spacing(16)
 
@@ -528,11 +554,6 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             on_telegram_proxy_with_bypass_toggled=self._on_telegram_proxy_with_bypass_toggled,
             on_wssize_toggled=self._on_wssize_toggled,
             on_debug_log_toggled=self._on_debug_log_toggled,
-            on_open_connection_test=self._open_connection_test,
-            on_open_internet_cleanup=self._on_internet_cleanup_clicked,
-            on_open_folder=self._open_folder,
-            on_open_onboarding_tour=self._start_onboarding_tour,
-            on_open_bypass_tour=self._start_bypass_tour,
         )
         _log_startup_winws2_control_metric(
             "_build_ui.settings_sections_build", (_time.perf_counter() - _t_sections_build) * 1000
@@ -545,8 +566,7 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.tray_close_mode_combo = section_widgets.tray_close_mode_combo
         self.defender_toggle = section_widgets.defender_toggle
         self.max_block_toggle = section_widgets.max_block_toggle
-        self.onboarding_tour_card = section_widgets.tour_card
-        self.bypass_tour_card = section_widgets.bypass_tour_card
+        self.state_media_block_toggle = section_widgets.state_media_block_toggle
         self.add_spacing(8)
         self.add_spacing(16)
         self.add_widget(self.program_settings_card)
@@ -574,18 +594,6 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
         self.add_widget(self.last_status_message_card)
         self._refresh_last_status_message()
 
-        self.add_spacing(16)
-        self.extra_section_label = section_widgets.extra_section_label
-        self.extra_card = section_widgets.extra_card
-        self.test_card = section_widgets.test_card
-        self.internet_cleanup_card = section_widgets.internet_cleanup_card
-        self.folder_card = section_widgets.folder_card
-
-        self.state_media_block_toggle = section_widgets.state_media_block_toggle
-        self.test_btn = self.test_card.button
-        self.internet_cleanup_btn = self.internet_cleanup_card.button
-        self.folder_btn = self.folder_card.button
-        self.add_widget(self.extra_card)
 
         # В простом виде на странице остаются только кнопка «Включить»,
         # состояние и автозапуск. Остальное прячется, а не удаляется:
@@ -1074,9 +1082,8 @@ class Zapret2ModeControlPage(ControlPageWindowsFeatureMixin, ControlPageActionMi
             language=self._ui_language,
             start_btn=self.start_btn,
             stop_and_exit_btn=self.stop_and_exit_btn,
-            test_card=self.test_card,
-            internet_cleanup_card=self.internet_cleanup_card,
-            folder_card=self.folder_card,
+            quick_action_tiles=self.quick_action_tiles,
+            quick_actions_title=self.quick_actions_title,
             additional_settings_notice=self.additional_settings_notice,
             fakes_card=None,
             program_settings_card=self.program_settings_card,

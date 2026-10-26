@@ -140,9 +140,6 @@ class WiringTests(unittest.TestCase):
             "tray_close_mode_combo",
             "windows_feature_toggles",
             "additional_settings_section",
-            "test_card",
-            "internet_cleanup_card",
-            "folder_card",
             "state_media_block_toggle",
         ):
             with self.subTest(step=name):

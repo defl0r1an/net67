@@ -16,6 +16,10 @@
 «Обновления». Проверки ниже стерегут именно её наличие: карточку легко
 потерять при следующей перетряске секций, а заметить пропажу — снова
 только вопросом вроде исходного.
+
+26 октября 2026 «Дополнительные действия» стали плитками «Быстрых
+действий» на вкладке «Обход» (presets/ui/control/quick_actions.py), и
+карточка — плиткой «Обновления». Проверки стерегут теперь плитку.
 """
 
 from __future__ import annotations
@@ -85,30 +89,27 @@ class NavigationTests(unittest.TestCase):
             open_page.find_main_window = original
 
 
-class CardWiringTests(unittest.TestCase):
-    """Карточка добавлена в оба режима, а не только в тот, что открыт."""
+class TileWiringTests(unittest.TestCase):
+    """Плитка «Обновления» есть в «Быстрых действиях» и ведёт в раздел обновлений."""
 
-    def _extra_card_source(self, module_name: str) -> str:
-        import importlib
+    def test_quick_actions_have_the_tile(self) -> None:
+        from presets.ui.control.quick_actions import quick_action_specs
 
-        module = importlib.import_module(module_name)
-        builder = next(
-            value
-            for name, value in vars(module).items()
-            if name.startswith("build_winws") and callable(value)
-        )
-        return inspect.getsource(builder)
+        specs = {spec.key: spec for spec in quick_action_specs("page.winws2_control")}
 
+        self.assertIn("updates", specs)
+        self.assertEqual(specs["updates"].title[1], "Обновления")
 
-    def test_winws2_has_the_card(self) -> None:
-        source = self._extra_card_source("presets.ui.control.zapret2.sections_build")
+    def test_page_wires_the_tile_to_the_updates_page(self) -> None:
+        from presets.ui.control.control_page_shared import ControlPageActionMixin
+        from presets.ui.control.zapret2.page import Zapret2ModeControlPage
 
-        self.assertIn("build_updates_card(", source)
-        self.assertIn("extra_card.addSettingCard(updates_card)", source)
+        self.assertIn('"updates": self._open_updates', inspect.getsource(Zapret2ModeControlPage._build_ui))
+        self.assertIn("open_updates_page()", inspect.getsource(ControlPageActionMixin._open_updates))
 
 
-class CardAppearanceTests(unittest.TestCase):
-    """Карточка строится настоящая, с настоящими надписями."""
+class TileAppearanceTests(unittest.TestCase):
+    """Плитка строится настоящая, с настоящими надписями."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -118,32 +119,35 @@ class CardAppearanceTests(unittest.TestCase):
             raise unittest.SkipTest(f"Qt недоступен: {exc}") from exc
         cls._app = QApplication.instance() or QApplication([])
 
-    def _card(self):
+    def test_tile_says_what_it_does(self) -> None:
         from PyQt6.QtWidgets import QWidget
-        from qfluentwidgets import PushSettingCard
 
-        from presets.ui.control.shared_builders import build_updates_card
+        from presets.ui.control.quick_actions import build_quick_actions, quick_action_specs
 
         parent = QWidget()
         self.addCleanup(parent.deleteLater)
-        return build_updates_card(
-            push_setting_card_cls=PushSettingCard,
+        widgets = build_quick_actions(
             tr_fn=lambda _key, default: default,
+            text_prefix="page.winws2_control",
+            handlers={spec.key: (lambda: None) for spec in quick_action_specs("page.winws2_control")},
             parent=parent,
         )
+        tile = widgets.tiles["updates"]
 
-    def test_card_says_what_it_does(self) -> None:
-        card = self._card()
-
-        self.assertEqual(card.titleLabel.text(), "Обновления")
-        self.assertIn("версию", card.contentLabel.text())
+        self.assertEqual(tile.title(), "Обновления")
+        self.assertIn("версию", tile.content())
 
     def test_click_without_a_window_does_not_raise(self) -> None:
         """Окна в тесте нет — нажатие обязано просто ничего не сделать."""
-        card = self._card()
+        from presets.ui.control.control_page_shared import ControlPageActionMixin
+        from updater import open_page
 
-        card.button.click()
-        self._app.processEvents()
+        original = open_page.find_main_window
+        open_page.find_main_window = lambda: None
+        try:
+            ControlPageActionMixin._open_updates(object())
+        finally:
+            open_page.find_main_window = original
 
 
 if __name__ == "__main__":

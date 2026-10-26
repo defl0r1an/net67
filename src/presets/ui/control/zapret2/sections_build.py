@@ -4,13 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from presets.ui.control.shared_builders import (
-    build_deferred_themed_push_setting_card_common,
-    build_docs_card,
-    build_bypass_tour_card_common,
-    build_onboarding_tour_card_common,
-    build_updates_card,
-)
 from ui.build_timing import BuildStepTimer
 from presets.ui.control.windows_features.build import build_state_media_block_toggle, build_windows_feature_toggles
 from ui.fluent_widgets import build_additional_settings_section, enable_setting_card_group_auto_height
@@ -31,14 +24,7 @@ class Zapret2SettingsBuildWidgets:
     telegram_proxy_toggle: object | None
     wssize_toggle: object | None
     debug_log_toggle: object | None
-    extra_section_label: object | None
-    extra_card: object
-    test_card: object
-    internet_cleanup_card: object
-    folder_card: object
     state_media_block_toggle: object
-    tour_card: object | None = None
-    bypass_tour_card: object | None = None
 
 
 def build_winws2_pages_settings_sections(
@@ -60,11 +46,6 @@ def build_winws2_pages_settings_sections(
     on_telegram_proxy_with_bypass_toggled,
     on_wssize_toggled,
     on_debug_log_toggled,
-    on_open_connection_test,
-    on_open_internet_cleanup,
-    on_open_folder,
-    on_open_onboarding_tour=None,
-    on_open_bypass_tour=None,
 ) -> Zapret2SettingsBuildWidgets:
     # Пошаговый замер: на машине пользователя эта сборка идёт 9,4 с, а на
     # машине разработчика — 91 мс. Угадывать виноватый виджет нельзя,
@@ -136,6 +117,13 @@ def build_winws2_pages_settings_sections(
             on_max_blocker_toggled=on_max_blocker_toggled,
         )
 
+    with timer.step("state_media_block_toggle"):
+        state_media_block_toggle = build_state_media_block_toggle(
+            tr_fn=tr_fn,
+            win11_toggle_row_cls=win11_toggle_row_cls,
+            on_state_media_block_toggled=on_state_media_block_toggled,
+        )
+
     program_settings_card.addSettingCard(gui_autostart_toggle)
     program_settings_card.addSettingCard(auto_dpi_toggle)
     if telegram_proxy_toggle:
@@ -143,28 +131,7 @@ def build_winws2_pages_settings_sections(
     program_settings_card.addSettingCard(tray_close_mode_combo)
     program_settings_card.addSettingCard(windows_feature_toggles.defender_toggle)
     program_settings_card.addSettingCard(windows_feature_toggles.max_block_toggle)
-    # Повтор тура — в «Настройках программы», а не среди прочего внизу:
-    # эта группа остаётся и в простом виде, где тур нужнее всего.
-    tour_card = None
-    if on_open_onboarding_tour is not None:
-        with timer.step("onboarding_tour_card"):
-            tour_card = build_onboarding_tour_card_common(
-                push_setting_card_cls=push_setting_card_cls,
-                tr_fn=tr_fn,
-                on_click=on_open_onboarding_tour,
-                parent=content_parent,
-            )
-        program_settings_card.addSettingCard(tour_card)
-    bypass_tour_card = None
-    if on_open_bypass_tour is not None:
-        with timer.step("bypass_tour_card"):
-            bypass_tour_card = build_bypass_tour_card_common(
-                push_setting_card_cls=push_setting_card_cls,
-                tr_fn=tr_fn,
-                on_click=on_open_bypass_tour,
-                parent=content_parent,
-            )
-        program_settings_card.addSettingCard(bypass_tour_card)
+    program_settings_card.addSettingCard(state_media_block_toggle)
 
     with timer.step("program_settings_card_auto_height"):
         enable_setting_card_group_auto_height(program_settings_card)
@@ -218,77 +185,6 @@ def build_winws2_pages_settings_sections(
             action_rows=[],
         )
 
-    extra_section_label = None
-    extra_card = setting_card_group_cls(
-        tr_fn("page.winws2_control.section.additional", "Дополнительные действия"),
-        content_parent,
-    )
-    with timer.step("test_card"):
-        test_card = build_deferred_themed_push_setting_card_common(
-        push_setting_card_cls=push_setting_card_cls,
-        button_text=tr_fn("page.winws2_control.button.open", "Открыть"),
-        icon_name="fa5s.wifi",
-        icon_color="#60cdff",
-        title_text=tr_fn("page.winws2_control.button.connection_test", "Тест соединения"),
-        content_text=tr_fn("page.winws2_control.button.connection_test.desc", "Проверить доступность сети и состояние обхода"),
-        on_click=on_open_connection_test,
-        button_accessible_name=tr_fn("page.winws2_control.button.connection_test.accessible_name", "Открыть тест соединения"),
-        parent=content_parent,
-    )
-    with timer.step("internet_cleanup_card"):
-        internet_cleanup_card = build_deferred_themed_push_setting_card_common(
-        push_setting_card_cls=push_setting_card_cls,
-        button_text=tr_fn("page.control.internet_cleanup.button", "Сбросить"),
-        icon_name="fa5s.network-wired",
-        icon_color="#4cc38a",
-        title_text=tr_fn("page.control.internet_cleanup.title", "Сбросить сеть Windows"),
-        content_text=tr_fn(
-            "page.control.internet_cleanup.desc",
-            "Сбросить TCP/IP, кэш DNS, прокси и Winsock. После этого понадобится перезагрузка",
-        ),
-        on_click=on_open_internet_cleanup,
-        button_accessible_name=tr_fn("page.control.internet_cleanup.accessible_name", "Сбросить сеть Windows"),
-        parent=content_parent,
-    )
-    with timer.step("folder_card"):
-        folder_card = build_deferred_themed_push_setting_card_common(
-        push_setting_card_cls=push_setting_card_cls,
-        button_text=tr_fn("page.winws2_control.button.open", "Открыть"),
-        icon_name="fa5s.folder-open",
-        icon_color="#f5c04d",
-        title_text=tr_fn("page.winws2_control.button.open_folder", "Открыть папку"),
-        content_text=tr_fn("page.winws2_control.button.open_folder.desc", "Перейти в папку программы и служебных файлов"),
-        on_click=on_open_folder,
-        button_accessible_name=tr_fn("page.winws2_control.button.open_folder.accessible_name", "Открыть папку программы"),
-        parent=content_parent,
-    )
-    with timer.step("updates_card"):
-        updates_card = build_updates_card(
-            push_setting_card_cls=push_setting_card_cls,
-            tr_fn=tr_fn,
-            parent=content_parent,
-        )
-    with timer.step("wiki_card"):
-        wiki_card = build_docs_card(
-            push_setting_card_cls=push_setting_card_cls,
-            tr_fn=tr_fn,
-            parent=content_parent,
-        )
-    with timer.step("state_media_block_toggle"):
-        state_media_block_toggle = build_state_media_block_toggle(
-            tr_fn=tr_fn,
-            win11_toggle_row_cls=win11_toggle_row_cls,
-            on_state_media_block_toggled=on_state_media_block_toggled,
-        )
-    extra_card.addSettingCard(test_card)
-    extra_card.addSettingCard(internet_cleanup_card)
-    extra_card.addSettingCard(folder_card)
-    extra_card.addSettingCard(updates_card)
-    extra_card.addSettingCard(wiki_card)
-    extra_card.addSettingCard(state_media_block_toggle)
-    with timer.step("extra_card_auto_height"):
-        enable_setting_card_group_auto_height(extra_card)
-
     timer.finish()
 
     return Zapret2SettingsBuildWidgets(
@@ -305,12 +201,5 @@ def build_winws2_pages_settings_sections(
         telegram_proxy_toggle=telegram_proxy_toggle,
         wssize_toggle=wssize_toggle,
         debug_log_toggle=debug_log_toggle,
-        extra_section_label=extra_section_label,
-        extra_card=extra_card,
-        test_card=test_card,
-        internet_cleanup_card=internet_cleanup_card,
-        folder_card=folder_card,
         state_media_block_toggle=state_media_block_toggle,
-        tour_card=tour_card,
-        bypass_tour_card=bypass_tour_card,
     )

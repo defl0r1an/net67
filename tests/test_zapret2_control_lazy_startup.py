@@ -124,6 +124,15 @@ class ControlPageImmediateStartupTests(unittest.TestCase):
         self.assertIn("enable_setting_card_group_auto_height(program_settings_card)", builder_source)
         self.assertNotIn("enable_setting_card_group_auto_height(self.program_settings_card)", page_source)
 
+    def test_quick_action_tiles_defer_their_icons(self) -> None:
+        import inspect
+
+        import ui.widgets.action_tile as action_tile
+
+        source = inspect.getsource(action_tile.ActionTile.__init__)
+        self.assertIn("QTimer.singleShot(ACTION_ICON_DELAY_MS, self._apply_icon)", source)
+        self.assertNotIn("get_cached_qta_pixmap", source)
+
 
 if __name__ == "__main__":
     unittest.main()

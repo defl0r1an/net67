@@ -24,7 +24,6 @@ def build_window_page_deps_sources(*, features, state, page_actions) -> PageDeps
             "notify": page_actions.notify,
 
             "on_profile_setup_changed": page_actions.on_profile_setup_changed,
-            "open_connection_test": page_actions.open_connection_test,
             "open_custom_dns_server": page_actions.open_custom_dns_server,
             "open_hosts_service": page_actions.open_hosts_service,
             "open_folder": page_actions.open_folder,
