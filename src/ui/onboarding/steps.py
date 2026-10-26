@@ -125,6 +125,9 @@ class TourStep:
     # техник обхода растягивали тур до полусотни шагов, и руководитель,
     # которому нужна одна кнопка, бросал его на десятом.
     branch: str = ""
+    # Глава тура: её название стоит над заголовком шага, а отрезок главы
+    # внизу карточки ведёт к её первому шагу (ключ onboarding.chapter.<глава>).
+    chapter: str = ""
 
 
 def is_alive_widget(widget) -> bool:
@@ -318,81 +321,106 @@ def _preset_section(section: str) -> TourStep:
 PRESETS_BRANCH = "presets"
 _PRESETS = PRESETS_BRANCH
 
+
+def _chapter(name: str, *steps: TourStep) -> tuple[TourStep, ...]:
+    """Шаги одной главы. Глава — подряд идущие шаги: строка глав на карточке
+    рисует по отрезку на каждую такую серию (ui/onboarding/overlay.py)."""
+    return tuple(replace(step, chapter=name) for step in steps)
+
+
 _TOUR_STEPS: tuple[TourStep, ...] = (
     # ── для всех ─────────────────────────────────────────────────────
     # Шагов «статус» и «кнопка запуска» нет: в net67 их карточки скрыты —
     # всё делает «одна кнопка». Шаг без цели не показывался, но считался
     # в «Шаг N из M», и счётчик врал на три шага. «О программе» нет в
     # меню вовсе — по той же причине нет и шага.
-    TourStep("welcome", hero=True),
-    TourStep("how_it_works", hero=True),
-    TourStep("oneclick", _page_target("oneclick"), page="control"),
-    TourStep("services", hero=True),
-    TourStep("program_settings", _page_target("program_settings"), page="control", choice="startup"),
-    TourStep("bell", _window_attr("notificationBell")),
-    TourStep("view_switch", _window_attr("advancedButton"), action="enable_advanced"),
+    *_chapter(
+        "intro",
+        TourStep("welcome", hero=True),
+        TourStep("how_it_works", hero=True),
+    ),
+    *_chapter(
+        "control",
+        TourStep("oneclick", _page_target("oneclick"), page="control"),
+        TourStep("services", hero=True),
+        TourStep("program_settings", _page_target("program_settings"), page="control", choice="startup"),
+        TourStep("bell", _window_attr("notificationBell")),
+        TourStep("view_switch", _window_attr("advancedButton"), action="enable_advanced"),
+    ),
     # ── расширенный вид: раздел «Обход» ──────────────────────────────
-    TourStep("building_blocks", hero=True, advanced_only=True),
-    TourStep("menu_root", _group_tab("root"), page="control", advanced_only=True),
-    TourStep("preset", _page_target("preset"), page="control", advanced_only=True),
-    # ── «Пресеты» ────────────────────────────────────────────────────
-    TourStep("menu_presets", _group_tab("settings"), page="user_presets", advanced_only=True, choice="provider"),
-    TourStep("presets_list", _page_target("presets_list"), page="user_presets", target_optional=True, action="branch:presets"),
-    TourStep("preset_menu", _page_target("preset_menu"), page="user_presets", page_state="preset_menu", branch=_PRESETS),
-    TourStep("preset_file", _page_target("editor"), page="preset_editor", target_optional=True, branch=_PRESETS),
-    *(
-        replace(_preset_section(section), branch=_PRESETS)
-        for section in (
-            "header",
-            "lua_init",
-            "engine_options",
-            "interception",
-            "blobs",
-            "profile",
-            "profile_name",
-            "profile_match",
-            "profile_packets",
-            "profile_strategy",
-            "profile_new",
-        )
+    *_chapter(
+        "presets",
+        TourStep("building_blocks", hero=True, advanced_only=True),
+        TourStep("menu_root", _group_tab("root"), page="control", advanced_only=True),
+        TourStep("preset", _page_target("preset"), page="control", advanced_only=True),
+        # ── «Пресеты» ────────────────────────────────────────────────────
+        TourStep("menu_presets", _group_tab("settings"), page="user_presets", advanced_only=True, choice="provider"),
+        TourStep("presets_list", _page_target("presets_list"), page="user_presets", target_optional=True, action="branch:presets"),
+        TourStep("preset_menu", _page_target("preset_menu"), page="user_presets", page_state="preset_menu", branch=_PRESETS),
+        TourStep("preset_file", _page_target("editor"), page="preset_editor", target_optional=True, branch=_PRESETS),
+        *(
+            replace(_preset_section(section), branch=_PRESETS)
+            for section in (
+                "header",
+                "lua_init",
+                "engine_options",
+                "interception",
+                "blobs",
+                "profile",
+                "profile_name",
+                "profile_match",
+                "profile_packets",
+                "profile_strategy",
+                "profile_new",
+            )
+        ),
+        TourStep("presets_toolbar", _page_target("presets_toolbar"), page="user_presets", branch=_PRESETS),
+        TourStep("profiles_list", _page_target("profiles_list"), page="preset_setup", target_optional=True),
+        # Счётчик «3 из 5» новичок читает как недоделку и включает всё подряд.
+        # В основной ветке хватает фразы на шаге profiles_list, а подробный
+        # разбор плитки — в ветке про пресеты, рядом со строкой профиля.
+        TourStep("profile_group", _page_target("first_group"), page="preset_setup", branch=_PRESETS),
+        TourStep("profile_row", _page_target("first_profile"), page="preset_setup", branch=_PRESETS),
+        TourStep("profile_menu", _page_target("profile_menu"), page="preset_setup", page_state="profile_menu", branch=_PRESETS),
+        TourStep("profiles_toolbar", _page_target("profiles_toolbar"), page="preset_setup", branch=_PRESETS),
+        TourStep("profile_order", _page_target("order_list"), page="profile_order", target_optional=True, branch=_PRESETS),
+        TourStep("list_type", _page_target("list_type"), page="profile_setup", target_optional=True, branch=_PRESETS),
+        TourStep("ranges", _page_target("ranges"), page="profile_setup", branch=_PRESETS),
+        TourStep("profile_tabs", _page_target("tabs"), page="profile_setup", branch=_PRESETS),
+        TourStep("strategy_choice", _page_target("strategies"), page="profile_setup", illustration="blocked", branch=_PRESETS),
+        TourStep("strategy_try", _page_target("strategy_try"), page="profile_setup", target_optional=True, branch=_PRESETS),
+        TourStep("strategy_find", _page_target("strategy_find"), page="profile_setup", target_optional=True, branch=_PRESETS),
+        *(
+            TourStep(f"technique_{name}", page="profile_setup", illustration=name, branch=_PRESETS)
+            for name in ("fake", "multisplit", "multidisorder", "fakedsplit", "hostfakesplit", "tcpseg", "oob", "syndata")
+        ),
+        TourStep("list_entries", _page_target("list_entries"), page="profile_setup", page_state="editor", branch=_PRESETS),
     ),
-    TourStep("presets_toolbar", _page_target("presets_toolbar"), page="user_presets", branch=_PRESETS),
-    TourStep("profiles_list", _page_target("profiles_list"), page="preset_setup", target_optional=True),
-    # Счётчик «3 из 5» новичок читает как недоделку и включает всё подряд.
-    # В основной ветке хватает фразы на шаге profiles_list, а подробный
-    # разбор плитки — в ветке про пресеты, рядом со строкой профиля.
-    TourStep("profile_group", _page_target("first_group"), page="preset_setup", branch=_PRESETS),
-    TourStep("profile_row", _page_target("first_profile"), page="preset_setup", branch=_PRESETS),
-    TourStep("profile_menu", _page_target("profile_menu"), page="preset_setup", page_state="profile_menu", branch=_PRESETS),
-    TourStep("profiles_toolbar", _page_target("profiles_toolbar"), page="preset_setup", branch=_PRESETS),
-    TourStep("profile_order", _page_target("order_list"), page="profile_order", target_optional=True, branch=_PRESETS),
-    TourStep("list_type", _page_target("list_type"), page="profile_setup", target_optional=True, branch=_PRESETS),
-    TourStep("ranges", _page_target("ranges"), page="profile_setup", branch=_PRESETS),
-    TourStep("profile_tabs", _page_target("tabs"), page="profile_setup", branch=_PRESETS),
-    TourStep("strategy_choice", _page_target("strategies"), page="profile_setup", illustration="blocked", branch=_PRESETS),
-    TourStep("strategy_try", _page_target("strategy_try"), page="profile_setup", target_optional=True, branch=_PRESETS),
-    TourStep("strategy_find", _page_target("strategy_find"), page="profile_setup", target_optional=True, branch=_PRESETS),
-    *(
-        TourStep(f"technique_{name}", page="profile_setup", illustration=name, branch=_PRESETS)
-        for name in ("fake", "multisplit", "multidisorder", "fakedsplit", "hostfakesplit", "tcpseg", "oob", "syndata")
-    ),
-    TourStep("list_entries", _page_target("list_entries"), page="profile_setup", page_state="editor", branch=_PRESETS),
     # ── «Инструменты» ────────────────────────────────────────────────
-    TourStep("menu_tools", _group_tab("system"), page="network", advanced_only=True),
-    TourStep("dns", _page_tab(PageName.NETWORK), page="network"),
-    TourStep("hosts", _page_tab(PageName.HOSTS), page="hosts", choice="hosts"),
-    TourStep("telegram_proxy", _page_tab(PageName.TELEGRAM_PROXY), page="telegram_proxy"),
-    TourStep("vpn", _page_tab(PageName.VPN), page="vpn"),
-    TourStep("antigravity", _page_tab(PageName.ANTIGRAVITY), page="antigravity", advanced_only=True),
+    *_chapter(
+        "tools",
+        TourStep("menu_tools", _group_tab("system"), page="network", advanced_only=True),
+        TourStep("dns", _page_tab(PageName.NETWORK), page="network"),
+        TourStep("hosts", _page_tab(PageName.HOSTS), page="hosts", choice="hosts"),
+        TourStep("telegram_proxy", _page_tab(PageName.TELEGRAM_PROXY), page="telegram_proxy"),
+        TourStep("vpn", _page_tab(PageName.VPN), page="vpn"),
+        TourStep("antigravity", _page_tab(PageName.ANTIGRAVITY), page="antigravity", advanced_only=True),
+    ),
     # ── «Диагностика» ────────────────────────────────────────────────
-    TourStep("menu_diagnostics", _group_tab("diagnostics"), page="blockcheck", advanced_only=True),
-    TourStep("blockcheck", _page_tab(PageName.BLOCKCHECK), page="blockcheck", choice="detect"),
-    TourStep("log_analyzer", _page_tab(PageName.WINWS_LOG_ANALYZER), page="log_analyzer"),
-    TourStep("logs", _page_tab(PageName.LOGS), page="logs"),
-    # Пока раздел в разработке, шага нет: тур описывал бы как рабочее то,
-    # на чём страница сама пишет «не работает».
-    *((TourStep("configs", _page_tab(PageName.CONFIGS), page="configs"),) if CONFIGS_READY else ()),
-    TourStep("finish", _page_target("tour_card"), page="control", target_optional=True, action="bypass_tour"),
+    *_chapter(
+        "diagnostics",
+        TourStep("menu_diagnostics", _group_tab("diagnostics"), page="blockcheck", advanced_only=True),
+        TourStep("blockcheck", _page_tab(PageName.BLOCKCHECK), page="blockcheck", choice="detect"),
+        TourStep("log_analyzer", _page_tab(PageName.WINWS_LOG_ANALYZER), page="log_analyzer"),
+        TourStep("logs", _page_tab(PageName.LOGS), page="logs"),
+        # Пока раздел в разработке, шага нет: тур описывал бы как рабочее то,
+        # на чём страница сама пишет «не работает».
+        *((TourStep("configs", _page_tab(PageName.CONFIGS), page="configs"),) if CONFIGS_READY else ()),
+    ),
+    *_chapter(
+        "finish",
+        TourStep("finish", _page_target("tour_card"), page="control", target_optional=True, action="bypass_tour"),
+    ),
 )
 
 # Ссылки на вики живут в config.urls вместе с остальными адресами.
@@ -409,15 +437,24 @@ TOUR_STEPS: tuple[TourStep, ...] = tuple(
 #: приёмами обход ему мешает. Тексты и схемы — те же ключи, что в
 #: основном туре: две версии одного объяснения разошлись бы.
 _BYPASS_TOUR_STEPS: tuple[TourStep, ...] = (
-    TourStep("bypass_welcome", hero=True),
-    TourStep("how_it_works", hero=True),
-    TourStep("strategy_choice", illustration="blocked"),
-    *(
-        TourStep(f"technique_{name}", illustration=name)
-        for name in ("fake", "multisplit", "multidisorder", "fakedsplit", "hostfakesplit", "tcpseg", "oob", "syndata")
+    *_chapter(
+        "intro",
+        TourStep("bypass_welcome", hero=True),
+        TourStep("how_it_works", hero=True),
     ),
-    TourStep("bypass_practice", hero=True),
-    TourStep("bypass_finish", hero=True),
+    *_chapter(
+        "techniques",
+        TourStep("strategy_choice", illustration="blocked"),
+        *(
+            TourStep(f"technique_{name}", illustration=name)
+            for name in ("fake", "multisplit", "multidisorder", "fakedsplit", "hostfakesplit", "tcpseg", "oob", "syndata")
+        ),
+    ),
+    *_chapter(
+        "practice",
+        TourStep("bypass_practice", hero=True),
+        TourStep("bypass_finish", hero=True),
+    ),
 )
 
 BYPASS_TOUR_STEPS: tuple[TourStep, ...] = tuple(

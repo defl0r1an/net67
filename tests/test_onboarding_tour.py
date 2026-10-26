@@ -945,25 +945,32 @@ class OnboardingCardBehaviourTests(unittest.TestCase):
             window.close()
             window.deleteLater()
 
-    def test_many_dots_fit_the_card_and_a_click_opens_that_step(self) -> None:
+    def test_click_on_a_chapter_segment_opens_its_first_step(self) -> None:
         from PyQt6.QtCore import QPoint, Qt
         from PyQt6.QtTest import QTest
 
         from ui.onboarding.steps import TourStep
 
-        steps = tuple(TourStep(f"step_{index}", hero=True) for index in range(60))
+        # Шесть глав по десять шагов: отрезков шесть, а не шестьдесят точек.
+        steps = tuple(TourStep(f"step_{index}", hero=True, chapter=f"chapter_{index // 10}") for index in range(60))
         window, _page, overlay = self._overlay(steps)
         try:
             overlay.start()
             for _ in range(30):
                 QApplication.processEvents()
-            dots = overlay._card.dots
-            rects = dots.dot_rects()
-            self.assertEqual(len(rects), 60)
-            self.assertLessEqual(rects[-1].right(), dots.width() + 0.5)
-            target = rects[41].center().toPoint()
-            QTest.mouseClick(dots, Qt.MouseButton.LeftButton, pos=QPoint(target.x(), target.y()))
-            self.assertEqual(overlay.current_step_key(), "step_41")
+            bar = overlay._card.chapter_bar
+            rects = bar.segment_rects()
+            self.assertEqual(len(rects), 6)
+            self.assertLessEqual(rects[-1].right(), bar.width() + 0.5)
+            # Нажимается вся высота строки, а не тонкая полоска.
+            self.assertGreaterEqual(min(rect.width() for rect in rects), 40)
+            self.assertEqual(rects[0].height(), bar.height())
+            QTest.mouseClick(bar, Qt.MouseButton.LeftButton, pos=QPoint(int(rects[4].center().x()), 2))
+            self.assertEqual(overlay.current_step_key(), "step_40")
+            # Щелчок в промежуток между отрезками тоже куда-то ведёт: мимо не нажать.
+            between = int((rects[1].right() + rects[2].left()) / 2)
+            QTest.mouseClick(bar, Qt.MouseButton.LeftButton, pos=QPoint(between, bar.height() - 2))
+            self.assertIn(overlay.current_step_key(), ("step_10", "step_20"))
         finally:
             overlay.finish("skipped", immediate=True)
             window.close()
@@ -1070,26 +1077,28 @@ class OnboardingDecorTests(unittest.TestCase):
             overlay.go_to(3)
             self.assertAlmostEqual(overlay._card.progress(), 0.8, places=6)
             overlay._on_frame()
-            self.assertEqual(overlay._card.dots.position(), 3.0)
+            self.assertEqual(overlay._card.chapter_bar.progress(), 4.0)
         finally:
             overlay.finish("skipped", immediate=True)
             window.close()
             window.deleteLater()
 
-    def test_pill_flows_to_a_far_step_and_clicks_hit_what_is_visible(self) -> None:
+    def test_chapter_fill_flows_to_a_far_step(self) -> None:
         window, overlay = self._overlay(12, animated=True)
-        dots = overlay._card.dots
+        bar = overlay._card.chapter_bar
         try:
             self._run(overlay, 0.5)
+            self.assertEqual(bar.progress(), 1.0)
             overlay.go_to(9)
             self._run(overlay, 0.04)
-            self.assertGreater(dots.position(), 0.0)
-            self.assertLess(dots.position(), 9.0)
-            # Во время движения точки сдвинуты: нажатие по видимой точке 4 ведёт на шаг 4.
-            rect = dots.dot_rects()[4]
-            self.assertEqual(dots.index_at(rect.center().x()), 4)
-            self._run(overlay, 1.2)
-            self.assertEqual(dots.position(), 9.0)
+            # Заливка дотекает до нового шага, а не прыгает.
+            self.assertGreater(bar.progress(), 1.0)
+            self.assertLess(bar.progress(), 10.0)
+            self._run(overlay, 1.5)
+            self.assertEqual(bar.progress(), 10.0)
+            # Тур без глав — один отрезок на всю ширину, как обычная полоса хода.
+            self.assertEqual(len(bar.segment_rects()), 1)
+            self.assertAlmostEqual(bar.fill_share(0), 10 / 12, places=6)
         finally:
             overlay.finish("skipped", immediate=True)
             window.close()

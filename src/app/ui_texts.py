@@ -6505,16 +6505,30 @@ TEXTS_ONBOARDING_NET67: dict[str, dict[str, str]] = {
         "ru": (
             "net67 возвращает сайты и приложения, которые провайдер блокирует или замедляет: "
             "YouTube, Discord, Telegram, а ещё ChatGPT, Claude и другие ИИ-сервисы.\n\n"
-            "За пару минут покажем, что здесь где и зачем. Листать можно кнопкой «Далее» или "
-            "стрелками на клавиатуре, закрыть — клавишей Esc."
+            "За пару минут покажем, что здесь где и зачем. Экскурсия разбита на главы — название "
+            "главы стоит над заголовком шага. Листать можно кнопкой «Далее» или стрелками на "
+            "клавиатуре, перейти сразу к нужной главе — нажав на её отрезок внизу карточки, "
+            "закрыть — клавишей Esc."
         ),
         "en": (
             "net67 brings back sites and apps that your provider blocks or slows down: YouTube, "
             "Discord, Telegram, as well as ChatGPT, Claude and other AI services.\n\n"
-            "In a couple of minutes we will show what is where and why. Use Next or the arrow keys "
-            "to page through, Esc to close."
+            "In a couple of minutes we will show what is where and why. The tour is split into "
+            "chapters — the chapter name stands above the step title. Use Next or the arrow keys "
+            "to page through, click a chapter segment at the bottom of the card to jump straight "
+            "to it, press Esc to close."
         ),
     },
+    # Главы тура: название над заголовком шага и подсказка у отрезка главы.
+    "onboarding.chapter.intro": {"ru": "Знакомство", "en": "Getting started"},
+    "onboarding.chapter.control": {"ru": "Главное", "en": "The basics"},
+    "onboarding.chapter.presets": {"ru": "Пресеты и профили", "en": "Presets and profiles"},
+    "onboarding.chapter.tools": {"ru": "Инструменты", "en": "Tools"},
+    "onboarding.chapter.diagnostics": {"ru": "Диагностика", "en": "Diagnostics"},
+    "onboarding.chapter.finish": {"ru": "Итог", "en": "Finish"},
+    "onboarding.chapter.techniques": {"ru": "Приёмы обхода", "en": "Bypass techniques"},
+    "onboarding.chapter.practice": {"ru": "На практике", "en": "In practice"},
+    "onboarding.chapter.hint": {"ru": "{chapter} · шагов: {count}", "en": "{chapter} · steps: {count}"},
     "onboarding.step.how_it_works.body": {
         "ru": (
             "Провайдер следит за трафиком с помощью фильтра — DPI. Фильтр читает начало каждого "
