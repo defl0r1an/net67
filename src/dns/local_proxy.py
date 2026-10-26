@@ -44,6 +44,8 @@ SERVICE_DESCRIPTION = (
 EXE_NAME = "dnscrypt-proxy.exe"
 CONFIG_NAME = "dnscrypt-proxy.toml"
 LOG_NAME = "dnscrypt-proxy.log"
+# Какой DNS стоял на адаптерах до 127.0.0.1; читает installer\remove_dnscrypt.ps1.
+PREVIOUS_DNS_NAME = "previous_dns.json"
 LOCAL_ADDRESSES = frozenset({LISTEN_IPV4, LISTEN_IPV6})
 # Движок сначала опрашивает серверы; на медленной линии это занимает несколько секунд.
 START_TIMEOUT_S = 25.0
@@ -254,15 +256,56 @@ def start(
     return LocalProxyResult(True, listen_ipv6=listen_ipv6)
 
 
+def remember_previous_dns(entries, *, system=None) -> None:
+    """Запоминает DNS адаптеров, которым сейчас пропишут 127.0.0.1.
+
+    ``entries`` — [{"guid", "name", "ipv4", "ipv6", "dhcp"}]. Адаптер, уже
+    смотрящий на 127.0.0.1 (смена режима), не перезаписывается: его прежний
+    DNS — тот, что был до первого выбора шифрованного DNS.
+
+    Читает запись installer\remove_dnscrypt.ps1 — при удалении программы и
+    при сборке, — чтобы вернуть адаптеру его DNS, а не автоматический.
+    """
+    import json
+
+    system = _system(system)
+    path = system.work_dir() / PREVIOUS_DNS_NAME
+    known: dict[str, dict] = {}
+    try:
+        for item in json.loads(path.read_text(encoding="utf-8")).get("adapters", []):
+            known[str(item.get("guid", ""))] = item
+    except (OSError, ValueError, AttributeError):
+        known = {}
+    for entry in entries:
+        guid = str(entry.get("guid", ""))
+        addresses = [*entry.get("ipv4", ()), *entry.get("ipv6", ())]
+        if not guid or uses_local_proxy(addresses):
+            continue
+        known[guid] = {
+            "guid": guid,
+            "name": str(entry.get("name", "")),
+            "ipv4": [str(item) for item in entry.get("ipv4", ())],
+            "ipv6": [str(item) for item in entry.get("ipv6", ())],
+            "dhcp": bool(entry.get("dhcp", True)),
+        }
+    system.work_dir().mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"adapters": list(known.values())}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def stop(*, system=None) -> None:
-    """Убирает службу шифрованного DNS и её файл настроек."""
+    """Убирает службу шифрованного DNS, её файл настроек и запись о прежнем DNS.
+
+    Сюда приходят, когда адаптерам уже прописан другой DNS, — запись о
+    прежнем больше не нужна, а устаревшая вернула бы при удалении чужое.
+    """
     system = _system(system)
     had_service = bool(system.service_state(SERVICE_NAME))
     _remove_service(system)
-    try:
-        _config_path(system).unlink(missing_ok=True)
-    except OSError:
-        pass
+    for name in (CONFIG_NAME, PREVIOUS_DNS_NAME):
+        try:
+            (system.work_dir() / name).unlink(missing_ok=True)
+        except OSError:
+            pass
     if had_service:
         log("DNS: шифрованный DNS остановлен", "INFO")
 
@@ -316,6 +359,7 @@ __all__ = [
     "SERVICE_NAME",
     "active_mode",
     "active_server",
+    "remember_previous_dns",
     "repair",
     "start",
     "stop",

@@ -125,7 +125,10 @@ def apply_dns(guids: list[str], ipv4: list[str], ipv6: list[str]) -> DnsCommandR
     исчезнувший адаптер надо отсечь до записи.
     """
     guids = list(dict.fromkeys(str(item or "").strip() for item in guids if str(item or "").strip()))
-    names = {adapter.guid: adapter.name for adapter in load_state().adapters}
+    adapters = load_state().adapters
+    names = {adapter.guid: adapter.name for adapter in adapters}
+    if _points_at_local_proxy(ipv4, ipv6):
+        _remember_dns_before_local_proxy(adapters, guids)
     templates = write_doh_templates()
     reach = check_servers(list(ipv4 or []), list(ipv6 or []), templates) if any(guid in names for guid in guids) else None
     if reach is not None and reach.blocked:
@@ -152,6 +155,40 @@ def apply_dns(guids: list[str], ipv4: list[str], ipv6: list[str]) -> DnsCommandR
         total_count=len(guids),
         warning="Сервер отвечает обычным DNS, но проверка DoH не получила ответа. Windows может использовать DNS без шифрования." if reach is not None and reach.doh_closed else "",
     )
+
+
+def _points_at_local_proxy(ipv4, ipv6) -> bool:
+    from dns.local_proxy import LOCAL_ADDRESSES
+
+    return any(str(item or "").strip() in LOCAL_ADDRESSES for item in (*(ipv4 or ()), *(ipv6 or ())))
+
+
+def _remember_dns_before_local_proxy(adapters, guids: list[str]) -> None:
+    """Записывает, какой DNS стоял на адаптерах до 127.0.0.1 (dns.local_proxy.remember_previous_dns).
+
+    По этой записи сборка и удаление программы возвращают адаптеру его DNS:
+    сбрасывать на автоматический нельзя — у адаптера со статическим адресом
+    автоматического DNS нет, и он остался бы без интернета.
+    """
+    from dns import local_proxy
+
+    wanted = set(guids)
+    try:
+        local_proxy.remember_previous_dns(
+            [
+                {
+                    "guid": adapter.guid,
+                    "name": adapter.name,
+                    "ipv4": list(adapter.static_ipv4),
+                    "ipv6": list(adapter.static_ipv6),
+                    "dhcp": bool(adapter.dhcp),
+                }
+                for adapter in adapters
+                if adapter.guid in wanted
+            ]
+        )
+    except Exception as exc:
+        log(f"DNS: прежний DNS адаптеров не записан: {exc}", "WARNING")
 
 
 def reset_to_auto(guids: list[str]) -> DnsCommandResult:

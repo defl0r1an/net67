@@ -36,6 +36,8 @@ class DnsAdapter:
     static_ipv6: tuple[str, ...] = ()
     auto_ipv4: tuple[str, ...] = ()
     auto_ipv6: tuple[str, ...] = ()
+    # Адрес IPv4 по DHCP; без него автоматического DNS у адаптера нет.
+    dhcp: bool = True
 
     @property
     def is_automatic(self) -> bool:
@@ -78,6 +80,7 @@ def build_dns_adapters(
                 static_ipv6=static.ipv6,
                 auto_ipv4=() if static.ipv4 else interface.dns_ipv4,
                 auto_ipv6=() if static.ipv6 else interface.dns_ipv6,
+                dhcp=bool(getattr(interface, "dhcp", True)),
             )
         )
     adapters.sort(key=lambda item: (not item.internet, not item.connected, item.name.casefold()))

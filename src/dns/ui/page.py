@@ -742,9 +742,26 @@ class NetworkPage(BasePage):
         )
 
     def _reset_to_auto(self) -> None:
-        """Плитка «Автоматически»: как и любой сервер, применяется сразу, без вопроса."""
+        """Плитка «Автоматически»: как и любой сервер, применяется сразу, без вопроса.
+
+        Кроме адаптеров со статическим адресом: им DHCP не выдаст DNS, и после
+        «Автоматически» пропал бы интернет (dns.page_plans.adapters_without_automatic_dns).
+        """
         adapters = self._ready_adapters()
         if adapters is None:
+            return
+        static = dns_page_plans.adapters_without_automatic_dns(self._adapters, adapters)
+        if static:
+            self._info(
+                "warning",
+                self._t("page.network.auto.static.title", "У адаптера статический адрес"),
+                self._t(
+                    "page.network.auto.static.content",
+                    "{names}: адрес задан вручную, и автоматического DNS ему никто не выдаст — интернет "
+                    "пропал бы. DNS не изменён: выберите сервер из списка или добавьте свой.",
+                    names=", ".join(f"«{name}»" for name in static),
+                ),
+            )
             return
         self._pending_choice = AUTO_CHOICE
         self.grid.flash(AUTO_CHOICE)

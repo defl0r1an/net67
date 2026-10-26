@@ -210,6 +210,18 @@ def describe_adapter_dns(
     )
 
 
+def adapters_without_automatic_dns(adapters, selected_guids) -> tuple[str, ...]:
+    """Отмеченные адаптеры со статическим адресом: «Автоматически» оставит их без DNS.
+
+    «Автоматически» стирает DNS, прописанный вручную, и Windows берёт тот,
+    что выдаёт DHCP. Если адрес адаптера задан вручную (DHCP выключен), DNS
+    выдать некому, и интернет пропадает. Владелец предупредил первым: «у
+    меня статика» (26 октября 2026).
+    """
+    selected = set(selected_guids)
+    return tuple(adapter.name for adapter in adapters if adapter.guid in selected and not adapter.dhcp)
+
+
 LEFTOVER_IPV6 = "ipv6"
 LEFTOVER_ADAPTER = "adapter"
 

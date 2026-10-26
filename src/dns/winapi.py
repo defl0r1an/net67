@@ -46,6 +46,9 @@ IF_OPER_STATUS_UP = 1
 IF_FLAG_HARDWARE = 0x01
 IF_FLAG_FILTER = 0x02
 IF_FLAG_CONNECTOR_PRESENT = 0x04
+# Бит IP_ADAPTER_ADDRESSES.Flags: адрес IPv4 адаптер берёт по DHCP. Без него
+# «автоматический» DNS взять неоткуда — адрес задан вручную (статика).
+IP_ADAPTER_DHCP_ENABLED = 0x04
 
 DNS_INTERFACE_SETTINGS_VERSION1 = 1
 DNS_INTERFACE_SETTINGS_VERSION3 = 3
@@ -213,6 +216,8 @@ class RawInterface:
     connector: bool = False
     dns_ipv4: tuple[str, ...] = ()
     dns_ipv6: tuple[str, ...] = ()
+    # Адрес IPv4 по DHCP. По умолчанию — да: так вела себя страница до флага.
+    dhcp: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,6 +362,7 @@ def _read_interfaces(first) -> list[RawInterface]:
                 connector=bool(if_flags is not None and if_flags & IF_FLAG_CONNECTOR_PRESENT),
                 dns_ipv4=tuple(dict.fromkeys(ipv4)),
                 dns_ipv6=tuple(dict.fromkeys(ipv6)),
+                dhcp=bool(int(item.Flags) & IP_ADAPTER_DHCP_ENABLED),
             )
         )
     return interfaces
