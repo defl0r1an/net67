@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from updater.commands import (
     installed_release_history,
+    mark_update_app_ready,
     is_auto_update_enabled,
     open_update_channel,
     pending_whats_new,
@@ -24,6 +25,7 @@ from updater.commands import (
 # их модулями держит tests/test_feature_facade_command_exports.py.
 __all__ = [
     "installed_release_history",
+    "mark_update_app_ready",
     "is_auto_update_enabled",
     "open_update_channel",
     "pending_whats_new",

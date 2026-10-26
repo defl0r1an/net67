@@ -91,6 +91,13 @@ def pending_whats_new() -> tuple[str, list[dict]]:
     return pending_version, history
 
 
+def mark_update_app_ready() -> None:
+    """Новая версия открылась — окно-продолжение установки может уходить (в фоне: это запись файла)."""
+    from updater.install_splash import mark_update_app_ready as mark
+
+    _in_background("update-ready", mark)
+
+
 def installed_release_history() -> tuple[str, list[dict]]:
     """Изменения установленной версии — для кнопки «Что нового» в «О программе».
 

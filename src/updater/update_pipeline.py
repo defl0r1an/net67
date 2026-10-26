@@ -88,6 +88,17 @@ class InstallerHandoff:
     version: str
     installer_path: str
     arguments: tuple[str, ...]
+    #: Куда записать номер процесса установщика — для окна-продолжения.
+    pid_file: str = ""
+
+
+def quiet_installer_arguments(arguments) -> tuple[str, ...]:
+    """/SILENT → /VERYSILENT: ход установки показывает окно-продолжение.
+
+    Своё окно установщика под ним только мешало бы: две полосы одного и того же.
+    Ошибки установщика /VERYSILENT не прячет.
+    """
+    return tuple("/VERYSILENT" if str(item).upper() == "/SILENT" else str(item) for item in arguments)
 
 
 class CancellationToken:
@@ -607,6 +618,10 @@ def prepare_handoff(
     # установка выглядела так, будто программа просто исчезла; владелец
     # попросил показывать установщик. Вопросов и кнопок «Далее» при этом
     # нет — только полоса и подпись «откроется сама».
+    #
+    # Если встало окно-продолжение (updater/install_splash.py), ход
+    # установки показывает оно, и установщик идёт с /VERYSILENT —
+    # quiet_installer_arguments. Не встало — остаётся /SILENT.
     arguments = (
         "/AUTOUPDATE",
         "/SILENT",
@@ -794,6 +809,7 @@ class UpdateInstallerWorker(QObject):
         launched = launch_installer_winapi(
             self._handoff.installer_path,
             self._handoff.arguments,
+            pid_file=self._handoff.pid_file,
         )
         if not launched:
             self.failed.emit("Не удалось запустить установщик")

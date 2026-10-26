@@ -76,6 +76,9 @@ class UpdaterFeature:
             parent=parent,
         )
 
+    def mark_update_app_ready(self) -> None:
+        self._commands().mark_update_app_ready()
+
     def create_whats_new_load_worker(self, request_id: int, *, parent=None):
         from updater.settings_workers import UpdaterWhatsNewLoadWorker
 

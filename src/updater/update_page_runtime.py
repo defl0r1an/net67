@@ -1306,11 +1306,88 @@ class UpdatePageRuntime(QObject):
             self._start_update_installer_stage()
 
     def _start_update_installer_stage(self) -> None:
-        """Сначала надпись «закроюсь и открою сам», потом установщик.
+        """Сначала окно-продолжение (или надпись «закроюсь и открою сам»), потом установщик.
 
         Раньше программа закрывалась молча, и её открывали снова посреди
-        установки — см. updater/ui/closing_notice.py.
+        установки — см. updater/ui/closing_notice.py. Теперь от закрытия
+        старой версии до открытия новой на экране окно с этапами
+        (updater/install_splash.py); не встало — прежняя надпись.
         """
+        handoff = self._download_state.handoff
+        if handoff is None:
+            self._fail_update_pipeline("Установщик не подготовлен")
+            return
+        if self._start_install_splash(handoff):
+            return
+        self._start_installer_with_closing_notice()
+
+    def _start_install_splash(self, handoff) -> bool:
+        """Запускает окно-продолжение и ждёт, пока оно встанет. False — окна не будет."""
+        try:
+            from config.build_info import APP_VERSION
+            from updater.install_splash import SPLASH_SHOWN_TIMEOUT_SECONDS, start_install_splash
+
+            window = self._view.window()
+            center = None
+            if window is not None and window.isVisible() and not window.isMinimized():
+                geometry = window.frameGeometry()
+                ratio = float(window.devicePixelRatioF() or 1.0)
+                center = (int(geometry.center().x() * ratio), int(geometry.center().y() * ratio))
+            setup_log = next(
+                (str(item)[len("/LOG="):] for item in handoff.arguments if str(item).upper().startswith("/LOG=")),
+                "",
+            )
+            splash = start_install_splash(
+                version=str(getattr(handoff, "version", "") or ""),
+                current_version=str(APP_VERSION or ""),
+                setup_log_path=setup_log,
+                center=center,
+            )
+        except Exception as exc:
+            log(f"Окно-продолжение установки не запущено: {exc}", "WARNING")
+            return False
+        if splash is None:
+            return False
+        self._install_splash = splash
+        self._install_splash_wait_ms = 0
+        self._install_splash_deadline_ms = int(SPLASH_SHOWN_TIMEOUT_SECONDS * 1000)
+        QTimer.singleShot(100, self._poll_install_splash)
+        return True
+
+    def _poll_install_splash(self) -> None:
+        if self._cleanup_in_progress:
+            return
+        splash = self.__dict__.get("_install_splash")
+        if splash is None:
+            return
+        if splash.is_shown():
+            from dataclasses import replace
+
+            from updater.update_pipeline import quiet_installer_arguments
+
+            handoff = self._download_state.handoff
+            if handoff is None:
+                self._fail_update_pipeline("Установщик не подготовлен")
+                return
+            # Окно встало: установщик идёт без своего окна, ход показывает наше.
+            self._download_state.handoff = replace(
+                handoff,
+                arguments=quiet_installer_arguments(handoff.arguments),
+                pid_file=str(splash.installer_pid_path),
+            )
+            log("Окно-продолжение установки на экране, запускаем установщик", "🔁 UPDATE")
+            self._launch_update_installer()
+            return
+        self._install_splash_wait_ms += 100
+        if self._install_splash_wait_ms < self._install_splash_deadline_ms and splash.is_running():
+            QTimer.singleShot(100, self._poll_install_splash)
+            return
+        log("Окно-продолжение установки не встало вовремя — установка идёт по-старому", "WARNING")
+        self._install_splash = None
+        splash.cancel()
+        self._start_installer_with_closing_notice()
+
+    def _start_installer_with_closing_notice(self) -> None:
         handoff = self._download_state.handoff
         if handoff is None:
             self._fail_update_pipeline("Установщик не подготовлен")
@@ -1371,6 +1448,11 @@ class UpdatePageRuntime(QObject):
                 notice.close()
             except RuntimeError:
                 pass
+        splash = self.__dict__.get("_install_splash")
+        if splash is not None:
+            # Окно-продолжение тоже обещало установку — снимаем.
+            self._install_splash = None
+            splash.cancel()
         self._view.mark_update_download_failed(message)
         self._on_download_failed(message)
         self._download_state.is_installing = False

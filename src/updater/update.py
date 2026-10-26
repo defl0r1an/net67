@@ -24,11 +24,14 @@ def _quote_powershell_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def launch_installer_winapi(exe_path: str, arguments: Sequence[str]) -> bool:
+def launch_installer_winapi(exe_path: str, arguments: Sequence[str], *, pid_file: str = "") -> bool:
     """Запускает Inno Setup через PowerShell с правами администратора.
 
     Функция вызывается только из отдельной стадии конвейера. Ожидание ответа
     UAC поэтому не может остановить главный поток Qt.
+
+    ``pid_file`` — куда записать номер процесса установщика: по нему окно-
+    продолжение (updater/install_splash.py) видит, когда установка кончилась.
     """
     if not os.path.exists(exe_path):
         log(f"❌ Файл установщика не найден: {exe_path}", "🔁❌ ERROR")
@@ -51,6 +54,7 @@ def launch_installer_winapi(exe_path: str, arguments: Sequence[str]) -> bool:
             f"-ArgumentList {_quote_powershell_literal(argument_line)} "
             "-Verb RunAs -PassThru;"
             "if($null -eq $process){exit 1};"
+            "[Console]::Out.WriteLine($process.Id);"
             "exit 0"
             "} catch {"
             "[Console]::Error.WriteLine($_.Exception.Message);"
@@ -72,7 +76,7 @@ def launch_installer_winapi(exe_path: str, arguments: Sequence[str]) -> bool:
         )
 
         try:
-            _, stderr_bytes = process.communicate(timeout=120)
+            stdout_bytes, stderr_bytes = process.communicate(timeout=120)
         except subprocess.TimeoutExpired:
             process.kill()
             process.communicate()
@@ -88,10 +92,25 @@ def launch_installer_winapi(exe_path: str, arguments: Sequence[str]) -> bool:
             return False
 
         log("✅ Установщик запущен успешно", "🔁 UPDATE")
+        if pid_file:
+            _write_installer_pid(pid_file, stdout_bytes)
         return True
     except Exception as exc:
         log(f"❌ Ошибка запуска: {exc}", "🔁❌ ERROR")
         return False
+
+
+def _write_installer_pid(pid_file: str, stdout_bytes: bytes | None) -> None:
+    text = (stdout_bytes or b"").decode("ascii", errors="ignore").strip().splitlines()
+    pid = next((line.strip() for line in reversed(text) if line.strip().isdigit()), "")
+    if not pid:
+        log("Номер процесса установщика не получен", "🔁 UPDATE")
+        return
+    try:
+        with open(pid_file, "w", encoding="ascii") as handle:
+            handle.write(pid)
+    except OSError as exc:
+        log(f"Номер процесса установщика не записан: {exc}", "🔁 UPDATE")
 
 
 def compare_versions(v1: str, v2: str) -> int:

@@ -235,8 +235,18 @@ def install_whats_new(startup_host, *, updater_feature, idle_tasks) -> None:
         # Хозяин без сигнала готовности (урезанный в тестах запуска):
         # «Что нового» — не то, ради чего стоит ронять запуск.
         return
+    def _on_ready() -> None:
+        # Окно-продолжение установки ждёт знака, что новая версия открылась:
+        # без него оно висело бы до страховочного срока. Обычный запуск
+        # ничего не пишет — метка нужна, только если окно недавно запускалось.
+        try:
+            updater_feature.mark_update_app_ready()
+        except Exception as exc:
+            log(f"Знак «новая версия открылась» не подан: {exc}", "⚠️ UPDATE")
+        idle_tasks.add("WhatsNewDialog", _show, delay_ms=_WHATS_NEW_DELAY_MS)
+
     bind_startup_gate(
         ready_signal,
-        lambda: idle_tasks.add("WhatsNewDialog", _show, delay_ms=_WHATS_NEW_DELAY_MS),
+        _on_ready,
         is_ready=lambda: bool(startup_host.startup_state.post_init_ready),
     )
