@@ -11,6 +11,7 @@ from ui.pages.base_page import BasePage
 from ui.fluent_widgets import SettingsCard
 from ui.theme import get_theme_tokens
 from app.ui_texts import tr as tr_catalog
+from updater.ui import download_view
 from updater.update_page_runtime import UpdatePageRuntime
 from ui.page_deps.types import UpdateRuntimeActions
 from updater.server_status_table_state import ServerStatusTableState
@@ -311,7 +312,11 @@ class ServersPage(BasePage):
         self.changelog_card.show_update(version, release_notes)
 
     def ask_update_offer(self, version: str, release_notes: str) -> str:
-        """То же окно «Доступно обновление», что при запуске: install / skip / later."""
+        """То же окно «Доступно обновление», что при запуске: install / skip / later.
+
+        «Обновить» начинает загрузку прямо из окна, и окно показывает её ход;
+        тогда ответ — ``install_started``, второй раз запускать не нужно.
+        """
         from config.build_info import APP_VERSION
         from updater.server_config import GITHUB_REPO
         from updater.ui.update_dialog import ask_update
@@ -319,14 +324,22 @@ class ServersPage(BasePage):
         # История пропущенных версий требует сети, а здесь поток окна:
         # показываем найденный выпуск, как и стартовое окно без истории.
         history = [{"version": version, "notes": str(release_notes or ""), "is_new": True}]
-        return ask_update(
+        started = []
+
+        def _install() -> None:
+            started.append(True)
+            self._request_install_update()
+
+        action = ask_update(
             self.window(),
+            on_install=_install,
             current_version=str(APP_VERSION or ""),
             target_version=version,
             history=history,
             source="GitHub",
             release_url=f"https://github.com/{GITHUB_REPO}/releases/tag/v{version}",
         )
+        return "install_started" if started else action
 
     def hide_update_offer(self) -> None:
         self.changelog_card.hide()
@@ -337,17 +350,24 @@ class ServersPage(BasePage):
     def start_update_download(self, version: str) -> None:
         self.changelog_card.start_download(version)
 
+    # Ход загрузки идёт и в окно «Доступно обновление», если загрузку начали
+    # из него и не скрыли (updater/ui/download_view.py).
+
     def update_download_progress(self, percent: int, done_bytes: int, total_bytes: int) -> None:
         self.changelog_card.update_progress(percent, done_bytes, total_bytes)
+        download_view.forward("set_download_progress", percent, done_bytes, total_bytes)
 
     def update_download_status_text(self, message: str) -> None:
         self.changelog_card.set_download_status_text(message)
+        download_view.forward("set_download_status", message)
 
     def mark_update_download_complete(self) -> None:
         self.changelog_card.download_complete()
+        download_view.forward("download_complete")
 
     def mark_update_download_failed(self, error: str) -> None:
         self.changelog_card.download_failed(error)
+        download_view.forward("download_failed", error)
 
     def show_update_download_error(self) -> None:
         self.update_card.show_download_error()

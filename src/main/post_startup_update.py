@@ -33,26 +33,33 @@ def install_update_check(
                 pass
             from app.page_names import PageName as StartupPageName
 
+            started: list[bool] = []
+
+            def _start_install(history) -> None:
+                started.append(True)
+                # Текст изменений сохраняется до установки: новая версия
+                # покажет «Что нового» сама, без сети.
+                updater_feature.remember_whats_new(version, history)
+                startup_host.show_page(StartupPageName.SERVERS)
+                page = startup_host.get_loaded_page(StartupPageName.SERVERS)
+                if page is not None:
+                    page.present_startup_update(
+                        version,
+                        release_notes,
+                        install_after_show=True,
+                    )
+
             # Окну нужны история выпусков, источник и адрес страницы —
-            # всё это проверка уже собрала в фоне.
-            action, history = startup_host.ask_update(version, details or {})
+            # всё это проверка уже собрала в фоне. «Обновить» начинает
+            # загрузку прямо из окна, и окно показывает её ход.
+            action, history = startup_host.ask_update(version, details or {}, on_install=_start_install)
             if action == "skip":
                 # «Пропустить версию»: при запуске о ней больше не напомним.
                 updater_feature.remember_skipped_update(version)
                 return
-            if action != "install":
+            if action != "install" or started:
                 return
-            # Текст изменений сохраняется до установки: новая версия
-            # покажет «Что нового» сама, без сети.
-            updater_feature.remember_whats_new(version, history)
-            startup_host.show_page(StartupPageName.SERVERS)
-            page = startup_host.get_loaded_page(StartupPageName.SERVERS)
-            if page is not None:
-                page.present_startup_update(
-                    version,
-                    release_notes,
-                    install_after_show=True,
-                )
+            _start_install(history)
         except Exception as exc:
             log(f"Ошибка при показе диалога обновления: {exc}", "❌ ERROR")
 

@@ -31,7 +31,7 @@ class PostStartupHost:
         close_state = self.close_state
         return not bool(close_state.is_exiting or close_state.closing_completely)
 
-    def ask_update(self, version: str, details: dict | None = None) -> tuple[str, list[dict]]:
+    def ask_update(self, version: str, details: dict | None = None, *, on_install=None) -> tuple[str, list[dict]]:
         """Окно «Доступно обновление»: (что нажали, показанная история).
 
         Раньше здесь было окошко в одну строку: «Выпущена версия X.
@@ -53,6 +53,8 @@ class PostStartupHost:
             history = [{"version": version, "notes": str(details.get("release_notes") or ""), "is_new": True}]
         action = ask_update(
             self._window,
+            # Загрузку начинает тот, кто спросил, — с историей, которую показали.
+            on_install=None if on_install is None else (lambda: on_install(history)),
             current_version=str(details.get("current_version") or ""),
             target_version=version,
             history=history,

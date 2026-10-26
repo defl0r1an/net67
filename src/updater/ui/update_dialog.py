@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import time
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import (
@@ -37,9 +39,12 @@ from ui.fluent_dialog import MessageBoxBase
 from ui.segmented_accessibility import set_segmented_items_accessibility
 from ui.theme import get_theme_tokens
 from ui.theme_refresh import ThemeRefreshBinding
-from ui.widgets.fun import Mascot
-from ui.widgets.fun.mascot import MOOD_HAPPY, MOOD_IDLE
+from ui.widgets.fun import FunTicker, Mascot
+from ui.widgets.fun.mascot import MOOD_BUSY, MOOD_HAPPY, MOOD_IDLE, MOOD_SAD
+from ui.widgets.fun.runway import UpdateRunway
 from updater import release_notes
+from updater.ui import download_view
+from updater.ui.fun_texts import DOWNLOAD_PHRASES, INSTALL_PHRASES
 
 RESULT_INSTALL = "install"
 RESULT_LATER = "later"
@@ -50,6 +55,58 @@ _MIN_WIDTH = 640
 _MAX_WIDTH = 1080
 _MIN_TEXT_HEIGHT = 240
 _MAX_TEXT_HEIGHT = 600
+
+
+#: Скорость считается по последним секундам загрузки, а не с её начала:
+#: иначе медленный старт (поиск источника, рукопожатие) занижал бы её до конца.
+_SPEED_WINDOW_SECONDS = 4.0
+
+
+def format_size_mb(value: int) -> str:
+    return f"{max(0, int(value)) / (1024 * 1024):.1f}"
+
+
+def format_speed(bytes_per_second: float) -> str:
+    """«685 КБ/с» до мегабайта в секунду, дальше «1.4 МБ/с»."""
+    speed = max(0.0, float(bytes_per_second))
+    if speed >= 1024 * 1024:
+        return f"{speed / (1024 * 1024):.1f} МБ/с"
+    return f"{speed / 1024:.0f} КБ/с"
+
+
+def format_eta(seconds: float) -> str:
+    """«49 сек», «2 мин 10 сек»."""
+    total = max(0, int(round(float(seconds))))
+    minutes, rest = divmod(total, 60)
+    if minutes:
+        return f"{minutes} мин {rest} сек" if rest else f"{minutes} мин"
+    return f"{rest} сек"
+
+
+class DownloadSpeed:
+    """Скорость и остаток по свежим замерам загрузки."""
+
+    def __init__(self, clock=time.monotonic) -> None:
+        self._clock = clock
+        self._samples: list[tuple[float, int]] = []
+
+    def add(self, done_bytes: int) -> None:
+        now = self._clock()
+        self._samples.append((now, max(0, int(done_bytes))))
+        while len(self._samples) > 2 and now - self._samples[0][0] > _SPEED_WINDOW_SECONDS:
+            self._samples.pop(0)
+
+    def bytes_per_second(self) -> float:
+        if len(self._samples) < 2:
+            return 0.0
+        (t0, b0), (t1, b1) = self._samples[0], self._samples[-1]
+        return (b1 - b0) / (t1 - t0) if t1 > t0 and b1 >= b0 else 0.0
+
+    def eta_seconds(self, done_bytes: int, total_bytes: int) -> float | None:
+        speed = self.bytes_per_second()
+        if speed <= 0 or total_bytes <= 0:
+            return None
+        return max(0.0, (int(total_bytes) - int(done_bytes)) / speed)
 
 
 def _text_area_size(parent) -> tuple[int, int]:
@@ -248,10 +305,64 @@ class UpdateOfferDialog(_ReleaseDialogBase):
             icon=FluentIcon.DOWNLOAD,
             name="Скачать и установить обновление",
             description="Скачивает новую версию и запускает установщик. Программа закроется и откроется снова.",
-            on_click=lambda: self._finish(RESULT_INSTALL),
+            on_click=self._on_install_clicked,
         )
-        for button in (self.skip_btn, self.later_btn, self.install_btn):
+        # Пока идёт загрузка, окно можно убрать: загрузка не прерывается, её
+        # ход виден на странице «Серверы».
+        self.hide_btn = self._make_button(
+            PushButton,
+            "Скрыть",
+            icon=FluentIcon.MINIMIZE,
+            name="Скрыть окно загрузки",
+            description="Убирает окно. Загрузка продолжится, её ход виден на странице «Серверы».",
+            on_click=self.reject,
+        )
+        self.hide_btn.hide()
+        self.close_btn = self._make_button(
+            PrimaryPushButton,
+            "Закрыть",
+            name="Закрыть окно обновления",
+            description="Закрывает окно. Повторить загрузку можно на странице «Серверы».",
+            on_click=self.reject,
+        )
+        self.close_btn.hide()
+        for button in (self.skip_btn, self.later_btn, self.install_btn, self.hide_btn, self.close_btn):
             self._buttons_right.addWidget(button)
+
+        # Загрузка в самом окне: строка этапа, полоса с бегущим логотипом,
+        # цифры и фраза. До «Обновить» спрятано.
+        self._on_install = None
+        self._speed = DownloadSpeed()
+        self.download_box = QWidget(self.widget)
+        self.download_box.setObjectName("updateDialogDownload")
+        self.download_box.setStyleSheet("QWidget#updateDialogDownload { background: transparent; }")
+        download_layout = QVBoxLayout(self.download_box)
+        download_layout.setContentsMargins(0, 6, 0, 0)
+        download_layout.setSpacing(6)
+        self.download_status = BodyLabel("", self.download_box)
+        self.download_status.setWordWrap(True)
+        download_layout.addWidget(self.download_status)
+        self.runway = UpdateRunway(self.download_box)
+        download_layout.addWidget(self.runway)
+        stats = QHBoxLayout()
+        stats.setSpacing(18)
+        self.percent_label = CaptionLabel("", self.download_box)
+        self.size_label = CaptionLabel("", self.download_box)
+        self.speed_label = CaptionLabel("", self.download_box)
+        self.eta_label = CaptionLabel("", self.download_box)
+        for label in (self.percent_label, self.size_label, self.speed_label, self.eta_label):
+            stats.addWidget(label)
+        stats.addStretch(1)
+        download_layout.addLayout(stats)
+        self.ticker = FunTicker(self.download_box)
+        download_layout.addWidget(self.ticker)
+        set_control_accessibility(
+            self.download_box,
+            name="Загрузка обновления",
+            description="Ход загрузки: этап, процент, объём, скорость и сколько осталось.",
+        )
+        self.download_box.hide()
+        self.viewLayout.addWidget(self.download_box)
 
         self.set_history(history)
         self._render_header()
@@ -265,6 +376,84 @@ class UpdateOfferDialog(_ReleaseDialogBase):
             self.accept()
         else:
             self.reject()
+
+    # --- загрузка в окне --------------------------------------------------------
+
+    def set_install_handler(self, handler) -> None:
+        """Кто начинает загрузку. Без него «Обновить» просто закрывает окно, как раньше."""
+        self._on_install = handler if callable(handler) else None
+
+    def is_downloading(self) -> bool:
+        return self.download_box.isVisible() or self.download_box.isVisibleTo(self)
+
+    def _on_install_clicked(self) -> None:
+        handler = self._on_install
+        if handler is None:
+            self._finish(RESULT_INSTALL)
+            return
+        self.result_action = RESULT_INSTALL
+        self.enter_download_mode()
+        try:
+            handler()
+        except Exception as exc:
+            self.download_failed(str(exc) or "не удалось начать загрузку")
+
+    def enter_download_mode(self) -> None:
+        """Окно не закрывается: под списком изменений идёт загрузка."""
+        self.title_label.setText(f"Загружаем v{self._target}")
+        for button in (self.skip_btn, self.later_btn, self.install_btn, self.close_btn):
+            button.hide()
+        self.hide_btn.show()
+        self.download_box.show()
+        self.runway.reset()
+        self._speed = DownloadSpeed()
+        for label in (self.percent_label, self.size_label, self.speed_label, self.eta_label):
+            label.setText("")
+        self.download_status.setText("Готовим загрузку…")
+        self.ticker.set_phrases(DOWNLOAD_PHRASES)
+        self.ticker.start()
+        self.mascot.set_mood(MOOD_BUSY)
+        download_view.set_active(self)
+        set_state_text(self.widget, f"Загрузка обновления v{self._target}")
+        self.hide_btn.setFocus()
+
+    def set_download_status(self, text: str) -> None:
+        message = str(text or "").strip()
+        if message:
+            self.download_status.setText(message)
+
+    def set_download_progress(self, percent: int, done_bytes: int, total_bytes: int) -> None:
+        self.runway.set_value(percent)
+        self._speed.add(done_bytes)
+        self.percent_label.setText(f"{int(percent)}%")
+        if total_bytes > 0:
+            self.size_label.setText(f"Загружено {format_size_mb(done_bytes)} / {format_size_mb(total_bytes)} МБ")
+        speed = self._speed.bytes_per_second()
+        self.speed_label.setText(f"Скорость: {format_speed(speed)}" if speed > 0 else "")
+        eta = self._speed.eta_seconds(done_bytes, total_bytes)
+        self.eta_label.setText(f"Осталось: {format_eta(eta)}" if eta is not None else "")
+
+    def download_complete(self) -> None:
+        """Скачано и проверено: дальше установщик, программа закроется сама."""
+        self.runway.finish()
+        self.eta_label.setText("")
+        self.speed_label.setText("")
+        self.download_status.setText("Загружено и проверено. Запускаем установку — программа закроется и откроется сама")
+        self.ticker.set_phrases(INSTALL_PHRASES)
+        self.mascot.set_mood(MOOD_HAPPY)
+
+    def download_failed(self, error: str) -> None:
+        self.runway.fail()
+        self.ticker.stop()
+        self.eta_label.setText("")
+        self.speed_label.setText("")
+        message = str(error or "").strip() or "загрузка не удалась"
+        self.title_label.setText("Обновление не загрузилось")
+        self.download_status.setText(f"{message}. Повторить можно на странице «Серверы».")
+        self.mascot.set_mood(MOOD_SAD)
+        self.hide_btn.hide()
+        self.close_btn.show()
+        self.close_btn.setFocus()
 
     def _on_browser(self) -> None:
         if self._release_url:
@@ -371,12 +560,22 @@ def open_url_in_background(url: str) -> None:
     threading.Thread(target=run, name="update-dialog-open-url", daemon=True).start()
 
 
-def ask_update(parent, **kwargs) -> str:
-    """Показывает предложение обновиться и возвращает, что выбрал человек."""
+def ask_update(parent, *, on_install=None, **kwargs) -> str:
+    """Показывает предложение обновиться и возвращает, что выбрал человек.
+
+    С ``on_install`` окно после «Обновить» не закрывается: оно само зовёт
+    загрузку и показывает её ход, а вернёт ``RESULT_INSTALL``, когда его
+    скроют или программа закроется под установку. Без него — как раньше:
+    «Обновить» закрывает окно, загрузку начинает тот, кто спросил.
+    """
     dialog = UpdateOfferDialog(parent, **kwargs)
     dialog.link_clicked.connect(open_url_in_background)
     dialog.mascot.set_mood(MOOD_IDLE)
-    dialog.exec()
+    dialog.set_install_handler(on_install)
+    try:
+        dialog.exec()
+    finally:
+        download_view.clear(dialog)
     action = dialog.result_action
     dialog.deleteLater()
     return action
@@ -392,6 +591,9 @@ def show_whats_new(parent, *, version: str, history=()) -> WhatsNewDialog:
 
 
 __all__ = [
+    "DownloadSpeed",
+    "format_eta",
+    "format_speed",
     "RESULT_INSTALL",
     "RESULT_LATER",
     "RESULT_SKIP",
