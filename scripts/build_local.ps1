@@ -99,6 +99,25 @@ function Stop-Net67Engine {
         }
     }
 
+    # Encrypted DNS service (src\dns\local_proxy.py) runs dnscrypt-proxy from
+    # artifact\user\dnscrypt and holds that file: the first build after
+    # choosing DNSCrypt in the app failed with "Artifact folder is locked".
+    # Stopping only the service is not enough. Adapters would keep 127.0.0.1
+    # with nobody answering there - no internet after the build - and the new
+    # app could not raise the engine again: its settings file goes away with
+    # the folder. So the same order as on uninstall: adapters back to
+    # automatic DNS first, then the service (installer\remove_dnscrypt.ps1).
+    $dnsService = Get-CimInstance -ClassName Win32_Service -Filter "Name='net67DnsCrypt'" -ErrorAction SilentlyContinue
+    if ($dnsService) {
+        if (Test-InsideArtifact $dnsService.PathName) {
+            Write-Host "      removing encrypted DNS service, adapters go back to automatic DNS"
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root "installer\remove_dnscrypt.ps1")
+            Write-Host "      choose the encrypted DNS again in the app after the build" -ForegroundColor Yellow
+        } else {
+            Write-Host ("      leaving foreign encrypted DNS service (" + $dnsService.PathName + ")")
+        }
+    }
+
     # xray is on the list for a reason: the connect-by-link core runs as a
     # separate process and holds artifact\bin\xray\xray.exe. One session
     # of connecting and the build fails with "Artifact folder is locked",
