@@ -1,0 +1,17 @@
+#!/bin/sh
+# commit-msg: вырезает из сообщения строки «Co-Authored-By: ... Claude/anthropic»
+# и «Claude-Session: ...».
+#
+# 23 октября 2026 четыре коммита ушли с такими строками, и GitHub записал
+# Claude в участники проекта. Убрать его удалось только переписыванием
+# main, dev и тега v0.26.67. Правило «без Co-Authored-By» было записано и
+# до этого — его просто не соблюли; хук не надеется на память.
+#
+# Подключение (один раз в клоне): git config core.hooksPath .githooks
+msg="$1"
+tmp="$msg.net67.$$"
+# После вырезанных строк в конце остаются пустые — их тоже убираем.
+grep -viE '^[[:space:]]*(co-authored-by:.*(anthropic[.]com|claude)|claude-session:)' "$msg" |
+    awk '{ if ($0 ~ /^[[:space:]]*$/) { blank = blank $0 "\n" } else { printf "%s", blank; blank = ""; print } }' > "$tmp"
+mv "$tmp" "$msg"
+exit 0
