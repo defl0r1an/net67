@@ -241,6 +241,7 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             "Ubisoft": ("--filter-tcp=80,443-65535", "--hostlist=lists/ubisoft.txt"),
             "Amazon TCP": ("--filter-tcp=80,443-65535", "--hostlist=lists/amazon.txt"),
             "Riot / Valorant TCP": ("--filter-tcp=443", "--hostlist=lists/riot-valorant.txt"),
+            "Signal": ("--filter-tcp=443", "--hostlist=lists/signal.txt"),
         }
 
         for name, match_lines in expected_profiles.items():
@@ -261,6 +262,7 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
                 "cloudflareinsights.com",
             ],
             "cloudfront.txt": ["cloudfront.net"],
+            "signal.txt": ["signal.org"],
             "epicgames-fortnite.txt": ["epicgames.com", "fortnite.com", "akamaized.net", "unrealengine.com"],
             "ubisoft.txt": ["ubi.com", "ubisoft.com", "ubisoftconnect.com", "ubisoftclub.com", "uplay.com"],
             "amazon.txt": ["amazonaws.com", "amazon.com", "awsapps.com", "awsstatic.com"],
@@ -1868,7 +1870,7 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             not in catalog_pairs
         ]
 
-        self.assertEqual(len(preset.profiles), 99)
+        self.assertEqual(len(preset.profiles), 100)
         self.assertEqual(offenders, [])
         self.assertIn(
             "--lua-init=fake_unknown_256=string.rep(string.char(0),256);"

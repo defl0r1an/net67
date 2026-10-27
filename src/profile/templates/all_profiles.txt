@@ -251,6 +251,12 @@
 
 --new
 
+--name=Signal
+--filter-tcp=443
+--hostlist=lists/signal.txt
+
+--new
+
 --name=GitHub · файлы и картинки
 --filter-tcp=443
 --hostlist=lists/githubusercontent.txt

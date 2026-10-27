@@ -1,6 +1,6 @@
 """Builtin winws2 ports of Flowseal zapret-discord-youtube 1.10.3 (all 22 bats).
 
-The ports keep the canonical 99-profile layout of `general EXP 1.10.0 (game filter)`
+The ports keep the canonical 100-profile layout of `general EXP 1.10.0 (game filter)`
 and translate every bat block with payload-scoped branches (exact port, not the
 `--payload=all` generalisation of the 1.9.9 set). The old ports stay untouched.
 """
@@ -88,29 +88,31 @@ IPSET_UDP_HYBRID = "Cloudflare UDP"
 # 2026-10-06: the pins were refreshed once for another format-wide edit — every builtin preset
 # got the «Сервис · роль» profile names (`--name=YouTube · видео (googlevideo.com)` instead of
 # `--name=googlevideo.com (CDN сервера)`); strategy lines were not touched.
+# 2026-10-27: refreshed again — every builtin preset got the Signal profile as #2, right after
+# git.zapret.moe. Removing exactly that block reproduces the previous pins for all 20 files.
 OLD_PORT_SHA256 = {
-    "general 1.9.9 (game filter).txt": "a7a766a48f4d5602e9eebf90c01fcf918a4294b466f70e63abdddb3eddb9e7e9",
-    "general ALT10 1.9.9 (game filter).txt": "c38358a8a84ee08178f9fd8683da416e5affe08c13776edf15a8deb900230d79",
-    "general ALT11 1.9.9 (game filter).txt": "806d7ca2822aebff9db3caebf9f68ec7b6b02a6e899c4226c4c969afd87da2ea",
-    "general ALT1 1.9.9 (game filter).txt": "da0dadcfb8db7ff574dc5cc694b13f75d04c5aa31e67c8e1ac160864c93ebaf6",
-    "general ALT12 1.9.9 (game filter).txt": "84cea74e9d45c0bc1bd1c1732ccacb53c334be0dae71bb0636c0ddd02c12e11c",
-    "general ALT2 1.9.9 (game filter).txt": "34b950600bb434548da46ae6f740f9a83889d3a47303ae72374027695c1a5b8c",
-    "general ALT3 1.9.9 (game filter).txt": "9ad033034376152c96c7221e5aa287d91aa5b2df7e56fd1aeb7dc71f0825adc5",
-    "general ALT4 1.9.9 (game filter).txt": "20afb6079a3211dc1926100cf9b9376b5b0824df63507dfb253483e9bd7dc86d",
-    "general ALT6 1.9.9 (game filter).txt": "4735394c5b8f71e1f8344118c6d0f55a1ab4788ee82e6b213894d15409def703",
-    "general ALT7 1.9.9 (game filter).txt": "1cdfcc4ca0ec63fcddcdbbda76c33b8beece907c548b2abfd54182a79faad6a9",
-    "general ALT8 1.9.9 (game filter).txt": "8ad7ad89fe947413ac310e667168454a556c7e6cf1383237cc58b6e7f5d4d085",
-    "general ALT9 1.9.9 (game filter).txt": "925a033a680a05287e22066733e88e9e6a0c6e67dcf8b8e8d7ffc5f71ca35a9a",
+    "general 1.9.9 (game filter).txt": "abff3fd66d116aee2d58835d1c60732c3805aeb7a853db57d426ebd554483dcc",
+    "general ALT10 1.9.9 (game filter).txt": "931d3a683fbe532ebbd2396379eee031f23fd4cbae74421b53a7c71dcab70aef",
+    "general ALT11 1.9.9 (game filter).txt": "cb5efa7e12a8968330e66fe31a99de48a841d11bb0d4db36d039ce68dbc06516",
+    "general ALT1 1.9.9 (game filter).txt": "7d34e72830d67705e8a629e3fab84998c887e4c7b5c1db84112f305ab92fffdc",
+    "general ALT12 1.9.9 (game filter).txt": "92cac554abdc16bfa9e98354085ad51fefde866b8b6c67754f3725094bf6ec5c",
+    "general ALT2 1.9.9 (game filter).txt": "96b6b6e54d899e226bf7816c59de842a480895daa6a5f0010c051add19b7183f",
+    "general ALT3 1.9.9 (game filter).txt": "a180dd6f14067c4aa7d4c6856eaacb26df36bb49189163bc080a7f21de319ca1",
+    "general ALT4 1.9.9 (game filter).txt": "597ed8aee6d9767945925d8d67a668ff5ae2201fa2ff096a78f4fabe1a0fd59f",
+    "general ALT6 1.9.9 (game filter).txt": "133b299636befb0aaf51e4e33321d713f59ea350bba81ddd26d0291a753336f4",
+    "general ALT7 1.9.9 (game filter).txt": "7e11c5073e53463c40de2f0657447b1e16ec6a45fc5ca6971d2c1a7d3c4db165",
+    "general ALT8 1.9.9 (game filter).txt": "fc298a66233d17b49d4f843cad20b628082d412f7525aaebae5ad3749e45d525",
+    "general ALT9 1.9.9 (game filter).txt": "47de67186018231852b01b91ce9983b2d5885296af7a9cee9840f7b6f4f45344",
     # Сумма сменилась намеренно: в строке Description «ZapretGUI» заменено
     # на net67, как во всех пресетах. Остальной текст файла прежний.
-    "general EXP 1.10.0 (game filter).txt": "9054a2147e0848c47df3fb4ac1d8515a46566550af67c05484cb00acdac82495",
-    "general FAKE TLS AUTO 1.9.9 (game filter).txt": "bfe6553f3c3542b30e973ff2d864c6d9f02208c45cf82d933f45abcb7237c1b9",
-    "general FAKE TLS AUTO ALT 1.9.9 (game filter).txt": "4b7f68c70b1d160b1278ca97e723f1f45301aa2df85750e93591b969327282ba",
-    "general FAKE TLS AUTO ALT2 1.9.9 (game filter).txt": "72e744cda439f618efefedc3caa4923b17e7c7409b5f975d3998c0ddddd10764",
-    "general FAKE TLS AUTO ALT3 1.9.9 (game filter).txt": "ddafb3a2827f3c8dc17d86ef993cbce40dc8f93e43cf51881a592bad8fc91f27",
-    "general SIMPLE FAKE 1.9.9 (game filter).txt": "764ea7fb6fbe90291ff5b196f1d3a4791292e009ef87760909953a5c4f3e002f",
-    "general SIMPLE FAKE ALT 1.9.9 (game filter).txt": "b2cca01a45ee92421e648b6842be16def35abd2192306c93ef312de2954039c3",
-    "general SIMPLE FAKE ALT2 1.9.9 (game filter).txt": "d4c9f22ba726154035affbfbe349b85c731adcb3f677f40ddcc6cd7300b052aa",
+    "general EXP 1.10.0 (game filter).txt": "39dd88410b6aa0acff8eb0f511d367b969f825c82ddd755b070b96be46de942f",
+    "general FAKE TLS AUTO 1.9.9 (game filter).txt": "0f876f92c18b327c6c13cc1c4e83c98f262b692925549b77b4c2f8bf36b1ef9a",
+    "general FAKE TLS AUTO ALT 1.9.9 (game filter).txt": "24a3e0c1cb049cf17cd844b63ed87d54dc788d2fd039a2082ccb8fd43ef9ae82",
+    "general FAKE TLS AUTO ALT2 1.9.9 (game filter).txt": "5a71aa19053e9bc51af7486d487940fd9cf5b23c946b83716b19bbb392626685",
+    "general FAKE TLS AUTO ALT3 1.9.9 (game filter).txt": "f950b5dcf22e1dc45d148fb61005b72f1bbe6708f4f9ff913e38b488ee77fe46",
+    "general SIMPLE FAKE 1.9.9 (game filter).txt": "fa06586b4535ea9e911d69ebd26fb72d96b33f3d7ff553a91007e720bf991651",
+    "general SIMPLE FAKE ALT 1.9.9 (game filter).txt": "07d3d94748662fd3e50bcc3a3b53a48a0e6967c91bb5a1ec037520d0c0a9d90a",
+    "general SIMPLE FAKE ALT2 1.9.9 (game filter).txt": "9fcb5214635d8d1399165f09d52178d89fe9fe30ce49133401dca374c2c4c277",
 }
 _BATCH_SYNTAX = re.compile(r"%[A-Za-z_]+%|\^|\"|(?:^|\s)start(?:\s|$)|call service\.bat|winws\.exe", re.MULTILINE)
 
@@ -180,7 +182,7 @@ class Flowseal1103Winws2PresetTests(unittest.TestCase):
             with self.subTest(name=name):
                 lines = _read(name).splitlines()
                 self.assertEqual(lines[0], f"# Preset: {name[:-4]}")
-                self.assertEqual(lines[1], "# BuiltinVersion: 2.43")
+                self.assertEqual(lines[1], "# BuiltinVersion: 2.44")
                 self.assertRegex(lines[2], r"^# IconColor: #[0-9a-f]{6}([0-9a-f]{2})?$")
                 self.assertTrue(lines[3].startswith(f"# Description: Flowseal {_V} "))
                 self.assertTrue(lines[3].endswith(", adapted to net67 profiles"))
@@ -212,7 +214,7 @@ class Flowseal1103Winws2PresetTests(unittest.TestCase):
             }
         for name, preset in self.presets.items():
             with self.subTest(name=name):
-                self.assertEqual(len(preset.profiles), 99)
+                self.assertEqual(len(preset.profiles), 100)
                 self.assertEqual([(p.display_name, tuple(p.match.all_lines())) for p in preset.profiles], expected)
                 if catalog_pairs is not None:
                     offenders = [
@@ -232,6 +234,9 @@ class Flowseal1103Winws2PresetTests(unittest.TestCase):
                     _strategy(first),
                     ("--out-range=-d8", "--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4"),
                 )
+                second = preset.profiles[1]
+                self.assertEqual(second.display_name, "Signal")
+                self.assertEqual(_strategy(second), _strategy(first))
                 backend = _profile(preset, "Бэкенд Google")
                 youtube = _profile(preset, "YouTube · сайт и приложение")
                 self.assertEqual(_strategy(backend), _strategy(youtube))
@@ -379,7 +384,7 @@ class Flowseal1103Winws2PresetTests(unittest.TestCase):
 
     def test_fooling_and_repeats_only_on_fake_sending_instances(self) -> None:
         for name, preset in self.presets.items():
-            for profile in preset.profiles[1:]:  # profile #1 git.zapret.moe is a fixed GUI convention
+            for profile in preset.profiles[2:]:  # profiles #1 git.zapret.moe and #2 Signal are fixed GUI conventions
                 for line in _lua(profile):
                     with self.subTest(name=name, profile=profile.display_name, line=line):
                         if re.search(r":(tcp_seq|tcp_ts|tcp_md5)[=:]|:tcp_md5$", line):

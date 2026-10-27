@@ -267,6 +267,33 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                 self.assertEqual(normalize_lines(profile.strategy.strategy_lines), expected_strategy)
                 self.assertEqual(self._resolved_strategy_id(profile), "alt9")
 
+    def test_signal_follows_git_zapret_moe_and_uses_alt9_in_every_builtin_preset(self) -> None:
+        expected_strategy = (
+            "--out-range=-d8",
+            "--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4",
+        )
+        preset_paths = sorted(Path("src/presets/builtin/winws2").glob("*.txt"))
+
+        self.assertGreater(len(preset_paths), 0)
+        for path in preset_paths:
+            with self.subTest(preset=path.name):
+                preset = parse_preset_text(
+                    path.read_text(encoding="utf-8"),
+                    engine="winws2",
+                    source_name=path.name,
+                )
+                matches = [profile for profile in preset.profiles if profile.display_name == "Signal"]
+                self.assertEqual(len(matches), 1)
+                profile = matches[0]
+                # В «Стандартном 1» git.zapret.moe нет — там Signal первый.
+                has_git = any(item.display_name == "git.zapret.moe" for item in preset.profiles)
+                self.assertIs(profile, preset.profiles[1 if has_git else 0])
+                self.assertTrue(profile.enabled)
+                self.assertEqual(profile.match.filter_lines, ["--filter-tcp=443"])
+                self.assertEqual(profile.match.hostlist_lines, ["--hostlist=lists/signal.txt"])
+                self.assertEqual(normalize_lines(profile.strategy.strategy_lines), expected_strategy)
+                self.assertEqual(self._resolved_strategy_id(profile), "alt9")
+
     def test_youtube_profiles_precede_ru_pass_in_every_builtin_preset(self) -> None:
         # AS12389 остаётся в ipset-ru: внутри него могут находиться российские
         # кэш-серверы Google/YouTube. Поэтому специальные YouTube-профили должны

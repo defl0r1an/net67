@@ -1,5 +1,5 @@
 # Preset: Default v1 (game filter)
-# BuiltinVersion: 2.44
+# BuiltinVersion: 2.45
 # IconColor: #a8c5ff
 
 --lua-init=@lua/zapret-lib.lua
@@ -90,6 +90,14 @@
 
 --new
 
+--name=Signal
+--filter-tcp=443
+--hostlist=lists/signal.txt
+--out-range=-d8
+--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4
+
+--new
+
 --name=ChatGPT
 --filter-tcp=80-65535
 --hostlist=lists/chatgpt.txt
@@ -102,7 +110,7 @@
 --filter-udp=443,6568,50000-51000
 --ipset=lists/ipset-anydesk.txt
 --out-range=-d8
---lua-desync=fake:blob=stun_pat:repeats=6
+--lua-desync=pass
 
 --new
 
@@ -147,6 +155,15 @@
 --out-range=-d8
 --payload=tls_client_hello
 --lua-desync=hostfakesplit_multi:hosts=google.com,vimeo.com:tcp_ts=-1000:tcp_md5:repeats=2
+
+--new
+
+--name=Tanki X
+--filter-tcp=80,443-65535
+--hostlist=lists/tankix.txt
+--out-range=-d8
+--lua-desync=fake:blob=fake_default_http:repeats=4:ip_autottl=2,3-20:ip6_autottl=2,3-20:tcp_md5
+--lua-desync=multidisorder:pos=host+1
 
 --new
 
