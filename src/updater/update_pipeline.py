@@ -7,36 +7,37 @@ QObject-ы приложения. Они выполняют только сеть
 
 from __future__ import annotations
 
-from branding import APP_NAME
-
 import hashlib
 import os
 import shutil
-import tempfile
 import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Callable
 
-import requests
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from config.build_info import APP_VERSION, CHANNEL
 from config.runtime_layout import APPLICATION_PATHS
 from log.log import log
 
+from .download_transfer import (
+    CHUNK_SIZE,
+    CancellationToken,
+    DownloadSource,
+    ThrottledProgress,
+    UpdateCancelled,
+    UpdateIntegrityError,
+    UpdatePipelineError,
+    _make_session,
+    download_source,
+)
 from .github_release import normalize_version
-from .network_hints import maybe_log_disable_dpi_for_update
 from .release_manager import get_latest_release
 from .update import compare_versions, launch_installer_winapi
 
 
-NUM_SEGMENTS = 4
-CHUNK_SIZE = 1024 * 1024
-PROGRESS_INTERVAL_SECONDS = 0.25
 SHA256_HEX_LENGTH = 64
 
 
@@ -48,24 +49,6 @@ class UpdateStage(StrEnum):
     VERIFY = "verify"
     HANDOFF = "handoff"
     INSTALLER = "installer"
-
-
-class UpdatePipelineError(RuntimeError):
-    """Понятная пользователю ошибка одной стадии конвейера."""
-
-
-class UpdateCancelled(UpdatePipelineError):
-    """Конвейер остановлен по запросу приложения."""
-
-
-class UpdateIntegrityError(UpdatePipelineError):
-    """Файл не прошёл проверку размера или SHA-256."""
-
-
-@dataclass(frozen=True, slots=True)
-class DownloadSource:
-    url: str
-    verify_ssl: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,63 +84,6 @@ def quiet_installer_arguments(arguments) -> tuple[str, ...]:
     return tuple("/VERYSILENT" if str(item).upper() == "/SILENT" else str(item) for item in arguments)
 
 
-class CancellationToken:
-    """Общий потокобезопасный признак отмены."""
-
-    def __init__(self) -> None:
-        self._event = threading.Event()
-
-    def cancel(self) -> None:
-        self._event.set()
-
-    def checkpoint(self) -> None:
-        if self._event.is_set():
-            raise UpdateCancelled("Обновление остановлено")
-
-    @property
-    def is_cancelled(self) -> bool:
-        return self._event.is_set()
-
-
-class ThrottledProgress:
-    """Не пропускает в Qt больше одного события прогресса за интервал."""
-
-    def __init__(
-        self,
-        callback: Callable[[int, int, int], None],
-        *,
-        interval_seconds: float = PROGRESS_INTERVAL_SECONDS,
-        clock: Callable[[], float] = time.monotonic,
-    ) -> None:
-        self._callback = callback
-        self._interval_seconds = float(interval_seconds)
-        self._clock = clock
-        self._lock = threading.Lock()
-        self._last_emit_at = 0.0
-        self._last_done = -1
-
-    def update(self, done: int, total: int, *, force: bool = False) -> None:
-        done = max(int(done), 0)
-        total = max(int(total), 0)
-        now = self._clock()
-        with self._lock:
-            completed = total > 0 and done >= total
-            if (
-                not force
-                and not completed
-                and self._last_done >= 0
-                and now - self._last_emit_at < self._interval_seconds
-            ):
-                return
-            if done == self._last_done and not force:
-                return
-            self._last_emit_at = now
-            self._last_done = done
-
-        percent = min(done * 100 // total, 100) if total > 0 else 0
-        self._callback(percent, done, total)
-
-
 def _emit_stage(
     callback: Callable[[str, str], None] | None,
     stage: UpdateStage,
@@ -166,25 +92,6 @@ def _emit_stage(
     log(f"Стадия обновления {stage.value}: {message}", "🔁 UPDATE")
     if callback is not None:
         callback(stage.value, message)
-
-
-def _make_session(verify_ssl: bool = True) -> requests.Session:
-    import urllib3
-
-    session = requests.Session()
-    session.trust_env = False
-    session.proxies = {"http": None, "https": None}
-    session.headers.update(
-        {
-            "User-Agent": f"{APP_NAME}-Updater/5.0",
-            "Accept": "application/octet-stream",
-            "Accept-Encoding": "identity",
-        }
-    )
-    if not verify_ssl:
-        session.verify = False
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    return session
 
 
 def normalize_sha256(value: object) -> str:
@@ -374,207 +281,6 @@ def prepare_update(
     return UpdatePreflightResult(artifact=artifact, connectivity_ok=connectivity_ok)
 
 
-def _supports_range(source: DownloadSource, token: CancellationToken) -> tuple[bool, int]:
-    token.checkpoint()
-    session = _make_session(source.verify_ssl)
-    try:
-        response = session.head(
-            source.url,
-            timeout=(10, 15),
-            verify=source.verify_ssl,
-            allow_redirects=True,
-        )
-        response.raise_for_status()
-        token.checkpoint()
-        accepts = response.headers.get("Accept-Ranges", "").lower()
-        length = int(response.headers.get("Content-Length", 0) or 0)
-        return accepts == "bytes" and length > 0, length
-    finally:
-        session.close()
-
-
-def _download_segment(
-    source: DownloadSource,
-    *,
-    start: int,
-    end: int,
-    destination: str,
-    segment_index: int,
-    progress_sizes: list[int],
-    progress_lock: threading.Lock,
-    total: int,
-    token: CancellationToken,
-    progress: ThrottledProgress,
-) -> None:
-    session = _make_session(source.verify_ssl)
-    session.headers["Range"] = f"bytes={start}-{end}"
-    try:
-        with session.get(
-            source.url,
-            stream=True,
-            timeout=(10, 90),
-            verify=source.verify_ssl,
-        ) as response:
-            response.raise_for_status()
-            if response.status_code != 206:
-                raise UpdatePipelineError("Сервер не подтвердил сегментную загрузку")
-            written = 0
-            with open(destination, "wb") as file_obj:
-                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                    token.checkpoint()
-                    if not chunk:
-                        continue
-                    file_obj.write(chunk)
-                    written += len(chunk)
-                    with progress_lock:
-                        progress_sizes[segment_index] = written
-                        done = sum(progress_sizes)
-                    progress.update(done, total)
-            expected = end - start + 1
-            if written != expected:
-                raise UpdateIntegrityError(
-                    f"Размер сегмента не совпадает: {written} вместо {expected}"
-                )
-    finally:
-        session.close()
-
-
-def _download_segmented(
-    source: DownloadSource,
-    destination: str,
-    *,
-    total: int,
-    token: CancellationToken,
-    progress: ThrottledProgress,
-) -> None:
-    segment_size = total // NUM_SEGMENTS
-    segments = [
-        (
-            index * segment_size,
-            total - 1 if index == NUM_SEGMENTS - 1 else (index + 1) * segment_size - 1,
-        )
-        for index in range(NUM_SEGMENTS)
-    ]
-    segment_dir = destination + "_segments"
-    os.makedirs(segment_dir, exist_ok=True)
-    segment_paths = [os.path.join(segment_dir, f"segment_{index}") for index in range(NUM_SEGMENTS)]
-    progress_sizes = [0] * NUM_SEGMENTS
-    progress_lock = threading.Lock()
-
-    try:
-        with ThreadPoolExecutor(max_workers=NUM_SEGMENTS) as pool:
-            futures = [
-                pool.submit(
-                    _download_segment,
-                    source,
-                    start=start,
-                    end=end,
-                    destination=segment_paths[index],
-                    segment_index=index,
-                    progress_sizes=progress_sizes,
-                    progress_lock=progress_lock,
-                    total=total,
-                    token=token,
-                    progress=progress,
-                )
-                for index, (start, end) in enumerate(segments)
-            ]
-            for future in futures:
-                future.result()
-
-        token.checkpoint()
-        with open(destination, "wb") as output:
-            for segment_path in segment_paths:
-                token.checkpoint()
-                with open(segment_path, "rb") as segment_file:
-                    shutil.copyfileobj(segment_file, output, length=CHUNK_SIZE)
-    finally:
-        shutil.rmtree(segment_dir, ignore_errors=True)
-
-
-def _download_single(
-    source: DownloadSource,
-    destination: str,
-    *,
-    token: CancellationToken,
-    progress: ThrottledProgress,
-) -> int:
-    session = _make_session(source.verify_ssl)
-    try:
-        with session.get(
-            source.url,
-            stream=True,
-            timeout=(10, 90),
-            verify=source.verify_ssl,
-        ) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("Content-Length", 0) or 0)
-            done = 0
-            with open(destination, "wb") as file_obj:
-                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                    token.checkpoint()
-                    if not chunk:
-                        continue
-                    file_obj.write(chunk)
-                    done += len(chunk)
-                    progress.update(done, total)
-            return total
-    finally:
-        session.close()
-
-
-def download_source(
-    source: DownloadSource,
-    destination: str,
-    *,
-    token: CancellationToken,
-    progress: ThrottledProgress,
-    max_retries: int = 2,
-) -> None:
-    """Скачивает одно зеркало с ограниченным числом повторов."""
-    last_error: Exception | None = None
-    for attempt in range(max(int(max_retries), 1)):
-        token.checkpoint()
-        try:
-            supports_range, total = _supports_range(source, token)
-            if supports_range and total > NUM_SEGMENTS * CHUNK_SIZE:
-                _download_segmented(
-                    source,
-                    destination,
-                    total=total,
-                    token=token,
-                    progress=progress,
-                )
-            else:
-                total = _download_single(
-                    source,
-                    destination,
-                    token=token,
-                    progress=progress,
-                )
-
-            actual_size = os.path.getsize(destination)
-            if total > 0 and actual_size != total:
-                raise UpdateIntegrityError(
-                    f"Размер загрузки не совпадает: {actual_size} вместо {total}"
-                )
-            progress.update(actual_size, total or actual_size, force=True)
-            return
-        except UpdateCancelled:
-            raise
-        except Exception as exc:
-            last_error = exc
-            maybe_log_disable_dpi_for_update(exc, scope="download", level="🔄 DOWNLOAD")
-            try:
-                os.remove(destination)
-            except FileNotFoundError:
-                pass
-            if attempt + 1 < max_retries:
-                token.checkpoint()
-                time.sleep(min(2 ** (attempt + 1), 4))
-    raise UpdatePipelineError(f"Не удалось скачать файл: {last_error}")
-
-
 def verify_artifact(
     artifact: UpdateArtifact,
     installer_path: str,
@@ -639,6 +345,29 @@ def prepare_handoff(
     )
 
 
+def _partial_download_dir(artifact: UpdateArtifact) -> Path:
+    # Имя выпуска не используется как путь; новый размер или SHA никогда не
+    # подхватят части предыдущего файла, даже при том же номере версии.
+    identity = f"{artifact.version}\0{artifact.expected_size}\0{artifact.expected_sha256}"
+    key = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    root = Path(APPLICATION_PATHS.update_cache_dir) / "downloads"
+    root.mkdir(parents=True, exist_ok=True)
+    current = root / f"partial-{key}"
+    current.mkdir(exist_ok=True)
+    if current.is_symlink() or current.is_junction() or current.resolve().parent != root.resolve():
+        raise UpdatePipelineError("Не удалось безопасно открыть каталог докачки")
+    for child in root.iterdir():
+        suffix = child.name.removeprefix("partial-")
+        if (child != current and child.name.startswith("partial-") and len(suffix) == 64
+                and all(char in "0123456789abcdef" for char in suffix)
+                and child.is_dir() and not child.is_symlink() and not child.is_junction()
+                and child.resolve().parent == root.resolve()):
+            # Оставляем части только нужного выпуска: десятки старых обновлений
+            # иначе занимали бы место после многократных обрывов связи.
+            shutil.rmtree(child, ignore_errors=True)
+    return current
+
+
 class UpdatePipeline:
     """Единый сетевой/файловый конвейер без зависимостей от GUI и runtime."""
 
@@ -663,9 +392,10 @@ class UpdatePipeline:
         )
 
     def download_and_prepare(self, artifact: UpdateArtifact) -> InstallerHandoff:
-        temporary_dir = tempfile.mkdtemp(prefix="zapret_upd_")
-        destination = os.path.join(temporary_dir, "Zapret2Setup.exe")
+        cache_dir = _partial_download_dir(artifact)
+        destination = str(cache_dir / "installer.part")
         progress = ThrottledProgress(self._on_progress or (lambda *_args: None))
+        completed = False
         try:
             _emit_stage(self._on_stage, UpdateStage.DOWNLOAD, "Скачивание обновления…")
             self._download_from_mirrors(artifact, destination, progress)
@@ -676,9 +406,16 @@ class UpdatePipeline:
 
             self._token.checkpoint()
             _emit_stage(self._on_stage, UpdateStage.HANDOFF, "Подготовка установщика…")
-            return prepare_handoff(artifact, destination, self._token)
+            handoff = prepare_handoff(artifact, destination, self._token)
+            completed = True
+            return handoff
+        except UpdateIntegrityError:
+            # Повтор с повреждённым префиксом не исправил бы контрольную сумму.
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            raise
         finally:
-            shutil.rmtree(temporary_dir, ignore_errors=True)
+            if completed:
+                shutil.rmtree(cache_dir, ignore_errors=True)
 
     def _download_from_mirrors(
         self,
@@ -700,7 +437,9 @@ class UpdatePipeline:
                     destination,
                     token=self._token,
                     progress=progress,
-                    max_retries=1 if self._silent else 2,
+                    max_retries=3,
+                    expected_size=artifact.expected_size,
+                    on_status=lambda message: _emit_stage(self._on_stage, UpdateStage.DOWNLOAD, message),
                 )
                 return
             except UpdateCancelled:

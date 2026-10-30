@@ -68,38 +68,12 @@ class ChangelogDownloadStartPlan:
     progress_visible: bool
     buttons_visible: bool
     close_visible: bool
-    download_start_time: float
-    last_bytes: int
-    last_speed_time: float
-    last_speed_bytes: int
-    smoothed_speed: float
     download_percent: int
     download_done_bytes: int
     download_total_bytes: int
     download_speed_kb: float | None
     download_eta_seconds: float | None
     download_error_text: str
-
-
-@dataclass(slots=True)
-class ChangelogProgressPlan:
-    mode: str
-    show_progress_bar: bool
-    hide_indeterminate: bool
-    progress_value: int
-    progress_label_text: str
-    version_text: str
-    speed_label_text: str
-    eta_label_text: str
-    download_percent: int
-    download_done_bytes: int
-    download_total_bytes: int
-    last_bytes: int
-    last_speed_time: float
-    last_speed_bytes: int
-    smoothed_speed: float
-    download_speed_kb: float | None
-    download_eta_seconds: float | None
 
 
 @dataclass(slots=True)
@@ -502,7 +476,7 @@ def build_changelog_update_plan(
         close_visible=True,
     )
 
-def build_changelog_download_start_plan(*, version: str, language: str, now: float) -> ChangelogDownloadStartPlan:
+def build_changelog_download_start_plan(*, version: str, language: str) -> ChangelogDownloadStartPlan:
     tr = lambda key, default: _tr(language, key, default)
 
     return ChangelogDownloadStartPlan(
@@ -520,141 +494,12 @@ def build_changelog_download_start_plan(*, version: str, language: str, now: flo
         progress_visible=True,
         buttons_visible=False,
         close_visible=False,
-        download_start_time=float(now),
-        last_bytes=0,
-        last_speed_time=float(now),
-        last_speed_bytes=0,
-        smoothed_speed=0.0,
         download_percent=0,
         download_done_bytes=0,
         download_total_bytes=0,
         download_speed_kb=None,
         download_eta_seconds=None,
         download_error_text="",
-    )
-
-def build_changelog_progress_plan(
-    *,
-    percent: int,
-    done_bytes: int,
-    total_bytes: int,
-    last_speed_time: float,
-    last_speed_bytes: int,
-    smoothed_speed: float,
-    download_speed_kb: float | None = None,
-    download_eta_seconds: float | None = None,
-    language: str,
-    now: float,
-    progress_bar_visible: bool,
-) -> ChangelogProgressPlan:
-    tr = lambda key, default: _tr(language, key, default)
-
-    hide_indeterminate = not progress_bar_visible and done_bytes > 0
-    show_progress_bar = progress_bar_visible or done_bytes > 0
-    progress_label_text = f"{int(percent)}%"
-    done_mb = done_bytes / (1024 * 1024)
-    total_mb = total_bytes / (1024 * 1024)
-    version_text = tr(
-        "page.servers.changelog.progress.downloaded_mb_template",
-        "Загружено {done:.1f} / {total:.1f} МБ",
-    ).format(done=done_mb, total=total_mb)
-
-    next_last_speed_time = float(last_speed_time)
-    next_last_speed_bytes = int(last_speed_bytes)
-    next_smoothed_speed = float(smoothed_speed)
-    next_download_speed_kb: float | None = download_speed_kb
-    next_download_eta_seconds: float | None = download_eta_seconds
-    speed_label_text = tr("page.servers.changelog.progress.speed_unknown", "Скорость: —")
-    eta_label_text = tr("page.servers.changelog.progress.eta_unknown", "Осталось: —")
-
-    if next_download_speed_kb is not None:
-        if next_download_speed_kb > 1024:
-            speed_label_text = tr(
-                "page.servers.changelog.progress.speed_mb_template",
-                "Скорость: {value:.1f} МБ/с",
-            ).format(value=next_download_speed_kb / 1024)
-        else:
-            speed_label_text = tr(
-                "page.servers.changelog.progress.speed_kb_template",
-                "Скорость: {value:.0f} КБ/с",
-            ).format(value=next_download_speed_kb)
-
-    if next_download_eta_seconds is not None:
-        if next_download_eta_seconds < 60:
-            eta_label_text = tr(
-                "page.servers.changelog.progress.eta_sec_template",
-                "Осталось: {seconds} сек",
-            ).format(seconds=int(next_download_eta_seconds))
-        else:
-            eta_label_text = tr(
-                "page.servers.changelog.progress.eta_min_template",
-                "Осталось: {minutes} мин",
-            ).format(minutes=int(next_download_eta_seconds / 60))
-
-    dt = float(now) - float(last_speed_time)
-    if dt >= 1.0 and done_bytes > 0:
-        delta_bytes = int(done_bytes) - int(last_speed_bytes)
-        if delta_bytes <= 0:
-            next_smoothed_speed = 0.0
-            next_last_speed_time = float(now)
-            next_last_speed_bytes = int(done_bytes)
-            next_download_speed_kb = None
-            next_download_eta_seconds = None
-        else:
-            instant_speed = delta_bytes / dt
-            if next_smoothed_speed <= 0:
-                next_smoothed_speed = instant_speed
-            else:
-                next_smoothed_speed = next_smoothed_speed * 0.4 + instant_speed * 0.6
-
-            next_last_speed_time = float(now)
-            next_last_speed_bytes = int(done_bytes)
-
-            speed = next_smoothed_speed
-            next_download_speed_kb = speed / 1024
-            if next_download_speed_kb > 1024:
-                speed_label_text = tr(
-                    "page.servers.changelog.progress.speed_mb_template",
-                    "Скорость: {value:.1f} МБ/с",
-                ).format(value=next_download_speed_kb / 1024)
-            else:
-                speed_label_text = tr(
-                    "page.servers.changelog.progress.speed_kb_template",
-                    "Скорость: {value:.0f} КБ/с",
-                ).format(value=next_download_speed_kb)
-
-            if speed > 0:
-                remaining = (total_bytes - done_bytes) / speed
-                next_download_eta_seconds = remaining
-                if remaining < 60:
-                    eta_label_text = tr(
-                        "page.servers.changelog.progress.eta_sec_template",
-                        "Осталось: {seconds} сек",
-                    ).format(seconds=int(remaining))
-                else:
-                    eta_label_text = tr(
-                        "page.servers.changelog.progress.eta_min_template",
-                        "Осталось: {minutes} мин",
-                    ).format(minutes=int(remaining / 60))
-
-    return ChangelogProgressPlan(
-        mode="downloading",
-        show_progress_bar=show_progress_bar,
-        hide_indeterminate=hide_indeterminate,
-        progress_value=int(percent),
-        progress_label_text=progress_label_text,
-        version_text=version_text,
-        speed_label_text=speed_label_text,
-        eta_label_text=eta_label_text,
-        download_percent=int(percent),
-        download_done_bytes=int(done_bytes),
-        download_total_bytes=int(total_bytes),
-        last_bytes=int(done_bytes),
-        last_speed_time=next_last_speed_time,
-        last_speed_bytes=next_last_speed_bytes,
-        smoothed_speed=next_smoothed_speed,
-        download_speed_kb=next_download_speed_kb,
-        download_eta_seconds=next_download_eta_seconds,
     )
 
 def build_changelog_terminal_plan(

@@ -543,9 +543,12 @@ class UpdaterSettingsWorkerArchitectureTests(unittest.TestCase):
         runtime._request_update_cache_invalidate.assert_called_once_with("install_update")
 
     def test_update_stage_changes_show_only_stage_text(self) -> None:
+        from updater.download_progress import DownloadProgress
+
         runtime = update_page_runtime.UpdatePageRuntime.__new__(update_page_runtime.UpdatePageRuntime)
         runtime._cleanup_in_progress = False
         runtime._view = Mock()
+        runtime._download_progress = DownloadProgress()
 
         update_page_runtime.UpdatePageRuntime._on_update_stage_changed(
             runtime,
@@ -556,6 +559,9 @@ class UpdaterSettingsWorkerArchitectureTests(unittest.TestCase):
         runtime._view.update_download_status_text.assert_called_once_with(
             "Проверка соединения с сервером…"
         )
+        snapshot = runtime._view.update_download_snapshot.call_args.args[0]
+        self.assertEqual(snapshot.status, "Проверка соединения с сервером…")
+        self.assertIsNone(snapshot.speed)
 
     def test_cache_invalidate_error_ignored_when_new_context_is_pending(self) -> None:
         runtime = update_page_runtime.UpdatePageRuntime.__new__(update_page_runtime.UpdatePageRuntime)

@@ -11,6 +11,7 @@ from ui.one_shot_worker_runtime import OneShotWorkerRuntime
 from ui.page_deps.types import UpdateRuntimeActions
 
 from log.log import log
+from updater.download_progress import DownloadProgress
 
 @dataclass(slots=True)
 class UpdateFoundState:
@@ -116,6 +117,7 @@ class UpdatePageView(Protocol):
     def hide_update_offer(self) -> None: ...
     def start_update_download(self, version: str) -> None: ...
     def update_download_progress(self, percent: int, done_bytes: int, total_bytes: int) -> None: ...
+    def update_download_snapshot(self, snapshot) -> None: ...
     def update_download_status_text(self, message: str) -> None: ...
     def mark_update_download_complete(self) -> None: ...
     def mark_update_download_failed(self, error: str) -> None: ...
@@ -176,6 +178,10 @@ class UpdatePageRuntime(QObject):
         self._found_state = UpdateFoundState()
         self._server_check_recovery = ServerCheckRecoveryState()
         self._download_state = UpdateDownloadState()
+        self._download_progress = DownloadProgress()
+        self._download_progress_timer = QTimer(self)
+        self._download_progress_timer.setInterval(1000)
+        self._download_progress_timer.timeout.connect(self._refresh_download_progress)
 
         self._auto_check_enabled = False
 
@@ -730,6 +736,8 @@ class UpdatePageRuntime(QObject):
             return
 
         self._download_state.is_installing = True
+        self._stop_download_progress_timer()
+        self._download_progress = DownloadProgress()
         log(f"Запуск установки обновления v{self._found_state.version}", "🔄 UPDATE")
 
         self._present_download_prepare_ui()
@@ -979,6 +987,7 @@ class UpdatePageRuntime(QObject):
 
     def cleanup(self) -> None:
         self._cleanup_in_progress = True
+        self._stop_download_progress_timer()
         manual_check_token = getattr(self, "_manual_check_token", None)
         self._manual_check_token = None
         if manual_check_token is not None:
@@ -1109,6 +1118,7 @@ class UpdatePageRuntime(QObject):
         self._found_state = UpdateFoundState()
 
     def _reset_download_state(self) -> None:
+        self._stop_download_progress_timer()
         self._download_state = UpdateDownloadState()
 
     def _start_server_check_workflow(self, *, telegram_only: bool) -> None:
@@ -1195,12 +1205,27 @@ class UpdatePageRuntime(QObject):
         worker.launched.connect(self._on_update_installer_launched)
         worker.failed.connect(self._fail_update_pipeline)
 
-    def _on_update_stage_changed(self, _stage: str, message: str) -> None:
+    def _on_update_stage_changed(self, stage: str, message: str) -> None:
         if self._cleanup_in_progress:
             return
         text = str(message or "").strip()
+        self._download_progress.set_stage(stage, text)
+        if stage == "download":
+            self._download_progress_timer.start()
+        else:
+            self._stop_download_progress_timer()
         if text:
             self._view.update_download_status_text(text)
+        self._refresh_download_progress()
+
+    def _stop_download_progress_timer(self) -> None:
+        timer = self.__dict__.get("_download_progress_timer")
+        if timer is not None:
+            timer.stop()
+
+    def _refresh_download_progress(self) -> None:
+        if not self._cleanup_in_progress:
+            self._view.update_download_snapshot(self._download_progress.snapshot())
 
     def _on_update_download_progress(
         self,
@@ -1210,7 +1235,8 @@ class UpdatePageRuntime(QObject):
     ) -> None:
         if self._cleanup_in_progress:
             return
-        self._view.update_download_progress(percent, done_bytes, total_bytes)
+        self._download_progress.update(percent, done_bytes, total_bytes)
+        self._refresh_download_progress()
 
     def _on_update_preflight_ready(self, result) -> None:
         if self._cleanup_in_progress:
@@ -1241,6 +1267,7 @@ class UpdatePageRuntime(QObject):
     def _on_update_handoff_ready(self, handoff) -> None:
         if self._cleanup_in_progress:
             return
+        self._stop_download_progress_timer()
         self._download_state.handoff = handoff
         self._view.mark_update_download_complete()
         if self._download_state.dpi_stopped_by_update:
@@ -1437,6 +1464,7 @@ class UpdatePageRuntime(QObject):
     def _fail_update_pipeline(self, error: str) -> None:
         if self._cleanup_in_progress:
             return
+        self._stop_download_progress_timer()
         message = str(error or "Не удалось установить обновление")
         # Через __dict__: у QObject-наследника getattr на незаданном
         # атрибуте уходит в C++ и падает, если объект собран без __init__.

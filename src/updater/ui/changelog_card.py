@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
@@ -15,6 +13,7 @@ from ui.accessibility import set_control_accessibility, set_state_text
 from ui.theme import get_cached_qta_pixmap, get_theme_tokens, get_themed_qta_icon
 from ui.theme_refresh import ThemeRefreshBinding
 import updater.update_page_plans as update_page_plans
+from updater.download_progress import DownloadProgress, progress_labels
 from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
@@ -40,11 +39,8 @@ class ChangelogCard(CardWidget):
         self.setObjectName("changelogCard")
         self._ui_language = language
         self._is_downloading = False
-        self._download_start_time = 0
-        self._last_bytes = 0
-        self._last_speed_time = 0.0
-        self._last_speed_bytes = 0
-        self._smoothed_speed = 0.0
+        self._progress_model = DownloadProgress()
+        self._download_snapshot = None
         self._download_percent = 0
         self._download_done_bytes = 0
         self._download_total_bytes = 0
@@ -95,6 +91,7 @@ class ChangelogCard(CardWidget):
         layout.addLayout(header)
 
         self.version_label = BodyLabel()
+        self.version_label.setWordWrap(True)
         layout.addWidget(self.version_label)
 
         self.changelog_text = QLabel()
@@ -236,7 +233,9 @@ class ChangelogCard(CardWidget):
         self._tokens = tokens or get_theme_tokens()
         tokens = self._tokens
 
-        self.title_label.setStyleSheet(f"color: {tokens.accent_hex};")
+        # Светлый акцент бренда на светлой карточке терялся; название этапа
+        # должно читаться с тем же контрастом, что и остальные подписи.
+        self.title_label.setStyleSheet(f"color: {tokens.fg};")
         self.changelog_text.setStyleSheet(f"color: {tokens.fg_muted}; font-size: 12px; padding: 4px 0;")
 
         self.close_btn.setIcon(FluentIcon.CLOSE)
@@ -282,20 +281,17 @@ class ChangelogCard(CardWidget):
         self._update_accessibility()
 
     def start_download(self, version: str):
+        self._progress_model = DownloadProgress()
+        self._progress_model.set_stage("download", "Скачивание обновления…")
+        self._download_snapshot = None
         plan = update_page_plans.build_changelog_download_start_plan(
             version=version,
             language=self._ui_language,
-            now=time.time(),
         )
         self._mode = plan.mode
         self._is_downloading = plan.is_downloading
         self._icon_kind = plan.icon_kind
         self._raw_version = plan.raw_version
-        self._download_start_time = plan.download_start_time
-        self._last_bytes = plan.last_bytes
-        self._last_speed_time = plan.last_speed_time
-        self._last_speed_bytes = plan.last_speed_bytes
-        self._smoothed_speed = plan.smoothed_speed
         self._download_percent = plan.download_percent
         self._download_done_bytes = plan.download_done_bytes
         self._download_total_bytes = plan.download_total_bytes
@@ -320,42 +316,31 @@ class ChangelogCard(CardWidget):
         self._update_accessibility()
 
     def update_progress(self, percent: int, done_bytes: int, total_bytes: int):
-        plan = update_page_plans.build_changelog_progress_plan(
-            percent=percent,
-            done_bytes=done_bytes,
-            total_bytes=total_bytes,
-            last_speed_time=self._last_speed_time,
-            last_speed_bytes=self._last_speed_bytes,
-            smoothed_speed=self._smoothed_speed,
-            download_speed_kb=self._download_speed_kb,
-            download_eta_seconds=self._download_eta_seconds,
-            language=self._ui_language,
-            now=time.time(),
-            progress_bar_visible=self.progress_bar.isVisible(),
-        )
-        self._mode = plan.mode
-        self._download_percent = plan.download_percent
-        self._download_done_bytes = plan.download_done_bytes
-        self._download_total_bytes = plan.download_total_bytes
-        self._last_bytes = plan.last_bytes
-        self._last_speed_time = plan.last_speed_time
-        self._last_speed_bytes = plan.last_speed_bytes
-        self._smoothed_speed = plan.smoothed_speed
-        self._download_speed_kb = plan.download_speed_kb
-        self._download_eta_seconds = plan.download_eta_seconds
+        self._progress_model.update(percent, done_bytes, total_bytes)
+        self.apply_download_snapshot(self._progress_model.snapshot())
 
-        if plan.hide_indeterminate and self._progress_indeterminate is not None and self._progress_indeterminate.isVisible():
-            try:
-                self._progress_indeterminate.stop()
-                self._progress_indeterminate.hide()
-            except Exception:
-                pass
-        self.progress_bar.setVisible(plan.show_progress_bar)
-        self.progress_bar.setValue(plan.progress_value)
-        self.progress_label.setText(plan.progress_label_text)
-        self.version_label.setText(plan.version_text)
-        self.speed_label.setText(plan.speed_label_text)
-        self.eta_label.setText(plan.eta_label_text)
+    def apply_download_snapshot(self, snapshot) -> None:
+        if not self._is_downloading:
+            return
+        self._download_snapshot = snapshot
+        self._download_percent = snapshot.percent
+        self._download_done_bytes = snapshot.done_bytes
+        self._download_total_bytes = snapshot.total_bytes
+        self._download_speed_kb = snapshot.speed / 1024 if snapshot.speed is not None else None
+        self._download_eta_seconds = snapshot.eta_seconds
+        labels = progress_labels(snapshot, language=self._ui_language)
+        if snapshot.done_bytes > 0:
+            self._progress_indeterminate.stop()
+            self._progress_indeterminate.hide()
+            self.progress_bar.show()
+        self.progress_bar.setValue(snapshot.percent)
+        self.progress_label.setText(labels.percent)
+        status = snapshot.status
+        if snapshot.total_bytes > 0:
+            status = labels.size if status == "Скачивание обновления…" else f"{status} · {labels.size}"
+        self.version_label.setText(status)
+        self.speed_label.setText(labels.speed)
+        self.eta_label.setText(labels.eta)
         self._update_accessibility()
 
     def set_download_status_text(self, message: str) -> None:
@@ -441,6 +426,8 @@ class ChangelogCard(CardWidget):
         self.eta_label.setText(plan.eta_label_text)
         self.install_btn.setText(plan.install_text)
         self._apply_theme()
+        if self._is_downloading and self._download_snapshot is not None:
+            self.apply_download_snapshot(self._download_snapshot)
         self._update_accessibility()
 
     def _on_install(self):

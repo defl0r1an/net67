@@ -354,8 +354,11 @@ class ServersPage(BasePage):
     # из него и не скрыли (updater/ui/download_view.py).
 
     def update_download_progress(self, percent: int, done_bytes: int, total_bytes: int) -> None:
-        self.changelog_card.update_progress(percent, done_bytes, total_bytes)
-        download_view.forward("set_download_progress", percent, done_bytes, total_bytes)
+        self._update_runtime._on_update_download_progress(percent, done_bytes, total_bytes)
+
+    def update_download_snapshot(self, snapshot) -> None:
+        self.changelog_card.apply_download_snapshot(snapshot)
+        download_view.forward("set_download_snapshot", snapshot)
 
     def update_download_status_text(self, message: str) -> None:
         self.changelog_card.set_download_status_text(message)

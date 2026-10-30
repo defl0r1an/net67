@@ -3131,6 +3131,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Скорость: {value:.0f} КБ/с",
         "en": "Speed: {value:.0f} KB/s",
     },
+    "page.servers.changelog.progress.speed_slow_template": {
+        "ru": "Скорость: {value:.1f} КБ/с",
+        "en": "Speed: {value:.1f} KB/s",
+    },
     "page.servers.changelog.progress.eta_sec_template": {
         "ru": "Осталось: {seconds} сек",
         "en": "Remaining: {seconds} sec",
