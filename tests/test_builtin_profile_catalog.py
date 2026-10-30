@@ -228,6 +228,23 @@ RUNTIME_ONLY_PROFILE_KEYS = {
 
 class BuiltinProfileCatalogTests(unittest.TestCase):
 
+    def test_simplex_ip_variant_is_separate_from_domain_variant(self) -> None:
+        preset = parse_preset_text(ALL_PROFILES_PATH.read_text(encoding="utf-8"), engine="winws2")
+        variants = [profile for profile in preset.profiles if profile.display_name == "SimpleX"]
+        self.assertEqual(len(variants), 2)
+        self.assertEqual({tuple(profile.match.hostlist_lines) for profile in variants},
+                         {(), ("--hostlist=lists/simplex.txt",)})
+        self.assertEqual({tuple(profile.match.ipset_lines) for profile in variants},
+                         {(), ("--ipset=lists/ipset-simplex.txt",)})
+        self.assertTrue(all(not (profile.match.hostlist_lines and profile.match.ipset_lines) for profile in variants))
+        addresses = _list_entries(LISTS_ROOT / "ipset-simplex.txt")
+        self.assertTrue(addresses)
+        self.assertEqual(len(addresses), len(set(addresses)))
+        for address in addresses:
+            with self.subTest(address=address):
+                network = ipaddress.ip_network(address, strict=False)
+                self.assertEqual(network.prefixlen, network.max_prefixlen)
+
     def test_service_hostlist_profiles_use_requested_domain_lists(self) -> None:
         preset = parse_preset_text(
             ALL_PROFILES_PATH.read_text(encoding="utf-8"),
@@ -242,6 +259,8 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             "Amazon TCP": ("--filter-tcp=80,443-65535", "--hostlist=lists/amazon.txt"),
             "Riot / Valorant TCP": ("--filter-tcp=443", "--hostlist=lists/riot-valorant.txt"),
             "Signal": ("--filter-tcp=443", "--hostlist=lists/signal.txt"),
+            "Matrix": ("--filter-tcp=443", "--hostlist=lists/matrix.txt"),
+            "SimpleX": ("--filter-tcp=443", "--hostlist=lists/simplex.txt"),
         }
 
         for name, match_lines in expected_profiles.items():
@@ -263,6 +282,8 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             ],
             "cloudfront.txt": ["cloudfront.net"],
             "signal.txt": ["signal.org"],
+            "matrix.txt": ["matrix.org", "vector.im", "element.io"],
+            "simplex.txt": ["simplex.chat", "simplex.im", "simplexonflux.com"],
             "epicgames-fortnite.txt": ["epicgames.com", "fortnite.com", "akamaized.net", "unrealengine.com"],
             "ubisoft.txt": ["ubi.com", "ubisoft.com", "ubisoftconnect.com", "ubisoftclub.com", "uplay.com"],
             "amazon.txt": ["amazonaws.com", "amazon.com", "awsapps.com", "awsstatic.com"],
@@ -1870,7 +1891,7 @@ class BuiltinProfileCatalogTests(unittest.TestCase):
             not in catalog_pairs
         ]
 
-        self.assertEqual(len(preset.profiles), 100)
+        self.assertEqual(len(preset.profiles), 102)
         self.assertEqual(offenders, [])
         self.assertIn(
             "--lua-init=fake_unknown_256=string.rep(string.char(0),256);"

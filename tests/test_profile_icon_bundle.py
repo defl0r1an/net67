@@ -74,6 +74,16 @@ class SimpleIconsBundleTests(unittest.TestCase):
         self.assertIn("simple", cache_kinds, "иконка не отрисована из бандла")
         self.assertNotIn("initials", cache_kinds, "не должно быть заглушки для иконки из бандла")
 
+    def test_messenger_icons_render_without_initials_fallback(self) -> None:
+        for slug in ("matrix", "simplex"):
+            with self.subTest(slug=slug):
+                pixmap = profile_icon.profile_icon_pixmap(f"simple:{slug}:XX", color="#B0B6BE", size=18)
+                self.assertFalse(pixmap.isNull())
+                self.assertTrue(any(key[0] == "simple" and key[1] == slug for key in profile_icon._PROFILE_PIXMAP_CACHE))
+                image = pixmap.toImage()
+                self.assertGreater(sum(image.pixelColor(x, y).alpha() > 40
+                                       for x in range(image.width()) for y in range(image.height())), 10)
+
     def test_vencord_icon_renders_from_bundle(self) -> None:
         pixmap = profile_icon.profile_icon_pixmap(
             "simple:vencord:VC",

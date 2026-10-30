@@ -291,8 +291,46 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                 self.assertTrue(profile.enabled)
                 self.assertEqual(profile.match.filter_lines, ["--filter-tcp=443"])
                 self.assertEqual(profile.match.hostlist_lines, ["--hostlist=lists/signal.txt"])
-                self.assertEqual(normalize_lines(profile.strategy.strategy_lines), expected_strategy)
-                self.assertEqual(self._resolved_strategy_id(profile), "alt9")
+                if path.name == "Default v1 (game filter).txt":
+                    self.assertEqual(normalize_lines(profile.strategy.strategy_lines), (
+                        "--out-range=-d8",
+                        "--lua-desync=hostfakesplit_multi:hosts=google.com,vimeo.com:tcp_ts=-1000:tcp_md5:repeats=2",
+                    ))
+                    self.assertEqual(self._resolved_strategy_id(profile), "hostfakesplit_multi")
+                else:
+                    self.assertEqual(normalize_lines(profile.strategy.strategy_lines), expected_strategy)
+                    self.assertEqual(self._resolved_strategy_id(profile), "alt9")
+
+    def test_matrix_and_simplex_follow_signal_in_all_builtin_presets(self) -> None:
+        for path in sorted(Path("src/presets/builtin/winws2").glob("*.txt")):
+            preset = parse_preset_text(path.read_text(encoding="utf-8"), engine="winws2", source_name=path.name)
+            signal_index = next(p.index for p in preset.profiles if p.display_name == "Signal")
+            for offset, (name, filename) in enumerate((("Matrix", "matrix"), ("SimpleX", "simplex")), start=1):
+                with self.subTest(preset=path.name, profile=name):
+                    matches = [p for p in preset.profiles if p.display_name == name]
+                    self.assertEqual(len(matches), 1)
+                    profile = matches[0]
+                    self.assertIs(profile, preset.profiles[signal_index + offset])
+                    self.assertTrue(profile.enabled)
+                    self.assertEqual(profile.match.filter_lines, ["--filter-tcp=443"])
+                    self.assertEqual(profile.match.hostlist_lines, [f"--hostlist=lists/{filename}.txt"])
+                    self.assertEqual(profile.match.ipset_lines, [])
+                    self.assertEqual(normalize_lines(profile.strategy.strategy_lines), (
+                        "--out-range=-d8",
+                        "--lua-desync=hostfakesplit:host=ozon.ru:tcp_ts=-1000:tcp_md5:repeats=4",
+                    ))
+                    self.assertEqual(self._resolved_strategy_id(profile), "alt9")
+
+    def test_default_v1_youtube_uses_catalogued_stun_multisplit(self) -> None:
+        path = Path("src/presets/builtin/winws2/Default v1 (game filter).txt")
+        preset = parse_preset_text(path.read_text(encoding="utf-8"), engine="winws2", source_name=path.name)
+        for filename in ("googlevideo.txt", "youtube.txt"):
+            with self.subTest(filename=filename):
+                profile = next(p for p in preset.profiles if p.match.hostlist_lines == [f"--hostlist=lists/{filename}"]
+                               and any(line.startswith("--filter-tcp=") for line in p.match.filter_lines))
+                self.assertIn("--lua-desync=fake:blob=stun_pat:tcp_ack=-66000:tcp_ts_up:repeats=3", profile.strategy.strategy_lines)
+                self.assertIn("--lua-desync=multisplit:pos=1,midsld", profile.strategy.strategy_lines)
+                self.assertEqual(self._resolved_strategy_id(profile), "stock_builtin_coverage_tcp_023")
 
     def test_youtube_profiles_precede_ru_pass_in_every_builtin_preset(self) -> None:
         # AS12389 остаётся в ipset-ru: внутри него могут находиться российские

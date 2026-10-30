@@ -154,6 +154,30 @@ class ProfileFolderActionTests(unittest.TestCase):
         self.assertEqual(state["folders"]["telegram"]["name"], "Telegram")
         self.assertEqual(state["folders"]["whatsapp"]["name"], "WhatsApp")
 
+    def test_untouched_matrix_and_simplex_move_to_messengers_once(self) -> None:
+        state = load_profile_folder_state()
+        for key in ("uid:matrix", "uid:simplex", "uid:rutor"):
+            state["items"][key] = {"folder_key": "sites", "order": None, "rating": 4}
+        state["items"]["uid:ordered"] = {"folder_key": "sites", "order": 0, "rating": 2}
+        folder = create_profile_folder("Работа")
+        state = {**load_profile_folder_state(), "items": state["items"]}
+        state["items"]["uid:moved"] = {"folder_key": folder, "order": None, "rating": 3}
+        save_profile_folder_state(state)
+        targets = {"uid:matrix": "messengers", "uid:simplex": "messengers", "uid:rutor": "sites",
+                   "uid:ordered": "messengers", "uid:moved": "messengers"}
+
+        self.assertTrue(move_untouched_profiles_to_split_folders(targets))
+        from settings import store
+        store.close_settings_database()
+        saved = load_profile_folder_state()
+        for key in ("uid:matrix", "uid:simplex"):
+            self.assertEqual(saved["items"][key], {"folder_key": "messengers", "order": None, "rating": 4})
+        self.assertEqual(saved["items"]["uid:rutor"]["folder_key"], "sites")
+        self.assertEqual(saved["items"]["uid:ordered"], {"folder_key": "sites", "order": 0, "rating": 2})
+        self.assertEqual(saved["items"]["uid:moved"], {"folder_key": folder, "order": None, "rating": 3})
+        with patch("profile.folders.settings_store.set_folders_settings", side_effect=AssertionError("повторная запись")):
+            self.assertFalse(move_untouched_profiles_to_split_folders(targets))
+
     def test_voice_profile_arranged_by_user_is_left_where_it_is(self) -> None:
         with TemporaryDirectory() as temp_dir:
             with patch("settings.store.MAIN_DIRECTORY", str(Path(temp_dir))):

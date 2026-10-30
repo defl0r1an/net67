@@ -113,6 +113,17 @@ class ShippedResourcesExistTests(unittest.TestCase):
                 f"нет каталогов стратегий для {engine}",
             )
 
+    def test_messenger_lists_are_shipped_in_base_and_runtime_layers(self) -> None:
+        self.assertEqual(_copy_pairs().get("lists"), "lists")
+        for name in ("matrix.txt", "simplex.txt", "ipset-simplex.txt"):
+            with self.subTest(name=name):
+                base = PROJECT_ROOT / "lists" / "base" / name
+                runtime = PROJECT_ROOT / "lists" / name
+                self.assertTrue(base.is_file())
+                self.assertTrue(runtime.is_file())
+                self.assertTrue(base.read_bytes())
+                self.assertEqual(base.read_bytes(), runtime.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -257,6 +257,24 @@
 
 --new
 
+--name=Matrix
+--filter-tcp=443
+--hostlist=lists/matrix.txt
+
+--new
+
+--name=SimpleX
+--filter-tcp=443
+--hostlist=lists/simplex.txt
+
+--new
+
+--name=SimpleX
+--filter-tcp=443
+--ipset=lists/ipset-simplex.txt
+
+--new
+
 --name=GitHub · файлы и картинки
 --filter-tcp=443
 --hostlist=lists/githubusercontent.txt

@@ -67,6 +67,8 @@ PROFILE_FOLDER_SPLITS: dict[str, str] = {
     VOICE_FOLDER_KEY: "discord",
     "telegram": "messengers",
     "whatsapp": "messengers",
+    # Ранее Matrix и SimpleX попадали в «Сайты»; вручную разложенное не перемещаем.
+    "messengers": "sites",
 }
 
 # В оригинальном zapret2 stun — общий протокол звонков (--filter-l7=stun), а
@@ -124,7 +126,7 @@ def _classify_profile_folder_text(value: str) -> str:
         return "telegram"
     if _has_any_token(value, ("whatsapp",)):
         return "whatsapp"
-    if _has_any_token(value, ("viber", "signal")):
+    if _has_any_token(value, ("viber", "signal", "matrix", "simplex")):
         return "messengers"
     if _has_any_token(value, ("facebook", "instagram", "tiktok", "twitter", "x.com", "vk")):
         return "social"
