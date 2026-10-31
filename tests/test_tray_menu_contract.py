@@ -101,6 +101,34 @@ class TrayMenuContractTests(unittest.TestCase):
 
         self.assertIsNone(manager._menu)
 
+    def test_cached_menu_can_reopen_and_receive_network_updates(self) -> None:
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        from PyQt6.QtWidgets import QWidget
+        from qfluentwidgets import RoundMenu
+        from main.tray_window_port import TrayWindowPort
+
+        owner = QWidget()
+        self.addCleanup(owner.deleteLater)
+        menus = []
+
+        def create_menu():
+            menu = RoundMenu(parent=owner)
+            menu.exec = Mock(return_value=None)
+            menus.append(menu)
+            return menu
+
+        manager = self._prewarm_manager(create_menu)
+        manager.window_port.exec_popup_menu = TrayWindowPort(owner).exec_popup_menu
+        manager._update_tray_tooltip = Mock()
+        for iteration in range(3):
+            manager.show_context_menu()
+            # Нужна настоящая обработка DeferredDelete: живая Python-ссылка
+            # иначе прячет уже запланированное удаление меню и его Action.
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            manager._on_network_status_changed(True, 12 + iteration)
+            self.assertEqual(manager._network_status_action.text(), f"Сеть: {12 + iteration} мс")
+        self.assertEqual(len(menus), 1)
+
     def test_native_backend_schedules_the_prewarm(self) -> None:
         import inspect
 

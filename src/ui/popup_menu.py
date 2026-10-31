@@ -115,8 +115,13 @@ def exec_popup_menu(
     owner: QWidget | None,
     capture_action: bool = False,
     monitor_global_mouse: bool = False,
+    delete_on_close: bool = True,
 ) -> object | None:
-    """Показывает одноразовое popup-меню, закрывает его при потере активности и удаляет после закрытия."""
+    """Закрывает popup при потере активности; по умолчанию удаляет его.
+
+    Владелец постоянного меню, например трей, передаёт delete_on_close=False:
+    его пункты нужны для следующего открытия и фонового обновления состояния.
+    """
 
     chosen_action: dict[str, object | None] = {"value": None}
     finished = {"value": False}
@@ -186,12 +191,15 @@ def exec_popup_menu(
         mouse_watch_timer.timeout.connect(_poll_global_mouse)
         mouse_watch_timer.start()
 
+    action_handlers = []
     for action in menu.actions():
         try:
             if capture_action:
-                action.triggered.connect(lambda _checked=False, action=action: _finish(action))
+                handler = lambda _checked=False, action=action: _finish(action)
             else:
-                action.triggered.connect(lambda _checked=False: _finish())
+                handler = lambda _checked=False: _finish()
+            action.triggered.connect(handler)
+            action_handlers.append((action, handler))
         except Exception:
             pass
 
@@ -226,12 +234,23 @@ def exec_popup_menu(
                 mouse_watch_timer.stop()
             except Exception:
                 pass
-        # Меню создаётся на каждый показ с родителем-страницей или окном, а
-        # RoundMenu сам себя не удаляет: без этого каждое открытие оставляло бы
-        # в памяти меню со всеми пунктами до закрытия программы.
-        try:
-            menu.deleteLater()
-        except RuntimeError:
-            pass
+        # В постоянном меню старые замыкания иначе держали бы прежний цикл
+        # и срабатывали при каждом следующем щелчке по тому же пункту.
+        for action, handler in action_handlers:
+            try:
+                action.triggered.disconnect(handler)
+            except (RuntimeError, TypeError):
+                pass
+        for temporary in (mouse_watch_timer, lifecycle_filter, loop):
+            if temporary is not None:
+                try:
+                    temporary.deleteLater()
+                except RuntimeError:
+                    pass
+        if delete_on_close:
+            try:
+                menu.deleteLater()
+            except RuntimeError:
+                pass
 
     return chosen_action["value"]

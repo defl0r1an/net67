@@ -23,6 +23,9 @@ class TrayWindowPort:
             position,
             owner=self._window,
             monitor_global_mouse=True,
+            # Менеджер трея хранит прогретое меню и обновляет его Action
+            # после закрытия; одноразовый режим оставлял удалённые пункты.
+            delete_on_close=False,
         )
 
     def prompt_console_command(self):
