@@ -209,6 +209,24 @@ def _collapse_group_spacing(card) -> None:
             continue
 
 
+def paint_standalone_card(painter, rect, *, hovered: bool = False) -> None:
+    """Общий фон для обычной карточки и её готового слоя в главной сцене.
+
+    Главная карточка раньше копировала родной paintEvent библиотеки:
+    после установки палитры оболочки у неё менялись фон и скругление
+    при переходе от обычного состояния к подкрашенному.
+    """
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QColor, QPainter
+    from shell.theme import CARD_RADIUS
+
+    colors = _card_colors()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(colors.surface_hover if hovered else colors.surface))
+    painter.drawRoundedRect(rect, float(CARD_RADIUS), float(CARD_RADIUS))
+
+
 def _make_paint_event():
     """Собирает обработчик отрисовки, общий для всех карточек.
 
@@ -229,8 +247,6 @@ def _make_paint_event():
     from shell.theme import CARD_RADIUS
 
     def paintEvent(self, event) -> None:  # noqa: N802 (сигнатура Qt)
-        colors = _card_colors()
-
         hovered = False
         try:
             hovered = bool(self.underMouse() and self.isEnabled())
@@ -245,13 +261,14 @@ def _make_paint_event():
         rect = QRectF(self.rect())
 
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(colors.surface_hover if hovered else colors.surface))
 
         if not in_group or (first and last):
-            painter.drawRoundedRect(rect, radius, radius)
+            paint_standalone_card(painter, rect, hovered=hovered)
         else:
+            colors = _card_colors()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colors.surface_hover if hovered else colors.surface))
             # Скругляем только внешние углы: на стыке строк засечки
             # выдали бы, что карточка собрана из кусков.
             #
@@ -330,4 +347,4 @@ def install_card_painting() -> tuple[str, ...]:
     return tuple(patched)
 
 
-__all__ = ["install_card_painting"]
+__all__ = ["install_card_painting", "paint_standalone_card"]

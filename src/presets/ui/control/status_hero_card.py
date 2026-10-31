@@ -30,6 +30,8 @@ from PyQt6.QtWidgets import QBoxLayout
 
 from qfluentwidgets import CardWidget, isDarkTheme
 
+from shell.card_paint import paint_standalone_card
+from shell.theme import CARD_RADIUS, palette
 from ui.animation_policy import are_live_animations_enabled
 from ui.paint_layer_cache import LayerCache
 
@@ -272,14 +274,15 @@ class StatusHeroCard(CardWidget):
 
     def _base_key(self) -> tuple:
         """Всё, от чего зависит неподвижная часть карточки."""
+        colors = palette(bool(isDarkTheme()))
         return (
             self.width(),
             self.height(),
-            float(self.borderRadius),
+            float(CARD_RADIUS),
             isDarkTheme(),
             bool(self.isHover),
             bool(self.isPressed),
-            self.backgroundColor.rgba(),
+            colors.surface,
             self._tint.rgba(),
         )
 
@@ -287,8 +290,8 @@ class StatusHeroCard(CardWidget):
         """Рамка и фон карточки и подкраска цветом состояния поверх них."""
         self._paint_card_frame(painter)
 
-        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        radius = float(self.borderRadius)
+        rect = QRectF(self.rect())
+        radius = float(CARD_RADIUS)
         strength = TINT_ALPHA_DARK if isDarkTheme() else TINT_ALPHA_LIGHT
         near = QColor(self._tint)
         near.setAlphaF(strength)
@@ -305,61 +308,19 @@ class StatusHeroCard(CardWidget):
         painter.drawRoundedRect(rect, radius, radius)
 
     def _paint_card_frame(self, painter: QPainter) -> None:
-        """Рамка и фон обычной карточки — то же, что рисует ``CardWidget.paintEvent``.
-
-        Библиотека рисует их только прямо на виджете, а в готовый слой нужно
-        нарисовать своим ``painter``, поэтому рисунок повторён здесь. За
-        совпадением с библиотекой следит тест
-        ``test_card_frame_matches_the_library_card`` (tests/test_bypass_scene.py).
-        """
-        w, h = self.width(), self.height()
-        r = self.borderRadius
-        d = 2 * r
-        dark = isDarkTheme()
-
-        top = QPainterPath()
-        top.arcMoveTo(1, h - d - 1, d, d, 240)
-        top.arcTo(1, h - d - 1, d, d, 225, -60)
-        top.lineTo(1, r)
-        top.arcTo(1, 1, d, d, -180, -90)
-        top.lineTo(w - r, 1)
-        top.arcTo(w - d - 1, 1, d, d, 90, -90)
-        top.lineTo(w - 1, h - r)
-        top.arcTo(w - d - 1, h - d - 1, d, d, 0, -60)
-        top_color = QColor(0, 0, 0, 20)
-        if dark:
-            if self.isPressed:
-                top_color = QColor(255, 255, 255, 18)
-            elif self.isHover:
-                top_color = QColor(255, 255, 255, 13)
-        else:
-            top_color = QColor(0, 0, 0, 15)
-        painter.strokePath(top, top_color)
-
-        bottom = QPainterPath()
-        bottom.arcMoveTo(1, h - d - 1, d, d, 240)
-        bottom.arcTo(1, h - d - 1, d, d, 240, 30)
-        bottom.lineTo(w - r - 1, h - 1)
-        bottom.arcTo(w - d - 1, h - d - 1, d, d, 270, 30)
-        bottom_color = top_color
-        if not dark and self.isHover and not self.isPressed:
-            bottom_color = QColor(0, 0, 0, 27)
-        painter.strokePath(bottom, bottom_color)
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(self.backgroundColor)
-        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), r, r)
+        """Та же палитра и форма, что у карточек после настройки оболочки."""
+        paint_standalone_card(painter, QRectF(self.rect()))
 
     def paintEvent(self, event) -> None:  # noqa: N802
-        if not self._tint.isValid():
-            super().paintEvent(event)
-            return
-        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        radius = float(self.borderRadius)
-
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
+        if not self._tint.isValid():
+            self._paint_card_frame(painter)
+            painter.end()
+            return
+        rect = QRectF(self.rect())
+        radius = float(CARD_RADIUS)
 
         if self._tint_fade.state() == QVariantAnimation.State.Running:
             # Цвет перетекает: подкраска каждый кадр другая, слой не годится.

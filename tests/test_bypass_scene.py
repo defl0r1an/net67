@@ -599,6 +599,7 @@ class StatusHeroCardTests(unittest.TestCase):
         card.show()
         scene.set_color("#6ccb5f")
         card._wave_t = 0.4
+        card._wave_color = QColor("#6ccb5f")
         image = QPixmap(card.size())
         image.fill(QColor(0, 0, 0, 0))
         card.render(image)
@@ -679,31 +680,32 @@ class StatusCardReadyLayersTests(unittest.TestCase):
             scene._breath = math.sin(2 * math.pi * flow_time / scene_module.BREATH_PERIOD_S)
 
     def test_card_frame_matches_the_library_card(self) -> None:
-        from PyQt6.QtCore import QPoint
-        from PyQt6.QtGui import QImage, QPainter, QRegion
-        from qfluentwidgets import Theme, isDarkTheme, setTheme
+        from PyQt6.QtCore import QPoint, Qt
+        from PyQt6.QtGui import QImage, QRegion
+        from qfluentwidgets import CardWidget, Theme, isDarkTheme, setTheme
 
-        class FrameOnlyCard(StatusHeroCard):
-            def paintEvent(self, event) -> None:  # noqa: N802
-                painter = QPainter(self)
-                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-                self._paint_card_frame(painter)
+        from shell.card_paint import install_card_painting
+        install_card_painting()
 
-        # QWidget.render добавляет фон платформы и QSS до paintEvent.
-        # Обоим вариантам нужен одинаковый путь Qt: прямое рисование на
-        # QImage пропускало этот фон и зависело от предыдущих страниц.
+        # Оболочка заменяет стандартный paintEvent библиотеки при старте.
+        # Эталон — карточка приложения после этой замены, а не чужая
+        # палитра, случайно оставшаяся в изолированном запуске теста.
         self.addCleanup(setTheme, Theme.DARK if isDarkTheme() else Theme.LIGHT)
         for theme in (Theme.DARK, Theme.LIGHT):
             setTheme(theme)
             for hover in (False, True):
                 with self.subTest(theme=theme, hover=hover):
                     images = []
-                    for card_type in (StatusHeroCard, FrameOnlyCard):
+                    for card_type in (CardWidget, StatusHeroCard):
                         card = card_type()
                         card.resize(400, 120)
                         self.addCleanup(card.deleteLater)
                         card.isHover = hover
-                        self.assertFalse(card.tint().isValid())
+                        if isinstance(card, StatusHeroCard):
+                            self.assertFalse(card.tint().isValid())
+                            # Вся карточка не является кнопкой: её обычный
+                            # фон сохраняется и под курсором.
+                            card.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, hover)
                         image = QImage(400, 120, QImage.Format.Format_ARGB32_Premultiplied)
                         image.fill(QColor("#20262e"))
                         card.render(image, QPoint(), QRegion(), QWidget.RenderFlag.DrawChildren)
