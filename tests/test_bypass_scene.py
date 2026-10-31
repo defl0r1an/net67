@@ -683,33 +683,32 @@ class StatusCardReadyLayersTests(unittest.TestCase):
         from PyQt6.QtGui import QImage, QPainter, QRegion
         from qfluentwidgets import Theme, isDarkTheme, setTheme
 
-        # Чужой QSS добавляет фон при QWidget.render, но не при прямом
-        # вызове рисования рамки. Здесь сравниваем именно рамку библиотеки;
-        # фон страницы проверяется ниже вместе с готовыми слоями сцены.
-        self.addCleanup(self._app.setStyleSheet, self._app.styleSheet())
-        self._app.setStyleSheet("")
+        class FrameOnlyCard(StatusHeroCard):
+            def paintEvent(self, event) -> None:  # noqa: N802
+                painter = QPainter(self)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                self._paint_card_frame(painter)
+
+        # QWidget.render добавляет фон платформы и QSS до paintEvent.
+        # Обоим вариантам нужен одинаковый путь Qt: прямое рисование на
+        # QImage пропускало этот фон и зависело от предыдущих страниц.
         self.addCleanup(setTheme, Theme.DARK if isDarkTheme() else Theme.LIGHT)
         for theme in (Theme.DARK, Theme.LIGHT):
             setTheme(theme)
             for hover in (False, True):
                 with self.subTest(theme=theme, hover=hover):
-                    card = StatusHeroCard()
-                    card.resize(400, 120)
-                    self.addCleanup(card.deleteLater)
-                    card.isHover = hover
-                    # Без цвета состояния карточку рисует сама библиотека.
-                    self.assertFalse(card.tint().isValid())
-                    library = QImage(400, 120, QImage.Format.Format_ARGB32_Premultiplied)
-                    library.fill(QColor("#20262e"))
-                    card.render(library, QPoint(), QRegion(), QWidget.RenderFlag.DrawChildren)
-
-                    ours = QImage(400, 120, QImage.Format.Format_ARGB32_Premultiplied)
-                    ours.fill(QColor("#20262e"))
-                    painter = QPainter(ours)
-                    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-                    card._paint_card_frame(painter)
-                    painter.end()
-                    self.assertEqual(library, ours)
+                    images = []
+                    for card_type in (StatusHeroCard, FrameOnlyCard):
+                        card = card_type()
+                        card.resize(400, 120)
+                        self.addCleanup(card.deleteLater)
+                        card.isHover = hover
+                        self.assertFalse(card.tint().isValid())
+                        image = QImage(400, 120, QImage.Format.Format_ARGB32_Premultiplied)
+                        image.fill(QColor("#20262e"))
+                        card.render(image, QPoint(), QRegion(), QWidget.RenderFlag.DrawChildren)
+                        images.append(image)
+                    self.assertEqual(images[0], images[1])
 
     def test_running_frame_with_ready_layers_looks_like_direct_painting(self) -> None:
         for scale in (1.0, 1.25, 1.5, 2.0):
