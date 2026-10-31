@@ -683,6 +683,11 @@ class StatusCardReadyLayersTests(unittest.TestCase):
         from PyQt6.QtGui import QImage, QPainter, QRegion
         from qfluentwidgets import Theme, isDarkTheme, setTheme
 
+        # Чужой QSS добавляет фон при QWidget.render, но не при прямом
+        # вызове рисования рамки. Здесь сравниваем именно рамку библиотеки;
+        # фон страницы проверяется ниже вместе с готовыми слоями сцены.
+        self.addCleanup(self._app.setStyleSheet, self._app.styleSheet())
+        self._app.setStyleSheet("")
         self.addCleanup(setTheme, Theme.DARK if isDarkTheme() else Theme.LIGHT)
         for theme in (Theme.DARK, Theme.LIGHT):
             setTheme(theme)

@@ -24,6 +24,15 @@ TRAILER = re.compile(r"^\s*(co-authored-by:.*(anthropic\.com|claude)|claude-sess
 class CommitMessageHookTests(unittest.TestCase):
     def _run_hook(self, text: str) -> str:
         sh = shutil.which("sh")
+        if sh is None and (git := shutil.which("git")):
+            # Git for Windows обычно добавляет в PATH только cmd: оболочка
+            # уже установлена рядом, и отсутствие её в PATH не повод
+            # пропускать настоящую проверку хука.
+            git_root = Path(git).resolve().parent.parent
+            sh = next(
+                (str(path) for path in (git_root / "bin/sh.exe", git_root / "usr/bin/sh.exe") if path.is_file()),
+                None,
+            )
         if sh is None:
             self.skipTest("нет sh")
         with tempfile.TemporaryDirectory() as folder:
