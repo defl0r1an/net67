@@ -42,6 +42,7 @@ tags:
 
 | Профиль | Что стоит за ним |
 | --- | --- |
+| net67 DNS | сервер net67; особенности и ограничения — [[#net67 DNS\|ниже]] |
 | GeoHide | geohide.ru |
 | DNS-AI | dns-ai.ru |
 | Comss DNS | dns.comss.one |
