@@ -48,11 +48,21 @@ class WaitTests(unittest.TestCase):
 
 
 class CheckSiteTests(unittest.TestCase):
-    def _run(self, outcomes_by_call, *, running=True, visit=None):
+    def _run(self, outcomes_by_call, *, running=True, visit=None, retry=None, quic_visit=None):
         from blockcheck import browser_check
 
         calls = iter(outcomes_by_call)
         visit = visit or browser_check.BrowserVisit(browser_check.BROWSER_MISSING)
+        self.retries: list[tuple[str, ...]] = []
+
+        def open_browser(host, *, cancelled, extra=(), net_log=False, quic=False):
+            if quic:
+                return quic_visit or visit
+            if not extra:
+                return visit
+            self.retries.append(tuple(extra))
+            return retry(extra) if retry else browser_check.BrowserVisit(browser_check.BROWSER_FAILED, "", "сброшено", "msedge.exe")
+
         with (
             patch("blockcheck.strategy_search.probes.resolve_target_addresses", return_value=(["1.1.1.1", "1.1.2.1"], "")),
             patch("blockcheck.strategy_search.probes.probe_https_addresses", side_effect=lambda host, addresses, cancel: next(calls)),
@@ -60,9 +70,7 @@ class CheckSiteTests(unittest.TestCase):
         ):
             cancel = SocketCancel()
             cancel.sleep = lambda seconds: True
-            return check.run_apply_check(
-                "discord.com", is_running=lambda: True, restarting=False, cancel=cancel, open_browser=lambda host, **_k: visit
-            )
+            return check.run_apply_check("discord.com", is_running=lambda: True, restarting=False, cancel=cancel, open_browser=open_browser)
 
     def test_site_open_through_preset_is_ok(self) -> None:
         self.assertEqual(self._run([[OK, OK]]).code, check.CHECK_OK)
@@ -77,14 +85,98 @@ class CheckSiteTests(unittest.TestCase):
         from blockcheck import browser_check
 
         opened = self._run([[OK, OK]], visit=browser_check.BrowserVisit(browser_check.BROWSER_OK, browser="msedge.exe"))
-        self.assertEqual(opened.code, check.CHECK_OK)
-        self.assertIn("msedge.exe", opened.text)
+        self.assertEqual((opened.code, opened.browser), (check.CHECK_OK, "Edge"))
         refused = browser_check.BrowserVisit(browser_check.BROWSER_FAILED, "ERR_CONNECTION_RESET", "соединение сброшено", "msedge.exe")
         failed = self._run([[OK, OK]], visit=refused)
         self.assertEqual(failed.code, check.CHECK_BROWSER_FAILED)
         self.assertIn("сброшено", failed.text)
         # Проба не открыла сайт — браузер не нужен: итог уже ясен.
         self.assertEqual(self._run([[RESET], [RESET]], visit=refused).code, check.CHECK_FAILED)
+
+    def test_silent_browser_is_retried_and_then_said_to_be_unchecked(self) -> None:
+        from blockcheck import browser_check
+
+        silent = browser_check.BrowserVisit(browser_check.BROWSER_NO_ANSWER, browser="msedge.exe", details="код выхода 0; вывод пуст")
+        opened = browser_check.BrowserVisit(browser_check.BROWSER_OK, browser="msedge.exe")
+        answers = iter([silent, opened])
+        result = self._run_with_browser(lambda host, quic=False, **_k: opened if quic else next(answers))
+        self.assertEqual((result.code, result.browser), (check.CHECK_OK, "Edge"))
+        # Молчит и второй раз — не «работает» и не «не открылся»: проверить не вышло, с тем, что вернул браузер.
+        result = self._run_with_browser(lambda host, **_k: silent)
+        self.assertEqual(result.code, check.CHECK_BROWSER_UNKNOWN)
+        kind, _title, body = check.apply_check_message("discord.com", result)
+        self.assertEqual(kind, "info")
+        self.assertIn("о сайте это ничего не говорит", body)
+        self.assertIn("Что сделать", body)
+
+    def test_every_installed_browser_is_tried_while_they_stay_silent(self) -> None:
+        from blockcheck import browser_check
+
+        tried: list[str] = []
+
+        def visit(host, *, cancelled, browser, net_log, quic=False):
+            tried.append(browser)
+            if browser.endswith("chrome.exe"):
+                return browser_check.BrowserVisit(browser_check.BROWSER_OK, browser="chrome.exe")
+            return browser_check.BrowserVisit(browser_check.BROWSER_NO_ANSWER, browser="msedge.exe", details="код выхода 1")
+
+        with (
+            patch.object(browser_check, "find_browsers", return_value=[r"C:\Edge\msedge.exe", r"C:\Chrome\chrome.exe"]),
+            patch.object(browser_check, "open_in_browser", side_effect=visit),
+        ):
+            visits = check._browser_visits("discord.com", cancel=SocketCancel(), open_browser=None)
+        self.assertEqual(tried, [r"C:\Edge\msedge.exe", r"C:\Edge\msedge.exe", r"C:\Chrome\chrome.exe"])
+        self.assertTrue(visits[-1].ok)
+
+    def _run_with_browser(self, open_browser):
+        with (
+            patch("blockcheck.strategy_search.probes.resolve_target_addresses", return_value=(["1.1.1.1", "1.1.2.1"], "")),
+            patch("blockcheck.strategy_search.probes.probe_https_addresses", return_value=[OK, OK]),
+            patch.object(check, "wait_until_running", return_value=True),
+        ):
+            cancel = SocketCancel()
+            cancel.sleep = lambda seconds: True
+            return check.run_apply_check("discord.com", is_running=lambda: True, restarting=False, cancel=cancel, open_browser=open_browser)
+
+    def test_browser_failure_is_followed_by_a_search_for_the_cause(self) -> None:
+        # Как www.castingcall.club на win10: Edge прятал имя (ECH); без ECH сайт открылся — причина доказана.
+        from blockcheck import browser_check
+        from blockcheck import browser_diagnosis as bd
+        from blockcheck.browser_netlog import HUNG, Connection, NetFacts
+
+        net = NetFacts((Connection("discord.com", "1.1.1.1", True, HUNG),))
+        failed = browser_check.BrowserVisit(browser_check.BROWSER_TIMEOUT, "", "страница не загрузилась за 20 с", "msedge.exe", net=net)
+        opened = browser_check.BrowserVisit(browser_check.BROWSER_OK, browser="msedge.exe")
+        result = self._run([[OK, OK]], visit=failed, retry=lambda extra: opened if extra == ("--host-resolver-rules=MAP discord.com 1.1.1.1",) else failed)
+        self.assertEqual((result.code, result.fixes, result.browser), (check.CHECK_BROWSER_FIXED, (bd.FIX_ECH,), "Edge"))
+        self.assertEqual(self.retries, [("--host-resolver-rules=MAP discord.com 1.1.1.1",)])
+        kind, _title, body = check.apply_check_message("discord.com", result)
+        self.assertEqual(kind, "warning")
+        self.assertIn("без ECH", body)
+        self.assertIn("Что сделать: выключите в своём браузере ECH", body)
+        self.assertIn("network.dns.echconfig.enabled", body)
+        # Ничего не помогло — так и сказано, с ошибкой браузера и с тем, что пробовали.
+        result = self._run([[OK, OK]], visit=failed)
+        self.assertEqual(result.code, check.CHECK_BROWSER_FAILED)
+        _kind, _title, body = check.apply_check_message("discord.com", result)
+        self.assertIn("без ECH", body)
+        self.assertIn("Что сделать", body)
+
+    def test_silent_browser_whose_log_shows_failed_site_connections_is_diagnosed(self) -> None:
+        # Так Edge 156 на win10 с www.castingcall.club: ни страницы, ни ошибки, а в журнале — три зависших соединения с ECH.
+        # Это не «проверить не вышло», а неудача с фактами: повторять не нужно, нужно искать причину.
+        from blockcheck import browser_check
+        from blockcheck import browser_diagnosis as bd
+        from blockcheck.browser_netlog import HUNG, Connection, NetFacts
+
+        net = NetFacts(tuple(Connection("discord.com", "1.1.1.1", True, HUNG) for _ in range(3)))
+        silent = browser_check.BrowserVisit(browser_check.BROWSER_NO_ANSWER, "", "браузер не ответил", "msedge.exe", net=net)
+        opened = browser_check.BrowserVisit(browser_check.BROWSER_OK, browser="msedge.exe")
+        result = self._run([[OK, OK]], visit=silent, retry=lambda extra: opened if extra == ("--host-resolver-rules=MAP discord.com 1.1.1.1",) else silent)
+        self.assertEqual((result.code, result.fixes, result.text), (check.CHECK_BROWSER_FIXED, (bd.FIX_ECH,), "соединения с сайтом не ответили"))
+        # Пустой журнал — настоящее молчание: проверить не вышло.
+        empty = browser_check.BrowserVisit(browser_check.BROWSER_NO_ANSWER, "", "браузер не ответил", "msedge.exe", net=NetFacts())
+        self.assertEqual(self._run([[OK, OK]], visit=empty).code, check.CHECK_BROWSER_UNKNOWN)
 
     def test_zapret_not_started_is_skipped(self) -> None:
         self.assertEqual(self._run([], running=False).code, check.CHECK_SKIPPED)

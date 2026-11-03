@@ -16,6 +16,7 @@ from dns.adapters import DnsAdapter, build_dns_adapters, is_dns_adapter
 from dns.custom_servers import custom_doh_templates
 from dns.dns_providers import doh_templates
 from dns.state import DnsCommandResult, DnsState
+from dns.step_log import timed_step
 from dns.reachability import check_servers
 from log.log import log
 
@@ -139,12 +140,14 @@ def apply_dns(guids: list[str], ipv4: list[str], ipv6: list[str]) -> DnsCommandR
             errors.append(f"адаптер {guid} не найден — он отключён или удалён")
             continue
         try:
-            winapi.write_dns(guid, ipv4, ipv6=False, doh_templates=templates)
-            winapi.write_dns(guid, ipv6, ipv6=True, doh_templates=templates)
+            with timed_step(f"запись DNS адаптеру «{names[guid]}»"):
+                winapi.write_dns(guid, ipv4, ipv6=False, doh_templates=templates)
+                winapi.write_dns(guid, ipv6, ipv6=True, doh_templates=templates)
         except (winapi.DnsWinApiError, ValueError) as exc:
             errors.append(f"«{names[guid]}»: {exc}")
     if len(errors) < len(guids):
-        winapi.flush_resolver_cache()
+        with timed_step("очистка кэша DNS"):
+            winapi.flush_resolver_cache()
     message = "; ".join(errors)
     if message:
         log(f"DNS: {message}", "WARNING")

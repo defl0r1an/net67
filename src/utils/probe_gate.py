@@ -72,7 +72,6 @@ class BackgroundKind:
 # сутками, а адрес может перестать отвечать в любой день.
 HOSTS_ADDRESSES = BackgroundKind("hosts_addresses", 6 * 3600.0)
 
-
 def may_search(why: Why) -> bool:
     """Можно ли искать замену (DNS, запас, соседние адреса), а не только проверить текущее."""
     return why in (Why.USER, Why.SIGNAL)

@@ -35,6 +35,13 @@ def create_hosts_runtime(status_callback=None):
     return create_hosts_manager(status_callback=status_callback)
 
 
+def hosts_write_lock():
+    """Все владельцы блоков используют один повторно входимый замок hosts."""
+    from hosts.hosts import HOSTS_EDIT_LOCK
+
+    return HOSTS_EDIT_LOCK
+
+
 def get_hosts_state(hosts_manager=None) -> HostsState:
     manager = hosts_manager or create_hosts_manager()
     error = ""
@@ -133,7 +140,12 @@ def execute_hosts_operation(hosts_manager, operation: str, payload=None) -> Host
 def refresh_applied_selection(hosts_manager=None) -> HostsCommandResult:
     """При запуске переписывает уже применённый блок hosts, если каталог сменил адреса."""
     from log.log import log
+    from hosts.proxy_domains import get_all_services
 
+    if not get_all_services():
+        # Каталог не загрузился (база отклонена, нет файла): выбор прочитался бы пустым,
+        # и блок переписался бы пустым — молча стёрлись бы все записи человека. Ждём каталога.
+        return HostsCommandResult(success=False, message="каталог hosts не загрузился — блок не трогается")
     manager = hosts_manager or create_hosts_manager(
         status_callback=lambda message: log(f"Hosts при запуске: {message}", "DEBUG")
     )
@@ -320,6 +332,13 @@ def load_page_snapshot():
 
 
 def apply_hosts_draft(selection: dict[str, str], adobe: bool | None = None) -> HostsApplyResult:
+    # Файл и сохранённый выбор меняются одной транзакцией: иначе другой
+    # владелец блока мог бы записать снимок между этими двумя операциями.
+    with hosts_write_lock():
+        return _apply_hosts_draft_locked(selection, adobe)
+
+
+def _apply_hosts_draft_locked(selection: dict[str, str], adobe: bool | None = None) -> HostsApplyResult:
     """Записывает черновик страницы одной операцией и возвращает свежий снимок.
 
     selection — полный выбор «сервис → профиль»; adobe — None, если блок
@@ -327,6 +346,7 @@ def apply_hosts_draft(selection: dict[str, str], adobe: bool | None = None) -> H
     «одной кнопки», — под общим замком hosts.
     """
     from log.log import log
+    from utils.probe_gate import Why
 
     manager = create_hosts_manager(
         status_callback=lambda message: log(f"Hosts: {message}", "DEBUG")
@@ -510,7 +530,7 @@ def _check_addresses(selection: dict[str, str] | None, *, why, recheck, should_s
     global _OVERLAY_BEFORE_REFRESH
     import time
 
-    from hosts import address_engine, proxy_domains
+    from hosts import address_engine, profile_dns, proxy_domains
     from hosts.address_probe import ALIVE, check_address, sweep
     from hosts.ipv6_detection import is_ipv6_available
     from hosts.relay_check import internet_reachable
@@ -552,6 +572,7 @@ def _check_addresses(selection: dict[str, str] | None, *, why, recheck, should_s
         relays=proxy_domains.relay_addresses_of(catalog),
         probe=_probe,
         resolve=lambda host, ipv6: [] if cancelled() else _fresh_addresses(host, ipv6),
+        profile_resolve=lambda profile, host, ipv6: None if cancelled() else profile_dns.ask_profile(profile, host, ipv6),
         network_ok=internet_reachable,
         ipv6=bool(is_ipv6_available()),
         why=why,

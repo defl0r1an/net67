@@ -249,6 +249,95 @@ class StrategyScanApplyTests(unittest.TestCase):
         self.assertNotIn("--lua-desync=fake:blob=tls_google", feature.saved_text)
         self.assertIn("--hostlist-domains=youtube.com,vimeo.com\n--lua-desync=pass", feature.saved_text)
 
+    def _window_lines(self, strategy_args: str, addresses=("74.125.110.106",)) -> tuple[str, ...]:
+        from blockcheck.strategy_search.probe_profile import build_probe_profile
+
+        return tuple(
+            build_probe_profile(
+                "tcp_https", strategy_args=strategy_args, match_domain="googlevideo.com", window_addresses=addresses
+            ).apply_lines()
+        )
+
+    def test_new_addresses_replace_the_old_window_profile_and_plain_apply_removes_it(self) -> None:
+        """Набор адресов сменился — старые адреса больше не замедляются; стратегия без окна убирает и его профиль."""
+        from profile.parser import parse_preset_text
+        from settings.mode import ENGINE_WINWS2
+
+        args = "--lua-desync=multisplit:pos=2"
+        with TemporaryDirectory() as temp_dir:
+            feature = _PresetFeature("--new\n--name=Общий\n--filter-tcp=443\n--hostlist-domains=vimeo.com\n--lua-desync=pass\n")
+            _apply(feature, temp_dir, strategy_args=args, scan_target="googlevideo.com", apply_lines=self._window_lines(args))
+            _apply(
+                feature,
+                temp_dir,
+                strategy_args=args,
+                scan_target="googlevideo.com",
+                apply_lines=self._window_lines(args, ("74.125.110.38", "74.125.110.39")),
+            )
+            moved = feature.saved_text
+            _apply(feature, temp_dir, strategy_args=args, scan_target="googlevideo.com")
+
+        self.assertNotIn("74.125.110.106", moved)
+        self.assertEqual(moved.count("--name=wssize: googlevideo.com"), 1)
+        preset = parse_preset_text(moved, engine=ENGINE_WINWS2, source_name="Selected.txt")
+        self.assertEqual([profile.name for profile in preset.profiles][:1], ["wssize: googlevideo.com"])
+        self.assertIn("--ipset-ip=74.125.110.38,74.125.110.39", moved)
+        self.assertNotIn("wssize", feature.saved_text)
+        self.assertIn("--hostlist-domains=googlevideo.com", feature.saved_text)
+
+    def test_window_profile_goes_right_above_the_strategy_profile(self) -> None:
+        """TLS по ответу сервера: профиль малого окна по адресам стоит над профилем по именам, а не под ним."""
+        from profile.parser import parse_preset_text
+        from settings.mode import ENGINE_WINWS2
+
+        args = "--lua-desync=multisplit:pos=2"
+        with TemporaryDirectory() as temp_dir:
+            feature = _PresetFeature("--new\n--name=Общий\n--filter-tcp=443\n--hostlist-domains=vimeo.com\n--lua-desync=pass\n")
+            first = _apply(feature, temp_dir, strategy_args=args, scan_target="googlevideo.com", apply_lines=self._window_lines(args))
+            second = _apply(
+                feature,
+                temp_dir,
+                strategy_args="--lua-desync=fake:blob=tls_google",
+                scan_target="googlevideo.com",
+                apply_lines=self._window_lines("--lua-desync=fake:blob=tls_google"),
+            )
+
+        self.assertEqual((first.operation, second.operation), ("created", "updated"))
+        self.assertIn("малое окно (wssize) для 74.125.110.106", first.applied_profile)
+        preset = parse_preset_text(feature.saved_text, engine=ENGINE_WINWS2, source_name="Selected.txt")
+        # Второе «Применить» обновило оба профиля на месте, а не добавило новые.
+        self.assertEqual(len(preset.profiles), 3)
+        window, names, shared = preset.profiles
+        self.assertIn("74.125.110.106", window.match_signature)
+        self.assertIn("googlevideo.com", names.match_signature)
+        self.assertIn("vimeo.com", shared.match_signature)
+        self.assertTrue(window.enabled and names.enabled)
+        window_text = "\n".join(segment.text for segment in window.segments)
+        self.assertIn("--lua-desync=wssize_ramp:wsize=1:scale=1\n--out-range=-d8\n--lua-desync=fake:blob=tls_google", window_text)
+        self.assertEqual(preset.preamble_lines.count("--wf-tcp-empty=1"), 1)
+        self.assertNotIn("multisplit", feature.saved_text)
+
+    def test_window_alone_writes_only_the_address_profile(self) -> None:
+        from blockcheck.strategy_search.probe_profile import WINDOW_STRATEGY_LINE
+        from profile.parser import parse_preset_text
+        from settings.mode import ENGINE_WINWS2
+
+        with TemporaryDirectory() as temp_dir:
+            feature = _PresetFeature("--new\n--name=YouTube\n--filter-tcp=443\n--hostlist-domains=googlevideo.com\n--lua-desync=multisplit:pos=1\n")
+            result = _apply(
+                feature,
+                temp_dir,
+                strategy_args=WINDOW_STRATEGY_LINE,
+                scan_target="googlevideo.com",
+                apply_lines=self._window_lines(WINDOW_STRATEGY_LINE),
+            )
+
+        self.assertEqual(result.applied_profile, "малое окно (wssize) для 74.125.110.106")
+        preset = parse_preset_text(feature.saved_text, engine=ENGINE_WINWS2, source_name="Selected.txt")
+        self.assertEqual(len(preset.profiles), 2)
+        # Рабочая стратегия сайта на остальных адресах осталась как была.
+        self.assertIn("--hostlist-domains=googlevideo.com\n--lua-desync=multisplit:pos=1", feature.saved_text)
+
     def test_profile_written_for_www_target_is_the_same_site(self) -> None:
         # Старый profile на www.youtube.com и новая цель youtube.com — один сайт: обновить, а не плодить.
         with TemporaryDirectory() as temp_dir:

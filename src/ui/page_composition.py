@@ -48,7 +48,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     ),
     PageName.ZAPRET2_PRESET_SETUP: PageDepsSpec(
         build_preset_setup_page_kwargs,
-        features=("profile", "external_actions"),
+        features=("profile", "external_actions", "hosts"),
         actions=("open_profile_setup", "show_page"),
         include_ui_state_store=True,
     ),
@@ -99,7 +99,7 @@ PAGE_DEPS_BUILDERS: dict[PageName, PageDepsSpec] = {
     PageName.BLOCKCHECK: PageDepsSpec(
         build_blockcheck_page_kwargs,
         features=("blockcheck", "dns", "runtime"),
-        actions=("show_page",),
+        actions=("show_page", "notify"),
     ),
     PageName.WINWS_LOG_ANALYZER: PageDepsSpec(build_winws_log_analyzer_page_kwargs),
     PageName.LOGS: PageDepsSpec(

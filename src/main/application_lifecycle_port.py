@@ -40,6 +40,33 @@ class ApplicationLifecycleWindowPort:
             telegram_proxy_feature=telegram_proxy_feature,
         )
 
+    def finish_strategy_scan_before_exit(self, on_done, *, timeout_ms: int = 60_000) -> bool:
+        from PyQt6.QtCore import QTimer
+        from main.window_lifecycle_cleanup import iter_loaded_pages_for_close
+
+        timer = QTimer(self._window)
+        timer.setSingleShot(True)
+        done = False
+
+        def finish(restored: bool) -> None:
+            nonlocal done
+            if done:
+                return
+            done = True
+            timer.stop()
+            timer.deleteLater()
+            on_done(bool(restored))
+
+        timer.timeout.connect(lambda: finish(False))
+        for _name, page in iter_loaded_pages_for_close(self._window):
+            request = getattr(page, "request_exit_restore", None)
+            if callable(request) and request(finish):
+                if not done:
+                    timer.start(int(timeout_ms))
+                return True
+        timer.deleteLater()
+        return False
+
 
 def build_application_lifecycle_window_port(window) -> ApplicationLifecycleWindowPort:
     return ApplicationLifecycleWindowPort(window)

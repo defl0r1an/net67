@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import re
 import secrets
 import socket
 import struct
@@ -19,6 +20,19 @@ from collections.abc import Sequence
 from blockcheck.strategy_search import verdict
 from blockcheck.strategy_search.verdict import ProbeOutcome, UdpProbeSpec
 from utils.net_failure import FAILURE_REFUSED, FAILURE_RESET, FAILURE_TIMEOUT, classify
+
+
+_VIDEO_NODE = re.compile(r"^rr(\d+)---(sn-[a-z0-9-]+)\.googlevideo\.com$")
+VIDEO_SIBLINGS = 20
+
+
+def sibling_video_hosts(host: str) -> list[str]:
+    """Плеер может выбрать соседний видеосервер того же узла; проверять надо каждый адрес."""
+    match = _VIDEO_NODE.match(str(host or "").strip().lower().rstrip("."))
+    if not match:
+        return []
+    number, node = int(match.group(1)), match.group(2)
+    return [f"rr{index}---{node}.googlevideo.com" for index in range(1, VIDEO_SIBLINGS + 1) if index != number]
 
 # Бюджет HTTPS-запроса: подключение + шифрование + первый ответ.
 HTTPS_TIMEOUT = 4.0
@@ -281,7 +295,8 @@ def probe_http(host: str, address: str, *, cancel=None, port: int = 80) -> Probe
         connected=connected,
         elapsed_ms=elapsed,
         body_cut=body_cut,
-        body_size=len(body),
+        # Весь ответ: без шифрования фильтр считает заголовки вместе с телом.
+        body_size=len(data),
     )
 
 

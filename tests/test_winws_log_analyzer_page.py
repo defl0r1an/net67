@@ -61,9 +61,10 @@ def test_page_smoke_fills_tables(result, tmp_path, monkeypatch):
 
     page = page_module.WinwsLogAnalyzerPage()
     try:
-        # Строка заголовка на месте, ссылка на внешнюю инструкцию убрана.
+        # Шапка остаётся единственной, справка ведёт в свою вики.
         assert page.layout.indexOf(page._ui.title_header) == 0
-        assert page._ui.help_button is None
+        from config.urls import WINWS_LOG_ANALYZER_INFO_URL
+        assert page._ui.help_button.getUrl().toString() == WINWS_LOG_ANALYZER_INFO_URL
 
         # Комбобокс недавних логов показывает ТОЛЬКО debug-логи winws2.
         page._refresh_recent_combo()

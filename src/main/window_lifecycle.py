@@ -78,9 +78,12 @@ class WindowLifecycleMixin:
         except Exception:
             pass
 
-    def request_exit(self, stop_dpi: bool) -> None:
+    def request_exit(self, stop_dpi: bool, *, restore_after_scan: bool = True) -> None:
         """Общий вход для tray и adapter-слоя."""
-        self._require_application_lifecycle().request_exit(stop_dpi=bool(stop_dpi))
+        if restore_after_scan:
+            self._require_application_lifecycle().request_exit(stop_dpi=bool(stop_dpi))
+        else:
+            self._require_application_lifecycle().request_exit(stop_dpi=bool(stop_dpi), restore_after_scan=False)
 
     def exit_keep_dpi(self) -> None:
         """Полный выход из GUI без остановки DPI."""

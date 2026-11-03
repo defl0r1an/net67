@@ -353,6 +353,7 @@ class ProfileSetupPageBase(BasePage):
         create_profile_strategy_open_group_save_worker=None,
         create_profile_strategy_grouping_save_worker=None,
         create_profile_geo_services_worker=None,
+        create_profile_name_geo_worker=None,
         open_hosts_editor=None,
         open_dns_settings=None,
     ):
@@ -385,6 +386,7 @@ class ProfileSetupPageBase(BasePage):
         # Гео-сервису (сам закрыт для России) помогают hosts и DNS, а не
         # стратегия: страница говорит об этом всплывающей карточкой.
         self._create_profile_geo_services_worker_fn = create_profile_geo_services_worker
+        self._create_profile_name_geo_worker_fn = create_profile_name_geo_worker
         self._open_hosts_editor = open_hosts_editor
         self._open_dns_settings = open_dns_settings
         self._open_profiles = open_profiles
@@ -945,6 +947,9 @@ class ProfileSetupPageBase(BasePage):
         self._list_file_find_bar = tab.find_bar
         self._list_file_find_controller = tab.find_controller
         self._list_file_text = tab.user_text
+        tab.set_exceptions_supported(is_zapret2_launch_method(self.launch_method))
+        self._list_file_language = tab.language
+        self._list_file_prefix_help = tab.prefix_help
         self._list_file_error_label = tab.error_label
         self._list_file_status_label = tab.status_label
         # Кнопки «Сохранить» нет: валидный текст сохраняется сам
@@ -1320,6 +1325,9 @@ class ProfileSetupPageBase(BasePage):
             name=str(getattr(item, "display_name", "") or ""),
             protocol=protocol,
             ports=ports,
+            create_geo_worker=self._create_profile_name_geo_worker_fn,
+            open_hosts_editor=self._open_hosts_editor,
+            open_dns_settings=self._open_dns_settings,
         )
         if not dialog.exec():
             return
@@ -2001,12 +2009,22 @@ class ProfileSetupPageBase(BasePage):
                 if user_text_changed and not keep_user_edits:
                     self._list_file_text.setPlainText(visible_user_text)
                 set_read_only_if_changed(self._list_file_text, not editable)
-                if kind == "ipset":
-                    set_placeholder_text_if_changed(self._list_file_text, "IP или подсети по одному на строку:\n1.2.3.4\n10.0.0.0/8")
-                else:
-                    set_placeholder_text_if_changed(self._list_file_text, "Домены по одному на строку:\nexample.com\nsub.example.org")
+                list_tab = self.__dict__.get("_list_file_editor_tab")
+                if list_tab is not None:
+                    set_placeholder_text_if_changed(self._list_file_text, list_tab.user_placeholder(kind))
             finally:
                 self._list_file_text.blockSignals(False)
+        language = self.__dict__.get("_list_file_language")
+        if language is not None:
+            language.set_list(kind=kind if editable else "", base_index=getattr(state, "base_index", None))
+            if self._list_file_text is not None:
+                self._list_file_text.refresh_diagnostics()
+        prefix_help = self.__dict__.get("_list_file_prefix_help")
+        if prefix_help is not None:
+            set_widget_visible_if_changed(prefix_help, editable and kind == "hostlist")
+        list_tab = self.__dict__.get("_list_file_editor_tab")
+        if list_tab is not None and kind:
+            list_tab.set_list_kind(kind)
         # Что сервер знает — фиксируем всегда; текст пользователя — только
         # когда его правки не старше пришедшего состояния.
         self._list_file_server_text_snapshot = visible_user_text

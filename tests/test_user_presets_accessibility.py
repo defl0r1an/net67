@@ -598,10 +598,11 @@ class UserPresetsAccessibilityTests(unittest.TestCase):
 
                 self.assertIn(".txt", body)
                 self.assertIn("@<config_file>", body)
-                self.assertIn("preset-zapret2.txt", body)
-                self.assertIn("Пресетами можно обмениваться напрямую.", body)
+                self.assertNotIn("preset-zapret2.txt", body)
+                self.assertIn(".zip", body)
                 self.assertNotIn("https://publish.obsidian.md/zapret/Privacy/Zapret2/preset", body)
-                self.assertIn("прямой запуск", body)
+                self.assertNotIn("прямой запуск", body)
+                self.assertIn("профиль", body)
 
     def _assert_accessibility(self, widgets) -> None:
         expected = {

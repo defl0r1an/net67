@@ -28,6 +28,7 @@ from diagnostics.verdict import (
     Level,
     ReachState,
     TargetOutcome,
+    describe_reach,
     judge_dns,
     judge_reach,
     summarize_service,
@@ -123,10 +124,14 @@ class ReachTests(unittest.TestCase):
         self.assertEqual(judge_reach(ProbeResult(ip="1.1.1.1", kind=KIND_CONNECT)), ReachState.IP_BLOCK)
         self.assertEqual(judge_reach(ProbeResult(ip="1.1.1.1", kind=KIND_CERT)), ReachState.CERT)
 
-    def test_body_cut_at_16kb_is_freeze_but_short_page_is_ok(self) -> None:
+    def test_body_cut_at_16kb_is_freeze_and_earlier_cut_is_not_opened(self) -> None:
         self.assertEqual(judge_reach(_ok(body_cut=True, body_size=16_500)), ReachState.FREEZE)
-        self.assertEqual(judge_reach(_ok(body_cut=True, body_size=3_000)), ReachState.OK)
+        # Страница оборвалась раньше окна: сайт не открылся (решение 2026-11-01), а чей это
+        # обрыв — покажут уточняющие пробы и сверка из-за рубежа.
+        self.assertEqual(judge_reach(_ok(body_cut=True, body_size=3_000)), ReachState.DPI)
+        self.assertIn("раньше обычного обрыва ТСПУ", describe_reach(_ok(body_cut=True, body_size=3_000)))
         self.assertEqual(judge_reach(_ok(body_size=16_500)), ReachState.OK)
+        self.assertEqual(judge_reach(_ok(body_size=3_000)), ReachState.OK)
 
 
 class ServiceSummaryTests(unittest.TestCase):
@@ -202,6 +207,7 @@ class _Net:
         # Что ответил сервер за рубежом и о каких сайтах его спрашивали.
         self.outside: dict[str, str] = {}
         self.outside_asked: list[str] = []
+        self.outside_pages: dict[str, str] = {}
         # Что «нашла» проверка подсетей; сколько раз её звали.
         self.subnets = None
         self.subnet_checks = 0
@@ -264,8 +270,9 @@ class _Net:
             return self.cause_facts(host, result)
         return engine.block_cause.CauseFacts(host=host, result=result)
 
-    def _outside(self, hosts, **_kwargs):
+    def _outside(self, hosts, pages=None, **_kwargs):
         self.outside_asked.extend(hosts)
+        self.outside_pages.update(pages or {})
         return {host: self.outside[host] for host in hosts if host in self.outside}
 
     def _subnets(self, _run, _emit):

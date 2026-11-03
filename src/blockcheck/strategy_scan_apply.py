@@ -239,6 +239,12 @@ def plan_selected_preset_strategy_apply(
     ``strategy_lines`` — profile найденной стратегии целиком (для нового
     profile-а), ``ready_strategy_lines`` — сама найденная готовая стратегия
     (для существующего profile-а).
+
+    Если подбор проверял стратегию вместе с профилем малого окна по адресам
+    (``probe_profile.ProbeProfile.window_lines``), в строках два profile-а:
+    малое окно, затем основной. Профиль малого окна ставится прямо над
+    основным — иначе соединение с этими адресами ушло бы в основной, когда
+    станет известно имя сайта, — или обновляется, если такой уже есть.
     """
     from copy import deepcopy
 
@@ -255,7 +261,14 @@ def plan_selected_preset_strategy_apply(
 
     _merge_preamble_lines(updated.preamble_lines, profile_preset.preamble_lines)
 
-    new_profile = profile_preset.profiles[0]
+    new_profile = profile_preset.profiles[-1]
+    window_profiles = list(profile_preset.profiles[:-1])
+    if str(scan_protocol or "").strip() == PROTOCOL_TCP_HTTPS:
+        from blockcheck.strategy_search.probe_profile import window_profile_name
+
+        # «Применить» пишет ровно то, что проверено: прежний профиль малого окна сайта уходит, а если
+        # проверено с окном — его заменит новый (набор адресов мог смениться).
+        updated = _without_profiles_named(updated, window_profile_name(profile_domain(match_target) or match_target))
     # Обновляется только profile самой цели: тот же отбор трафика и те же имена,
     # что у найденной стратегии (его создало прошлое «Применить»). Общий profile,
     # в списке которого цель лишь одна из многих, не трогается: стратегия
@@ -271,7 +284,9 @@ def plan_selected_preset_strategy_apply(
         None,
     )
     site_port = {PROTOCOL_TCP_HTTPS: 443, PROTOCOL_HTTP80: 80}.get(str(scan_protocol or "").strip())
-    if existing_profile is None and site_port:
+    # Профиль по адресам (одно малое окно) своим по имени не бывает: profile цели по имени он не заменяет.
+    by_names = bool(getattr(new_profile.match, "hostlist_domains_lines", None))
+    if existing_profile is None and site_port and by_names:
         existing_profile = next(
             (profile for profile in updated.profiles if _is_targets_own_profile(profile, match_target, site_port)),
             None,
@@ -284,12 +299,63 @@ def plan_selected_preset_strategy_apply(
             ready_strategy_lines,
             scan_protocol,
         )
-        return planned, "updated", expect
+        if not window_profiles:
+            return planned, "updated", expect
+        from profile.strategy_shape import is_lua_desync_line
 
-    # Найденная стратегия проверена на конкретной цели — её profile идёт
-    # первым, чтобы более широкие profile-ы пресета не перехватили цель.
-    planned = append_profile_from_template(updated, new_profile, enabled=True, position="top")
-    return planned, "created", _expect_profile_lua_lines(0, _lua_lines(new_profile))
+        main_index = existing_profile.index
+        main_lua = [line.strip() for line in ready_strategy_lines or () if is_lua_desync_line(str(line or "").strip())]
+        operation = "updated"
+    else:
+        # Найденная стратегия проверена на конкретной цели — её profile идёт
+        # первым, чтобы более широкие profile-ы пресета не перехватили цель.
+        planned = append_profile_from_template(updated, new_profile, enabled=True, position="top")
+        main_index, main_lua, operation = 0, _lua_lines(new_profile), "created"
+    planned, main_index = _with_window_profiles(planned, window_profiles, main_index)
+    return planned, operation, _expect_profile_lua_lines(main_index, main_lua)
+
+
+def _with_window_profiles(preset, window_profiles, main_index: int):
+    """Профили малого окна прямо над основным: (пресет, новый номер основного profile-а).
+
+    Прежний профиль малого окна этого сайта (то же имя ``wssize: <сайт>`` или тот же отбор трафика)
+    удаляется целиком: набор адресов мог смениться, а старые адреса иначе замедлялись бы и дальше.
+    Новый вставляется прямо над основным — иначе соединение ушло бы в основной, как только станет
+    известно имя сайта.
+    """
+    from profile.serializer import append_profile_from_template, with_profile_deleted
+
+    for window in window_profiles:
+        while True:
+            stale = next(
+                (
+                    profile
+                    for profile in preset.profiles
+                    if (window.name and profile.name == window.name)
+                    or (window.match_signature and profile.match_signature == window.match_signature)
+                ),
+                None,
+            )
+            if stale is None:
+                break
+            preset = with_profile_deleted(preset, stale.index)
+            if stale.index < main_index:
+                main_index -= 1
+        preset = append_profile_from_template(preset, window, enabled=True, position=main_index)
+        main_index += 1
+    return preset, main_index
+
+
+def _without_profiles_named(preset, name: str):
+    """Пресет без profile-ов с этим именем."""
+    from profile.serializer import with_profile_deleted
+
+    while name:
+        stale = next((profile for profile in preset.profiles if profile.name == name), None)
+        if stale is None:
+            break
+        preset = with_profile_deleted(preset, stale.index)
+    return preset
 
 
 def apply_profile_to_selected_preset(
@@ -370,6 +436,12 @@ def apply_strategy(
 
         names = dict.fromkeys(profile_domain(name) or name for name in (target, *(name for name, _host in companions_for(target))))
         applied_profile = ", ".join(names)
+        groups = [value for line in new_strategy_lines if line.startswith("--ipset-ip=") for value in _option_values(line)]
+        if groups:
+            # Профиль малого окна по адресам: его человек должен видеть — он замедляет эти адреса.
+            window = f"малое окно (wssize) для {', '.join(dict.fromkeys(groups))}"
+            only_window = not any(line.startswith("--hostlist-domains=") for line in new_strategy_lines)
+            applied_profile = window if only_window else f"{applied_profile}; {window}"
 
     selected_file_name, operation, blob_warnings = apply_profile_to_selected_preset(
         profile_feature=profile_feature,

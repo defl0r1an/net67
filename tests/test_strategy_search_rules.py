@@ -51,13 +51,18 @@ class JudgeHttpsTests(unittest.TestCase):
 
     def test_answer_cut_early_is_blocked_but_cut_after_limit_is_ok(self) -> None:
         self.assertEqual(rules.judge_https(https_result(body_size=2_000, body_cut=True)).state, rules.PROBE_BLOCKED)
-        self.assertTrue(rules.judge_https(https_result(body_size=30_000, body_cut=True)).ok)
+        from diagnostics.limits import FREEZE_MAX_BYTES
+
+        self.assertTrue(rules.judge_https(https_result(body_size=FREEZE_MAX_BYTES + 1, body_cut=True)).ok)
 
     def test_http_body_cut_after_status_is_blocked(self) -> None:
         # Без шифрования заголовок 200 приходит, а тело фильтр рвёт на полпути.
         cut = rules.judge_http(host="example.org", status=200, failure="reset", body_cut=True, body_size=20_000)
         self.assertEqual(cut.state, rules.PROBE_BLOCKED)
-        self.assertIn("оборвался", cut.reason)
+        self.assertIn("по объёму", cut.reason)
+        early = rules.judge_http(host="example.org", status=200, failure="reset", body_cut=True, body_size=3_000)
+        self.assertEqual(early.state, rules.PROBE_BLOCKED)
+        self.assertIn("оборвался", early.reason)
         self.assertTrue(rules.judge_http(host="example.org", status=200).ok)
 
     def test_small_complete_page_is_ok(self) -> None:

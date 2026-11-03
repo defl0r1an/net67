@@ -37,6 +37,7 @@ from qfluentwidgets import (
 )
 
 from app.ui_texts import tr as tr_catalog
+from config.urls import HOSTS_INFO_URL
 from hosts.draft import MIXED, HostsDraft
 from hosts.hosts_blocks import BLOCK_NET67
 from hosts.page_snapshot import CATEGORY_AI, CATEGORY_DIRECT, CATEGORY_OTHER, HostsPageSnapshot
@@ -53,6 +54,7 @@ from hosts.profile_probe import (
 from hosts.ui.profile_icons import profile_icon
 from profile.ui.profile_icon import profile_icon_pixmap
 from hosts.ui.services_tiles import HostsChoice, HostsTile, HostsTilesGrid, split_service_title
+from ui.widgets.title_help_link import make_help_link
 from ui.accessibility import set_control_accessibility, set_state_text
 from ui.animation_policy import are_live_animations_enabled
 from ui.fluent_widgets import SettingsCard
@@ -187,6 +189,8 @@ class HostsPage(BasePage):
         self._applying = False
         # Пока шла запись, пользователь успел ещё что-то поменять.
         self._apply_pending = False
+        # Изменения, ушедшие текущей записью (HostsDraft.pending_changes).
+        self._inflight_changes: tuple[dict, bool | None] = ({}, None)
         self._apply_force_pending = False
         self._just_written = False
         # Последняя запись упёрлась в доступ к файлу. Снимок этого не видит
@@ -260,6 +264,18 @@ class HostsPage(BasePage):
         summary_row.addLayout(summary_text, 1)
         self.summary_status = _StatusPill(self.summary_card)
         summary_row.addWidget(self.summary_status, 0, Qt.AlignmentFlag.AlignVCenter)
+        # Ссылка на пошаговую статью — та же, что на других страницах. Справа от сводки:
+        # место справа от заголовка занимают кнопки «Файл hosts», «DNS для всех», «Выключить все».
+        self.help_button = make_help_link(
+            HOSTS_INFO_URL,
+            tooltip="Открыть инструкцию: как пользоваться «Редактором hosts»",
+            description=(
+                "Открывает в браузере пошаговую статью о «Редакторе hosts»: когда hosts помогает, "
+                "как включить сервис и выбрать DNS-профиль."
+            ),
+            parent=self.summary_card,
+        )
+        summary_row.addWidget(self.help_button, 0, Qt.AlignmentFlag.AlignVCenter)
         self.summary_card.main_layout.addLayout(summary_row)
         top_layout.addWidget(self.summary_card)
         self.add_widget(self.top_panel)
@@ -569,6 +585,8 @@ class HostsPage(BasePage):
         self._applying = True
         self._just_written = False
         self._write_epoch += 1
+        # Что уходит этой записью: при отказе убирается только оно.
+        self._inflight_changes = draft.pending_changes()
         selection = draft.selection()
         adobe = draft.adobe if draft.adobe_changed else None
         self._recheck_after_write |= self._newly_enabled(selection)
@@ -596,6 +614,8 @@ class HostsPage(BasePage):
                 str(getattr(result, "message", "") or ""),
                 snapshot,
                 access_denied=bool(getattr(result, "access_denied", False)),
+                pending=pending,
+                force=force,
             )
             return
         self._just_written = True
@@ -625,8 +645,8 @@ class HostsPage(BasePage):
             return
         self._applying = False
         self._recheck_after_write = set()
-        self._take_pending()
-        self._fail_write(error, None)
+        pending, force = self._take_pending()
+        self._fail_write(error, None, pending=pending, force=force)
 
     # ── умная проверка адресов ───────────────────────────────
 
@@ -702,20 +722,23 @@ class HostsPage(BasePage):
                 self.address_check_status.show()
             self._request_snapshot()
 
-    def _fail_write(self, message: str, snapshot, *, access_denied: bool = False) -> None:
+    def _fail_write(self, message: str, snapshot, *, access_denied: bool = False, pending: bool = False, force: bool = False) -> None:
         """Запись не удалась: плитки возвращаются к тому, что реально в файле."""
         self._write_denied = bool(access_denied)
         if self._draft is not None:
-            self._draft.reset()
+            self._draft.drop_failed(self._inflight_changes)
         if snapshot is not None:
             self._set_snapshot(snapshot)
         self._render()
         self._show_error(
             self._tr("page.hosts.apply_failed.title", "Не удалось записать hosts"),
-            message,
+            message or self._tr("page.hosts.apply_failed.unknown", "Причина не сообщена — подробности в журнале программы."),
             offer_restore=bool(access_denied),
         )
-        self._request_snapshot()
+        if pending and (force or (self._draft is not None and self._draft.has_user_changes())):
+            self._commit(force=force)
+        else:
+            self._request_snapshot()
 
     def _restore_permissions(self) -> None:
         # Повторное нажатие гасит занятая дорожка; кнопку не отключаем — у нажатой

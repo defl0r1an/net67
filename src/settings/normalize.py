@@ -421,6 +421,20 @@ def normalize_dns(data: object) -> dict[str, Any]:
     }
 
 
+def _global_ipv4_list(value: object, limit: int) -> list[str]:
+    result: list[str] = []
+    for item in value if isinstance(value, list) else []:
+        try:
+            address = ip_address(str(item).strip())
+        except ValueError:
+            continue
+        if address.version == 4 and address.is_global and address.compressed not in result:
+            result.append(address.compressed)
+    return result[:limit]
+
+
+
+
 def normalize_hosts(data: object) -> dict[str, Any]:
     raw = as_dict(data)
     selection_raw = as_dict(raw.get("selection"))

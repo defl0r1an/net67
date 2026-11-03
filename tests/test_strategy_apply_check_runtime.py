@@ -16,7 +16,7 @@ def test_stale_apply_check_does_not_notify_after_new_request():
     page._apply_check_runtime.cancel()
     page._on_log = Mock()
     with patch("blockcheck.strategy_apply_check.apply_check_message") as message:
-        page._on_apply_check_finished(old, "example.org", CHECK_OK, "")
+        page._on_apply_check_finished(old, "example.org", ApplyCheck(CHECK_OK))
     message.assert_not_called()
     page._on_log.assert_not_called()
 
@@ -27,7 +27,7 @@ def test_apply_check_cannot_notify_a_closed_page():
     page._apply_check_runtime = OneShotWorkerRuntime()
     current = page._apply_check_runtime.next_request_id()
     with patch("blockcheck.strategy_apply_check.apply_check_message") as message:
-        page._on_apply_check_finished(current, "example.org", CHECK_OK, "")
+        page._on_apply_check_finished(current, "example.org", ApplyCheck(CHECK_OK))
     message.assert_not_called()
 
 
@@ -40,7 +40,21 @@ def test_apply_worker_carries_request_and_suppresses_cancelled_result():
             worker.stop()
         with patch("blockcheck.strategy_apply_check.run_apply_check", return_value=ApplyCheck(CHECK_OK)):
             worker.run()
-        assert got == ([] if cancelled else [(7, "example.org", CHECK_OK, "")])
+        assert got == ([] if cancelled else [(7, "example.org", ApplyCheck(CHECK_OK))])
+
+
+def test_cancellation_during_check_suppresses_its_completed_result():
+    worker = StrategyApplyCheckWorker(8, "example.org", is_running=lambda: True, restarting=False)
+    got = []
+    worker.completed.connect(lambda *args: got.append(args))
+
+    def finish_after_stop(*args, **kwargs):
+        worker.stop()
+        return ApplyCheck(CHECK_OK)
+
+    with patch("blockcheck.strategy_apply_check.run_apply_check", side_effect=finish_after_stop):
+        worker.run()
+    assert got == []
 
 
 def _ensure_callback(runtime):

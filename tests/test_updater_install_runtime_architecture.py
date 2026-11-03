@@ -31,7 +31,7 @@ class UpdaterInstallRuntimeArchitectureTest(unittest.TestCase):
     def test_installer_success_requests_lifecycle_exit_on_main_thread(self) -> None:
         source = inspect.getsource(UpdatePageRuntime._on_update_installer_launched)
         self.assertIn("QTimer.singleShot", source)
-        self.assertIn("request_exit(stop_dpi=False)", source)
+        self.assertIn("request_exit(stop_dpi=False, restore_after_scan=False)", source)
         self.assertNotIn("os._exit", source)
 
 

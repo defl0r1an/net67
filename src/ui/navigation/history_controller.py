@@ -40,6 +40,7 @@ class WindowNavigationHistory:
         self.history = NavigationHistory()
         self._restoring = False
         self._commit_pending = False
+        self._last_step = -1
 
     # ------------------------------------------------------------------
     # Запись
@@ -72,6 +73,8 @@ class WindowNavigationHistory:
         entry = self._current_entry()
         if entry is not None:
             self.history.visit(entry)
+            if not self._restoring:
+                self._last_step = -1
 
     def _current_entry(self) -> HistoryEntry | None:
         try:
@@ -120,6 +123,7 @@ class WindowNavigationHistory:
                 self.commit()
                 return False
             if self._open(index):
+                self._last_step = step
                 return True
             self.history.drop(index)
 

@@ -608,5 +608,22 @@ class Winws2PresetSwitchTests(unittest.TestCase):
 
 
 
+
+class PresetRunnerStateMachineTests(unittest.TestCase):
+    def test_stop_after_failed_switch_goes_through_stopping(self) -> None:
+        from winws_runtime.runners.preset_runner_support import PresetRunnerState, PresetRunnerStateMachine
+
+        machine = PresetRunnerStateMachine()
+        machine.transition(PresetRunnerState.STARTING)
+        machine.transition(PresetRunnerState.RUNNING)
+        # Смена на сломанный пресет не удалась, прежний winws ещё жив.
+        machine.transition(PresetRunnerState.FAILED, error="dry-run failed")
+
+        machine.transition(PresetRunnerState.STOPPING)
+        machine.transition(PresetRunnerState.IDLE)
+
+        self.assertEqual(machine.snapshot().state, PresetRunnerState.IDLE)
+
+
 if __name__ == "__main__":
     unittest.main()

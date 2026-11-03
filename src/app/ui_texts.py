@@ -7,6 +7,7 @@
 
 from settings.mode import ENGINE_WINWS1, ENGINE_WINWS2, EXE_NAME_WINWS1, EXE_NAME_WINWS2
 from app.page_names import PageName
+from config import external_check
 
 
 DEFAULT_UI_LANGUAGE = "ru"
@@ -578,9 +579,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Сервисы",
         "en": "Services",
     },
-    "page.blockcheck.scope": {
-        "ru": "Что проверить:",
-        "en": "What to check:",
+    "page.blockcheck.custom_domain.open": {
+        "ru": "Свой домен",
+        "en": "Own domain",
+    },
+    "page.blockcheck.custom_domain.open.description": {
+        "ru": "Добавить в проверку сайт, которого нет в списке BlockCheck.",
+        "en": "Add a site that is not on the BlockCheck list to the check.",
     },
     "page.blockcheck.scope_main": {
         "ru": "Только Discord и YouTube (быстро)",
@@ -1504,10 +1509,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "Включить --wssize",
         "en": "Enable --wssize",
     },
-    "page.dpi_settings.advanced.wssize.desc": {
-        "ru": "Добавляет параметр размера окна TCP",
-        "en": "Adds TCP window size parameter",
-    },
+    "page.dpi_settings.advanced.wssize.desc": {"ru": "Малое окно TCP в профилях по IP-адресам. Может снизить скорость; профили по доменам не меняет", "en": "A small TCP window in IP-based profiles. It may reduce speed; domain-based profiles are unchanged"},
     "page.dpi_settings.advanced.debug_log.title": {
         "ru": "Включить лог-файл (--debug)",
         "en": "Enable log file (--debug)",
@@ -1731,6 +1733,10 @@ TEXTS: dict[str, dict[str, str]] = {
     "page.hosts.state.changed": {
         "ru": "записывается",
         "en": "being written",
+    },
+    "page.hosts.apply_failed.unknown": {
+        "ru": "Причина не сообщена — подробности в журнале программы (папка logs).",
+        "en": "No reason was given; see the program log (the logs folder) for details.",
     },
     "page.hosts.apply_failed.title": {
         "ru": "Не удалось записать hosts",
@@ -3716,28 +3722,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "What is this?",
     },
     "page.winws1_user_presets.info.body": {
-        "ru": (
-            "Пресет, или конфиг, — это один или несколько .txt-файлов со списком флагов net67. "
-            "Формат такой же, как у winws2.exe, поэтому GUI может быстро читать и менять настройки.\n\n"
-            "Пресеты нужны, чтобы быстрее делать новые настройки, проще обмениваться ими и держать GUI и консольный net67 в одном формате.\n\n"
-            "При запуске активный пресет передаётся в winws2.exe через @<config_file>. "
-            "Это значит: прочитать параметры командной строки из файла. Остальные параметры командной строки при таком запуске не используются.\n\n"
-            "Файл preset-zapret2.txt в папке настроек хранит только активный пресет. "
-            "Сам по себе он не считается пользовательским пресетом. Ваши пресеты лежат в папке presets. "
-            "По умолчанию используется Default, также есть встроенный Gaming.\n\n"
-            "Пресетами можно обмениваться напрямую.\n\n"
-            "Почему пресеты иногда плохо подходят: в них стратегии часто заранее прописаны под разные фильтры и hostlist. "
-            "Из-за этого один сайт может заработать, а другой перестать. Для более точной настройки лучше использовать прямой запуск: "
-            "там стратегия подбирается отдельно для нужной категории и hostlist."
-        ),
-        "en": (
-            "A preset, or config, is one or more .txt files with net67 flags. "
-            "It uses the same format as winws2.exe, so the GUI can read and edit these settings.\n\n"
-            "The active preset is passed to winws2.exe through @<config_file>, "
-            "which means: read command-line options from a file. Other command-line options are not used in this launch mode.\n\n"
-            "The preset-zapret2.txt file in the settings folder only stores the active preset copy. "
-            "User presets are stored in the presets folder. More details are available from the button below."
-        ),
+        "ru": "Пресет — один .txt-файл с настройками движка: общая шапка и профили сайтов или приложений. При запуске выбранный пресет передаётся winws2 через @<config_file>.\n\nВстроенные пресеты приходят с программой. Свои можно создавать, дублировать, импортировать и экспортировать в .zip вместе со списками сайтов.\n\nВыберите пресет, на котором открывается больше всего нужных сайтов. Если не работает отдельный сайт, откройте его профиль: так можно настроить его, сохранив остальные работающие настройки.",
+        "en": "A preset is one .txt file with engine settings: a shared header and profiles for sites or apps. The selected preset is passed to winws2 through @<config_file>.\n\nBuilt-in presets come with the app. You can create, duplicate, import and export your own presets as .zip archives together with their lists.\n\nChoose a preset that opens most of the sites you need. To fix one site, open its profile and keep the other working settings."
     },
     "page.winws1_user_presets.info.open_site.button": {
         "ru": "Открыть сайт с пресетами",
@@ -4320,28 +4306,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "What is this?",
     },
     "page.winws2_user_presets.info.body": {
-        "ru": (
-            "Пресет, или конфиг, — это один или несколько .txt-файлов со списком флагов net67. "
-            "Формат такой же, как у winws2.exe, поэтому GUI может быстро читать и менять настройки.\n\n"
-            "Пресеты нужны, чтобы быстрее делать новые настройки, проще обмениваться ими и держать GUI и консольный net67 в одном формате.\n\n"
-            "При запуске активный пресет передаётся в winws2.exe через @<config_file>. "
-            "Это значит: прочитать параметры командной строки из файла. Остальные параметры командной строки при таком запуске не используются.\n\n"
-            "Файл preset-zapret2.txt в папке настроек хранит только активный пресет. "
-            "Сам по себе он не считается пользовательским пресетом. Ваши пресеты лежат в папке presets. "
-            "По умолчанию используется Default, также есть встроенный Gaming.\n\n"
-            "Пресетами можно обмениваться напрямую.\n\n"
-            "Почему пресеты иногда плохо подходят: в них стратегии часто заранее прописаны под разные фильтры и hostlist. "
-            "Из-за этого один сайт может заработать, а другой перестать. Для более точной настройки лучше использовать прямой запуск: "
-            "там стратегия подбирается отдельно для нужной категории и hostlist."
-        ),
-        "en": (
-            "A preset, or config, is one or more .txt files with net67 flags. "
-            "It uses the same format as winws2.exe, so the GUI can read and edit these settings.\n\n"
-            "The active preset is passed to winws2.exe through @<config_file>, "
-            "which means: read command-line options from a file. Other command-line options are not used in this launch mode.\n\n"
-            "The preset-zapret2.txt file in the settings folder only stores the active preset copy. "
-            "User presets are stored in the presets folder. More details are available from the button below."
-        ),
+        "ru": "Пресет — один .txt-файл с настройками движка: общая шапка и профили сайтов или приложений. При запуске выбранный пресет передаётся winws2 через @<config_file>.\n\nВстроенные пресеты приходят с программой. Свои можно создавать, дублировать, импортировать и экспортировать в .zip вместе со списками сайтов.\n\nВыберите пресет, на котором открывается больше всего нужных сайтов. Если не работает отдельный сайт, откройте его профиль: так можно настроить его, сохранив остальные работающие настройки.",
+        "en": "A preset is one .txt file with engine settings: a shared header and profiles for sites or apps. The selected preset is passed to winws2 through @<config_file>.\n\nBuilt-in presets come with the app. You can create, duplicate, import and export your own presets as .zip archives together with their lists.\n\nChoose a preset that opens most of the sites you need. To fix one site, open its profile and keep the other working settings."
     },
     "page.winws2_user_presets.info.open_site.button": {
         "ru": "Открыть сайт с пресетами",
@@ -4779,9 +4745,9 @@ TEXTS_EXTRA: dict[str, dict[str, str]] = {
         "ru": "Открыть «Редактор hosts»",
         "en": "Open the Hosts editor",
     },
-    "page.strategy_scan.geo_site.open_dns": {
-        "ru": "Настройка DNS",
-        "en": "DNS settings",
+    "page.strategy_scan.geo_site.question_text_vpn": {
+        "ru": "{target} — это {service}. Сервис сам ограничивает посетителей из России: он узнаёт страну по адресу вашего подключения, провайдер тут ни при чём. Ни одна стратегия Zapret этого не изменит, а подбор зря займёт время.\n\nhosts и DNS тоже не помогут — только подключение через другую страну (VPN).",
+        "en": "{target} is {service}. The service itself limits visitors from Russia: it tells the country by the address of your connection, your provider has nothing to do with it. No Zapret strategy changes that, and the search would only waste time.\n\nhosts and DNS will not help either, only a connection through another country (VPN).",
     },
     "page.strategy_scan.geo_site.question_title": {
         "ru": "Стратегия здесь не поможет",
@@ -5773,7 +5739,8 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
             "отмечают, работает ли он.\n\n"
             "Кнопки-значки в шапке открывают остальные разделы; название кнопки видно при наведении. "
             "«Список сайтов» — ваши записи списка сайтов или адресов. «Текст профиля» — строки "
-            "профиля так, как они записаны в пресете.\n\n"
+            "профиля так, как они записаны в пресете. В обоих разделах есть кнопка с подробным "
+            "объяснением и статьями вики.\n\n"
             "Открытый раздел появляется в строке пути вверху; по ней же возвращаются к стратегиям."
         ),
         "en": (
@@ -5781,7 +5748,8 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
             "method and mark whether it works.\n\n"
             "The icon buttons in the header open the other sections; hover a button to see its name. "
             "\"Site list\" holds your entries of the site or address list. \"Profile text\" shows "
-            "the profile lines as they are written in the preset.\n\n"
+            "the profile lines as they are written in the preset. Both sections have a button with a "
+            "detailed explanation and wiki articles.\n\n"
             "The open section appears in the path line at the top; use it to return to the strategies."
         ),
     },
@@ -6056,13 +6024,13 @@ TEXTS_ONBOARDING: dict[str, dict[str, str]] = {
             "Сверху — «База»: системные записи. Они приходят с программой и обновляются вместе с ней.\n\n"
             "Снизу — «Ваши записи». Добавляйте сюда свои сайты или адреса, по одному на строку. Они "
             "лежат в отдельном файле в папке lists/user и не пропадут при обновлении.\n\n"
-            "Движок получает общий список: базу плюс ваши записи."
+            "Движок получает общий список: сначала ваши записи, затем базу. Первая запись домена имеет приоритет. Кнопка «Что это?» объясняет исключения ! и точное имя ^."
         ),
         "en": (
             "At the top is Base: the built-in entries. They come with the app and are updated with it.\n\n"
             "Below are Your entries. Add your own sites or addresses here, one per line. They are "
             "kept in a separate file in the lists/user folder and survive updates.\n\n"
-            "The engine gets one combined list: the base plus your entries."
+            "The engine receives your entries first, then the base. The first entry for a domain takes priority. What is this? explains exclusions (!) and exact names (^)."
         ),
     },
     "onboarding.step.fakes.title": {

@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import time
+
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from log.log import log
+
+
+DPI_RESTORE_WAIT_SECONDS = 30.0
+DPI_RESTORE_POLL_MS = 250
 
 
 class ApplicationLifecycle:
@@ -23,16 +30,52 @@ class ApplicationLifecycle:
         self._telegram_proxy_feature = telegram_proxy_feature
         self._tray_feature = tray_feature
 
-    def request_exit(self, *, stop_dpi: bool) -> None:
+    def request_exit(self, *, stop_dpi: bool, restore_after_scan: bool = True) -> None:
         if stop_dpi:
             self.exit_stop_dpi()
         else:
-            self.exit_keep_dpi()
+            if restore_after_scan:
+                self.exit_keep_dpi()
+            else:
+                self.exit_keep_dpi(restore_after_scan=False)
 
-    def exit_keep_dpi(self) -> None:
+    def exit_keep_dpi(self, *, restore_after_scan: bool = True) -> None:
         self._prepare_full_exit(stop_dpi=False)
         log("Запрошен выход: выйти без остановки DPI", "INFO")
-        self._quit_application()
+        if restore_after_scan:
+            self._restore_dpi_after_scan_then(self._quit_application)
+        else:
+            self._quit_application()
+
+    def _restore_dpi_after_scan_then(self, leave) -> None:
+        request = getattr(self._window_port, "finish_strategy_scan_before_exit", None)
+        if not callable(request):
+            leave()
+            return
+        try:
+            waiting = request(lambda restored: self._wait_dpi_running_then(restored, leave)) is True
+        except Exception as error:
+            log(f"Не удалось завершить подбор перед выходом: {error}", "WARNING")
+            waiting = False
+        if not waiting:
+            leave()
+
+    def _wait_dpi_running_then(self, restored: bool, leave, *, deadline: float | None = None) -> None:
+        if not restored:
+            leave()
+            return
+        now = time.monotonic()
+        deadline = now + DPI_RESTORE_WAIT_SECONDS if deadline is None else deadline
+        try:
+            running = bool(self._runtime_feature.is_running())
+        except Exception:
+            running = False
+        if running or now >= deadline:
+            if not running:
+                log("Обход не успел запуститься после подбора перед выходом", "WARNING")
+            leave()
+            return
+        QTimer.singleShot(DPI_RESTORE_POLL_MS, lambda: self._wait_dpi_running_then(True, leave, deadline=deadline))
 
     def exit_stop_dpi(self) -> None:
         self._prepare_full_exit(stop_dpi=True)

@@ -11,6 +11,12 @@ def migrate_outdated_dns_addresses():
     return _migrate()
 
 
+
+
+
+
+
+
 def is_isp_dns_warning_shown() -> bool:
     from settings.store import get_isp_dns_info_shown
 

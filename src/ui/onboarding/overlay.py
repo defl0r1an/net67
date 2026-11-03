@@ -51,6 +51,7 @@ from qfluentwidgets import (
 )
 
 from app.ui_texts import tr as tr_catalog
+from ui.widgets.site_link_button import SiteLinkButton
 from log.log import log
 from ui.animation_policy import are_live_animations_enabled
 from ui.onboarding.blur import blur_pixmap
@@ -406,7 +407,7 @@ class _TourCard(QWidget):
         layout.addWidget(self.action_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         # Статья вики по теме шага: открывается сразу, искать не нужно.
-        self.wiki_button = HyperlinkButton(FluentIcon.LINK, "", "", self.content)
+        self.wiki_button = SiteLinkButton(FluentIcon.LINK, "", "", self.content)
         self.wiki_button.hide()
         layout.addWidget(self.wiki_button, 0, Qt.AlignmentFlag.AlignLeft)
 

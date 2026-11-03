@@ -23,7 +23,7 @@ from diagnostics import (
     block_kind,
     ipv6_check,
     quic_probe,
-    report_text,
+    service_view,
     subnet_whitelist,
     system_state,
     telegram_check,
@@ -31,6 +31,7 @@ from diagnostics import (
 from diagnostics.run_context import Probe
 from diagnostics.services import Service
 from diagnostics.verdict import ADVICE_DNS, ADVICE_VIA_ZAPRET, DnsState, Level, ReachState, ServiceVerdict, advice_geo_site
+from hosts.geo_sites import only_vpn_helps
 
 ADVICE_IPV6 = (
     "Из-за этого сайты могут открываться с задержкой: браузер сначала пробует IPv6. Перезагрузите роутер; "
@@ -182,7 +183,13 @@ def _control_down(collected: dict[str, list[Probe]], key: str) -> bool:
     # времени) — не «нет интернета», иначе такой прогон спрятал бы найденные
     # блокировки остальных сайтов.
     probes = collected.get(key) or ()
-    return bool(probes) and all(probe.reach_state in _NO_ROAD for probe in probes)
+    # TLS, который режут по ответу сервера, обходится малым окном: такой адрес не «закрыт», и режим
+    # «белых списков» (где Zapret не помогает) по нему не назначается.
+    return bool(probes) and all(
+        probe.reach_state in _NO_ROAD
+        and not (probe.cause is not None and probe.cause.code == block_cause.CAUSE_REPLY_WINDOW)
+        for probe in probes
+    )
 
 
 def _foreign_reachable(reference: list[dict] | None) -> bool:
@@ -333,7 +340,8 @@ def collect_problems(
                 advice = (advice_geo_site(geo_service),) + tuple(
                     item for item in advice if item not in ADVICE_VIA_ZAPRET
                 )
-                action = "hosts"
+                # Кнопка «Редактор hosts» — только тем, кому hosts помогает.
+                action = "" if only_vpn_helps((geo_service,)) else "hosts"
             if not action and verdict.kind == block_kind.KIND_DNS:
                 # Адрес сайта не узнать — помогает другой DNS: кнопка ведёт в его настройку.
                 action = "dns"
@@ -341,12 +349,12 @@ def collect_problems(
                 # Telegram закрывают по адресу: стратегия тут бессильна, а у программы есть свой прокси.
                 action = "telegram_proxy"
             causes = tuple(
-                dict.fromkeys(report_text.sentence(probe.cause.text) + "." for probe in broken if probe.cause is not None)
+                dict.fromkeys(service_view.sentence(probe.cause.text) + "." for probe in broken if probe.cause is not None)
             )
             # Чужой сертификат: кто именно ответил вместо сайта и что с этим делать — первым делом.
-            causes += tuple(dict.fromkeys(report_text.sentence(probe.unstable) + "." for probe in shaky))
+            causes += tuple(dict.fromkeys(service_view.sentence(probe.unstable) + "." for probe in shaky))
             certs = [probe.cert for probe in broken if probe.cert is not None]
-            causes = tuple(dict.fromkeys(report_text.sentence(item.text) + "." for item in certs)) + causes
+            causes = tuple(dict.fromkeys(service_view.sentence(item.text) + "." for item in certs)) + causes
             advice = tuple(dict.fromkeys(item.advice for item in certs if item.advice)) + advice
             problems.append(
                 problem(

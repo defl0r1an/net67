@@ -51,6 +51,20 @@ class EntryTests(unittest.TestCase):
         self.assertEqual(entry["states"], {"Discord": "ok", "YouTube": "fail"})
         self.assertEqual(entry["log_file"], "C:\\logs\\run.log")
 
+    def test_site_that_does_not_open_is_saved_as_not_opening_even_with_a_warning_level(self) -> None:
+        # Сайт, к которому не удалось соединиться, отчёт помечает замечанием (warn): это не
+        # установленная блокировка. Но он не открывается, и история не должна называть его
+        # «снова открывается» (так было с Facebook 31.10.2026: карточка «не открывается»,
+        # строка изменений «снова открываются: Facebook»).
+        facebook = {**_service("Facebook", "warn"), "opens": False}
+        youtube = {**_service("YouTube", "warn"), "opens": True}
+        old_report = _service("Discord", "warn")  # отчёт до поля opens: остаётся уровень
+        entry = history.blockcheck_entry(_report(facebook, youtube, old_report), when=WHEN)
+
+        self.assertEqual(entry["states"], {"Facebook": "fail", "YouTube": "warn", "Discord": "warn"})
+        before = history.blockcheck_entry(_report({**_service("Facebook", "fail"), "opens": False}), when=WHEN)
+        self.assertEqual(history.describe_changes(before, entry), [])
+
     def test_clean_run_and_scope_title(self) -> None:
         entry = history.blockcheck_entry(_report(_service("Discord", "ok"), scope="main"), when=WHEN)
 
@@ -168,6 +182,18 @@ class ChangesTests(unittest.TestCase):
 
     def test_no_previous_run_means_nothing_to_compare(self) -> None:
         self.assertEqual(history.describe_changes(None, self._entry(Discord="fail")), [])
+
+    def test_previous_run_skips_runs_with_a_different_zapret_state(self) -> None:
+        on = {"kind": "blockcheck", "title": "Все сайты", "time": "1", "zapret": "on"}
+        off = {"kind": "blockcheck", "title": "Все сайты", "time": "2", "zapret": "off"}
+        unknown = {"kind": "blockcheck", "title": "Все сайты", "time": "3", "zapret": ""}
+        entry = {"kind": "blockcheck", "title": "Все сайты", "zapret": "off"}
+
+        # Прогон при включённом Zapret — не сравнение для прогона без него.
+        self.assertEqual(history.previous_run([on, off], entry)["time"], "2")
+        self.assertIsNone(history.previous_run([on], entry))
+        # Неизвестное состояние сравнению не мешает.
+        self.assertEqual(history.previous_run([on, unknown], entry)["time"], "3")
 
     def test_previous_run_is_the_latest_of_same_kind_and_scope(self) -> None:
         runs = [

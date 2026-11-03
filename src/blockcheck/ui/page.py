@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from config import external_check
+
 from blockcheck.strategy_search.probe_profile import PROTOCOL_STUN_VOICE, PROTOCOL_TCP_HTTPS
 import logging
 import time
@@ -47,15 +49,16 @@ from ui.queued_worker_state import QueuedWorkerState
 from app.ui_texts import tr as tr_catalog
 
 from qfluentwidgets import (
+    BodyLabel,
     ComboBox,
     CaptionLabel,
-    BodyLabel,
     IndeterminateProgressBar,
     themeColor,
     PrimaryPushButton,
     PushButton,
     LineEdit,
     SegmentedWidget,
+    TransparentPushButton,
     FluentIcon,
 )
 
@@ -140,6 +143,7 @@ class BlockcheckPage(BasePage):
         bypass_is_running=None,
         start_bypass=None,
         stop_bypass=None,
+        notify=None,
     ):
         super().__init__(
             title=tr_catalog("page.blockcheck.title", default="BlockCheck"),
@@ -153,6 +157,15 @@ class BlockcheckPage(BasePage):
         )
         self.setObjectName("BlockcheckPage")
 
+        from config.urls import BLOCKCHECK_INFO_URL
+        from ui.widgets.title_help_link import add_title_help_link
+
+        self._help_link = add_title_help_link(
+            self, BLOCKCHECK_INFO_URL,
+            tooltip="Как читать результаты BlockCheck",
+            description="Открыть раздел BlockCheck в вики net67",
+        )
+
         self._blockcheck = blockcheck_feature
         self._dns = dns_feature
         self._create_strategy_scan_worker = create_strategy_scan_worker
@@ -160,6 +173,7 @@ class BlockcheckPage(BasePage):
         self._open_dns_settings = open_dns_settings
         self._ensure_bypass_for_strategy = ensure_bypass_for_strategy
         self._bypass_is_running = bypass_is_running
+        self._notify = notify
         # «С обходом и без»: две проверки подряд с переключением обхода между ними. Без управления обходом
         # (страница собрана без запуска и остановки) кнопка недоступна.
         self._paired = (
@@ -188,6 +202,10 @@ class BlockcheckPage(BasePage):
         self._cleanup_in_progress = False
         self._tabs_pivot = None
         self._domains_caption = None
+        # Поле своих доменов открыто по ссылке «+ Свой домен» и спрятано на время проверки.
+        self._custom_domains_open = False
+        self._domains_hidden_for_run = False
+        self._custom_domain_btn = None
         self._domains_flow = None
         self._prepare_support_btn = None
         self._support_status_label = None
@@ -325,12 +343,16 @@ class BlockcheckPage(BasePage):
 
         # ── Что проверить и кнопка: одна строка ──
         section_started_at = time.perf_counter()
-        self._control_card = SettingsCard()
-        row = QHBoxLayout()
-        row.setSpacing(12)
+        self._summary_panel = BlockcheckSummaryPanel(
+            on_action=self._on_problem_action, parent=self.content,
+            on_open=self._open_card_by_key,
+            on_open_page=lambda card: show_report_dialog(self.window(), card_plain_text(card)),
+        )
+        self._control_card = self._summary_panel
+        row = self._summary_panel.actions
         self._scope_label = BodyLabel(tr_catalog("page.blockcheck.scope", default="Что проверить:"))
         set_state_text(self._scope_label, f"Поле BlockCheck: {self._scope_label.text()}")
-        row.addWidget(self._scope_label)
+        self._scope_label.hide()
         self._scope_combo = ComboBox()
         # userData — именованным: второй позиционный аргумент у qfluentwidgets —
         # значок, и значение терялось (старый выбор режима всегда давал «Полную»).
@@ -350,26 +372,40 @@ class BlockcheckPage(BasePage):
         self._scope_combo.setMinimumWidth(320)
         self._update_scope_combo_accessibility()
         self._scope_combo.currentIndexChanged.connect(self._update_scope_combo_accessibility)
+        # Кнопки «Проверить», «С обходом и без», «Остановить» встают перед списком ниже (insertWidget 0–2).
         row.addWidget(self._scope_combo)
         row.addSpacing(8)
+        self._custom_domain_btn = TransparentPushButton(
+            FluentIcon.ADD, tr_catalog("page.blockcheck.custom_domain.open", default="Свой домен")
+        )
+        set_control_accessibility(
+            self._custom_domain_btn, name="Добавить свой домен в BlockCheck",
+            description="Открывает поле для сайта, которого нет в списке BlockCheck.",
+        )
+        self._custom_domain_btn.clicked.connect(self._open_custom_domains)
+        self._summary_panel.controls.addWidget(self._custom_domain_btn, 0, Qt.AlignmentFlag.AlignLeft)
 
         self._status_label = CaptionLabel(
             tr_catalog("page.blockcheck.ready", default="Сайты — так, как их открыл бы браузер")
         )
+        self._status_label.setWordWrap(True)
         self._set_status_text(self._status_label.text())
-        row.addWidget(self._status_label, 1)
+        self._status_label.hide()
+        self._summary_panel.controls.addWidget(self._status_label)
 
         # start=False: иначе анимация крутится и у скрытой полосы, пока жива страница.
         self._progress_bar = IndeterminateProgressBar(start=False)
         self._progress_bar.setVisible(False)
-        self._progress_bar.setFixedWidth(160)
         set_control_accessibility(
             self._progress_bar,
             name="Ход BlockCheck: не выполняется",
             description="Показывает, что проверка BlockCheck выполняется.",
         )
         set_state_text(self._progress_bar, "Ход BlockCheck: не выполняется")
-        row.addWidget(self._progress_bar)
+        row.addStretch(1)
+        # Полоса хода — тонкой линией под строкой состояния: в строке кнопок во время проверки
+        # (там ещё «Остановить») она наезжала на выпадающий список.
+        self._summary_panel.controls.addWidget(self._progress_bar)
 
         self._start_btn = PrimaryPushButton(tr_catalog("page.blockcheck.start", default="Проверить"))
         self._start_btn.setIcon(FluentIcon.PLAY)
@@ -381,7 +417,7 @@ class BlockcheckPage(BasePage):
         set_control_accessibility(self._start_btn, name="Запустить BlockCheck", description=start_description)
         set_state_text(self._start_btn, "Запустить BlockCheck")
         self._start_btn.clicked.connect(self._on_start)
-        row.addWidget(self._start_btn)
+        row.insertWidget(0, self._start_btn)
 
         self._paired_btn = PushButton(tr_catalog("page.blockcheck.paired", default="С обходом и без"))
         self._paired_btn.setIcon(FluentIcon.SYNC)
@@ -398,7 +434,7 @@ class BlockcheckPage(BasePage):
         self._paired_btn.clicked.connect(self._on_start_paired)
         # Без управления обходом кнопка остаётся на месте, но недоступна.
         self._paired_btn.setEnabled(self._paired is not None)
-        row.addWidget(self._paired_btn)
+        row.insertWidget(1, self._paired_btn)
 
         self._stop_btn = PushButton(tr_catalog("page.blockcheck.stop", default="Остановить"))
         self._stop_btn.setIcon(FluentIcon.CANCEL)
@@ -412,8 +448,7 @@ class BlockcheckPage(BasePage):
         self._stop_btn.clicked.connect(self._on_stop)
         self._stop_btn.setEnabled(False)
         self._stop_btn.setVisible(False)
-        row.addWidget(self._stop_btn)
-        self._control_card.add_layout(row)
+        row.insertWidget(2, self._stop_btn)
         self._add_tab_widget(self._control_card)
         self._log_ui_timing("blockcheck_ui.control_card.build", section_started_at)
 
@@ -441,12 +476,7 @@ class BlockcheckPage(BasePage):
         self._log_ui_timing("blockcheck_ui.domains_card.build", section_started_at)
 
         # ── Итог и список сайтов ──
-        self._summary_panel = BlockcheckSummaryPanel(
-            on_action=self._on_problem_action, parent=self.content,
-            on_open=self._open_card_by_key,
-            on_open_page=lambda card: show_report_dialog(self.window(), card_plain_text(card)),
-        )
-        self._add_tab_widget(self._summary_panel)
+        self._sync_domains_area()
         self._check_history = BlockcheckHistoryList()
         self._check_history.run_opened.connect(self._open_past_check)
         self._add_tab_widget(self._check_history)
@@ -540,6 +570,7 @@ class BlockcheckPage(BasePage):
                 open_dns_settings=lambda: self._on_problem_action("dns", ""),
                 ensure_bypass_for_strategy=self._ensure_bypass_for_strategy,
                 bypass_is_running=self._bypass_is_running,
+                notify=self._notify,
             )
             self._strategy_tab_page.setVisible(False)
             self.add_widget(self._strategy_tab_page)
@@ -643,6 +674,11 @@ class BlockcheckPage(BasePage):
             return self.request_runtime_conflicting_stop()
         return False
 
+    def request_exit_restore(self, on_done) -> bool:
+        """Выход с оставленным DPI посреди подбора стратегии: см. StrategyScanPage."""
+        request = getattr(self._strategy_tab_page, "request_exit_restore", None)
+        return bool(callable(request) and request(on_done))
+
     def request_runtime_conflicting_stop(self) -> bool:
         """Останавливает проверки BlockCheck перед ручным запуском основного DPI."""
         stopped = False
@@ -686,6 +722,8 @@ class BlockcheckPage(BasePage):
         show_blockcheck = tab_key == self.TAB_BLOCKCHECK
         for widget in self._tab_widgets:
             widget.setVisible(show_blockcheck)
+        # Общий показ вкладки не должен раскрывать поле, которое открывается по кнопке.
+        self._sync_domains_area()
         self._check_history.setVisible(show_blockcheck and bool(self._check_history.rows()))
         if self._results_card is not None and self._last_report is None:
             self._results_card.setVisible(False)
@@ -763,6 +801,8 @@ class BlockcheckPage(BasePage):
             on_progress=self._on_check_progress,
         )
         self._set_status_text(self._status_label.text())
+        self._domains_hidden_for_run = True
+        self._sync_domains_area()
 
     def _on_log(self, message: str):
         if self._cleanup_in_progress:
@@ -778,6 +818,8 @@ class BlockcheckPage(BasePage):
     def _set_paired_buttons(self, *, busy: bool) -> None:
         """Пока идёт парный запуск (и между проверками), ни одна кнопка запуска не нужна."""
         self._paired_btn.setEnabled(self._paired is not None and not busy)
+        self._domains_hidden_for_run = busy
+        self._sync_domains_area()
         if busy:
             self._start_btn.setEnabled(False)
 
@@ -993,6 +1035,9 @@ class BlockcheckPage(BasePage):
         value = str(text or "").strip()
         self._status_label.setText(value)
         set_state_text(self._status_label, f"Статус BlockCheck: {value}")
+        # До первой проверки строка повторяла бы выпадающий список: её нет, пока нечего сказать.
+        idle = value == tr_catalog("page.blockcheck.ready", default="Сайты, хостинги и звонки — так, как их открыл бы браузер")
+        self._status_label.setVisible(bool(value) and not idle)
 
     def _set_support_status(self, text: str) -> None:
         if self._support_status_label is None:
@@ -1417,6 +1462,29 @@ class BlockcheckPage(BasePage):
         """Строка плашек доменов видна, только когда в ней что-то есть."""
         if self._domains_flow is not None:
             self._domains_flow.setVisible(bool(self._get_extra_domains()))
+        self._sync_domains_area()
+
+    def _sync_domains_area(self) -> None:
+        """Поле своих доменов: открыто по ссылке или когда домены уже есть; на время проверки спрятано.
+
+        Ссылка «+ Свой домен» видна, пока поля нет на экране.
+        """
+        card = self.__dict__.get("_domains_card")
+        if card is None:
+            return
+        active = self.TAB_ORDER[self._active_tab_index] == self.TAB_BLOCKCHECK
+        shown = active and not self._domains_hidden_for_run and (self._custom_domains_open or bool(self._get_extra_domains()))
+        card.setVisible(shown)
+        button = self.__dict__.get("_custom_domain_btn")
+        if button is not None:
+            button.setVisible(not shown and not self._domains_hidden_for_run)
+
+    def _open_custom_domains(self) -> None:
+        """«+ Свой домен»: открыть поле и поставить в него курсор."""
+        self._custom_domains_open = True
+        self._sync_domains_area()
+        if self._domain_input is not None:
+            self._domain_input.setFocus()
 
     def _get_extra_domains(self) -> list[str]:
         """Collect domains from chips to pass to worker."""
@@ -1492,7 +1560,8 @@ class BlockcheckPage(BasePage):
                 self._tabs_pivot.setItemText(self.TAB_DNS_SPOOFING, _tr("page.blockcheck.tab.dns_spoofing", "DNS подмена"))
             self._update_tabs_accessibility()
             # Карточки без шапок: set_title не вызывается, он добавил бы шапку обратно.
-            self._scope_label.setText(_tr("page.blockcheck.scope", "Что проверить:"))
+            if self._custom_domain_btn is not None:
+                self._custom_domain_btn.setText(_tr("page.blockcheck.custom_domain.open", "Свой домен"))
             # Порядок тот же, что при создании списка: сайты первые, глубокая диагностика последняя.
             self._scope_combo.setItemText(0, _tr("page.blockcheck.scope_all", "Только сайты (быстро)"))
             self._scope_combo.setItemText(1, _tr("page.blockcheck.scope_main", "Только Discord и YouTube (быстро)"))

@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+from config import external_check
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -29,6 +31,7 @@ from diagnostics.block_kind import (
     KIND_DOWN,
     KIND_IP,
     KIND_NO_CONNECT,
+    KIND_TLS_REPLY,
     KIND_UNSTABLE,
     kind_info,
     site_kind,
@@ -43,7 +46,7 @@ from diagnostics.tls_probe import (
     KIND_TLS,
     ProbeResult,
 )
-from diagnostics.limits import FREEZE_MAX_BYTES, FREEZE_MIN_BYTES
+from diagnostics import cut_window
 from utils.address_kinds import AddressKind, address_kind, is_stub_address
 from utils.windows_dns_query import DNS_STATUS_NAME_ERROR, DNS_STATUS_NO_RECORDS
 
@@ -227,8 +230,13 @@ def judge_reach(result: ProbeResult | None) -> ReachState:
     if result is None:
         return ReachState.NO_ADDRESS
     if result.kind == KIND_OK:
-        if result.body_cut and FREEZE_MIN_BYTES <= result.body_size <= FREEZE_MAX_BYTES:
+        cut = cut_window.result_cut(result)
+        if cut == cut_window.CUT_WINDOW:
             return ReachState.FREEZE
+        if cut == cut_window.CUT_EARLY:
+            # Страница не догрузилась: сайт не открылся, а на чьей стороне обрыв —
+            # покажут уточняющие пробы и сверка из-за рубежа.
+            return ReachState.DPI
         return ReachState.OK
     if result.kind == KIND_CERT:
         return ReachState.CERT
@@ -246,8 +254,13 @@ def describe_reach(result: ProbeResult | None, *, timeout: float = 0.0) -> str:
         return "не удалось узнать адрес сервера"
     if state == ReachState.FREEZE:
         return (
-            f"ответ оборвался на {result.body_size // 1024} КБ — так ТСПУ режет соединения "
+            f"ответ оборвался на ~{cut_window.result_bytes(result) // 1024} КБ — так ТСПУ режет соединения "
             "с зарубежными серверами"
+        )
+    if result.kind == KIND_OK and result.body_cut:
+        return (
+            f"ответ оборвался на ~{cut_window.result_bytes(result) // 1024} КБ — раньше обычного обрыва ТСПУ "
+            f"({cut_window.WINDOW_TEXT}); сломан ли сайт сам, показывает сверка с сервером {external_check.COUNTRY_RU_IN}"
         )
     if state == ReachState.CERT:
         return f"чужой сертификат ({result.cert_problem or 'не прошёл проверку'}) — трафик перехватывает антивирус, прокси или провайдер"
@@ -307,6 +320,10 @@ class ServiceVerdict:
     dns_note: str = ""
     # Вид блокировки сервиса: по нему экран собирает проблемы в группы.
     kind: str = ""
+    # Открывается ли сам сайт. Уровень этого не говорит: сайт, к которому не удалось
+    # соединиться или который не работает сам, — замечание (WARN), а не тревога, но
+    # он не открывается. История и сравнение «с Zapret и без» судят по этому полю.
+    opens: bool = True
 
 
 _BROKEN = (ReachState.DPI, ReachState.FREEZE, ReachState.IP_BLOCK, ReachState.CERT)
@@ -320,11 +337,18 @@ _ADVICE_STRATEGY_OR_ADDRESS = (
     "поможет DNS-профиль в «Редакторе hosts», другой DNS или VPN."
 )
 # Советы «почини через net67»: движок убирает их у гео-сайтов, которым net67 не помогает.
-ADVICE_VIA_ZAPRET = (_ADVICE_STRATEGY, _ADVICE_START, _ADVICE_STRATEGY_OR_ADDRESS)
+ADVICE_VIA_ZAPRET = (_ADVICE_STRATEGY, _ADVICE_START, _ADVICE_STRATEGY_OR_ADDRESS, kind_info(KIND_TLS_REPLY).cure)
 
 
 def advice_geo_site(service: str) -> str:
     """Совет для сервиса, который сам ограничивает доступ из России (каталог hosts)."""
+    from hosts.geo_sites import only_vpn_helps
+
+    if only_vpn_helps((service,)):
+        return (
+            f"{service} сам ограничивает посетителей из России — узнаёт страну по адресу подключения. "
+            "Стратегия Zapret, hosts и DNS тут не помогут: нужно подключение через другую страну (VPN)."
+        )
     return (
         f"{service} сам ограничивает доступ из России, поэтому стратегия net67 его не чинит. "
         "Включите для него DNS-профиль на странице «Редактор hosts» или смените DNS в разделе «Настройка DNS»."
@@ -416,6 +440,8 @@ def _advice_for(
         # Вид блокировки важнее: закрытому адресу «запустите net67» обещал бы лишнее.
         if kind == KIND_IP:
             return (_ADVICE_STRATEGY_OR_ADDRESS,)
+        if kind == KIND_TLS_REPLY:
+            return (kind_info(KIND_TLS_REPLY).cure,)
         # «Не удалось узнать, запущен ли net67» — не «не запущен»: запускать не советуем.
         if zapret_running is False:
             return (_ADVICE_START,)
@@ -520,7 +546,7 @@ def summarize_service(
             advice = advice + (_ADVICE_DNS,)
         # «Причина не ясна» и «не работает сам» — не установленная блокировка: замечание, а не тревога.
         level = Level.WARN if kind in (KIND_NO_CONNECT, KIND_DOWN) else Level.FAIL
-        return ServiceVerdict(level, headline, advice, dns_note, kind)
+        return ServiceVerdict(level, headline, advice, dns_note, kind, opens=False)
 
     if main.reach == ReachState.NO_ADDRESS:
         # Адреса нет — это дело DNS: такой сайт идёт в группу «DNS» с кнопкой настройки DNS.
@@ -530,5 +556,6 @@ def summarize_service(
             ("Проверьте подключение к интернету.", _ADVICE_DNS),
             dns_note,
             KIND_DNS,
+            opens=False,
         )
     return ServiceVerdict(Level.UNKNOWN, f"{label}: проверка не дала ответа", ("Повторите проверку через минуту.",), dns_note)

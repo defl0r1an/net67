@@ -185,6 +185,18 @@ def geo_site_notice_text(service: str, *, language: str | None = None) -> str:
 def geo_site_question_text(service: str, target_input: str, *, language: str | None = None) -> str:
     # Тот же адрес, с которым запустился бы подбор.
     target = normalize_target_input(target_input, PROTOCOL_TCP_HTTPS)
+    from hosts.geo_sites import only_vpn_helps
+
+    if only_vpn_helps((service,)):
+        return tr_catalog(
+            "page.strategy_scan.geo_site.question_text_vpn",
+            language=language,
+            default=(
+                "{target} — это {service}. Сервис сам ограничивает посетителей из России: он узнаёт страну по адресу "
+                "вашего подключения, провайдер тут ни при чём. Ни одна стратегия Zapret этого не изменит, а подбор "
+                "зря займёт время.\n\nhosts и DNS тоже не помогут — только подключение через другую страну (VPN)."
+            ),
+        ).format(service=service, target=target)
     return tr_catalog(
         "page.strategy_scan.geo_site.question_text",
         language=language,
@@ -347,7 +359,14 @@ def build_result_presentation(result, *, row_number: int) -> StrategyScanResultP
             status_tooltip = f"Открылось {attempts_ok} раза подряд на свежих соединениях"
         if (getattr(result, "raw_data", None) or {}).get("volume") == "unknown":
             status_tooltip += ". Объём не проверен: сайт отвечает коротко"
-        if (getattr(result, "raw_data", None) or {}).get("transfer"):
+        raw = getattr(result, "raw_data", None) or {}
+        if raw.get("window_addresses"):
+            # Малое окно замедляет эти адреса само: это свойство приёма, а не сервера.
+            status_tooltip += (
+                ". С малым окном приёма (wssize) для " + ", ".join(map(str, raw["window_addresses"]))
+                + ": окно приёма там не больше 128 КБ — при пинге 20 мс это около 50 Мбит/с"
+            )
+        elif raw.get("transfer"):
             status_tooltip += ". Сервер отвечает медленно или с паузами — от стратегии это не зависит"
     elif verdict == "unstable":
         status_tooltip = f"Открылось не каждый раз ({attempts_ok} из {attempts_total}): {error_text}"

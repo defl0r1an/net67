@@ -45,12 +45,14 @@ from diagnostics import (
     block_cause,
     block_view,
     cert_owner,
+    cut_window,
     net_access,
     protocol_probe,
     quic_probe,
     registry,
     report_text,
     sections,
+    service_view,
     system_state,
     telegram_check,
     transfer_probe,
@@ -63,7 +65,6 @@ from diagnostics.problems import has_spoofing as _has_spoofing
 from diagnostics.levels import level_rank
 from diagnostics.limits import (
     DNS_ATTEMPTS,
-    FREEZE_MAX_BYTES,
     RECHECK_AT_ONCE,
     RECHECK_LIGHT_AT_ONCE,
     RECHECK_NEEDS_S,
@@ -367,7 +368,7 @@ def _check_volume(run: _Run, probe: _Probe) -> None:
     result = probe.reach
     if probe.reach_state != ReachState.OK or result is None or not result.ip or run.dns_cancelled():
         return
-    if result.body_size >= FREEZE_MAX_BYTES and not result.body_cut:
+    if cut_window.whole_past_window(result):
         # Главная страница сама больше окна обрыва и пришла целиком.
         return
     facts = volume_probe.collect(probe.host, result.ip, probe.target.path, cancel=run.probe_cancel)
@@ -564,7 +565,7 @@ def _service_verdict(service: Service, probes: list[_Probe], *, zapret_running: 
                 and not probe.dns.ips
                 and not probe.hosts_ips
             ),
-            cure=probe.video_node.advice if probe.strategy_futile else (),
+            cure=probe.video_node.advice if probe.video_node is not None else (),
         )
         for probe in probes
     ]
@@ -900,30 +901,14 @@ def check_site(host: str, *, should_stop: ShouldStop | None = None, emit: Emit |
         report = registry.annotate(report, registry_index)
         site = report[0] if report else None
         if site is not None and names:
-            _add_name_speed(site, names, zapret_running=zapret_running)
+            service_view.add_name_speed(
+                site, names, sections.speed_problems({"names": names}, zapret_running=zapret_running)
+            )
         return site
     except _Stopped:
         return None
     finally:
         run.close()
-
-
-def _add_name_speed(site: dict, names: dict, *, zapret_running: bool | None) -> None:
-    """Дописывает к записи сайта замер потока по имени; замедление или обрыв меняют итог."""
-    site["names"] = names
-    if names.get("level") != "warn":
-        return
-    hurt = [str(item.get("host") or "") for item in names.get("items") or () if item.get("state") == "warn"]
-    if site.get("level") == "ok":
-        # Иначе итогом осталось бы «открывается», хотя пользоваться сайтом нельзя.
-        site["level"] = "warn"
-        site["status"] = "Поток режут"
-        site["headline"] = f"{site.get('label', '')} открывается, но поток данных режут по имени: {', '.join(hurt)}"
-    for problem in sections.speed_problems({"names": names}, zapret_running=zapret_running):
-        advice = problem.get("advice") or ()
-        for item in [advice] if isinstance(advice, str) else advice:
-            if item and item not in site.setdefault("advice", []):
-                site["advice"].append(str(item))
 
 
 # Один сайт проверяется быстрее целого набора: дольше ждать незачем.

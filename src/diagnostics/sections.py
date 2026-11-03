@@ -19,6 +19,7 @@ from dataclasses import replace
 from diagnostics import (
     block_cause,
     block_kind,
+    cut_window,
     filter_habits,
     filter_place,
     ipv6_check,
@@ -31,6 +32,7 @@ from diagnostics import (
     report_text,
     selectivity,
     self_check,
+    service_view,
     speed_check,
     subnet_whitelist,
     system_state,
@@ -251,14 +253,13 @@ def clock_skew(run: Run) -> float | None:
         return None
     result = net_access.get(run, _CLOCK_HOST, addresses[0], "/generate_204", read_limit=1)
     local = time.time()
-    for line in result.body.split(b"\r\n\r\n", 1)[0].split(b"\r\n")[1:]:
-        name, _colon, value = line.partition(b":")
-        if name.strip().lower() == b"date":
-            try:
-                return local - parsedate_to_datetime(value.decode("ascii", errors="ignore").strip()).timestamp()
-            except (TypeError, ValueError):
-                return None
-    return None
+    # Время сервера — в заголовке Date, а не в теле ответа (у /generate_204 тела нет).
+    if not result.server_date:
+        return None
+    try:
+        return local - parsedate_to_datetime(result.server_date).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 def check_system(
@@ -499,9 +500,9 @@ def check_filter_habits(run: Run, collected: dict[str, list[Probe]], *, tools=()
     """
     from diagnostics import block_cause, browser_hello
 
-    def _send(ip: str, parts: tuple[bytes, ...], pause: float) -> str:
+    def _send(ip: str, parts: tuple[bytes, ...], pause: float, *, flight: bool = False) -> str:
         return browser_hello.send_parts(
-            ip, parts, pause=pause, timeout=HABIT_TIMEOUT_S, cancel=run.probe_cancel
+            ip, parts, pause=pause, timeout=HABIT_TIMEOUT_S, cancel=run.probe_cancel, flight=flight
         ).kind
 
     def _rest(seconds: float) -> None:
@@ -768,7 +769,7 @@ def check_crowd(run: Run, collected: dict[str, list[Probe]], services, *, tools=
         # Слово итога и исходы по строкам — готовыми словами: экран их только показывает.
         "status": crowd_probe.STATUS[verdict.code],
         "rows": crowd_probe.rows(facts),
-        "text": report_text.sentence(verdict.text),
+        "text": service_view.sentence(verdict.text),
         "advice": verdict.advice,
         # Факты как есть: исход одиночного соединения до пачки, каждого из пачки и одиночного после.
         "before": facts.before,
@@ -922,7 +923,7 @@ def check_network(run: Run, other_tools) -> dict:
 
 
 def ask_outside(run: Run, services: dict[str, Service], done_probes: list) -> None:
-    """Сайты без дороги и после перепроверки: живы ли они снаружи (сервер net67 DNS).
+    """Сайты без дороги и после перепроверки: отвечают ли они внешнему серверу.
 
     Только по галочке: само соединение с сервером проекта выдаёт программу. Пока
     адрес сервера не задан (``outside_check.SERVER_HOST``), сверка не идёт вовсе.
@@ -939,8 +940,15 @@ def ask_outside(run: Run, services: dict[str, Service], done_probes: list) -> No
     ]
     if not failed or run.dns_cancelled() or run.deadline - time.monotonic() < OUTSIDE_NEEDS_S:
         return
+    # Страница оборвалась раньше окна «16 КБ»: сервер грузит её целиком по тому же пути.
+    pages = {
+        probe.host: probe.target.path or "/"
+        for probe in failed
+        if cut_window.result_cut(probe.reach) == cut_window.CUT_EARLY
+    }
     answers = outside_check.ask(
         [probe.host for probe in failed],
+        pages=pages,
         server_ips=lambda: net_access.doh_lookup(run, outside_check.SERVER_HOST)[1],
         cancel=run.probe_cancel,
     )

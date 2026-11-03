@@ -30,7 +30,9 @@ tests/test_preset_contract_architecture_checks.py — структура) и а�
 
    Отдельно при переименовании, дублировании, создании и импорте шапка получает
    ``# Preset: <имя>`` (и ``# PresetKind: imported`` для импорта), чтобы имя в
-   списке совпадало с именем в файле.
+   списке совпадало с именем в файле. Обновление пресета по ссылке
+   (``presets.remote_sync_workers``) — тот же импорт, повторённый по просьбе
+   пользователя: свежий текст источника получает ту же шапку с локальным именем.
 
 2. При запуске (текст пресета -> @config-файл для winws/winws2):
 
@@ -93,6 +95,12 @@ tests/test_preset_contract_architecture_checks.py — структура) и а�
 
 from __future__ import annotations
 
+import re
+
+
+# Деление строки пресета на опции — то же правило, что у парсера и запуска
+# («--a=x --b=y» — две опции); разделители сохраняются: "".join(части) == строка.
+_INLINE_OPTION_SPLIT_KEEP_RE = re.compile(r"((?<=\S)\s+(?=--))")
 
 ENGINE_WINWS1 = "winws1"
 ENGINE_WINWS2 = "winws2"
@@ -110,7 +118,7 @@ SAVE_TIME_NORMALIZATIONS: dict[str, str] = {
     SAVE_LEGACY_DEBUG_LOG_RELOCATION: "--debug=@logs/... -> --debug=@user/logs/...",
     SAVE_DROP_SERVICE_HEADER_LINES: "удаление строк # Modified: и # ActivePreset:",
     SAVE_LINE_ENDINGS: "CRLF/CR -> LF, ровно один перевод строки в конце, без метки BOM в начале",
-    SAVE_PRESET_IDENTITY_HEADERS: "# Preset: / # PresetKind: при переименовании, дублировании, создании и импорте",
+    SAVE_PRESET_IDENTITY_HEADERS: "# Preset: / # PresetKind: при переименовании, дублировании, создании, импорте и обновлении по ссылке",
 }
 
 # Служебные строки шапки, которые сохранение удаляет (в нижнем регистре).

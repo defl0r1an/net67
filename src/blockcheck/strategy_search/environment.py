@@ -47,6 +47,13 @@ def strategy_pause_seconds() -> float:
     return 0.0
 
 
+# Срок одного приветствия при поиске пропускаемых имён: короче обычного, их до трёх десятков.
+HELLO_DISCOVERY_TIMEOUT_S = 2.5
+# Малое окно: сервер отдаёт ответ по байту, с задержкой подтверждений — 2 байта на медленной линии идут секунды.
+WINDOW_PROBE_TIMEOUT_S = 5.0
+# Сколько соседних видеосерверов проверять одновременно.
+WINDOW_SIBLING_WORKERS = 6
+
 class RealEnvironment:
     def __init__(
         self,
@@ -308,10 +315,62 @@ class RealEnvironment:
         """Начало шифрования к адресу с именем ``name``: True — прошло, False — оборвали, None — нет соединения."""
         from diagnostics.block_cause import HELLO_CANCELLED, HELLO_CONNECT, tls_hello
 
-        result = tls_hello(address, name, timeout=2.5, cancel=self._cancel)
+        result = tls_hello(address, name, timeout=HELLO_DISCOVERY_TIMEOUT_S, cancel=self._cancel)
         if result.kind in (HELLO_CONNECT, HELLO_CANCELLED):
             return None
         return bool(result.answered)
+
+    def probe_window(self, address: str) -> bool | None:
+        """TLS с адреса режут по ответу сервера? True — окно в 1 байт ответило дважды, а окно в 1 КБ — нет.
+
+        None — нет соединения или «Стоп». Та же проба, что у BlockCheck (``block_cause.window_facts``).
+        """
+        from diagnostics.block_cause import HELLO_CANCELLED, HELLO_CONNECT, reply_window_proven, window_facts
+
+        small, control = window_facts(address, self._cancel, timeout=WINDOW_PROBE_TIMEOUT_S)
+        if small.kind in (HELLO_CONNECT, HELLO_CANCELLED) or (control is not None and control.kind == HELLO_CANCELLED):
+            return None
+        return reply_window_proven(small, control)
+
+    def server_window(self, address: str) -> int | None:
+        """Окно приёма сервера сразу после соединения (``utils.tcp_info``). None — не узнать."""
+        from utils.tcp_info import server_window
+
+        return server_window(address, timeout=HELLO_DISCOVERY_TIMEOUT_S)
+
+    def video_siblings(self, host: str) -> list[str]:
+        """Адреса соседних видеосерверов того же узла (rr1…rr20 того же sn-…): YouTube раздаёт видео со всех них."""
+        from blockcheck.strategy_search.probes import sibling_video_hosts
+
+        found: list[str] = []
+        for name in sibling_video_hosts(host):
+            addresses, error = self.resolve(name, 443, udp=False)
+            found.extend(address for address in addresses if not error and address not in found)
+        return found
+
+    def reply_window_among(self, addresses) -> list[str]:
+        """Из ``addresses`` — те, где TLS режут по ответу сервера: постороннее имя оборвано, малое окно доказано.
+
+        Параллельно, но с шагом между стартами: залп соединений к соседним адресам сам бывает поводом
+        для фильтра придержать их все.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        from diagnostics.block_cause import STAGGER_S, later
+        from blockcheck.strategy_search.sni_discovery import NEUTRAL_NAME
+
+        def one(address: str) -> str:
+            if self.probe_hello(address, NEUTRAL_NAME) is not False:
+                return ""
+            return address if self.probe_window(address) else ""
+
+        with ThreadPoolExecutor(max_workers=WINDOW_SIBLING_WORKERS) as pool:
+            futures = [
+                pool.submit(later, index * STAGGER_S, self._cancel, one, address)
+                for index, address in enumerate(addresses)
+            ]
+            return [address for address in (future.result() for future in futures) if address]
+
 
 
 class _ManagedSession:

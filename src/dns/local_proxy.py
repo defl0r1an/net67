@@ -34,6 +34,7 @@ from pathlib import Path
 
 from dns import local_proxy_catalog as catalog
 from dns.local_proxy_config import LISTEN_IPV4, LISTEN_IPV6, build_config, read_mode, read_server, read_upstreams
+from dns.step_log import timed_step
 from log.log import log
 
 SERVICE_NAME = "net67DnsCrypt"
@@ -122,11 +123,26 @@ def uses_local_proxy(addresses: Iterable[str]) -> bool:
     return any(str(item or "").strip() in LOCAL_ADDRESSES for item in addresses)
 
 
-def _wait_answer(system) -> bool:
+# Так движок пишет, что ни один сервер режима не годится (не отвечает или
+# подменяет ответы — «lying resolver»). Дальше он сам ничего не дождётся:
+# замер на win10 2026-11-01 — у GeoHide это видно через 4 с, а программа
+# ждала все START_TIMEOUT_S и только потом ставила DNS без шифрования.
+NO_SERVERS_MARK = "waiting for at least one server to be reachable"
+
+
+def _wait_answer(system, log_from: int = 0) -> bool:
+    """Ждёт первого ответа движка; False — не дождались или движок сам сказал, что серверов нет.
+
+    log_from — сколько символов журнала было до запуска: старые строки прошлых запусков не в счёт.
+    """
+    log_path = system.work_dir() / LOG_NAME
     waited = 0.0
     while waited < START_TIMEOUT_S:
         if system.answers(LISTEN_IPV4):
             return True
+        if NO_SERVERS_MARK in _read(log_path)[log_from:]:
+            log(f"DNS: шифрованный DNS сообщил, что ни один сервер не годится (через {waited:.1f} с)", "WARNING")
+            return False
         system.sleep(_POLL_S)
         waited += _POLL_S
     return False
@@ -201,9 +217,12 @@ def start(
 
     # Свою службу останавливаем до проверки порта: иначе порт занят ею самой.
     if system.service_state(SERVICE_NAME):
-        system.stop_service(SERVICE_NAME)
+        with timed_step("шифрованный DNS: остановка прежней службы"):
+            system.stop_service(SERVICE_NAME)
     listen_ipv6 = bool(system.ipv6_loopback_available())
-    if not system.port_53_free(ipv6=listen_ipv6):
+    with timed_step("шифрованный DNS: проверка порта 53"):
+        port_free = system.port_53_free(ipv6=listen_ipv6)
+    if not port_free:
         _roll_back(system, exe, config, previous_config)
         return LocalProxyResult(
             False,
@@ -226,25 +245,32 @@ def start(
             ),
             encoding="utf-8",
         )
-        system.grant_service_access(work)
+        with timed_step("шифрованный DNS: права службы на папку"):
+            system.grant_service_access(work)
     except OSError as exc:
         _roll_back(system, exe, config, previous_config)
         return LocalProxyResult(False, f"Не удалось подготовить папку шифрованного DNS: {exc}")
 
-    ok, output = system.check_config(exe, config)
+    with timed_step("шифрованный DNS: проверка настроек движком"):
+        ok, output = system.check_config(exe, config)
     if not ok:
         _roll_back(system, exe, config, previous_config)
         return LocalProxyResult(False, f"dnscrypt-proxy не принял настройки: {output[-300:]}")
 
-    ok, error = _ensure_service(system, exe, config)
+    with timed_step("шифрованный DNS: запись службы Windows"):
+        ok, error = _ensure_service(system, exe, config)
     if not ok:
         _roll_back(system, exe, config, previous_config)
         return LocalProxyResult(False, f"Не удалось создать службу Windows {SERVICE_NAME}: {error}")
-    started, reason = system.start_service(SERVICE_NAME)
+    log_from = len(_read(work / LOG_NAME))
+    with timed_step("шифрованный DNS: запуск службы"):
+        started, reason = system.start_service(SERVICE_NAME)
     if not started:
         _roll_back(system, exe, config, previous_config)
         return LocalProxyResult(False, f"Служба Windows {SERVICE_NAME} не запустилась: {reason}")
-    if not _wait_answer(system):
+    with timed_step("шифрованный DNS: ожидание первого ответа"):
+        answered = _wait_answer(system, log_from)
+    if not answered:
         tail = _log_tail(system)
         _roll_back(system, exe, config, previous_config)
         return LocalProxyResult(

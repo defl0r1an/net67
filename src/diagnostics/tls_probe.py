@@ -88,11 +88,19 @@ class ProbeResult:
     body_size: int = 0
     # Ответ начал приходить, но оборвался (таймаут или сброс посреди тела).
     body_cut: bool = False
+    # Байты ответа на проводе: заголовки и тело как пришло (сжатое не распаковано).
+    # 0 — не измерено (тогда счёт идёт по ``body_size``). По ним и по ``handshake_size``
+    # ``diagnostics.cut_window`` считает байты так, как их считает фильтр.
+    received_size: int = 0
+    # Байты рукопожатия TLS от сервера (сертификат и прочее); 0 — не измерено.
+    handshake_size: int = 0
     cert_problem: str = ""
     tls_version: str = ""
     elapsed_ms: float = 0.0
     detail: str = ""
     body: bytes = b""
+    # Заголовок Date ответа сервера (как пришёл), "" — его не было.
+    server_date: str = ""
     # Почему не установилось соединение — вид сбоя ``utils.net_failure``: "timeout" —
     # ответа нет вовсе, "refused" — адрес сам отказал, "unreachable" — до адреса нет
     # дороги, "other" — прочая ошибка системы (например, запрет сетевого экрана).

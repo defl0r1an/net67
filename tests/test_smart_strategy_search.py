@@ -77,7 +77,8 @@ class SmartStrategySearchTests(unittest.TestCase):
 
         # Baseline: закрыто
         engine._baseline = Mock(return_value=True)
-        engine._target = Mock(forced=False, host="discord.com", addresses=["162.159.135.232"], companions=())
+        from blockcheck.strategy_search.engine import _Target
+        engine._target = _Target(host="discord.com", addresses=("162.159.135.232",))
         # Pass control: закрыто
         engine._pass_control = Mock(return_value=True)
 

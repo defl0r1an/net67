@@ -225,11 +225,15 @@ def stop_dpi_for_update(*, is_any_running, shutdown_sync, reason: str) -> tuple[
     if not is_any_running():
         return False, True, ""
 
-    result = shutdown_sync(
-        reason=str(reason or "updater_pipeline"),
-        include_cleanup=True,
-        update_runtime_state=False,
-    )
+    try:
+        result = shutdown_sync(
+            reason=str(reason or "updater_pipeline"),
+            include_cleanup=True,
+            update_runtime_state=False,
+        )
+    except Exception as error:
+        # Движок мог уже остановиться до сбоя очистки: при отказе обновления его надо вернуть.
+        return True, False, str(error)
     if bool(getattr(result, "still_running", False)):
         return True, False, "DPI не остановился"
     return True, True, ""

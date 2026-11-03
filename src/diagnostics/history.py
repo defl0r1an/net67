@@ -35,6 +35,21 @@ def _overall_level(report: dict) -> str:
     return worst(problem.get("level") for problem in report.get("problems") or ())
 
 
+def _service_state(service: dict) -> str:
+    """Состояние сайта для истории: «не открывается» — ``fail``, даже если уровень — замечание.
+
+    Сайт, к которому не удалось соединиться, отчёт помечает уровнем ``warn``: это не
+    установленная блокировка. Но история, счётчик «Открывается N из M» и сравнение
+    «с Zapret и без» читают ``warn`` как «открывается» (``levels.is_open``), и такой
+    сайт попадал в «снова открываются», хотя на карточке написано «не открывается».
+    Отчёты до поля ``opens`` его не несут — для них остаётся уровень.
+    """
+    level = str(service.get("level") or "unknown")
+    if service.get("opens") is False and level in (WARN, FAIL):
+        return FAIL
+    return level
+
+
 def blockcheck_entry(report: dict, *, log_file: str = "", when: datetime | None = None, preset: str = "") -> dict:
     """Короткая запись о прогоне BlockCheck для истории.
 
@@ -45,7 +60,7 @@ def blockcheck_entry(report: dict, *, log_file: str = "", when: datetime | None 
     when = when or datetime.now()
     problems = [str(problem.get("text") or "") for problem in report.get("problems") or ()]
     states = {
-        str(service.get("label") or service.get("key") or ""): str(service.get("level") or "unknown")
+        str(service.get("label") or service.get("key") or ""): _service_state(service)
         for service in report.get("services") or ()
         if not service.get("control")
     }
@@ -173,10 +188,21 @@ def same_run_kind(run: dict, entry: dict) -> bool:
 
 
 def previous_run(history: list[dict], entry: dict) -> dict | None:
-    """Последний прошлый прогон того же вида и с тем же набором сайтов."""
+    """Последний прошлый прогон того же вида, с тем же набором сайтов и при том же Zapret.
+
+    Прогон с включённым Zapret и прогон без него не сравниваются: сайт,
+    «переставший открываться» только потому, что Zapret выключили, — не новая
+    блокировка (для этого есть сравнение «с Zapret и без»). Если про Zapret в
+    одной из записей ничего не известно, сравнение разрешено.
+    """
+    mark = str(entry.get("zapret") or "")
     for run in reversed(history):
-        if same_run_kind(run, entry):
-            return run
+        if not same_run_kind(run, entry):
+            continue
+        other = str(run.get("zapret") or "")
+        if mark and other and mark != other:
+            continue
+        return run
     return None
 
 

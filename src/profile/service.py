@@ -45,6 +45,7 @@ from .key_resolution import (
     resolve_preset_profile_reference_index,
     resolve_preset_profile_row_index,
 )
+from lists.core.hostlist_syntax import HostlistIndex
 from .list_file_editor import (
     count_profile_list_entries,
     profile_list_file_reference,
@@ -286,6 +287,16 @@ class ProfilePresetService:
         if reason:
             log(f"ProfilePresetService: запись пресета не подтверждена: {reason}", "ERROR")
         return reason
+
+    def _commit_preset_or_raise(self, preset: Preset, *, expect) -> None:
+        """Записать пресет; неподтверждённая запись — исключение, а не «успех».
+
+        Раньше такие правки возвращали None, как «profile не найден», и окно
+        показывало новое состояние, которого на диске нет.
+        """
+        failure = self._commit_preset(preset, expect=expect)
+        if failure:
+            raise RuntimeError(f"Пресет не сохранён: {failure}")
 
     def edit_selected_preset(self, edit, *, content_change_kind: str = "preset_structure") -> tuple[str, Any]:
         """Правка выбранного пресета внешней фичей через общий путь записи.
@@ -759,8 +770,7 @@ class ProfilePresetService:
             if bool(preset.profiles[index].enabled) == bool(enabled):
                 return preset.profiles[index].key
             preset = with_profile_enabled(preset, index, bool(enabled))
-            if self._commit_preset(preset, expect=_expect_profile_enabled(index, bool(enabled))):
-                return None
+            self._commit_preset_or_raise(preset, expect=_expect_profile_enabled(index, bool(enabled)))
             return preset.profiles[index].key if 0 <= index < len(preset.profiles) else None
 
         if profile_key.startswith("template:") and enabled:
@@ -1092,8 +1102,7 @@ class ProfilePresetService:
         ):
             return old_persistent_key, old_persistent_key
         preset = with_editable_profile_settings(preset, index, next_settings)
-        if self._commit_preset(preset, expect=_expect_editable_settings(index, next_settings)):
-            return None
+        self._commit_preset_or_raise(preset, expect=_expect_editable_settings(index, next_settings))
         return self._profile_edit_result(preset, index, old_persistent_key)
 
     def update_profile_raw_text(self, profile_key: str, raw_text: str) -> tuple[str, str] | None:
@@ -1111,8 +1120,7 @@ class ProfilePresetService:
         # по формату относится к шапке пресета — он сохраняется там, и это не
         # «файл не совпал после записи».
         expected_text = profile_raw_text(preset.profiles[index]) if index < len(preset.profiles) else normalized_text
-        if self._commit_preset(preset, expect=_expect_profile_raw_text(index, expected_text)):
-            return None
+        self._commit_preset_or_raise(preset, expect=_expect_profile_raw_text(index, expected_text))
         return self._profile_edit_result(preset, index, old_persistent_key)
 
     def _profile_edit_result(self, preset: Preset, index: int, old_persistent_key: str) -> tuple[str, str] | None:
@@ -1237,8 +1245,7 @@ class ProfilePresetService:
             out_range=current.out_range,
         )
         preset = with_editable_profile_settings(preset, index, next_settings)
-        if self._commit_preset(preset, expect=_expect_editable_settings(index, next_settings)):
-            return None
+        self._commit_preset_or_raise(preset, expect=_expect_editable_settings(index, next_settings))
         return self._profile_edit_result(preset, index, old_persistent_key)
 
     def delete_profile(self, profile_key: str) -> bool:
@@ -1521,6 +1528,11 @@ class ProfilePresetService:
         text_parts = read_profile_list_file_text_parts(self._lists_root(), reference)
         invalid_lines = validate_profile_list_file_text(reference.kind, text_parts.user_text) if reference.editable else ()
         base_entries_count = count_profile_list_entries(text_parts.base_text) if reference.editable else 0
+        base_index = (
+            HostlistIndex.from_texts(("base", text_parts.base_text))
+            if reference.editable and reference.kind == "hostlist"
+            else None
+        )
         user_entries_count = count_profile_list_entries(
             text_parts.user_text if reference.editable else text_parts.final_text
         )
@@ -1537,6 +1549,7 @@ class ProfilePresetService:
             error_text=reference.error_text,
             base_entries_count=base_entries_count,
             user_entries_count=user_entries_count,
+            base_index=base_index,
         )
 
     def _append_template_profile_to_preset(

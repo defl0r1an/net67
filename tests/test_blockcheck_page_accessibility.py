@@ -76,6 +76,16 @@ _REPORT = {
 
 
 class BlockcheckPageAccessibilityTests(unittest.TestCase):
+    def test_custom_domains_open_only_on_request_and_stay_hidden_during_run(self):
+        page = _make_page()
+        self.addCleanup(page.deleteLater)
+        self.assertTrue(page._domains_card.isHidden())
+        page._open_custom_domains()
+        self.assertFalse(page._domains_card.isHidden())
+        page._domains_hidden_for_run = True
+        page._switch_tab(page.TAB_ORDER.index(page.TAB_BLOCKCHECK))
+        self.assertTrue(page._domains_card.isHidden())
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
@@ -127,7 +137,8 @@ class BlockcheckPageAccessibilityTests(unittest.TestCase):
         page = _make_page()
         self.addCleanup(page.deleteLater)
 
-        for card in (page._control_card, page._domains_card, page._results_card, page._footer_card):
+        self.assertIs(page._control_card, page._summary_panel)
+        for card in (page._domains_card, page._results_card, page._footer_card):
             self.assertIsNone(card._title_label)
         # Пустая таблица до первой проверки не показывается.
         self.assertTrue(page._results_card.isHidden())

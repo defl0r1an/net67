@@ -1,5 +1,5 @@
-// Срез таблицы опций поставляемого winws2 без Cygwin (форк движка, 26fb2e84, v1.0.6).
-// https://git.zapret.moe/api/v1/repos/zapretdiscordyoutube/zapret2-fork/raw/nfq2/nfqws.c?ref=26fb2e84881231ef5d29d89b2facaaf520baf726
+// Таблица опций поставляемого winws2, коммит 9600a09fa3d23a178deb93ecb5355a0dd8f731f9.
+// https://raw.githubusercontent.com/zapret-discordyoutube/zapret2-fork/9600a09fa3d23a178deb93ecb5355a0dd8f731f9/nfq2/nfqws.c
 static const struct option long_options[] = {
 	[IDX_DEBUG] = {"debug", optional_argument, 0, 0},
 	[IDX_DRY_RUN] = {"dry-run", no_argument, 0, 0},

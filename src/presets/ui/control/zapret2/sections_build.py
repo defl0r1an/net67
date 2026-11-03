@@ -155,7 +155,7 @@ def build_winws2_pages_settings_sections(
             win11_toggle_row_cls(
                 "fa5s.ruler-horizontal",
                 "Включить --wssize",
-                "Добавляет параметр размера окна TCP",
+                "Малое окно TCP в профилях по IP-адресам. Может снизить скорость; профили по доменам не меняет",
             )
             if win11_toggle_row_cls
             else None

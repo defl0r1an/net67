@@ -43,6 +43,9 @@ class FakeSession:
             (line.split("id=", 1)[1] for line in config_text.splitlines() if "id=" in line),
             "pass" if "--lua-desync=pass" in config_text else None,
         )
+        # Профиль малого окна по адресам: «+w» к стратегии, одно малое окно — «wssize».
+        if "--lua-desync=wssize" in config_text:
+            self.strategy = f"{self.strategy}+w" if self.strategy else "wssize"
 
     def start(self):
         if self.env.start_fails.get(self.strategy, 0) > 0:
@@ -80,6 +83,13 @@ class FakeEnv:
     http: object = None
     quic_cut_by_name: bool = False
     quic: object = None
+    # Проба малого окна до запуска winws2: адрес -> True / False / None. По умолчанию не проходит.
+    window: object = None
+    # Соседние видеосерверы узла: хост -> адреса; и какие из адресов режут по ответу сервера.
+    siblings: object = None
+    sibling_windows: tuple = ()
+    # Окно приёма сервера (байт) по адресу; по умолчанию не известно.
+    window_of: object = None
 
     def __post_init__(self):
         self.running = None
@@ -370,6 +380,38 @@ class CompanionTests(unittest.TestCase):
         self.assertTrue(any("без обхода video.example.com" in line for line in events.logs))
         self.assertTrue(any(result.strategy_id == "both" and result.success for result in events.results))
 
+    def test_video_server_must_pass_the_volume_too(self) -> None:
+        """Рукопожатие с видеосервером без видео — не победа: он набирает объём, как и цель."""
+        env = self._env(
+            lambda running, _n: OK if running in ("page_only", "both") else RESET,
+            lambda running: OK if running in ("page_only", "both") else RESET,
+        )
+        hosts: list = []
+        original = env.probe_volume
+
+        def volume(host, address, answered):
+            hosts.append(host)
+            if host == "video.example.com" and env.running == "page_only":
+                return ProbeOutcome(rules.PROBE_BLOCKED, "соединение замирает после ~16 КБ (блокировка по объёму)", 1.0, "reset", 0, rules.VOLUME_CUT)
+            return original(host, address, answered)
+
+        env.probe_volume = volume
+        _report, events = run(env, **self.REQUEST)
+
+        by_id = {result.strategy_id: result for result in events.results}
+        self.assertIn("video.example.com", hosts)
+        self.assertFalse(by_id["page_only"].success)
+        self.assertIn("16 КБ", by_id["page_only"].error)
+        self.assertTrue(by_id["both"].success)
+
+    def test_closed_video_server_wins_over_quic(self) -> None:
+        """Страница открыта, QUIC режут по имени, а видеосервер закрыт: подбирать надо TCP для видео, не QUIC."""
+        env = self._env(lambda running, _n: OK, lambda running: OK if running == "both" else RESET, quic_cut_by_name=True)
+        report, _events = run(env, FakeEvents(answer=False), **self.REQUEST)
+
+        self.assertEqual(report.scan_protocol, "tcp_https")
+        self.assertTrue(any(result.strategy_id == "both" and result.success for result in report.working_strategies))
+
     def test_everything_open_without_bypass_still_asks(self) -> None:
         env = self._env(lambda running, _n: OK, lambda running: OK)
         report, _events = run(env, FakeEvents(answer=False), **self.REQUEST)
@@ -478,6 +520,29 @@ class StrategyVerdictTests(unittest.TestCase):
         self.assertEqual(len(env.sessions), 1 + 2)  # pass + два запуска «broken»
         self.assertEqual(env.history_saved[2], ["broken"])
         self.assertEqual(report.working_strategies, [])
+
+    def test_blocked_start_of_one_strategy_does_not_stop_the_scan(self) -> None:
+        # Антивирус не дал создать процесс winws2 (или занял файл пробы):
+        # это сбой одной стратегии, остальные проверяются дальше.
+        env = FakeEnv(network=blocked_unless("good"), candidates=[cand("blocked"), cand("good")])
+        original = env.start_session
+
+        def start_session(config_text):
+            session = original(config_text)
+            if session.strategy == "blocked":
+                def start():
+                    raise PermissionError(5, "Access is denied")
+
+                session.start = start
+            return session
+
+        env.start_session = start_session
+        report, events = run(env)
+
+        self.assertEqual(report.fatal_error, "")
+        verdicts = {result.strategy_id: result.verdict for result in events.results}
+        self.assertEqual(verdicts["blocked"], rules.VERDICT_CRASH)
+        self.assertEqual(verdicts["good"], rules.VERDICT_WORKING)
 
     def test_one_time_start_failure_is_retried_and_not_remembered(self) -> None:
         env = FakeEnv(network=blocked_unless(), candidates=[cand("racy")])

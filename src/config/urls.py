@@ -21,9 +21,16 @@ INFO_URL = _BRAND_DOCS_URL
 
 #: Справочные страницы отдельных разделов. Пустая строка гасит
 #: соответствующую кнопку «Подробнее».
-PRESET_INFO_URL = ""
-PROFILE_INFO_URL = ""
-WINWS_LOG_ANALYZER_INFO_URL = ""
+PRESET_INFO_URL = f"{DOCS_URL.rstrip('/')}/presets" if DOCS_URL else ""
+PROFILE_INFO_URL = f"{DOCS_URL.rstrip('/')}/profiles" if DOCS_URL else ""
+WINWS_LOG_ANALYZER_INFO_URL = f"{DOCS_URL.rstrip('/')}/diagnostics#анализ-лога" if DOCS_URL else ""
+FILTER_INFO_URL = f"{PROFILE_INFO_URL}#когда-срабатывает-профиль" if PROFILE_INFO_URL else ""
+HOSTLIST_INFO_URL = f"{DOCS_URL.rstrip('/')}/lists" if DOCS_URL else ""
+IPSET_INFO_URL = HOSTLIST_INFO_URL
+EXCLUSIONS_INFO_URL = f"{DOCS_URL.rstrip('/')}/lists#исключения" if DOCS_URL else ""
+DESYNC_INFO_URL = f"{DOCS_URL.rstrip('/')}/techniques" if DOCS_URL else ""
+HOSTS_INFO_URL = f"{DOCS_URL.rstrip('/')}/hosts" if DOCS_URL else ""
+BLOCKCHECK_INFO_URL = f"{DOCS_URL.rstrip('/')}/diagnostics#blockcheck" if DOCS_URL else ""
 ANDROID_URL = ""
 
 #: Апстрим движка. Это не автор GUI, а сторонний компонент winws,

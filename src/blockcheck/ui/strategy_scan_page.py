@@ -7,6 +7,7 @@ Tests strategies one by one through winws2 + HTTPS probe.
 from blockcheck.strategy_search.probe_profile import PROTOCOL_TCP_HTTPS, PROTOCOL_UDP_GAMES, PROTOCOL_HTTP80, PROTOCOL_QUIC
 import logging
 from collections import deque
+from types import SimpleNamespace
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
@@ -80,10 +81,12 @@ class StrategyScanPage(BasePage):
         open_dns_settings=None,
         ensure_bypass_for_strategy=None,
         bypass_is_running=None,
+        notify=None,
     ):
         self._embedded = bool(embedded)
         self._ensure_bypass_for_strategy = ensure_bypass_for_strategy
         self._bypass_is_running = bypass_is_running
+        self._notify = notify
         self._apply_check_runtime = OneShotWorkerRuntime()
         self._apply_check_host = ""
         self._apply_check_protocol = PROTOCOL_TCP_HTTPS
@@ -214,11 +217,15 @@ class StrategyScanPage(BasePage):
         self._target_input = control_widgets.target_input
         self._quick_domain_btn = control_widgets.quick_domain_btn
         self._quick_cards = control_widgets.quick_cards
-        self._geo_notice = control_widgets.geo_notice
-        self._geo_notice.hosts_button.setVisible(self._open_hosts_editor is not None)
-        self._geo_notice.dns_button.setVisible(self._open_dns_settings is not None)
-        self._geo_notice.open_hosts_clicked.connect(self._open_hosts_editor_for_geo_site)
-        self._geo_notice.open_dns_clicked.connect(self._open_dns_settings_for_geo_site)
+        # Выбран гео-сайт: стратегия его не чинит, нужен hosts или DNS. Это та же
+        # всплывающая карточка, что на странице профиля, — в правом нижнем углу.
+        from profile.ui.profile_geo_notice import ProfileGeoNotice
+
+        self._geo_notice = ProfileGeoNotice(
+            self,
+            open_hosts_editor=self._open_hosts_editor_for_geo_site,
+            open_dns_settings=self._open_dns_settings_for_geo_site,
+        )
         self._target_input.textChanged.connect(self._refresh_geo_notice)
         # Карточка сервиса подсвечивается, когда его адрес стоит в поле, в том числе после ручного ввода.
         self._target_input.textChanged.connect(self._quick_cards.set_target)
@@ -300,12 +307,11 @@ class StrategyScanPage(BasePage):
     def _refresh_geo_notice(self, *_args) -> None:
         if self._geo_notice is None:
             return
-        from blockcheck.strategy_scan_page_plans import geo_site_notice_text
-
         service = self._geo_service_for_target()
-        if service:
-            self._geo_notice.set_text(geo_site_notice_text(service, language=self._ui_language))
-        self._geo_notice.setVisible(bool(service))
+        if not service:
+            self._geo_notice.show_services(())
+            return
+        self._geo_notice.show_services((service,), SimpleNamespace(display_name=service, match_lines=()))
 
     def _open_hosts_editor_for_geo_site(self) -> None:
         if self._open_hosts_editor is not None:
@@ -332,7 +338,10 @@ class StrategyScanPage(BasePage):
         hosts_text = tr_catalog("page.strategy_scan.geo_site.open_hosts", default="Открыть «Редактор hosts»")
         scan_text = tr_catalog("page.strategy_scan.geo_site.question_scan_anyway", default="Всё равно подобрать")
         box.yesButton.setText(hosts_text)
-        box.yesButton.setVisible(self._open_hosts_editor is not None)
+        from hosts.geo_sites import only_vpn_helps
+
+        # Сервису, которому помогает только VPN, «Редактор hosts» ничего не даст.
+        box.yesButton.setVisible(self._open_hosts_editor is not None and not only_vpn_helps((service,)))
         box.cancelButton.setText(tr_catalog("page.strategy_scan.resume_question_cancel", default="Отмена"))
         scan_button = PushButton(scan_text)
         choice = {"scan": False}
@@ -767,6 +776,20 @@ class StrategyScanPage(BasePage):
             return False
 
     def _on_stop(self):
+        if self._strategy_scan_run_runtime.is_queued():
+            # Подбор ещё ждёт очереди фоновых задач и Zapret не останавливал:
+            # снимаем его из очереди. Иначе он стартовал бы после «Стопа»,
+            # остановил бы Zapret и запустил его заново.
+            cancel_restore = getattr(self.__dict__.get("_scan_worker"), "cancel_runtime_restore", None)
+            if cancel_restore is not None:
+                cancel_restore()
+            self._strategy_scan_run_runtime.stop()
+            # Это «Отмена», а не сбой: пустой отчёт про None читался бы как
+            # «Ошибка подбора».
+            from blockcheck.scan_models import StrategyScanReport
+
+            self._on_finished(StrategyScanReport(target="", total_tested=0, cancelled=True))
+            return
         request_strategy_scan_stop(
             worker=self._strategy_scan_run_runtime.worker,
             schedule_stop_check=lambda expected_worker:
@@ -915,18 +938,36 @@ class StrategyScanPage(BasePage):
                 proceed = False
         worker.answer_continue(proceed)
 
-    def _restore_runtime_after_scan(self) -> None:
+    def _restore_runtime_after_scan(self) -> bool:
         """Подбор останавливал net67 — вернуть его, если он работал до подбора."""
         restore = getattr(self._scan_worker, "restore_runtime_if_needed", None)
         if restore is None:
-            return
+            return False
         try:
-            restored = restore()
+            restored = bool(restore())
         except Exception:
             logger.exception("Failed to restore net67 after strategy scan")
-            return
+            return False
         if restored:
             self._on_log("Подбор закончен — запускаю net67 снова, как было до подбора")
+        return restored
+
+    def request_exit_restore(self, on_done) -> bool:
+        """Выход ждёт остановки подбора и возврата обхода, который подбор выключал."""
+        runtime = self._strategy_scan_run_runtime
+        if runtime.is_queued():
+            self._on_stop()
+            return False
+        if not runtime.is_running():
+            return False
+        self._exit_restore_callback = on_done
+        self._on_stop()
+        return True
+
+    def _finish_exit_restore(self, restored: bool) -> None:
+        callback = self.__dict__.pop("_exit_restore_callback", None)
+        if callback is not None:
+            callback(bool(restored))
 
     def _on_log(self, message: str):
         if self._cleanup_in_progress:
@@ -949,8 +990,10 @@ class StrategyScanPage(BasePage):
         """Handle scan completion."""
         if self._cleanup_in_progress:
             return
-        self._restore_runtime_after_scan()
-        self._request_strategy_scan_finalize(report)
+        restored = self._restore_runtime_after_scan()
+        self._finish_exit_restore(restored)
+        if not self._cleanup_in_progress:
+            self._request_strategy_scan_finalize(report)
 
     def _request_strategy_scan_finalize(self, report) -> None:
         state = self._strategy_scan_finalize_state_obj()
@@ -1304,22 +1347,47 @@ class StrategyScanPage(BasePage):
         self._apply_check_runtime.start_qthread_worker(
             worker_factory=lambda request_id: StrategyApplyCheckWorker(
                 request_id, host, is_running=self._bypass_is_running, restarting=restarting, scan_protocol=protocol,
-                companions=companions),
-            bind_worker=lambda worker: worker.completed.connect(self._on_apply_check_finished),
+                companions=companions, read_preset=getattr(self._blockcheck, "read_strategy_preset_text", None)),
+            bind_worker=self._bind_apply_check_worker,
         )
         self._on_log(f"Проверяю {host} через ваш пресет после запуска обхода…")
 
-    def _on_apply_check_finished(self, request_id: int, host: str, code: str, text: str) -> None:
+    def _bind_apply_check_worker(self, worker) -> None:
+        worker.completed.connect(self._on_apply_check_finished)
+        worker.progress.connect(self._on_apply_check_progress)
+
+    def _apply_check_log(self, line: str) -> None:
+        self._on_log(line)
+        self._blockcheck.append_strategy_scan_run_log(self._run_log_file, line)
+
+    def _on_apply_check_progress(self, request_id: int, line: str) -> None:
+        if self._apply_check_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
+            self._apply_check_log(str(line))
+
+    def _on_apply_check_finished(self, request_id: int, host: str, check) -> None:
         if not self._apply_check_runtime.is_current(request_id, cleanup_in_progress=self._cleanup_in_progress):
             return
-        from blockcheck.strategy_apply_check import apply_check_message
+        from blockcheck.strategy_apply_check import apply_check_buttons, apply_check_message
 
-        self._on_log(f"Проверка через пресет: {host} — {code}{f' ({text})' if text else ''}")
-        message = apply_check_message(host, code, text)
-        if message is not None:
-            kind, title, body = message
-            show = InfoBarHelper.warning if kind == "warning" else InfoBarHelper.success
-            show(self.window(), title, body)
+        notify = self.__dict__.get("_notify")
+        buttons = apply_check_buttons(check) if callable(notify) else []
+        self._apply_check_log(f"Проверка через пресет: {host} — {check.code}{f' ({check.text})' if check.text else ''}")
+        message = apply_check_message(host, check, with_buttons=bool(buttons))
+        if message is None:
+            return
+        kind, title, body = message
+        self._apply_check_log(f"{title}. {body}")
+        if callable(notify):
+            from app_notifications import advisory_notification
+
+            notify(advisory_notification(
+                level=kind, title=title, content=body, source="blockcheck.apply_check",
+                presentation="infobar", queue="immediate", duration=-1 if buttons else 15000,
+                buttons=buttons, dedupe_key=f"blockcheck.apply_check.{host}",
+            ))
+            return
+        show = {"warning": InfoBarHelper.warning, "info": InfoBarHelper.info}.get(kind, InfoBarHelper.success)
+        show(self.window(), title, body)
 
     def _on_strategy_apply_failed(self, request_id: int, error: str) -> None:
         if not self._strategy_apply_runtime.is_current(
@@ -1618,6 +1686,8 @@ class StrategyScanPage(BasePage):
             warning_prefix="strategy scan geo sites worker",
         )
         self._geo_sites_runtime.cancel()
+        if self._geo_notice is not None:
+            self._geo_notice.cleanup()
         self._strategy_apply_runtime.stop(
             blocking=False,
             warning_prefix="strategy scan apply worker",

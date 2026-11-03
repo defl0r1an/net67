@@ -86,7 +86,26 @@ class UpdaterPipelineRuntimeTests(unittest.TestCase):
         self.assertEqual(len(callbacks), 1)
         runtime._runtime_actions.request_exit.assert_not_called()
         callbacks[0]()
-        runtime._runtime_actions.request_exit.assert_called_once_with(stop_dpi=False)
+        runtime._runtime_actions.request_exit.assert_called_once_with(stop_dpi=False, restore_after_scan=False)
+
+    def test_partial_stop_failure_restores_the_running_bypass(self) -> None:
+        runtime = self._runtime()
+        runtime._update_dpi_stop_runtime = Mock()
+        runtime._update_dpi_stop_runtime.is_current.return_value = True
+        runtime._continue_after_update_dpi_stop = Mock()
+        UpdatePageRuntime._on_update_dpi_stop_finished(runtime, 7, True, False, "сбой очистки")
+        runtime._restart_dpi_after_update.assert_called_once_with(context="неудачного обновления")
+        runtime._continue_after_update_dpi_stop.assert_not_called()
+        runtime._runtime_actions.mark_stopped.assert_not_called()
+
+    def test_stop_error_keeps_the_original_running_state(self):
+        from updater.commands import stop_dpi_for_update
+
+        result = stop_dpi_for_update(
+            is_any_running=lambda: True,
+            shutdown_sync=Mock(side_effect=OSError("сбой очистки")), reason="test",
+        )
+        self.assertEqual(result, (True, False, "сбой очистки"))
 
     def test_failure_restarts_only_dpi_stopped_by_update(self) -> None:
         runtime = self._runtime()

@@ -11,7 +11,8 @@
 - «открылось» значит «прошёл объём», а не только «ответил»: фильтр режет
   соединение где-то в окне ``FREEZE_MIN_BYTES``–``FREEZE_MAX_BYTES``
   (``diagnostics.limits``, «обрыв на 16 КБ»), а короткая страница это окно
-  не пересекает;
+  не пересекает. Где оборвалось, решает общее правило ``diagnostics.cut_window``
+  (оно же у проверки сайтов): байты считаются как у фильтра, с рукопожатием;
 - первая попытка — отбор: её провал сразу «не работает». После первого
   успеха одна случайная тишина стратегию не губит, явный след DPI губит;
 - в историю провалов не идут: провал при пропавшей сети, «Стоп», разовое
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from diagnostics import cut_window
 
 from utils.net_failure import (
     FAILURE_CANCELLED,
@@ -61,7 +63,8 @@ class ProbeOutcome:
     # Вид сбоя из ``utils.net_failure``; пусто, если адрес ответил. Правила опираются
     # на него, а ``reason`` — только текст для человека.
     failure: str = ""
-    # Сколько байт тела ответа пришло (для решения, нужна ли проверка объёма).
+    # Сколько байт ответ провёз по счёту фильтра (``cut_window``): по нему решается,
+    # нужна ли проверка объёма. 0 — не измерено.
     body_size: int = 0
     # Проверка объёма по соединению: "" — не делалась, VOLUME_* — её итог.
     volume: str = ""
@@ -114,14 +117,18 @@ def judge_https(result) -> ProbeOutcome:
     status = result.status
     if status is None:
         return ProbeOutcome(PROBE_BLOCKED, "нет ответа HTTP", elapsed, FAILURE_CLOSED)
-    if result.body_cut and result.body_size < FREEZE_MAX_BYTES:
-        size_kb = max(1, round(result.body_size / 1024))
-        if result.body_size >= FREEZE_MIN_BYTES:
+    received = cut_window.result_bytes(result)
+    cut = cut_window.result_cut(result)
+    if cut in (cut_window.CUT_WINDOW, cut_window.CUT_EARLY):
+        size_kb = max(1, round(received / 1024))
+        if cut == cut_window.CUT_WINDOW:
             return ProbeOutcome(PROBE_BLOCKED, f"ответ обрывается на ~{size_kb} КБ (блокировка по объёму)", elapsed, FAILURE_RESET)
+        # Раньше окна: страница не догрузилась — стратегия сайт не открыла, хотя на обычный
+        # обрыв ТСПУ это не похоже.
         return ProbeOutcome(PROBE_BLOCKED, f"ответ оборвался на ~{size_kb} КБ", elapsed, FAILURE_RESET)
     if status == 400:
         return ProbeOutcome(PROBE_BLOCKED, "сервер ответил 400: до него дошли фейковые пакеты", elapsed, FAILURE_HTTP)
-    return ProbeOutcome(PROBE_OK, f"HTTP {status}", elapsed, body_size=int(result.body_size or 0))
+    return ProbeOutcome(PROBE_OK, f"HTTP {status}", elapsed, body_size=received)
 
 
 def judge_http(
@@ -143,7 +150,8 @@ def judge_http(
     блокировке, код 451, текст о реестре — ``diagnostics.block_cause.stub_reason``),
     Код 400 также не считается успешным ответом при подборе.
     ``body_cut`` — заголовок пришёл, а тело сброшено или замерло: это тоже
-    блокировка, хотя статус уже 200.
+    блокировка, хотя статус уже 200. ``body_size`` — байты всего ответа (заголовки
+    и тело): так их считает фильтр.
     """
     from diagnostics.block_cause import HttpFacts, stub_reason
 
@@ -157,15 +165,22 @@ def judge_http(
     stub = stub_reason(host, HttpFacts(status=status, location=location, body=body))
     if stub:
         return ProbeOutcome(PROBE_BLOCKED, f"заглушка провайдера: {stub}", elapsed_ms, FAILURE_HTTP)
-    if failure:
+    if failure and not body_cut:
         return ProbeOutcome(PROBE_BLOCKED, "ответ HTTP оборвался", elapsed_ms, failure)
     if status == 400:
         return ProbeOutcome(PROBE_BLOCKED, "сервер ответил 400: запрос отклонён", elapsed_ms, FAILURE_HTTP)
     if body_cut:
         size_kb = max(1, round(body_size / 1024))
+        if cut_window.passed_window(body_size):
+            return ProbeOutcome(PROBE_OK, f"HTTP {status}", elapsed_ms, body_size=body_size)
+        # Без шифрования фильтр считает только сам ответ: заголовки и тело (``body_size``).
+        if cut_window.cut_place(body_size) == cut_window.CUT_WINDOW:
+            return ProbeOutcome(
+                PROBE_BLOCKED, f"ответ обрывается на ~{size_kb} КБ (блокировка по объёму)", elapsed_ms, failure or FAILURE_RESET
+            )
         return ProbeOutcome(PROBE_BLOCKED, f"ответ оборвался на ~{size_kb} КБ", elapsed_ms, failure or FAILURE_RESET)
     redirects = 300 <= status < 400 and location.strip().lower().startswith("https://")
-    return ProbeOutcome(PROBE_OK, f"HTTP {status}", elapsed_ms, redirect_https=redirects)
+    return ProbeOutcome(PROBE_OK, f"HTTP {status}", elapsed_ms, redirect_https=redirects, body_size=body_size)
 
 
 # --- Объём: прошло ли соединение порог обрыва ---------------------------------------
@@ -179,7 +194,7 @@ VOLUME_UNKNOWN = "unknown"
 
 def needs_volume(outcome: ProbeOutcome) -> bool:
     """Адрес ответил так коротко, что обрыв по объёму (окно ``FREEZE_*_BYTES``) не мог проявиться."""
-    return outcome.ok and not outcome.volume and outcome.body_size < FREEZE_MAX_BYTES
+    return outcome.ok and not outcome.volume and not cut_window.passed_window(outcome.body_size)
 
 
 def judge_volume(answered: ProbeOutcome, verdict, transfer=None) -> ProbeOutcome:

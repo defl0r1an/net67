@@ -11,6 +11,7 @@ from ui.accessibility import set_control_accessibility, set_state_text
 from ui.latest_value_worker_state import LatestValueWorkerState
 from ui.notification_inbox import NotificationInbox
 from ui.one_shot_worker_runtime import OneShotWorkerRuntime
+from ui.queued_worker_state import QueuedWorkerState
 from ui.window_notification_actions import WindowNotificationActionHandler, WindowNotificationRuntimeActions
 
 #: Сколько после закрытия панели нажатием на колокольчик щелчок по нему
@@ -77,6 +78,7 @@ class WindowNotificationCenter(QObject):
             show_page=self._show_page,
             open_url=self._request_external_open_url,
             request_disable_proxy=self._request_disable_proxy,
+            request_browser_fix=self._request_browser_fix,
             request_disable_kaspersky_warning=self._request_disable_kaspersky_warning,
             request_disable_telega_warning=self._request_disable_telega_warning,
             request_windivert_autofix=self._request_windivert_autofix,
@@ -282,6 +284,14 @@ class WindowNotificationCenter(QObject):
             bar=bar,
         )
 
+    def _request_browser_fix(self, value: str, bar=None) -> None:
+        from blockcheck.browser_fixes import run_fix
+
+        text = str(value or "").strip()
+        if not text:
+            return
+        self._request_notification_action("browser_fix", lambda: run_fix(text), bar=bar, context={"value": text})
+
     def _request_disable_kaspersky_warning(self, bar=None) -> None:
         self._request_notification_action(
             "disable_kaspersky_warning",
@@ -330,9 +340,13 @@ class WindowNotificationCenter(QObject):
 
     def _request_notification_action(self, action_name: str, action_fn, *, bar=None, context=None) -> None:
         request = (str(action_name or "").strip(), action_fn, bar, dict(context or {}))
-        self._notification_action_state_obj().request_or_start(
+        # Действия кнопок уведомлений независимы («Продолжить запуск», «Отключить
+        # прокси»): каждое выполняется по очереди, ни одно не заменяет другое.
+        state = self._notification_action_state_obj()
+        state.start_or_queue(
             request,
             lambda value: self._run_notification_action_worker(*value),
+            state.append,
         )
 
     def _run_notification_action_worker(self, action_name: str, action_fn, bar, context: dict[str, object]) -> None:
@@ -377,13 +391,13 @@ class WindowNotificationCenter(QObject):
         context = self._notification_action_context.pop(int(request_id), {})
         if not self._notification_action_runtime.is_current(request_id):
             return
-        if self._notification_action_state_obj().has_pending():
-            return
 
         action = str(action_name or context.get("action_name") or "")
         bar = context.get("bar")
         if action == "disable_proxy":
             self._notify_disable_proxy_result(result, bar=bar)
+        elif action == "browser_fix":
+            self._notify_browser_fix_result(result, bar=bar)
         elif action == "disable_kaspersky_warning":
             self._notify_disable_warning_result(
                 bool(result),
@@ -419,12 +433,12 @@ class WindowNotificationCenter(QObject):
         context = self._notification_action_context.pop(int(request_id), {})
         if not self._notification_action_runtime.is_current(request_id):
             return
-        if self._notification_action_state_obj().has_pending():
-            return
         action = str(action_name or context.get("action_name") or "")
         bar = context.get("bar")
         if action == "disable_proxy":
             self._notify_disable_proxy_result((False, error), bar=bar)
+        elif action == "browser_fix":
+            self._notify_browser_fix_result((False, str(error or "действие не выполнено"), []), bar=bar)
         elif action == "disable_kaspersky_warning":
             self._notify_disable_warning_result(
                 False,
@@ -457,31 +471,15 @@ class WindowNotificationCenter(QObject):
             self._finish_launch_conflict_action((False, error), context=context, bar=bar)
 
     def _on_notification_action_worker_finished(self, _worker) -> None:
-        self._notification_action_state_obj().schedule_pending_after_finish(
+        state = self._notification_action_state_obj()
+        state.schedule_next_after_finish(
             _worker,
             is_current_worker_finish=self._is_current_worker_finish,
             single_shot=QTimer.singleShot,
-            run_scheduled=self._run_scheduled_notification_action_worker_start,
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
+            start=lambda value: self._run_notification_action_worker(*value),
+            queue_item=state.append,
+            is_cleanup_in_progress=lambda: bool(self.__dict__.get("_cleanup_in_progress", False)),
         )
-
-    def _schedule_notification_action_worker_start(self, request) -> None:
-        if request is None:
-            return
-        self._notification_action_state_obj().schedule_start(
-            QTimer.singleShot,
-            lambda value=request: self._run_scheduled_notification_action_worker_start(value),
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False),
-            pending_when_already_scheduled=request,
-        )
-
-    def _run_scheduled_notification_action_worker_start(self, request=None) -> None:
-        pending = self._notification_action_state_obj().take_pending_for_scheduled_start(
-            cleanup_in_progress=self.__dict__.get("_cleanup_in_progress", False)
-        )
-        next_request = pending if pending is not None else request
-        if next_request is not None:
-            self._run_notification_action_worker(*next_request)
 
     def _external_open_url_state_obj(self) -> LatestValueWorkerState:
         state = self.__dict__.get("_external_open_url_state")
@@ -516,38 +514,15 @@ class WindowNotificationCenter(QObject):
     def _external_open_url_start_scheduled(self, value: bool) -> None:
         self._external_open_url_state_obj().start_scheduled = bool(value)
 
-    def _notification_action_state_obj(self) -> LatestValueWorkerState:
+    def _notification_action_state_obj(self) -> QueuedWorkerState:
         state = self.__dict__.get("_notification_action_state")
         runtime = self.__dict__.get("_notification_action_runtime")
         if state is None:
-            pending = self.__dict__.pop("_notification_action_pending", None)
-            start_scheduled = bool(self.__dict__.pop("_notification_action_start_scheduled", False))
-            state = LatestValueWorkerState(
-                runtime,
-                empty_value=None,
-                pending=pending,
-                start_scheduled=start_scheduled,
-            )
+            state = QueuedWorkerState(runtime)
             self.__dict__["_notification_action_state"] = state
         elif getattr(state, "runtime", None) is None and runtime is not None:
             state.runtime = runtime
         return state
-
-    @property
-    def _notification_action_pending(self):
-        return self._notification_action_state_obj().pending
-
-    @_notification_action_pending.setter
-    def _notification_action_pending(self, value) -> None:
-        self._notification_action_state_obj().pending = value
-
-    @property
-    def _notification_action_start_scheduled(self) -> bool:
-        return bool(self._notification_action_state_obj().start_scheduled)
-
-    @_notification_action_start_scheduled.setter
-    def _notification_action_start_scheduled(self, value: bool) -> None:
-        self._notification_action_state_obj().start_scheduled = bool(value)
 
     def _is_current_worker_finish(self, runtime, worker) -> bool:
         if self.__dict__.get("_cleanup_in_progress", False):
@@ -580,6 +555,28 @@ class WindowNotificationCenter(QObject):
                 queue="immediate",
                 duration=7000 if success else 10000,
                 dedupe_key="startup.proxy.action",
+            )
+        )
+
+    def _notify_browser_fix_result(self, result, *, bar=None) -> None:
+        """Итог кнопки «исправить» из проверки после «Применить»; у ECH — кнопка «Вернуть как было»."""
+        try:
+            success, text, buttons = result
+        except (TypeError, ValueError):
+            success, text, buttons = False, "действие не выполнено", []
+        if success:
+            self._close_bar(bar)
+        self.notify(
+            advisory_notification(
+                level="success" if success else "warning",
+                title="Готово" if success else "Не получилось",
+                content=str(text or ""),
+                source="blockcheck.browser_fix",
+                presentation="infobar",
+                queue="immediate",
+                duration=-1 if buttons else (10000 if success else 15000),
+                buttons=list(buttons or ()),
+                dedupe_key=f"blockcheck.browser_fix.{text}",
             )
         )
 

@@ -48,15 +48,7 @@ PACKET_COLUMNS = [
 PACKETS_PLACEHOLDER_TITLE = "Пакеты: выберите соединение в таблице выше"
 
 def _build_title_header(page, ui: SimpleNamespace) -> None:
-    """Заголовок страницы без ссылки на внешнюю инструкцию.
-
-    Справа от заголовка была ссылка «Как это б#&^ь работает?» на сайт
-    автора исходного проекта. Мат в корпоративном приложении неуместен,
-    а сама ссылка уводила на сторонний ресурс.
-
-    Обёртка-заголовок сохранена: на неё ссылается остальная разметка
-    страницы и обновление переводов.
-    """
+    """Единая шапка сохраняет контракт страницы и ведёт в свою документацию."""
     title_index = page.layout.indexOf(page.title_label)
     if title_index < 0:
         return
@@ -70,7 +62,18 @@ def _build_title_header(page, ui: SimpleNamespace) -> None:
     title_layout.addWidget(page.title_label, 0, Qt.AlignmentFlag.AlignVCenter)
     title_layout.addStretch(1)
 
+    from config.urls import WINWS_LOG_ANALYZER_INFO_URL
+    from ui.widgets.title_help_link import make_help_link
+
     ui.help_button = None
+    if WINWS_LOG_ANALYZER_INFO_URL:
+        ui.help_button = make_help_link(
+            WINWS_LOG_ANALYZER_INFO_URL,
+            tooltip="Как читать журнал движка",
+            description="Открыть справку по анализу журнала в вики net67",
+            parent=ui.title_header,
+        )
+        title_layout.addWidget(ui.help_button)
     page.layout.insertWidget(title_index, ui.title_header)
 
 

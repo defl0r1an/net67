@@ -55,6 +55,13 @@ class BlockcheckFeature:
 
         return StrategyApplyWorker(request_id, apply_strategy=self.apply_strategy, **kwargs)
 
+    def read_strategy_preset_text(self) -> str:
+        """После применения проверяется тот пресет, из которого движок запускается сейчас."""
+        from settings.mode import ZAPRET2_MODE
+
+        text, _manifest = self.presets_feature.read_selected_preset_source(ZAPRET2_MODE)
+        return str(text or "")
+
     def create_page_initial_state_worker(self, request_id: int, *, parent=None):
         from blockcheck.workers import BlockcheckInitialStateWorker
 

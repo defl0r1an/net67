@@ -49,6 +49,12 @@ STATE_MEDIA_DOMAIN_GROUPS: tuple[StateMediaDomainGroup, ...] = (
 )
 
 
+def _hosts_write_lock():
+    from hosts.commands import hosts_write_lock
+
+    return hosts_write_lock()
+
+
 def get_state_media_domains() -> tuple[str, ...]:
     domains: list[str] = []
     seen: set[str] = set()
@@ -75,6 +81,10 @@ def _remove_block(lines: list[str]) -> tuple[list[str], bool]:
             inside_block = False
             removed = True
             continue
+        if inside_block and not line.strip():
+            # Конечную метку стёрли руками: блок пишется без пустых строк, значит
+            # он кончился здесь. Дальше — строки пользователя, их не трогаем.
+            inside_block = False
         if not inside_block:
             new_lines.append(line)
     return new_lines, removed

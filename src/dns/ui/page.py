@@ -428,6 +428,7 @@ class NetworkPage(BasePage):
         # Предупреждение зависит и от отметок адаптеров: неотмеченный адаптер — дорога мимо выбранного сервера.
         self._render_notice()
 
+
     def _provider(self, name: str) -> dict | None:
         for group in self._providers.values():
             if name in group:

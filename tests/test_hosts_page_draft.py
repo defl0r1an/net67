@@ -411,6 +411,31 @@ class HostsPageTests(unittest.TestCase):
         self.assertFalse(page._draft.has_user_changes())
         self.assertFalse(page._draft.value("Direct"))
 
+    def test_failed_write_keeps_clicks_queued_after_it_started(self) -> None:
+        page = self._page(_manual_snapshot())
+        page._on_tile_activated("Direct")
+        page._set_service_profile("Alpha", "p1")
+        page._set_service_profile("Beta", "p1")
+
+        with patch("hosts.ui.page.InfoBar"):
+            self._finish_write(page, success=False, message="запись не удалась")
+
+        self.assertEqual(len(self.writes), 2)
+        self.assertEqual(self.writes[1]["selection"], {"Alpha": "p1", "Beta": "p1"})
+        self._finish_write(page, snapshot=_manual_snapshot(alpha="p1", beta="p1"))
+        self.assertFalse(page._draft.has_user_changes())
+
+    def test_new_choice_for_the_same_service_survives_failed_write(self) -> None:
+        page = self._page(_manual_snapshot())
+        page._set_service_profile("Alpha", "p1")
+        page._set_service_profile("Alpha", "p2")
+
+        with patch("hosts.ui.page.InfoBar"):
+            self._finish_write(page, success=False, message="запись не удалась")
+
+        self.assertEqual(len(self.writes), 2)
+        self.assertEqual(self.writes[1]["selection"], {"Alpha": "p2"})
+
     def test_write_refused_by_file_access_offers_restore_in_error_and_on_page(self) -> None:
         """Файл читается, а записать нельзя — кнопки восстановления прав не было нигде.
 
@@ -810,6 +835,38 @@ class HostsPageTests(unittest.TestCase):
         names = {field.name for field in dataclasses.fields(HostsFeature)}
         self.assertTrue({"peek_page_snapshot", "create_snapshot_worker", "create_apply_worker"} <= names)
         self.assertFalse(any("manager" in name or "runtime" in name for name in names))
+
+
+class HostsHelpLinkTests(unittest.TestCase):
+    """Ссылка «Как это работает?» на статью о «Редакторе hosts» — та же, что на других страницах."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._app = QApplication.instance() or QApplication([])
+
+    def test_help_link_stands_in_the_summary_and_opens_the_hosts_article(self) -> None:
+        from PyQt6.QtCore import QUrl
+
+        from config.urls import HOSTS_INFO_URL
+        from hosts.ui.page import HostsPage
+        from ui.widgets.site_link_button import SiteLinkButton
+
+        snapshot = _snapshot("")
+        feature = SimpleNamespace(
+            peek_page_snapshot=lambda: snapshot,
+            create_snapshot_worker=lambda request_id, parent=None: None,
+            create_apply_worker=lambda request_id, selection, adobe, parent=None: None,
+        )
+        page = HostsPage(deps=SimpleNamespace(hosts_feature=feature, open_file_page=lambda: None))
+        self.addCleanup(page.deleteLater)
+
+        from docs.wiki_site import page_url
+
+        self.assertEqual(HOSTS_INFO_URL, page_url("hosts"))
+        self.assertIsInstance(page.help_button, SiteLinkButton)
+        self.assertEqual(page.help_button.getUrl(), QUrl(HOSTS_INFO_URL))
+        self.assertTrue(page.summary_card.isAncestorOf(page.help_button))
+        self.assertEqual(page.help_button.accessibleName(), "Как это работает?")
 
 
 class HostsFileCommandsTests(unittest.TestCase):

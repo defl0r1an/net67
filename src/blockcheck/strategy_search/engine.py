@@ -14,6 +14,11 @@
    - открыта — проверяем ещё раз и спрашиваем пользователя, есть ли смысл;
    - закрыта раньше шифрования (сервер не принимает подключение) —
      стратегии обхода DPI это не чинят, останавливаемся с объяснением.
+3а. Какие имена пропускает фильтр (``sni_discovery``). Не проходит ни одно, а с
+   окном приёма в 1 байт ответ сервера приходит — TLS с адреса режут по ответу
+   сервера. Тогда (и для таких же адресов остальных имён сервиса) каждая
+   стратегия проверяется с профилем малого окна по этим адресам перед основным
+   (``probe_profile.WINDOW_STRATEGY_LINE``), первой — малое окно без приёмов.
 4. Контроль: запуск winws2 с пустой стратегией ``pass`` (две пробы). Если
    цель открывается уже от него — любая стратегия «сработает», замер ненадёжен.
 5. Каждая стратегия: запуск winws2 → одна проверка (отбор). Короткий ответ
@@ -40,6 +45,7 @@ from blockcheck.scan_models import StrategyProbeResult, StrategyScanReport
 from blockcheck.strategy_search import verdict as rules
 from blockcheck.strategy_search.ordering import Candidate, batch_for_mode, family_siblings, order_candidates
 from blockcheck.strategy_search.probe_profile import (
+    WINDOW_STRATEGY_LINE,
     PROTOCOL_HTTP80,
     PROTOCOL_QUIC,
     PROTOCOL_STUN_VOICE,
@@ -54,6 +60,9 @@ from blockcheck.strategy_search.verdict import ProbeOutcome, UdpProbeSpec
 logger = logging.getLogger(__name__)
 
 PASS_STRATEGY_ARGS = "--lua-desync=pass"
+# Малое окно без других приёмов: первая проверка, когда TLS с адреса режут по ответу сервера.
+WINDOW_ONLY_ID = "wssize_window_only"
+WINDOW_ONLY_NAME = "Только малое окно по адресам (wssize_ramp)"
 # Сколько раз перезапускать стратегию, если winws2 упал (гонка драйвера).
 # Падение с тем же выводом второй раз подряд — не гонка, а сама стратегия.
 CRASH_RETRIES = 2
@@ -167,6 +176,11 @@ class SearchEnvironment(Protocol):
     def quic_blocked_by_name(self, host: str, address: str) -> bool: ...
     def probe_udp(self, specs: Sequence[UdpProbeSpec]) -> list[tuple[UdpProbeSpec, ProbeOutcome]]: ...
     def tcp_port_open(self, address: str, port: int) -> bool: ...
+    def probe_hello(self, address: str, name: str | None) -> bool | None: ...
+    def probe_window(self, address: str) -> bool | None: ...
+    def server_window(self, address: str) -> int | None: ...
+    def video_siblings(self, host: str) -> list[str]: ...
+    def reply_window_among(self, addresses: Sequence[str]) -> list[str]: ...
     def cancel_probes(self) -> None: ...
 
     def monotonic(self) -> float: ...
@@ -190,6 +204,10 @@ class _Target:
     # Без обхода цель отвечает, но соединение замирает на объёме: каждая
     # проверка обязана набрать объём, иначе «откроется» любая стратегия.
     volume_block: bool = False
+    # Адреса цели и остальных имён, где TLS режут по ответу сервера: им нужен профиль малого окна.
+    window_addresses: tuple[str, ...] = ()
+    # Окно сервера меньше приветствия браузера: профиль выбирается по адресам цели, а не по имени.
+    match_by_address: bool = False
 
 
 @dataclass
@@ -424,8 +442,11 @@ class StrategySearch:
         # такой подбор ничего не говорит о них и в историю не идёт.
         if self._target.forced or not (confirmed_ids or failed_ids):
             return
+        # Провал рядом с малым окном говорит о паре «стратегия + окно», а не о стратегии: без окна
+        # она могла бы работать. В историю на 14 дней такие провалы не идут.
+        failed = [] if self._target.window_addresses else list(failed_ids)
         try:
-            self._env.record_history(key, confirmed=list(confirmed_ids), failed=list(failed_ids))
+            self._env.record_history(key, confirmed=list(confirmed_ids), failed=failed)
         except Exception:
             logger.exception("strategy search history save failed")
             # Не теряем накопленное при временной ошибке записи: конец прогона повторит её.
@@ -535,11 +556,12 @@ class StrategySearch:
             raise ScanFatal(self._not_dpi_reason(host, addresses, decision.reason), STOP_ADDRESS_BLOCK)
         if decision.state == rules.BASELINE_OPEN:
             decision = self._recheck_open_baseline(host, addresses, outcomes, decision)
-        if decision.state == rules.BASELINE_OPEN and self._baseline_quic(host, decision.probe_addresses):
-            return True
         if decision.state == rules.BASELINE_OPEN and self._companion_closed(companions):
             # Страница открывается, а другое имя сервиса (видеосервер, превью) нет: подбирать есть что.
+            # Раньше QUIC: без видеосервера видео не пойдёт, как бы ни открывалась страница.
             self._target = _Target(host=host, addresses=decision.probe_addresses, companions=companions)
+            return True
+        if decision.state == rules.BASELINE_OPEN and self._baseline_quic(host, decision.probe_addresses):
             return True
         if decision.state == rules.BASELINE_OPEN:
             report.baseline_accessible = True
@@ -788,7 +810,8 @@ class StrategySearch:
 
     # --- Одна стратегия -------------------------------------------------------------
 
-    def _profile(self, strategy_args: str) -> ProbeProfile:
+    def _profile(self, strategy_args: str, *, window: bool = True) -> ProbeProfile:
+        """Профиль пробы. ``window=False`` — без профиля малого окна (контрольный запуск: «без приёмов»)."""
         games_paths: list[str] = []
         if self._protocol == PROTOCOL_UDP_GAMES:
             games_paths = self._env.games_ipset_paths(self._request.udp_games_scope)
@@ -801,6 +824,8 @@ class StrategySearch:
             games_ipset_paths=games_paths,
             games_addresses=self._target.games_addresses,
             games_ports=self._target.games_ports,
+            window_addresses=self._target.window_addresses if window and self._protocol == PROTOCOL_TCP_HTTPS else (),
+            match_addresses=self._target.addresses if self._target.match_by_address and self._protocol == PROTOCOL_TCP_HTTPS else (),
         )
 
     def _match_domains(self) -> str:
@@ -849,6 +874,12 @@ class StrategySearch:
             # Сервис открыт, только когда открыты все его имена: страница без видеосервера — не победа.
             for companion, addresses in self._target.companions if passed else ():
                 extra = self._env.probe_https(companion, addresses)
+                if volume and rules.attempt_passed(extra):
+                    # Видеосервер тоже обязан набрать объём: рукопожатие без видео — не победа.
+                    extra = [
+                        self._env.probe_volume(companion, address, outcome) if rules.needs_volume(outcome) else outcome
+                        for address, outcome in zip(addresses, extra)
+                    ]
                 if not rules.attempt_passed(extra):
                     passed, reason, outcomes = False, f"{companion}: {rules.attempt_reason(extra)}", extra
                     break
@@ -882,15 +913,33 @@ class StrategySearch:
     def _test_strategy(self, candidate: Candidate, *, confirm: bool = True) -> _StrategyRun:
         """Проверка одной стратегии. ``confirm=False`` — контрольный запуск: до
         ``CONTROL_PROBES`` проб, до первой открывшей цель."""
-        profile = self._profile(candidate.args)
+        # Контрольный запуск — winws2 без приёмов обхода, малое окно тоже приём.
+        profile = self._profile(candidate.args, window=confirm)
         config_text = build_probe_config_text(profile, self._env.blob_lines(candidate.args))
         crash_reason = ""
         previous_crash = ""
         for crash_try in range(1 + CRASH_RETRIES):
             if self.cancelled:
                 return _StrategyRun(rules.VERDICT_CANCELLED)
-            session = self._env.start_session(config_text)
-            start = session.start()
+            session = None
+            try:
+                session = self._env.start_session(config_text)
+                start = session.start()
+            except OSError as exc:
+                # Антивирус занял файл пробы или не дал запустить winws2: это сбой
+                # одной стратегии, а не всего подбора.
+                if session is not None:
+                    try:
+                        session.stop()
+                    except Exception:
+                        pass
+                crash_reason = f"не удалось запустить: {exc}"
+                self._events.log(f"  winws2 не запустился: {crash_reason}")
+                if crash_reason == previous_crash:
+                    return _StrategyRun(rules.VERDICT_CRASH, [], crash_reason, repeatable_crash=True)
+                previous_crash = crash_reason
+                self._env.recover_after_crash()
+                continue
             if self.cancelled:
                 session.stop()
                 return _StrategyRun(rules.VERDICT_CANCELLED)
@@ -976,7 +1025,9 @@ class StrategySearch:
         passed = [attempt for attempt in run.attempts if attempt.passed]
         success = run.verdict == rules.VERDICT_WORKING
         return StrategyProbeResult(
-            strategy_name=candidate.name,
+            strategy_name=candidate.name + (
+                " + малое окно по адресам" if self._target.window_addresses and candidate.strategy_id != WINDOW_ONLY_ID else ""
+            ),
             strategy_id=candidate.strategy_id,
             strategy_args=candidate.args,
             target=self._request.target,
@@ -997,6 +1048,8 @@ class StrategySearch:
                 "probe_host": self._target.host,
                 # Остальные имена сервиса (хост для пробы): после «Применить» открываться должны и они.
                 "companions": [host for host, _addresses in self._target.companions],
+                # Адреса, где TLS режут по ответу сервера: стратегия проверена с профилем малого окна по ним.
+                "window_addresses": list(self._target.window_addresses),
             },
         )
 
@@ -1049,14 +1102,29 @@ class StrategySearch:
         self._events.phase("Какие имена пропускает фильтр")
         self._stage(STEP_NAMES, "running", "Пробуем чужие имена к тому же адресу")
         address = self._target.addresses[0]
+        self._check_server_window(address)
         started = self._env.monotonic()
         search = sni_discovery.discover(
             lambda name: self._env.probe_hello(address, name),
             self._target.host,
             sleep=self._env.sleep,
             cancelled=lambda: self.cancelled,
+            window=lambda: self._env.probe_window(address),
         )
         seconds = self._env.monotonic() - started
+        extra = self._names_extra(ordered, batch, search, address, seconds)
+        target_found = search.kind == sni_discovery.FILTER_REPLY_WINDOW
+        windows = self._reply_window_addresses(target_found)
+        if windows:
+            extra = [*self._start_window_mode(windows, target_found), *extra]
+        return extra
+
+    def _names_extra(self, ordered: list[Candidate], batch: list[Candidate], search, address: str, seconds: float) -> list[Candidate]:
+        """Что дал поиск имён: в белом списке — варианты стратегий с найденными именами."""
+        from blockcheck.strategy_search import sni_discovery
+
+        if search.kind == sni_discovery.FILTER_REPLY_WINDOW:
+            return []
         if search.kind == sni_discovery.FILTER_BLACK:
             self._events.log(
                 f"  Имя цели рвётся, постороннее {sni_discovery.NEUTRAL_NAME} проходит — режут только это имя"
@@ -1085,6 +1153,102 @@ class StrategySearch:
         if extra:
             self._events.log(f"  Сначала проверим {len(extra)} стратегий с этими именами в подставном пакете")
         return extra
+
+    def _check_server_window(self, address: str) -> None:
+        """Окно сервера меньше приветствия браузера — профиль по адресам, а не по имени.
+
+        Браузер отправит такое приветствие частями, winws2 не соберёт его и не узнает имя сайта:
+        профиль по списку доменов не сработает ни с одной стратегией (dns.nextdns.io, октябрь 2026).
+        У сервиса из нескольких имён профиль по адресам цели не покрыл бы остальные имена — там как было.
+        """
+        from diagnostics.browser_hello import build_hello
+
+        window = self._env.server_window(address)
+        hello = len(build_hello(self._target.host))
+        if not window or window >= hello:
+            return
+        if self._target.companions:
+            self._events.log(
+                f"  Сервер {address} принимает до ответа только {window} байт, а приветствие браузера — {hello}: "
+                "по имени winws2 его может не узнать. У сервиса несколько имён, профиль остаётся по именам"
+            )
+            return
+        self._target.match_by_address = True
+        self._events.log(
+            f"  Сервер {address} принимает до своего ответа только {window} байт, а приветствие браузера — {hello} "
+            "байт: браузер отправит его частями, и winws2 не узнает имя сайта. Профиль подбора — по адресам цели, "
+            "а не по имени"
+        )
+
+    def _reply_window_addresses(self, target_found: bool) -> tuple[str, ...]:
+        """Адреса, где TLS режут по ответу сервера: у цели (первый уже проверен) и у остальных имён сервиса.
+
+        Адрес попадает сюда, только если постороннее имя к нему оборвалось, а малое окно прошло:
+        проба малого окна сама повторяет ответ дважды (``environment.probe_window``).
+        """
+        from blockcheck.strategy_search.sni_discovery import NEUTRAL_NAME
+
+        found: list[str] = []
+        hosts: list[str] = []
+        first = self._target.addresses[0] if self._target.addresses else ""
+        if target_found and first:
+            found.append(first)
+            hosts.append(self._target.host)
+        others = [(self._target.host, address) for address in self._target.addresses[1:]] if target_found else []
+        others += [(host, addresses[0]) for host, addresses in self._target.companions if addresses]
+        for host, address in others:
+            if self.cancelled:
+                break
+            if self._env.probe_hello(address, host) is not False or self._env.probe_hello(address, NEUTRAL_NAME) is not False:
+                continue
+            if self._env.probe_window(address):
+                if host != self._target.host:
+                    self._events.log(
+                        f"  {host} ({address}): шифрование не проходит ни с каким именем, а с окном приёма в 1 байт "
+                        "ответ сервера приходит — этот адрес тоже режут по ответу сервера"
+                    )
+                found.append(address)
+                hosts.append(host)
+        found.extend(self._sibling_windows(hosts, found))
+        return tuple(dict.fromkeys(found))
+
+    def _sibling_windows(self, hosts: Sequence[str], known: Sequence[str]) -> list[str]:
+        """Соседние видеосерверы узла (rr1…rr20 того же sn-…), на которых тот же фильтр доказан пробой.
+
+        Плеер берёт видео с любого из них: без них профиль малого окна закрыл бы один видеосервер из двадцати.
+        В профиль идут только проверенные адреса — соседи по сети бывают серверами других городов.
+        """
+        candidates: list[str] = []
+        for host in dict.fromkeys(hosts):
+            if self.cancelled:
+                return []
+            candidates.extend(address for address in self._env.video_siblings(host) if address not in known)
+        candidates = list(dict.fromkeys(candidates))
+        if not candidates or self.cancelled:
+            return []
+        found = [address for address in self._env.reply_window_among(candidates) if address in candidates]
+        self._events.log(
+            f"  Соседние видеосерверы того же узла: проверено {len(candidates)}, тот же фильтр на {len(found)}"
+        )
+        return found
+
+    def _start_window_mode(self, addresses: tuple[str, ...], target_found: bool) -> list[Candidate]:
+        """Стратегии дальше проверяются с профилем малого окна по ``addresses``; первым — малое окно без приёмов."""
+        from blockcheck.strategy_search.probe_profile import window_groups
+
+        self._target.window_addresses = addresses
+        groups = ", ".join(window_groups(addresses))
+        whose = "Цели" if target_found else "Другого имени сервиса"
+        self._events.log(
+            f"  {whose}: шифрование с адреса режут по ответу сервера — с обычным окном приёма ответа нет ни с каким "
+            "именем, с окном в 1 байт он приходит, с окном в 1 КБ снова нет. Каждую стратегию проверим вместе с малым "
+            f"окном (wssize_ramp) в отдельном профиле по адресам {groups}. Скорость через такой профиль ограничена: окно приёма там не больше 128 КБ — при пинге 20 мс это около 50 Мбит/с."
+        )
+        self._stage(STEP_NAMES, "done", f"TLS режут по ответу сервера — добавляем малое окно для {groups}")
+        # Первым — одно малое окно: если хватит его, приёмы против фильтра имён не нужны,
+        # а «Применить» запишет только профиль по адресам.
+        return [Candidate(WINDOW_ONLY_ID, WINDOW_ONLY_NAME, WINDOW_STRATEGY_LINE)]
+
 
 
 def run_strategy_search(

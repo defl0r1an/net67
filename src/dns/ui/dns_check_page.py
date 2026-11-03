@@ -97,8 +97,8 @@ class DNSCheckPage(BasePage):
         """Создаёт интерфейс страницы.
 
         Страница живёт во вкладке BlockCheck, поэтому без шапок у карточек,
-        карточки «Что проверяем» и подписи «Действия»: кнопки и статус — одна
-        строка, под ней итог. Подробный лог открывается в отдельном окне.
+        карточки «Что проверяем» и подписи «Действия»: строка кнопок, под ней
+        статус, ниже итог. Подробный лог открывается в отдельном окне.
         """
         self.control_card = SettingsCard()
         row = QHBoxLayout()
@@ -123,6 +123,7 @@ class DNSCheckPage(BasePage):
 
 
         self.status_label = CaptionLabel()
+        self.status_label.setWordWrap(True)
         self._set_status(
             tr_catalog(
                 "page.dns_check.status.ready",
@@ -132,8 +133,7 @@ class DNSCheckPage(BasePage):
             tone="muted",
             bold=False,
         )
-        row.addSpacing(8)
-        row.addWidget(self.status_label, 1)
+        row.addStretch(1)
 
         self.log_button = PushButton(
             tr_catalog("page.dns_check.button.log", language=self._ui_language, default="Подробный лог"),
@@ -171,6 +171,7 @@ class DNSCheckPage(BasePage):
         self.save_button.clicked.connect(self.save_results)
         row.addWidget(self.save_button)
         self.control_card.add_layout(row)
+        self.control_card.add_widget(self.status_label)
 
         # start=False: иначе анимация крутится и у скрытой полосы, пока жива страница.
         self.progress_bar = IndeterminateProgressBar(self, start=False)

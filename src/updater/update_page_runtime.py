@@ -1308,12 +1308,13 @@ class UpdatePageRuntime(QObject):
             cleanup_in_progress=self._cleanup_in_progress,
         ):
             return
+        if was_running:
+            self._download_state.dpi_stopped_by_update = True
         if not stopped:
             self._fail_update_pipeline(error or "DPI не удалось остановить")
             return
         if was_running:
             self._runtime_actions.mark_stopped()
-            self._download_state.dpi_stopped_by_update = True
         self._continue_after_update_dpi_stop()
 
     def _on_update_dpi_stop_failed(self, request_id: int, error: str) -> None:
@@ -1455,7 +1456,7 @@ class UpdatePageRuntime(QObject):
         log("Установщик запущен; приложение закрывается штатно", "🔁 UPDATE")
         QTimer.singleShot(
             0,
-            lambda: self._runtime_actions.request_exit(stop_dpi=False),
+            lambda: self._runtime_actions.request_exit(stop_dpi=False, restore_after_scan=False),
         )
 
     def _on_update_pipeline_cancelled(self) -> None:
