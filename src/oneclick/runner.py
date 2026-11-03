@@ -60,9 +60,10 @@ class OneClickDeps:
 class OneClickRunner:
     """Выполняет включение и выключение по плану."""
 
-    def __init__(self, deps: OneClickDeps):
+    def __init__(self, deps: OneClickDeps, *, should_stop=None):
         self._deps = deps
         self._state = OneClickState.OFF
+        self._should_stop = should_stop or (lambda: False)
 
     @property
     def state(self) -> OneClickState:
@@ -88,6 +89,8 @@ class OneClickRunner:
         failed_domains: tuple[str, ...] = ()
 
         for step in build_enable_plan(request):
+            if self._should_stop():
+                break
             if step.key is StepKey.SELFCHECK:
                 self._set_state(OneClickState.CHECKING, "Проверка доступности")
 
@@ -95,6 +98,9 @@ class OneClickRunner:
             results.append(result)
             if extra:
                 failed_domains = extra
+
+            if self._should_stop():
+                break
 
             if step.key is StepKey.DPI and result.ok:
                 self._set_state(OneClickState.RUNNING, "Обход включён, завершаем настройку")
@@ -133,6 +139,8 @@ class OneClickRunner:
                 # включение: обход соединения работает и без него.
                 # Поэтому шаг пропускается с объяснением, а не падает.
                 ready, note = deps.check_telegram_ready()
+                if self._should_stop():
+                    return StepResult(key, ok=True, skipped=True), ()
                 if not ready:
                     return (
                         StepResult(key, ok=True, message=note, skipped=True, note=note),
@@ -167,11 +175,16 @@ class OneClickRunner:
                 ok, message = deps.backup_hosts()
                 if not ok:
                     return StepResult(key, ok=False, message=message or "Не удалось сохранить копию hosts"), ()
+                if self._should_stop():
+                    return StepResult(key, ok=True, skipped=True), ()
                 ok, message = deps.apply_hosts(dict(request.hosts_entries or {}))
                 return StepResult(key, ok=ok, message=message), ()
 
             if key is StepKey.DNS:
                 integrity = deps.check_dns_integrity()
+                # После «Выключить» отменённая проверка не должна назначать новый DNS.
+                if self._should_stop():
+                    return StepResult(key, ok=True, skipped=True), ()
                 change, reason = should_change_dns(list(integrity or []))
                 if not change:
                     # Подмены нет — сеть не трогаем вообще.

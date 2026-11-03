@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from threading import Event
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -27,6 +28,11 @@ class _OneClickWorker(QThread):
         self._enable = bool(enable)
         self._runtime_feature = runtime_feature
         self.needs_selfcheck = False
+        self._disable_requested = Event()
+
+    def request_disable(self) -> None:
+        """Прерывает настройку перед последовательным запуском выключения."""
+        self._disable_requested.set()
 
     def run(self) -> None:
         try:
@@ -37,8 +43,9 @@ class _OneClickWorker(QThread):
             deps = build_oneclick_deps(
                 runtime_feature=self._runtime_feature,
                 report=lambda state, message: self.progress.emit(state, message),
+                should_stop=self._disable_requested.is_set,
             )
-            runner = OneClickRunner(deps)
+            runner = OneClickRunner(deps, should_stop=self._disable_requested.is_set)
 
             # Запрос читается и на выключение — ради одного поля.
             #
@@ -53,6 +60,8 @@ class _OneClickWorker(QThread):
                 # статус включения и мешать выключить уже работающий обход.
                 self.needs_selfcheck = request.run_selfcheck
                 outcome = runner.enable(replace(request, run_selfcheck=False))
+                if self._disable_requested.is_set():
+                    self.needs_selfcheck = False
             else:
                 outcome = runner.disable(
                     owns_telegram_proxy=request.needs_telegram_proxy

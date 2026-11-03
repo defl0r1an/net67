@@ -338,7 +338,7 @@ def restore_hosts_to_original() -> tuple[bool, str]:
     return _restore_hosts(use_original=True)
 
 
-def _check_dns_integrity() -> list:
+def _check_dns_integrity(*, should_stop=None) -> list:
     """Проверка подмены DNS для шага «Проверка DNS».
 
     Раньше здесь стоял blockcheck.dns_integrity. Исходный проект удалил его,
@@ -350,7 +350,8 @@ def _check_dns_integrity() -> list:
     from diagnostics.engine import run_dns_check
     from oneclick.plans import integrity_from_dns_check
 
-    return integrity_from_dns_check(run_dns_check(emit=lambda _line: None))
+    options = {"should_stop": should_stop} if should_stop is not None else {}
+    return integrity_from_dns_check(run_dns_check(emit=lambda _line: None, **options))
 
 
 def _active_adapters() -> list:
@@ -494,13 +495,15 @@ def _probe_domains() -> tuple[int, tuple[str, ...]]:
 # Сборка
 # ──────────────────────────────────────────────────────────────────────
 
-def build_oneclick_deps(*, runtime_feature: Any, report=None) -> OneClickDeps:
+def build_oneclick_deps(*, runtime_feature: Any, report=None, should_stop=None) -> OneClickDeps:
     """Собирает зависимости для OneClickRunner.
 
     runtime_feature — узкий набор ControlRuntimeActions со страницы
     управления: start, stop и is_any_running. Целиком RuntimeFeature сюда
     передавать нельзя, это запрещает архитектурный контракт страниц.
     """
+    from functools import partial
+
     return OneClickDeps(
         check_conflicts=_make_check_conflicts(runtime_feature),
         start_dpi=_make_start_dpi(runtime_feature),
@@ -511,7 +514,7 @@ def build_oneclick_deps(*, runtime_feature: Any, report=None) -> OneClickDeps:
         backup_hosts=_backup_hosts,
         apply_hosts=_apply_hosts,
         restore_hosts=_restore_hosts,
-        check_dns_integrity=_check_dns_integrity,
+        check_dns_integrity=partial(_check_dns_integrity, should_stop=should_stop) if should_stop is not None else _check_dns_integrity,
         apply_dns=_apply_dns,
         restore_dns=_restore_dns,
         probe_domains=_probe_domains,

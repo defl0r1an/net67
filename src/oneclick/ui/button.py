@@ -98,6 +98,7 @@ class OneClickButton(QWidget):
         self._state = OneClickState.OFF
         self._stopping = False
         self._worker: _OneClickWorker | None = None
+        self._pending_disable = None
         from ui.one_shot_worker_runtime import OneShotWorkerRuntime
         self._availability_runtime = OneShotWorkerRuntime()
         self._closed = False
@@ -381,6 +382,12 @@ class OneClickButton(QWidget):
         if self._state in _BUSY:
             return
         if self._worker is not None and self._worker.isRunning():
+            if self._state is OneClickState.RUNNING:
+                self._cancel_availability()
+                self._pending_disable = self._worker._runtime_feature
+                self._stopping = True
+                self._apply_state(OneClickState.PREPARING, "")
+                self._worker.request_disable()
             return
 
         feature = None
@@ -424,13 +431,22 @@ class OneClickButton(QWidget):
         worker.start()
 
     def _on_progress(self, state, message: str) -> None:
+        if not self._current_worker_signal() or self._stopping:
+            return
         if state in _BUSY or state is OneClickState.RUNNING:
             self._apply_state(state, str(message or ""))
-            # Настройки ещё применяются: две изменяющие систему команды
-            # одновременно запускать нельзя. Проверка сайтов сюда не входит.
-            self.button.set_click_enabled(False)
+
+    def _current_worker_signal(self) -> bool:
+        if self.__dict__.get("_closed", False):
+            return False
+        sender = self.sender()
+        return sender is None or sender is self._worker
 
     def _on_finished(self, state, message: str) -> None:
+        if not self._current_worker_signal():
+            return
+        if self.__dict__.get("_pending_disable") is not None:
+            return
         self._apply_state(state, str(message or ""))
         worker = self._worker
         if state is OneClickState.RUNNING and bool(getattr(worker, 'needs_selfcheck', False)):
@@ -469,12 +485,21 @@ class OneClickButton(QWidget):
         """
         if self._worker is worker:
             self._worker = None
+            pending_disable = self.__dict__.get("_pending_disable")
+            if pending_disable is not None:
+                # Выключение ждёт только текущую запись/отмену проверки, а не всю настройку.
+                # Даже на границе finished_with/finished запрос пользователя не теряется.
+                self._pending_disable = None
+                self._start_worker(enable=False, feature=pending_disable)
             # Поток умер, не сообщив результата: разблокируем кнопку сами,
             # иначе человеку останется только перезапустить программу.
-            if self._state in _BUSY:
+            elif self._state in _BUSY:
                 log("Поток «одной кнопки» завершился без результата", "⚠ WARNING")
                 self._apply_state(OneClickState.ERROR, "Операция прервана, попробуйте ещё раз")
             else:
+                button = self.__dict__.get("button")
+                if button is not None:
+                    button.set_click_enabled(True)
                 self._catch_up_with_runtime()
         if worker is not None:
             worker.deleteLater()
