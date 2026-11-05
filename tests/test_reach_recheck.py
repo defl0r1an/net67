@@ -373,11 +373,13 @@ class RecheckLanesTests(unittest.TestCase):
             done_probes.append((key, target, probe, None))
 
         lock = threading.Condition()
-        now = {"light": 0, "full": 0}
-        peak = {"light": 0, "full": 0}
+        now = {"light": 0, "full": 0, "confirm": 0}
+        peak = {"light": 0, "full": 0, "confirm": 0}
+        calls = {}
         # Задача держит место, пока очередь не заполнится до своего предела (или секунду):
         # пик тогда задаёт очередь, а не то, как быстро машина успела запустить потоки.
-        fill = {"light": engine.RECHECK_LIGHT_AT_ONCE, "full": engine.RECHECK_AT_ONCE}
+        fill = {"light": engine.RECHECK_LIGHT_AT_ONCE, "full": engine.RECHECK_AT_ONCE,
+                "confirm": engine.RECHECK_AT_ONCE}
 
         def busy(kind: str) -> None:
             with lock:
@@ -390,7 +392,12 @@ class RecheckLanesTests(unittest.TestCase):
                 now[kind] -= 1
 
         def light(_run, host, ip, _path, **_kwargs):
-            busy("light")
+            with lock:
+                calls[host] = calls.get(host, 0) + 1
+                attempt = calls[host]
+            # Второй get — контроль после полной перепроверки. Он выполняется
+            # внутри тяжёлой очереди и не занимает слот первичного лёгкого шага.
+            busy("light" if attempt == 1 else "confirm")
             # Половина сайтов на лёгкий запрос открывается — их ждёт полная проверка.
             return _ok(ip) if int(host[1:].split(".")[0]) % 2 else _dead(ip)
 
@@ -409,6 +416,7 @@ class RecheckLanesTests(unittest.TestCase):
         self.assertLessEqual(peak["full"], engine.RECHECK_AT_ONCE)
         self.assertGreater(peak["light"], engine.RECHECK_AT_ONCE)
         self.assertLessEqual(peak["light"], engine.RECHECK_LIGHT_AT_ONCE)
+        self.assertLessEqual(peak["confirm"], engine.RECHECK_AT_ONCE)
         opened = [probe.rechecked for _key, _target, probe, _error in result]
         self.assertEqual(opened.count("opened"), 6)
         self.assertEqual(opened.count("same"), 6)

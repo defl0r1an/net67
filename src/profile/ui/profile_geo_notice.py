@@ -4,6 +4,10 @@
 Провайдер его не режет, поэтому перебор готовых стратегий ничего не даст —
 помогает DNS-профиль в «Редакторе hosts» или другой DNS.
 
+Telegram закрыт по IP-адресам: ему не помогают ни стратегия, ни hosts, ни DNS.
+Для него карточка говорит про прокси из раздела «Telegram Proxy» и про клиент
+netgram, а кнопки ведут туда.
+
 Подсказка — отдельная карточка поверх страницы, в правом нижнем углу: её
 видно сразу, но места у списка стратегий она не отнимает. Закрытая крестиком
 карточка для этого сервиса больше не появляется до перезапуска программы.
@@ -42,7 +46,7 @@ from qfluentwidgets import (
     isDarkTheme,
 )
 
-from hosts.geo_sites import only_vpn_helps, service_icon
+from hosts.geo_sites import only_proxy_helps, only_vpn_helps, service_icon
 from profile.icons import resolve_profile_icon
 from profile.ui.profile_icon import profile_icon_pixmap
 from ui.accessibility import set_control_accessibility
@@ -81,6 +85,8 @@ def _service_icon(services: tuple[str, ...]) -> tuple[str, str] | None:
 
 
 def geo_notice_title(services: tuple[str, ...]) -> str:
+    if only_proxy_helps(services):
+        return "Telegram: подключение через прокси"
     names = [str(name) for name in services if str(name or "").strip()]
     shown = ", ".join(names[:_NAMED_SERVICES])
     rest = len(names) - _NAMED_SERVICES
@@ -90,6 +96,9 @@ def geo_notice_title(services: tuple[str, ...]) -> str:
 
 
 def geo_notice_text(services: tuple[str, ...]) -> str:
+    if only_proxy_helps(services):
+        return ("Если провайдер блокирует IP-адреса Telegram, смена стратегии, hosts или DNS "
+                "это не исправит. Попробуйте прокси в разделе «Telegram Proxy» или клиент netgram.")
     if only_vpn_helps(services):
         # TikTok и подобные узнают страну по адресу подключения: hosts и DNS тут бессильны.
         many = len(services) > 1
@@ -157,6 +166,8 @@ class ProfileGeoNoticeCard(FlyoutViewBase):
 
     open_hosts_clicked = pyqtSignal()
     open_dns_clicked = pyqtSignal()
+    open_telegram_proxy_clicked = pyqtSignal()
+    open_netgram_clicked = pyqtSignal()
     close_clicked = pyqtSignal()
 
     def __init__(self, host: QWidget) -> None:
@@ -222,6 +233,23 @@ class ProfileGeoNoticeCard(FlyoutViewBase):
         )
         self.dns_button.clicked.connect(self.open_dns_clicked)
         buttons.addWidget(self.dns_button)
+        # Telegram: вместо hosts и DNS — своя пара кнопок.
+        self.proxy_button = PrimaryPushButton("Telegram Proxy", self)
+        set_control_accessibility(
+            self.proxy_button,
+            name="Открыть «Telegram Proxy»",
+            description="Открывает раздел «Telegram Proxy»: прокси программы, через который Telegram работает без обхода блокировки.",
+        )
+        self.proxy_button.clicked.connect(self.open_telegram_proxy_clicked)
+        buttons.addWidget(self.proxy_button)
+        self.netgram_button = PushButton("Скачать netgram", self)
+        set_control_accessibility(
+            self.netgram_button,
+            name="Скачать netgram",
+            description="Открывает в браузере страницу последнего выпуска netgram Desktop — клиента Telegram, который сам обходит блокировку.",
+        )
+        self.netgram_button.clicked.connect(self.open_netgram_clicked)
+        buttons.addWidget(self.netgram_button)
         buttons.addStretch(1)
         root.addLayout(buttons)
 
@@ -249,10 +277,13 @@ class ProfileGeoNoticeCard(FlyoutViewBase):
     def set_services(self, services: tuple[str, ...]) -> None:
         self.title_label.setText(geo_notice_title(services))
         self.text_label.setText(geo_notice_text(services))
-        # Сервису, которому помогает только VPN, кнопки hosts и DNS обещали бы неправду.
-        hosts_helps = not only_vpn_helps(services)
+        # Сервису, которому помогает только VPN или прокси, кнопки hosts и DNS обещали бы неправду.
+        proxy_helps = only_proxy_helps(services)
+        hosts_helps = not only_vpn_helps(services) and not proxy_helps
         self.hosts_button.setVisible(hosts_helps)
         self.dns_button.setVisible(hosts_helps)
+        self.proxy_button.setVisible(proxy_helps)
+        self.netgram_button.setVisible(proxy_helps)
         self.setFixedHeight(self._height_for_content())
         self.place()
 
@@ -370,6 +401,19 @@ class ProfileGeoNoticeCard(FlyoutViewBase):
         self._shadow.sync_geometry()
 
 
+def show_telegram_proxy_page(window) -> None:
+    """Открывает настройки прокси без запуска службы."""
+    from app.page_names import PageName
+    from ui.window_adapter import show_page
+    show_page(window, PageName.TELEGRAM_PROXY)
+
+
+def _open_netgram_page() -> None:
+    from config.urls import NETGRAM_URL
+    from updater.ui.update_dialog import open_url_in_background
+    open_url_in_background(NETGRAM_URL)
+
+
 class ProfileGeoNotice(QObject):
     """Решает, показывать ли карточку открытому профилю, и держит её в углу страницы.
 
@@ -384,12 +428,18 @@ class ProfileGeoNotice(QObject):
         create_worker=None,
         open_hosts_editor=None,
         open_dns_settings=None,
+        open_telegram_proxy=None,
+        open_netgram=None,
     ) -> None:
         super().__init__(host)
         self._host = host
         self._create_worker = create_worker
         self._open_hosts_editor = open_hosts_editor
         self._open_dns_settings = open_dns_settings
+        # Без своих обработчиков карточка открывает раздел и ссылку сама; окно поверх программы
+        # (создание профиля) подставляет свои — они сперва закрывают окно.
+        self._open_telegram_proxy = open_telegram_proxy or self._show_telegram_proxy_page
+        self._open_netgram = open_netgram or _open_netgram_page
         self._runtime = OneShotWorkerRuntime()
         self._cleanup_in_progress = False
         self._profile_key = ""
@@ -404,6 +454,8 @@ class ProfileGeoNotice(QObject):
         self.card = ProfileGeoNoticeCard(host)
         self.card.open_hosts_clicked.connect(self._on_open_hosts)
         self.card.open_dns_clicked.connect(self._on_open_dns)
+        self.card.open_telegram_proxy_clicked.connect(lambda: self._open_telegram_proxy())
+        self.card.open_netgram_clicked.connect(lambda: self._open_netgram())
         self.card.close_clicked.connect(self._on_close)
         host.installEventFilter(self)
 
@@ -496,6 +548,9 @@ class ProfileGeoNotice(QObject):
     def _on_open_dns(self) -> None:
         if self._open_dns_settings is not None:
             self._open_dns_settings()
+
+    def _show_telegram_proxy_page(self) -> None:
+        show_telegram_proxy_page(self._host.window())
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802 (Qt API)
         if watched is self._host and event.type() == QEvent.Type.Resize and self.card.is_shown():

@@ -18,6 +18,27 @@ from profile.strategy_catalog import load_strategy_catalogs
 from profile.strategy_shape import composite_identity, is_lua_desync_line, is_range_line, strategy_shape
 
 
+def _has_all_sites_tcp_profile(preset):
+    import re
+    for profile in preset.profiles:
+        if not profile.enabled:
+            continue
+        lines = list(profile.match.all_lines())
+        if any(re.match(r"^--(?:hostlist|ipset|hostlist-domains|ipset-ip)=", line) for line in lines):
+            continue
+        for line in lines:
+            if not line.startswith("--filter-tcp="):
+                continue
+            included, excluded = [], []
+            for part in line.split("=", 1)[1].split(","):
+                match = re.fullmatch(r"(~?)(\d+)(?:-(\d+))?", part.strip())
+                if match:
+                    (excluded if match[1] else included).append((int(match[2]), int(match[3] or match[2])))
+            if any(a <= 443 <= b for a, b in included) and not any(a <= 443 <= b for a, b in excluded):
+                return True
+    return False
+
+
 def _builtin_version(text: str) -> float:
     """Номер из строки «# BuiltinVersion: X.YY»; 0, если строки нет."""
     for line in text.splitlines()[:5]:
@@ -259,6 +280,9 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                     source_name=path.name,
                 )
                 matches = [profile for profile in preset.profiles if profile.display_name == "git.zapret.moe"]
+                if _has_all_sites_tcp_profile(preset):
+                    self.assertEqual(matches, [])
+                    continue
                 self.assertEqual(len(matches), 1)
                 profile = matches[0]
                 self.assertIs(profile, preset.profiles[0])
@@ -283,6 +307,9 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
                     source_name=path.name,
                 )
                 matches = [profile for profile in preset.profiles if profile.display_name == "Signal"]
+                if _has_all_sites_tcp_profile(preset):
+                    self.assertEqual(matches, [])
+                    continue
                 self.assertEqual(len(matches), 1)
                 profile = matches[0]
                 # В «Стандартном 1» git.zapret.moe нет — там Signal первый.
@@ -304,6 +331,9 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
     def test_matrix_and_simplex_follow_signal_in_all_builtin_presets(self) -> None:
         for path in sorted(Path("src/presets/builtin/winws2").glob("*.txt")):
             preset = parse_preset_text(path.read_text(encoding="utf-8"), engine="winws2", source_name=path.name)
+            if _has_all_sites_tcp_profile(preset):
+                self.assertFalse({"Signal", "Matrix", "SimpleX"} & {p.display_name for p in preset.profiles})
+                continue
             signal_index = next(p.index for p in preset.profiles if p.display_name == "Signal")
             for offset, (name, filename) in enumerate((("Matrix", "matrix"), ("SimpleX", "simplex")), start=1):
                 with self.subTest(preset=path.name, profile=name):
@@ -328,9 +358,9 @@ class ProfileStrategyResolutionTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 profile = next(p for p in preset.profiles if p.match.hostlist_lines == [f"--hostlist=lists/{filename}"]
                                and any(line.startswith("--filter-tcp=") for line in p.match.filter_lines))
-                self.assertIn("--lua-desync=fake:blob=stun_pat:tcp_ack=-66000:tcp_ts_up:repeats=3", profile.strategy.strategy_lines)
+                self.assertIn("--lua-desync=fake:blob=fake_stun_as_tls:tcp_ack=-66000:tcp_ts_up:repeats=3", profile.strategy.strategy_lines)
                 self.assertIn("--lua-desync=multisplit:pos=1,midsld", profile.strategy.strategy_lines)
-                self.assertEqual(self._resolved_strategy_id(profile), "stock_builtin_coverage_tcp_023")
+                self.assertEqual(self._resolved_strategy_id(profile), "stock_builtin_coverage_tcp_025")
 
     def test_youtube_profiles_precede_ru_pass_in_every_builtin_preset(self) -> None:
         # AS12389 остаётся в ipset-ru: внутри него могут находиться российские

@@ -77,7 +77,6 @@ class GeoSitesTests(unittest.TestCase):
             "www.google.com",
             "microsoft.com",
             "github.com",
-            "telegram.org",
             "x.com",
             "www.instagram.com",
             "rutracker.org",

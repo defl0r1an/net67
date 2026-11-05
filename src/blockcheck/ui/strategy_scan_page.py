@@ -122,6 +122,7 @@ class StrategyScanPage(BasePage):
         self._games_scope_label: QLabel | None = None
         self._games_scope_combo = None
         self._udp_scope_hint_label: QLabel | None = None
+        self._one_site_hint_label: QLabel | None = None
         # Подробный лог подбора; показывается в отдельном окне по кнопке.
         self._log_lines: deque[str] = deque(maxlen=BLOCKCHECK_LOG_VIEW_MAX_LINES)
         self._result_objects: list = []
@@ -231,6 +232,7 @@ class StrategyScanPage(BasePage):
         self._target_input.textChanged.connect(self._quick_cards.set_target)
         self._quick_cards.set_target(self._target_input.text())
         self._udp_scope_hint_label = control_widgets.udp_scope_hint_label
+        self._one_site_hint_label = control_widgets.one_site_hint_label
         self._start_btn = control_widgets.start_btn
         self._stop_btn = control_widgets.stop_btn
         self._mode_combo.currentIndexChanged.connect(self._update_control_accessibility)
@@ -335,13 +337,21 @@ class StrategyScanPage(BasePage):
             geo_site_question_text(service, self._target_input.text(), language=self._ui_language),
             self.window(),
         )
-        hosts_text = tr_catalog("page.strategy_scan.geo_site.open_hosts", default="Открыть «Редактор hosts»")
+        from hosts.geo_sites import only_proxy_helps, only_vpn_helps
+
+        # Telegram закрыт по адресу: первая кнопка ведёт не в hosts, а в «Telegram Proxy».
+        proxy_helps = only_proxy_helps((service,))
+        if proxy_helps:
+            hosts_text = tr_catalog("page.strategy_scan.geo_site.open_telegram_proxy", default="Открыть «Telegram Proxy»")
+        else:
+            hosts_text = tr_catalog("page.strategy_scan.geo_site.open_hosts", default="Открыть «Редактор hosts»")
         scan_text = tr_catalog("page.strategy_scan.geo_site.question_scan_anyway", default="Всё равно подобрать")
         box.yesButton.setText(hosts_text)
-        from hosts.geo_sites import only_vpn_helps
-
         # Сервису, которому помогает только VPN, «Редактор hosts» ничего не даст.
-        box.yesButton.setVisible(self._open_hosts_editor is not None and not only_vpn_helps((service,)))
+        if proxy_helps:
+            box.yesButton.setVisible(True)
+        else:
+            box.yesButton.setVisible(self._open_hosts_editor is not None and not only_vpn_helps((service,)))
         box.cancelButton.setText(tr_catalog("page.strategy_scan.resume_question_cancel", default="Отмена"))
         scan_button = PushButton(scan_text)
         choice = {"scan": False}
@@ -361,7 +371,11 @@ class StrategyScanPage(BasePage):
         set_message_box_button_accessibility(
             box,
             yes_name=hosts_text,
-            yes_description="Открывает «Редактор hosts», где сервису включается DNS-профиль. Подбор не запустится.",
+            yes_description=(
+                "Открывает раздел «Telegram Proxy». Подбор не запустится."
+                if proxy_helps
+                else "Открывает «Редактор hosts», где сервису включается DNS-профиль. Подбор не запустится."
+            ),
             cancel_name="Отменить запуск подбора",
             cancel_description="Подбор не запустится.",
         )
@@ -369,7 +383,12 @@ class StrategyScanPage(BasePage):
             return False
         if choice["scan"]:
             return True
-        self._open_hosts_editor_for_geo_site()
+        if proxy_helps:
+            from profile.ui.profile_geo_notice import show_telegram_proxy_page
+
+            show_telegram_proxy_page(self.window())
+        else:
+            self._open_hosts_editor_for_geo_site()
         return False
 
     def _refresh_mode_hint(self, *_args) -> None:
@@ -428,6 +447,8 @@ class StrategyScanPage(BasePage):
         if self._quick_domain_btn is not None:
             self._quick_domain_btn.setVisible(plan.show_target_controls)
         self._quick_cards.setVisible(plan.show_target_controls)
+        if self._one_site_hint_label is not None:
+            self._one_site_hint_label.setVisible(plan.show_one_site_hint)
 
         self._target_input.setText(plan.normalized_target)
         self._target_input.setPlaceholderText(plan.placeholder_text)
@@ -637,6 +658,7 @@ class StrategyScanPage(BasePage):
             games_scope_label=self._games_scope_label,
             games_scope_combo=self._games_scope_combo,
             quick_domain_btn=self._quick_domain_btn,
+            one_site_hint_label=self._one_site_hint_label,
         )
 
     # ------------------------------------------------------------------

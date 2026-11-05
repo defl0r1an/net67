@@ -40,6 +40,9 @@ class TelegramProxySettingsPanelWidgets:
     host_port_row: object
     host_edit: object
     port_spin: object
+    lan_toggle: object
+    device_row: object
+    device_btn: object
     proxy_mode_row: object
     mtproxy_secret_row: object
     mtproxy_secret_edit: object
@@ -253,6 +256,7 @@ def build_telegram_proxy_settings_panel(
     on_open_advanced_settings,
     on_telegram_hosts_action,
     on_open_netgram=None,
+    on_copy_device_link=None,
 ) -> TelegramProxySettingsPanelWidgets:
     text = TELEGRAM_PROXY_SETTINGS_TEXT
     (
@@ -281,8 +285,8 @@ def build_telegram_proxy_settings_panel(
         placeholder="127.0.0.1",
         accessible_name="Адрес Telegram Proxy",
         description=(
-            "IP-адрес для прослушивания Telegram Proxy. 127.0.0.1 — только локально, "
-            "0.0.0.0 или IP вашей сети — доступ с других устройств."
+            "IP-адрес для прослушивания Telegram Proxy. 0.0.0.0 — доступ с этого компьютера и "
+            "других устройств сети, 127.0.0.1 — только этот компьютер."
         ),
         width=160,
     )
@@ -299,6 +303,25 @@ def build_telegram_proxy_settings_panel(
     )
     host_port_row.add_control(port_spin)
     settings_card.addSettingCard(host_port_row)
+
+    lan_toggle = Win11ToggleRow(
+        "fa5s.network-wired",
+        text.lan_title,
+        text.lan_description,
+    )
+    lan_toggle.setChecked(False)
+    settings_card.addSettingCard(lan_toggle)
+
+    device_row, device_btn = build_action_row(
+        icon_name="fa5s.mobile-alt",
+        title=text.device_title,
+        description=text.device_description_no_network,
+        button_text=text.device_button,
+        button_icon=FluentIcon.COPY,
+        accessible_name="Скопировать ссылку Telegram Proxy для телефона",
+        on_click=on_copy_device_link or (lambda: None),
+    )
+    settings_card.addSettingCard(device_row)
 
     proxy_mode_row = Win11ComboRow(
         icon_name="fa5s.exchange-alt",
@@ -426,6 +449,9 @@ def build_telegram_proxy_settings_panel(
         host_port_row=host_port_row,
         host_edit=host_edit,
         port_spin=port_spin,
+        lan_toggle=lan_toggle,
+        device_row=device_row,
+        device_btn=device_btn,
         proxy_mode_row=proxy_mode_row,
         mtproxy_secret_row=mtproxy_secret_row,
         mtproxy_secret_edit=mtproxy_secret_edit,

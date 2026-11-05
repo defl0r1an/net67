@@ -57,6 +57,7 @@ def build_protocol_ui_plan(*, scan_protocol: str, current_value: str) -> Strateg
         show_target_controls=show_target_controls,
         normalized_target=normalized,
         placeholder_text=default_target_for_protocol(scan_protocol),
+        show_one_site_hint=scan_protocol == PROTOCOL_TCP_HTTPS,
     )
 
 
@@ -185,8 +186,14 @@ def geo_site_notice_text(service: str, *, language: str | None = None) -> str:
 def geo_site_question_text(service: str, target_input: str, *, language: str | None = None) -> str:
     # Тот же адрес, с которым запустился бы подбор.
     target = normalize_target_input(target_input, PROTOCOL_TCP_HTTPS)
-    from hosts.geo_sites import only_vpn_helps
+    from hosts.geo_sites import only_proxy_helps, only_vpn_helps
 
+    if only_proxy_helps((service,)):
+        return tr_catalog(
+            "page.strategy_scan.geo_site.question_text_proxy",
+            language=language,
+            default='{target} — это {service}. Если провайдер блокирует IP-адреса Telegram, смена стратегии, hosts или DNS это не исправит. Попробуйте прокси в разделе «Telegram Proxy» или клиент netgram.',
+        ).format(service=service, target=target)
     if only_vpn_helps((service,)):
         return tr_catalog(
             "page.strategy_scan.geo_site.question_text_vpn",
@@ -207,6 +214,9 @@ def geo_site_question_text(service: str, target_input: str, *, language: str | N
         ),
     ).format(service=service, target=target)
 
+
+# Во время подбора нужен сопоставимый результат для одного адреса.
+ONE_SITE_HINT_RU = 'Проверяйте сайты по одному. Во время подбора не открывайте другие заблокированные сайты: так проще сравнить результаты стратегий для выбранного адреса.'
 
 def build_language_plan(*, language: str) -> StrategyScanLanguagePlan:
     def _tr(key: str, default: str) -> str:
@@ -233,6 +243,7 @@ def build_language_plan(*, language: str) -> StrategyScanLanguagePlan:
             "page.strategy_scan.quick_domains_hint",
             "Готовые адреса: Discord, YouTube, Telegram и другие",
         ),
+        one_site_hint=_tr("page.strategy_scan.one_site_hint", ONE_SITE_HINT_RU),
     )
 
 

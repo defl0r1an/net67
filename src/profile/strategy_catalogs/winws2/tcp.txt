@@ -3202,6 +3202,14 @@ description = Приветствие TLS раскладывается на не�
 
 # --- Flowseal general EXP 1.10.0 ---
 
+[stock_builtin_coverage_tcp_025]
+name = Protocol Mask STUN · TLS
+author = builtin
+label = stock
+description = Поддельный пакет STUN в формате TLS перед приветствием, затем разделение приветствия. Используется для YouTube и бэкенда Google.
+--lua-desync=fake:blob=fake_stun_as_tls:tcp_ack=-66000:tcp_ts_up:repeats=3
+--lua-desync=multisplit:pos=1,midsld
+
 [flowseal_exp_1100_google]
 name = Flowseal EXP 1.10.0 · из Google
 old_name = Flowseal EXP 1.10.0 / Google

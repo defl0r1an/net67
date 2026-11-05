@@ -1,5 +1,5 @@
 # Preset: Default v1 (game filter)
-# BuiltinVersion: 2.48
+# BuiltinVersion: 2.50
 # IconColor: #a8c5ff
 
 --lua-init=@lua/zapret-lib.lua
@@ -61,6 +61,7 @@
 --blob=quic6:@bin/quic_6.bin
 --blob=quic7:@bin/quic_7.bin
 --blob=stun_pat:@bin/stun.bin
+--blob=fake_stun_as_tls:@bin/stun.bin
 --blob=quic_test:@bin/quic_test_00.bin
 --blob=fake_tls:@bin/fake_tls_1.bin
 --blob=fake_tls_1:@bin/fake_tls_1.bin
@@ -143,7 +144,7 @@
 --hostlist=lists/googlevideo.txt
 --out-range=-n8
 --payload=tls_client_hello
---lua-desync=fake:blob=stun_pat:tcp_ack=-66000:tcp_ts_up:repeats=3
+--lua-desync=fake:blob=fake_stun_as_tls:tcp_ack=-66000:tcp_ts_up:repeats=3
 --lua-desync=multisplit:pos=1,midsld
 
 --new
@@ -153,7 +154,7 @@
 --hostlist=lists/youtube.txt
 --out-range=-d8
 --payload=tls_client_hello
---lua-desync=fake:blob=stun_pat:tcp_ack=-66000:tcp_ts_up:repeats=3
+--lua-desync=fake:blob=fake_stun_as_tls:tcp_ack=-66000:tcp_ts_up:repeats=3
 --lua-desync=multisplit:pos=1,midsld
 
 --new
@@ -172,7 +173,7 @@
 --hostlist=lists/google-backend.txt
 --out-range=-d8
 --payload=tls_client_hello
---lua-desync=fake:blob=stun_pat:tcp_ack=-66000:tcp_ts_up:repeats=3
+--lua-desync=fake:blob=fake_stun_as_tls:tcp_ack=-66000:tcp_ts_up:repeats=3
 --lua-desync=multisplit:pos=1,midsld
 
 --new
