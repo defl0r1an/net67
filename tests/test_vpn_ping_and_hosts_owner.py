@@ -116,9 +116,9 @@ class StatsRefreshTests(unittest.TestCase):
         self.assertIn("timer.stop()", source)
 
     def test_check_server_gets_live_stats(self) -> None:
-        from vpn.ui import page as vpn_page
+        from vpn.ui.experience import VpnExperience
 
-        source = inspect.getsource(vpn_page.VpnPage._on_check_server)
+        source = inspect.getsource(VpnExperience.check)
 
         self.assertIn("stats=stats", source)
 

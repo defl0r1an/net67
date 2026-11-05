@@ -85,9 +85,14 @@ class VpnPageThreadingTests(unittest.TestCase):
                 )
 
     def test_ui_handlers_use_background_worker(self) -> None:
+        from vpn.ui.experience import VpnExperience
+        import inspect
+        controllers = {"_on_toggle_connection": VpnExperience.start,
+                       "_on_check_server": VpnExperience.check}
         for handler in UI_HANDLERS:
             with self.subTest(handler):
-                source = ast.unparse(_method(handler))
+                source = (inspect.getsource(controllers[handler]) if handler in controllers
+                          else ast.unparse(_method(handler)))
                 self.assertIn(
                     "_start_worker",
                     source,
@@ -109,11 +114,12 @@ class VpnPageThreadingTests(unittest.TestCase):
             self.assertIn(attr, source)
 
     def test_buttons_are_re_enabled_on_failure(self) -> None:
-        source = ast.unparse(_method("_on_check_server_failed"))
-        self.assertIn("setEnabled(True)", source)
-
-        source = ast.unparse(_method("_on_tunnel_failed"))
-        self.assertIn("setEnabled(True)", source)
+        from vpn.ui.experience import VpnExperience
+        import inspect
+        source = inspect.getsource(VpnExperience.check_failed)
+        self.assertIn("ping_btn.setEnabled", source)
+        self.assertIn("_release()", inspect.getsource(VpnExperience.failed))
+        self.assertIn("setEnabled(True)", inspect.getsource(VpnExperience._release))
 
 
 class VpnPingTests(unittest.TestCase):

@@ -38,6 +38,18 @@ from log.log import log
 #: Единственный на приложение экземпляр ядра.
 _RUNTIME = None
 _RUNTIME_LOCK = threading.Lock()
+_ACTIVE_PROFILE = None
+_APPLIED_SCOPE = "none"
+_CONNECTION_SERIAL = 0
+
+
+def connection_serial():
+    return _CONNECTION_SERIAL
+
+
+def active_connection():
+    """Последний применённый профиль и охват; это не проверка доступа в интернет."""
+    return _ACTIVE_PROFILE, _APPLIED_SCOPE
 
 
 def _runtime():
@@ -253,8 +265,29 @@ def _stop_tunnel() -> None:
         log(f"Туннель не свернулся штатно: {exc}", "⚠ VPN")
 
 
-def connect(profile) -> tuple[bool, str]:
+def connect(profile, *, should_stop=None, progress=None) -> tuple[bool, str]:
+    """Отмена снимает только соединение, созданное этим вызовом."""
+    global _CONNECTION_SERIAL
+    from vpn.operation import CONNECTION_LOCK
+    if progress is not None:
+        progress("Ожидаем завершения предыдущей операции…")
+    with CONNECTION_LOCK:
+        if should_stop is not None and should_stop():
+            return False, "Подключение отменено"
+        _CONNECTION_SERIAL += 1
+        owned_serial = _CONNECTION_SERIAL
+        result = _connect(profile, should_stop=should_stop, progress=progress)
+        if should_stop is not None and should_stop():
+            stopped, message = disconnect(expected_serial=owned_serial)
+            if not stopped:
+                return False, f"Отмена не завершена: {message}"
+            return False, "Подключение отменено"
+        return result
+
+
+def _connect(profile, *, should_stop=None, progress=None) -> tuple[bool, str]:
     """Поднимает ядро на выбранном сервере. Возвращает (получилось, что сказать)."""
+    global _ACTIVE_PROFILE, _APPLIED_SCOPE
     from vpn.xray import XrayError
 
     available, message = check_core_available()
@@ -262,17 +295,27 @@ def connect(profile) -> tuple[bool, str]:
         return (False, message)
 
     runtime = _runtime()
+    _ACTIVE_PROFILE, _APPLIED_SCOPE = None, "none"
+    _stop_tunnel()
+    _drop_system_proxy()
+    if progress is not None:
+        progress("Запускаем ядро…")
     try:
         # Прежнее ядро останавливаем сами: порт один, и второй процесс
         # на нём просто не поднимется, а сообщение будет про занятый
         # порт вместо смены сервера.
         runtime.stop()
-        runtime.start(profile, settings_dir=_settings_dir())
+        options = {"should_stop": should_stop} if should_stop is not None else {}
+        runtime.start(profile, settings_dir=_settings_dir(), **options)
     except XrayError as exc:
         return (False, str(exc))
     except Exception as exc:
+        runtime.stop()
         return (False, f"Не удалось запустить ядро Xray: {exc}")
 
+    _ACTIVE_PROFILE, _APPLIED_SCOPE = profile, "local"
+    if should_stop is not None and should_stop():
+        return False, "Подключение отменено"
     title = str(getattr(profile, "title", "") or getattr(profile, "host", "") or "сервер")
 
     # Подключение записываем в журнал целиком: и что подключаемся, и с
@@ -302,10 +345,13 @@ def connect(profile) -> tuple[bool, str]:
     tun_failure = ""
 
     if tun_requested:
+        if progress is not None:
+            progress("Настраиваем туннель…")
         started, tun_failure = _start_tunnel(profile)
         if started:
             # Один путь наружу, а не два. Пояснение — в _drop_system_proxy().
             _drop_system_proxy()
+            _APPLIED_SCOPE = "tun"
             log(f"Туннель поднят, весь трафик идёт через «{title}»", "🌐 VPN")
             return (True, f"Подключено к «{title}». Весь трафик системы идёт через сервер.")
         log(f"Туннель не поднялся, откатываемся на системный прокси: {tun_failure}", "⚠ VPN")
@@ -314,6 +360,10 @@ def connect(profile) -> tuple[bool, str]:
 
     from vpn import system_proxy
 
+    if should_stop is not None and should_stop():
+        return False, "Подключение отменено"
+    if progress is not None:
+        progress("Настраиваем прокси приложений…")
     applied, proxy_message = system_proxy.enable(local_proxy_address())
     if not applied:
         return (
@@ -322,6 +372,7 @@ def connect(profile) -> tuple[bool, str]:
             f"{proxy_message}. Пропишите {local_proxy_address()} вручную.",
         )
 
+    _APPLIED_SCOPE = "proxy"
     # Сообщение обязано сойтись с тем, что человек видит на экране.
     #
     # Здесь была неправда: при включённом переключателе «весь трафик» и
@@ -342,7 +393,17 @@ def connect(profile) -> tuple[bool, str]:
     return (True, f"Подключено к «{title}». {describe_mode(tun_enabled=False)}")
 
 
-def disconnect() -> tuple[bool, str]:
+def disconnect(*, expected_serial=None) -> tuple[bool, str]:
+    global _CONNECTION_SERIAL
+    from vpn.operation import CONNECTION_LOCK
+    with CONNECTION_LOCK:
+        if expected_serial is not None and expected_serial != _CONNECTION_SERIAL:
+            return False, "Соединение уже изменилось; повторите действие для текущего сервера"
+        _CONNECTION_SERIAL += 1
+        return _disconnect()
+
+
+def _disconnect() -> tuple[bool, str]:
     """Останавливает ядро."""
     # Туннель и системный прокси снимаем первыми и всегда.
     #
@@ -350,6 +411,7 @@ def disconnect() -> tuple[bool, str]:
     # маршрутах или реестре, система останется завёрнутой в туннель без
     # выхода или настроенной на порт, которого больше нет, — то есть без
     # интернета. Поэтому сначала снимаем перенаправление.
+    global _ACTIVE_PROFILE, _APPLIED_SCOPE
     _stop_tunnel()
 
     from vpn import system_proxy
@@ -361,8 +423,9 @@ def disconnect() -> tuple[bool, str]:
     except Exception as exc:
         return (False, f"Не удалось остановить ядро Xray: {exc}")
 
+    _ACTIVE_PROFILE, _APPLIED_SCOPE = None, "none"
     if not restored:
-        return (True, f"Отключено, но {proxy_message}")
+        return (False, f"Ядро отключено, но настройки прокси не восстановлены: {proxy_message}")
     return (True, "Отключено")
 
 

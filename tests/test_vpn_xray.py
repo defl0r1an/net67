@@ -133,15 +133,16 @@ class WaitTests(unittest.TestCase):
         self.assertTrue(wait_until_listening(probe=lambda: True))
 
     def test_gives_up_after_the_deadline(self) -> None:
-        """Не поднялось за полторы секунды — не поднимется."""
+        """Срок ограничен и не зависит от числа повторных проверок."""
         from vpn.xray import wait_until_listening
 
         self.assertFalse(wait_until_listening(timeout_s=0.15, probe=lambda: False))
 
-    def test_deadline_is_short_enough_to_not_feel_like_a_freeze(self) -> None:
+    def test_startup_deadline_is_bounded(self) -> None:
         from vpn.xray import STARTUP_TIMEOUT_S
 
-        self.assertLessEqual(STARTUP_TIMEOUT_S, 3.0)
+        self.assertGreaterEqual(STARTUP_TIMEOUT_S, 3.0)
+        self.assertLessEqual(STARTUP_TIMEOUT_S, 10.0)
 
     def test_port_probe_survives_a_closed_port(self) -> None:
         from vpn.xray import is_port_open

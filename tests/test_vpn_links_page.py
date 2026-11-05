@@ -76,9 +76,9 @@ class ParserRoutingTests(unittest.TestCase):
 
 class ServerListTests(unittest.TestCase):
     def test_page_shows_a_list_not_a_dropdown(self) -> None:
-        from vpn.ui import page
+        from vpn.ui.page_build import build_vpn_page
 
-        source = inspect.getsource(page.VpnPage._build_ui)
+        source = inspect.getsource(build_vpn_page)
 
         self.assertIn("QListWidget", source)
         self.assertIn("profile_list", source)
@@ -89,11 +89,11 @@ class ServerListTests(unittest.TestCase):
         Переписывать их все ради смены вида значило бы трогать логику
         вместе с оформлением.
         """
-        from vpn.ui import page
+        from vpn.ui.page_build import build_vpn_page
 
-        source = inspect.getsource(page.VpnPage._build_ui)
+        source = inspect.getsource(build_vpn_page)
 
-        self.assertIn("self.profile_combo.hide()", source)
+        self.assertIn("page.profile_combo.hide()", source)
 
     def test_selection_is_read_from_the_list(self) -> None:
         """В списке человек и выбирает строку — спрашивать надо его."""

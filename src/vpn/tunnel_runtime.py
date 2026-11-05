@@ -33,6 +33,17 @@ CLIENT_EXE_NAME = "amneziawg.exe"
 #: драйвер ядра. Makefile кладёт wintun.dll рядом с exe, и без неё туннель
 #: не поднимется — проверяем обе части.
 WINTUN_DLL_NAME = "wintun.dll"
+_ACTIVE_PROFILE = None
+_ACTIVE_TUNNEL_NAME = ""
+_CONNECTION_SERIAL = 0
+
+
+def active_connection():
+    return _ACTIVE_PROFILE, _ACTIVE_TUNNEL_NAME
+
+
+def connection_serial():
+    return _CONNECTION_SERIAL
 
 
 def client_path() -> Path:
@@ -158,8 +169,23 @@ def get_status(tunnel_name: str = "") -> TunnelStatus:
     return TunnelStatus(TunnelState.DISCONNECTED)
 
 
-def connect(profile: VpnProfile, *, tunnel_name: str = "") -> TunnelStatus:
+def connect(profile: VpnProfile, *, tunnel_name: str = "", should_stop=None,
+            progress=None) -> TunnelStatus:
+    global _CONNECTION_SERIAL
+    from vpn.operation import CONNECTION_LOCK
+    with CONNECTION_LOCK:
+        if should_stop is not None and should_stop():
+            return TunnelStatus(TunnelState.DISCONNECTED, message="Подключение отменено")
+        _CONNECTION_SERIAL += 1
+        return _connect(profile, tunnel_name=tunnel_name, should_stop=should_stop, progress=progress)
+
+
+def _connect(profile: VpnProfile, *, tunnel_name: str = "", should_stop=None,
+             progress=None) -> TunnelStatus:
     """Поднимает туннель по профилю."""
+    global _ACTIVE_PROFILE, _ACTIVE_TUNNEL_NAME
+    if should_stop is not None and should_stop():
+        return TunnelStatus(TunnelState.DISCONNECTED, message="Подключение отменено")
     ok, message = validate_profile_for_tunnel(profile)
     if not ok:
         return TunnelStatus(TunnelState.ERROR, message=message)
@@ -175,6 +201,10 @@ def connect(profile: VpnProfile, *, tunnel_name: str = "") -> TunnelStatus:
 
     # Существующий туннель снимаем, иначе служба не пересоздастся.
     disconnect(tunnel_name=name)
+    if should_stop is not None and should_stop():
+        return TunnelStatus(TunnelState.DISCONNECTED, message="Подключение отменено")
+    if progress is not None:
+        progress("Запускаем службу туннеля…")
 
     try:
         result = subprocess.run(
@@ -199,17 +229,24 @@ def connect(profile: VpnProfile, *, tunnel_name: str = "") -> TunnelStatus:
 
     _set_tunnel_service_manual_start(name)
 
-    status = _wait_for_tunnel(name)
+    if progress is not None:
+        progress("Ожидаем сетевой адаптер…")
+    options = {"should_stop": should_stop} if should_stop is not None else {}
+    status = _wait_for_tunnel(name, **options)
+    if should_stop is not None and should_stop():
+        disconnect(tunnel_name=name)
+        return TunnelStatus(TunnelState.DISCONNECTED, message="Подключение отменено")
     if status.state is not TunnelState.CONNECTED:
         hint = build_failure_hint(winws_running=_is_winws_running())
         return TunnelStatus(
             TunnelState.ERROR,
             message=f"{hint}\n\n{_describe_service_failure(name)}",
         )
+    _ACTIVE_PROFILE, _ACTIVE_TUNNEL_NAME = profile, name
     return status
 
 
-def _wait_for_tunnel(name: str, *, timeout: float = 15.0) -> TunnelStatus:
+def _wait_for_tunnel(name: str, *, timeout: float = 15.0, should_stop=None) -> TunnelStatus:
     """Ждёт, пока служба туннеля выйдет в рабочее состояние.
 
     Сразу после /installtunnelservice служба ещё в START_PENDING, и
@@ -221,6 +258,8 @@ def _wait_for_tunnel(name: str, *, timeout: float = 15.0) -> TunnelStatus:
     deadline = time.monotonic() + float(timeout)
     status = get_status(name)
     while time.monotonic() < deadline:
+        if should_stop is not None and should_stop():
+            return TunnelStatus(TunnelState.DISCONNECTED, message="Подключение отменено")
         status = get_status(name)
         if status.state is TunnelState.CONNECTED:
             return status
@@ -281,8 +320,19 @@ def _describe_service_failure(name: str) -> str:
     return "\n".join(parts)
 
 
-def disconnect(*, tunnel_name: str = "") -> TunnelStatus:
+def disconnect(*, tunnel_name: str = "", expected_serial=None) -> TunnelStatus:
+    global _CONNECTION_SERIAL
+    from vpn.operation import CONNECTION_LOCK
+    with CONNECTION_LOCK:
+        if expected_serial is not None and expected_serial != _CONNECTION_SERIAL:
+            return TunnelStatus(TunnelState.ERROR, message="Соединение уже изменилось; повторите действие")
+        _CONNECTION_SERIAL += 1
+        return _disconnect(tunnel_name=tunnel_name)
+
+
+def _disconnect(*, tunnel_name: str = "") -> TunnelStatus:
     """Снимает туннель."""
+    global _ACTIVE_PROFILE, _ACTIVE_TUNNEL_NAME
     name = normalize_tunnel_name(tunnel_name)
 
     if is_client_available():
@@ -308,6 +358,8 @@ def disconnect(*, tunnel_name: str = "") -> TunnelStatus:
         except Exception as exc:
             log(f"Принудительное снятие службы туннеля: {exc}", "DEBUG")
 
+    if name == _ACTIVE_TUNNEL_NAME:
+        _ACTIVE_PROFILE, _ACTIVE_TUNNEL_NAME = None, ""
     return TunnelStatus(TunnelState.DISCONNECTED)
 
 

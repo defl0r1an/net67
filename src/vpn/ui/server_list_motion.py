@@ -24,7 +24,7 @@ from __future__ import annotations
 import time
 
 from PyQt6.QtCore import QObject, QRect, QSize, Qt, QTimer
-from PyQt6.QtGui import QColor, QPainter, QPainterPath
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPainterPath
 from PyQt6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 from ui.animation_policy import are_animations_enabled, are_live_animations_enabled
@@ -221,7 +221,32 @@ class ServerListDelegate(QStyledItemDelegate):
                 painter.translate(0, (1.0 - progress) * ROW_RISE_PX)
             if not selected:
                 self._paint_hover(painter, option.rect, index, hovered)
+            from vpn.ui.experience import ROW_STATUS_ROLE
+            status = str(index.data(ROW_STATUS_ROLE) or "")
+            if status:
+                from ui.theme import get_theme_tokens, token_to_qcolor
+                # Стиль рисует выделение по rect. Если сразу сузить его ради
+                # метаданных, правая часть останется на фоне страницы, а цвет
+                # выделенного текста попадёт на противоположную подложку.
+                background = QStyleOptionViewItem(opt)
+                self.initStyleOption(background, index)
+                background.text = ""
+                background.icon = QIcon()
+                background.features &= ~QStyleOptionViewItem.ViewItemFeature.HasDecoration
+                widget = opt.widget or self.parent()
+                widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem,
+                                           background, painter, widget)
+                status_width = min(option.rect.width() // 2, opt.fontMetrics.horizontalAdvance(status) + 24)
+                opt.rect = opt.rect.adjusted(0, 0, -status_width, 0)
             super().paint(painter, opt, index)
+            if status:
+                from shell.theme import palette
+                color = (palette(not get_theme_tokens().is_light).on_accent if selected
+                         else get_theme_tokens().fg_muted)
+                painter.setPen(token_to_qcolor(color))
+                text_rect = option.rect.adjusted(option.rect.width() - status_width + 8, 0, -12, 0)
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                                 opt.fontMetrics.elidedText(status, Qt.TextElideMode.ElideRight, text_rect.width()))
         finally:
             painter.restore()
 

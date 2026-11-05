@@ -16,7 +16,71 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt6.QtCore import QThread, pyqtSignal
+import weakref
+
+from PyQt6 import sip
+from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal, pyqtSlot
+
+
+# Поток переживает удаление страницы. Иначе закрытие окна во время системного
+# вызова удаляет работающий QThread вместе с родителем и завершает приложение.
+_LIVE_JOBS = set()
+
+
+class VpnJob(QObject):
+    """Доставляет даже лямбда-обработчики в поток окна, пока страница жива."""
+
+    def __init__(self, page, attr, call, on_done, on_failed):
+        super().__init__()
+        self.page = weakref.ref(page)
+        self.attr = attr
+        self.on_done = on_done
+        self.on_failed = on_failed
+        self.worker = VpnCallWorker(call)
+        self.worker.done.connect(self.deliver)
+        self.worker.failed.connect(self.fail)
+        self.worker.finished.connect(self.finish)
+        self.worker._vpn_job = self
+        _LIVE_JOBS.add(self)
+        app = QCoreApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self.shutdown)
+
+    def _page(self):
+        page = self.page()
+        return page if page is not None and not sip.isdeleted(page) and not getattr(page, "_closing", False) else None
+
+    @pyqtSlot(object)
+    def deliver(self, result):
+        if self._page() is not None and self.on_done is not None:
+            self.on_done(result)
+
+    @pyqtSlot(str)
+    def fail(self, message):
+        if self._page() is not None and self.on_failed is not None:
+            self.on_failed(message)
+
+    def detach(self):
+        self.on_done = self.on_failed = None
+        self.page = lambda: None
+        self.worker.requestInterruption()
+
+    @pyqtSlot()
+    def shutdown(self):
+        # При выходе системный вызов заканчивается до удаления Qt runtime.
+        # Обычное закрытие страницы не ждёт и только отсоединяет обработчики.
+        self.detach()
+        self.worker.wait()
+
+    @pyqtSlot()
+    def finish(self):
+        page = self._page()
+        if page is not None and getattr(page, self.attr, None) is self.worker:
+            setattr(page, self.attr, None)
+        self.detach()
+        self.worker.deleteLater()
+        _LIVE_JOBS.discard(self)
+        self.deleteLater()
 
 
 class VpnCallWorker(QThread):

@@ -48,7 +48,7 @@ LOCAL_PORT = 10808
 #: Полторы секунды хватает с запасом: замер на холодном старте — меньше
 #: двухсот миллисекунд. Больше ждать незачем, не поднялось за это время
 #: значит не поднимется.
-STARTUP_TIMEOUT_S = 1.5
+STARTUP_TIMEOUT_S = 6.0
 
 #: Как часто спрашиваем порт, пока ждём.
 POLL_INTERVAL_S = 0.05
@@ -278,6 +278,15 @@ def can_bind_proxy_port(port: int) -> bool:
 
 
 def choose_proxy_port(preferred: int = LOCAL_PORT) -> int:
+    if not preferred:
+        # Проверке нужен независимый порт, в том числе когда основной занят.
+        for _ in range(20):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(("127.0.0.1", 0))
+                candidate = sock.getsockname()[1]
+            if can_bind_proxy_port(candidate):
+                return candidate
+        raise XrayError("Нет свободного локального порта для проверки")
     candidates = dict.fromkeys((preferred, *range(18080, 18100)))
     for port in candidates:
         if can_bind_proxy_port(port):
@@ -291,6 +300,7 @@ def wait_until_listening(
     timeout_s: float = STARTUP_TIMEOUT_S,
     probe=None,
     alive=None,
+    should_stop=None,
 ) -> bool:
     """Ждёт, пока ядро поднимет слушателя.
 
@@ -300,12 +310,15 @@ def wait_until_listening(
     check = probe or (lambda: is_port_open(port))
     deadline = time.monotonic() + float(timeout_s)
     while time.monotonic() < deadline:
+        if should_stop is not None and should_stop():
+            return False
         if alive is not None and not alive():
             return False
         if check():
             return True
         time.sleep(POLL_INTERVAL_S)
-    return bool((alive is None or alive()) and check())
+    return bool((should_stop is None or not should_stop()) and
+                (alive is None or alive()) and check())
 
 
 def write_config(profile, directory: Path, *, port: int = LOCAL_PORT) -> Path:
@@ -336,12 +349,14 @@ class XrayRuntime:
         process = self._process
         return process is not None and process.poll() is None
 
-    def start(self, profile, *, settings_dir: Path, spawn=None) -> None:
+    def start(self, profile, *, settings_dir: Path, spawn=None, should_stop=None) -> None:
         """Поднимает ядро под выбранный сервер.
 
         `spawn` подменяется в тестах: запускать настоящий процесс в
         проверке правил незачем.
         """
+        if should_stop is not None and should_stop():
+            raise XrayError("Подключение отменено")
         if self.is_running:
             self.stop()
 
@@ -358,16 +373,20 @@ class XrayRuntime:
         launcher = spawn or self._spawn
         self._process = launcher(core, config)
 
+        cancel_options = {"should_stop": should_stop} if should_stop is not None else {}
         if not wait_until_listening(
             self._port,
             probe=None if spawn is None else (lambda: True),
             alive=lambda: self.is_running,
+            **cancel_options,
         ):
             exit_code = self._process.poll() if self._process is not None else None
             self.stop()
+            if should_stop is not None and should_stop():
+                raise XrayError("Подключение отменено")
             if exit_code is not None:
                 raise XrayError(f"Ядро Xray завершилось при запуске (код {exit_code})")
-            raise XrayError("Ядро Xray не начало слушать порт за полторы секунды")
+            raise XrayError("Ядро Xray не начало слушать порт за 6 секунд")
 
     def stop(self) -> None:
         process = self._process

@@ -1,24 +1,8 @@
-"""Переключатель вкладок внутри страницы должен быть виден.
+"""Надписи вкладок остаются читаемыми при каскаде таблицы стилей.
 
-На странице VPN две вкладки — «Amnezia» и «VPN». В окне на их месте был
-пустой тёмный прямоугольник: надписи не рисовались. Переключиться было
-не на что, человек оставался на первой вкладке и видел её тексты —
-«Подключение через AmneziaWG или WireGuard» на вкладке ссылок.
-
-## Причина
-
-Таблица стилей Qt каскадом уходит в потомков. Одна строка `background:`
-на родителе перекрывает собственную таблицу qfluentwidgets, а именно ею
-и задан цвет надписей SegmentedItem.
-
-Замер на одной и той же полосе:
-
-    родитель без стилей   — 15742 светлых пикселя
-    родитель с background —    69
-
-Поэтому цвет задаётся у нас, в shell/theme.py, а не берётся у
-библиотеки. Тест меряет ровно это: под нашей таблицей стилей надписи
-обязаны остаться видимыми.
+Общая площадь светлых пикселей не проверяет буквы: в неё попадали
+подложка выбранного пункта и прозрачный белый. Сравниваем одну и ту же
+полосу с текстом и без него, отдельно для каждого пункта.
 """
 
 from __future__ import annotations
@@ -26,7 +10,9 @@ from __future__ import annotations
 import os
 import sys
 import unittest
-from collections import Counter
+import functools
+import json
+import subprocess
 from pathlib import Path
 
 
@@ -36,67 +22,95 @@ if str(PROJECT_SRC) not in sys.path:
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-
-    _APP = QApplication.instance() or QApplication([])
-except Exception as exc:  # pragma: no cover - среда без Qt
-    _APP = None
-    _QT_ERROR = exc
-else:
-    _QT_ERROR = None
+_APP = None
 
 
-#: Ниже этого числа светлых пикселей надписи считаем пропавшими.
-#: Целых надписей примерно пятнадцать тысяч, пустой полосы — семь
-#: десятков; порог взят с большим запасом от обоих значений.
-VISIBLE_PIXELS_MIN = 2000
+# Считается контрастный след каждой надписи относительно полосы без текста.
+# Светлая подложка выбранного пункта не должна подменять видимость букв.
+VISIBLE_PIXELS_MIN = 20
 
 
-def _light_pixels(stylesheet: str) -> int:
+def _caption_pixels(stylesheet: str) -> dict[str, int]:
+    from PyQt6.QtCore import QPoint, QRect, Qt
+    from PyQt6.QtGui import QFont, QFontDatabase
     from PyQt6.QtWidgets import QVBoxLayout, QWidget
     from qfluentwidgets import SegmentedWidget, Theme, setTheme
 
-    setTheme(Theme.DARK)
+    from PyQt6.QtTest import QTest
+    setTheme(Theme.DARK, save=False)
+    # Offscreen на Windows не загружает системные шрифты сам. Без этого
+    # прежний замер подтверждал светлую подложку даже при отсутствующих буквах.
+    font_id = -1
+    if sys.platform == "win32":
+        font_id = QFontDatabase.addApplicationFont(str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts/segoeui.ttf"))
 
     host = QWidget()
+    host.setObjectName("net67Window")
+    host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     host.resize(700, 90)
     host.setStyleSheet(stylesheet)
     layout = QVBoxLayout(host)
     tabs = SegmentedWidget(host)
     for key, title in (("amnezia", "Amnezia"), ("links", "VPN")):
         tabs.addItem(key, title, lambda: None)
+        tabs.widget(key).setFont(QFont("Segoe UI", 10) if sys.platform == "win32" else _APP.font())
     tabs.setCurrentItem("amnezia")
     layout.addWidget(tabs)
     host.show()
-    _APP.processEvents()
+    QTest.qWait(300)
 
-    image = host.grab().toImage()
-    counter = Counter(
-        image.pixelColor(x, y).name()
-        for x in range(0, host.width(), 2)
-        for y in range(0, host.height(), 2)
-    )
+    image = host.grab().toImage().copy()
+    regions = {}
+    tabs.setFixedSize(tabs.size())
+    for key in ("amnezia", "links"):
+        item = tabs.widget(key)
+        regions[key] = QRect(item.mapTo(host, QPoint(0, 0)), item.size()).adjusted(8, 6, -8, -6)
+        item.setFixedSize(item.size())
+        item.setText("")
+    QTest.qWait(30)
+    blank = host.grab().toImage()
+    visible = {}
+    def brightness(color):
+        # У прозрачного белого RGB тоже равен 255. Считаем видимый цвет
+        # на тёмной подложке, иначе тест «видит» невидимые пиксели.
+        alpha = color.alphaF()
+        return color.lightness() * alpha + 16 * (1 - alpha)
+    for key, rect in regions.items():
+        visible[key] = sum(
+            abs(brightness(image.pixelColor(x, y)) - brightness(blank.pixelColor(x, y))) > 60
+            for x in range(rect.left(), rect.right())
+            for y in range(rect.top(), rect.bottom())
+        )
     host.deleteLater()
-    return sum(count for colour, count in counter.items() if int(colour[1:3], 16) > 120)
+    if font_id >= 0:
+        QFontDatabase.removeApplicationFont(font_id)
+    return visible
 
 
-@unittest.skipIf(_QT_ERROR is not None, f"Qt недоступен: {_QT_ERROR}")
+@functools.lru_cache(maxsize=1)
+def _measurements():
+    # Полный набор оставляет глобальные стили/таймеры Qt от других страниц.
+    # Проверяем настоящий каскад в свежем процессе, как при запуске программы.
+    completed = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--measure"],
+                               capture_output=True, text=True, encoding="utf-8", timeout=30,
+                               env=dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONUTF8="1"),
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if completed.returncode:
+        raise AssertionError(completed.stderr or completed.stdout)
+    return json.loads(completed.stdout.strip().splitlines()[-1])
+
+
 class SegmentedTabsTests(unittest.TestCase):
     def test_labels_survive_our_stylesheet(self) -> None:
-        from shell.theme import palette, shell_qss
+        visible = _measurements()["native"]
 
-        visible = _light_pixels(shell_qss(palette(True)))
+        self.assertTrue(all(value > VISIBLE_PIXELS_MIN for value in visible.values()), visible)
 
-        self.assertGreater(visible, VISIBLE_PIXELS_MIN)
-
-    def test_a_bare_background_rule_is_what_used_to_erase_them(self) -> None:
-        """Проверка самой причины: без нашего правила надписи пропадают.
-
-        Если однажды qfluentwidgets перестанет так реагировать на каскад,
-        этот тест упадёт — и правило в теме можно будет убрать.
-        """
-        self.assertLess(_light_pixels("background: #101010;"), VISIBLE_PIXELS_MIN)
+    def test_our_rules_restore_captions_over_inherited_wrong_colours(self) -> None:
+        hidden = _measurements()["hidden"]
+        restored = _measurements()["restored"]
+        self.assertTrue(any(value < VISIBLE_PIXELS_MIN for value in hidden.values()), hidden)
+        self.assertTrue(all(value > VISIBLE_PIXELS_MIN for value in restored.values()), restored)
 
     def test_theme_styles_the_item_class_by_name(self) -> None:
         from shell.theme import palette, shell_qss
@@ -108,4 +122,19 @@ class SegmentedTabsTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    if "--measure" in sys.argv:
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        from PyQt6.QtWidgets import QApplication
+        from shell.theme import palette, shell_qss
+        _APP = QApplication([])
+        inherited = "SegmentedWidget SegmentedItem { background: #101010; color: #101010; }"
+        result = {"native": _caption_pixels(shell_qss(palette(True))),
+                  "hidden": _caption_pixels(inherited),
+                  "restored": _caption_pixels(inherited + shell_qss(palette(True)))}
+        _APP.closeAllWindows()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        print(json.dumps(result), flush=True)
+        # Пиксели и cleanup уже проверены; общий обход деструкторов PyQt на
+        # Windows здесь не проверяется и не должен убивать соседний прогон.
+        os._exit(0)
     unittest.main()

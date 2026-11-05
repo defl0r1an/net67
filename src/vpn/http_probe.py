@@ -1,36 +1,13 @@
-"""Проверка сервера настоящим запросом через него.
+"""HTTPS-проба через явный SOCKS5 с удалённым DNS и проверкой сертификата.
 
-## Чем это отличается от прежней проверки
-
-`vpn/ping.py` стучится в сам сервер: ICMP, TCP или UDP-проба по его
-порту. Для WireGuard это единственный доступный способ, но он отвечает
-не на тот вопрос. «Порт открыт» не значит «через сервер можно работать»:
-узел может отвечать на TCP и при этом не пропускать трафик, упираться в
-исчерпанную подписку или блокировать нужный сайт.
-
-Серверы из подписки поднимаются ядром Xray, и с ними можно иначе:
-сходить через сервер по-настоящему — обычным HTTPS-запросом к внешнему
-адресу. Так делает Happ, и ответ получается о том, что человека
-интересует: работает или нет, и насколько быстро.
-
-## Что именно замеряется
-
-Время до первого байта ответа, а не время загрузки страницы. Поэтому
-цель — маленький адрес, отдающий пустой ответ с кодом 204: он не тратит
-время на передачу тела и одинаково быстр во всём мире.
-
-## Через что идёт запрос
-
-Через локальный SOCKS ядра. Значит, проверка возможна, только когда
-ядро поднято на нужном сервере — то есть при переключении сервера или
-на подключённом соединении. Спрашивать «а как быстр вон тот сервер, к
-которому мы не подключены» этим способом нельзя, и притворяться, что
-можно, не надо.
+Время включает установку соединения, TLS и получение заголовков ответа.
+Проверяются два небольших HTTPS-адреса; неожиданный статус не доказывает
+перехват. Неподключённый сервер получает отдельное ядро в vpn.probing.
+Проба не измеряет пропускную способность и не подтверждает все сайты.
 """
 
 from __future__ import annotations
 
-import socket
 import time
 from dataclasses import dataclass
 
@@ -38,11 +15,11 @@ from dataclasses import dataclass
 #: Куда стучимся. Адрес отдаёт «204 без тела» и живёт у Cloudflare,
 #: то есть близок почти к любому серверу — замер получается про канал до
 #: сервера, а не про путь от сервера до далёкого сайта.
-PROBE_URL = "http://cp.cloudflare.com/generate_204"
+PROBE_URL = "https://cp.cloudflare.com/generate_204"
 
 #: Запасной адрес: если первый заблокирован или лежит, проверка не
 #: должна объявлять сервер мёртвым.
-PROBE_URL_FALLBACK = "http://www.gstatic.com/generate_204"
+PROBE_URL_FALLBACK = "https://www.gstatic.com/generate_204"
 
 #: Сколько ждём. Три секунды — с запасом для дальнего сервера; всё, что
 #: дольше, человек и так посчитает неработающим.
@@ -87,28 +64,27 @@ def _probe_once(url: str, *, proxy_address: str, timeout: float) -> HttpProbeRes
 
     started = time.monotonic()
     try:
-        response = requests.get(
-            url,
-            proxies=proxies,
-            timeout=timeout,
-            allow_redirects=False,
-        )
+        with requests.Session() as session:
+            # Настройки прокси из окружения не должны подменять выбранный путь.
+            session.trust_env = False
+            response = session.get(url, proxies=proxies, timeout=timeout,
+                                   allow_redirects=False, verify=True, stream=True)
+            status = response.status_code
+            response.close()
     except Exception as exc:
         return HttpProbeResult(False, None, _explain(exc))
 
     latency_ms = (time.monotonic() - started) * 1000.0
 
-    if response.status_code != EXPECTED_STATUS:
-        # Не ошибка сети, а чужой ответ: так выглядит перехват запроса
-        # порталом или страницей провайдера.
+    if status != EXPECTED_STATUS:
         return HttpProbeResult(
             False,
             latency_ms,
-            f"Ответ {response.status_code} вместо {EXPECTED_STATUS} — запрос перехвачен",
-            response.status_code,
+            f"Ответ HTTPS {status} вместо {EXPECTED_STATUS}",
+            status,
         )
 
-    return HttpProbeResult(True, latency_ms, "Сервер отвечает", response.status_code)
+    return HttpProbeResult(True, latency_ms, "HTTPS через сервер работает", status)
 
 
 def _explain(exc: Exception) -> str:
@@ -136,18 +112,20 @@ def check_through_proxy(
     proxy_address: str,
     timeout: float = PROBE_TIMEOUT,
     urls: tuple[str, ...] = (PROBE_URL, PROBE_URL_FALLBACK),
+    should_stop=lambda: False,
 ) -> HttpProbeResult:
     """Проверяет сервер настоящим запросом через него.
 
-    Запасной адрес пробуется, только если первый не ответил по сети.
-    Чужой код ответа запасным адресом не лечится: он говорит о перехвате
-    запроса, а не о недоступности цели.
+    При неудаче пробуется второй адрес: ошибка первой цели сама по себе
+    не доказывает неработоспособность сервера.
     """
     last = HttpProbeResult(False, None, "Проверять нечем")
 
     for url in urls:
+        if should_stop():
+            return HttpProbeResult(False, None, "Проверка отменена")
         last = _probe_once(url, proxy_address=proxy_address, timeout=timeout)
-        if last.ok or last.status is not None:
+        if last.ok:
             return last
 
     return last
