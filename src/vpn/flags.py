@@ -11,19 +11,18 @@
 двумя способами — по сокращению в начале и по русскому названию, — и
 второй важнее: сокращение может отсутствовать, название есть всегда.
 
-## Почему символы, а не картинки
-
-Флаг собирается из двух символов-индикаторов Unicode: 🇳 + 🇱 даёт 🇳🇱.
-Никаких файлов, никакой папки с картинками, ничего не надо класть в
-сборку.
-
-Оговорка: Windows такие пары **не рисует флагами** — системный шрифт
-Segoe UI Emoji их не поддерживает, и на экране будут две буквы в
-рамочках. Это лучше голого «NL», но до настоящего флага не дотягивает.
-Настоящие потребуют набора картинок в приложении.
+Флаги рисуются исходными изображениями Apple: Windows не поддерживает
+региональные эмодзи в системном шрифте. Полный справочник названий нужен
+подпискам, в которых вместо кода указаны Кипр, Антарктида или территория.
+Страна берётся из названия профиля и не выдаётся за геолокацию сервера.
 """
 
 from __future__ import annotations
+
+import re
+import unicodedata
+
+from vpn.country_names import ALL_COUNTRY_NAMES, EXTRA_FLAG_CODES
 
 
 #: Сдвиг от латинской буквы к её региональному индикатору.
@@ -139,13 +138,46 @@ COUNTRY_NAMES: dict[str, tuple[str, ...]] = {
     "PH": ("филиппины", "philippines"),
     "TW": ("тайвань", "taiwan"),
     "NZ": ("новая зеландия", "new zealand"),
+    "CD": ("демократическая республика конго", "др конго", "democratic republic of the congo", "dr congo"),
+    "CG": ("республика конго", "republic of the congo"),
 }
+
+
+for _code, _aliases in ALL_COUNTRY_NAMES.items():
+    COUNTRY_NAMES[_code] = tuple(dict.fromkeys((*COUNTRY_NAMES.get(_code, ()), *_aliases)))
+for _code, _aliases in tuple(COUNTRY_NAMES.items()):
+    COUNTRY_NAMES[_code] = tuple(dict.fromkeys((*_aliases, *(
+        alias.replace("о-ва", "острова").replace("о-в", "остров") for alias in _aliases
+    ))))
+
+SUPPORTED_FLAG_CODES = ISO_COUNTRY_CODES | EXTRA_FLAG_CODES
+_SUBDIVISION_TAGS = {"GB-ENG": "gbeng", "GB-SCT": "gbsct", "GB-WLS": "gbwls"}
+_SUBDIVISION_EMOJI = {
+    code: "\U0001f3f4" + "".join(chr(0xe0000 + ord(char)) for char in tag) + "\U000e007f"
+    for code, tag in _SUBDIVISION_TAGS.items()
+}
+
+
+def _normal_name(value: str) -> str:
+    text = unicodedata.normalize("NFKD", value.casefold().replace("ё", "е"))
+    return "".join(char for char in text if not unicodedata.combining(char))
+
+
+_NAME_RULES = [
+    (re.compile(r"(?<!\w)" + r"[\W_]+".join(re.escape(word) for word in re.findall(r"\w+", _normal_name(alias))) + r"(?!\w)"), code)
+    for alias, code in sorted(
+        {(alias, code) for code, aliases in COUNTRY_NAMES.items() for alias in aliases if len(alias) > 2},
+        key=lambda pair: (-len(pair[0]), -len(pair[1]), pair[1]),
+    )
+]
 
 
 def flag_for_code(code: str) -> str:
     """Флаг по двухбуквенному коду страны. Непонятный код — пусто."""
     text = str(code or "").strip().upper()
-    if len(text) != 2 or not text.isalpha() or not text.isascii():
+    if text in _SUBDIVISION_EMOJI:
+        return _SUBDIVISION_EMOJI[text]
+    if text not in SUPPORTED_FLAG_CODES:
         return ""
 
     return "".join(chr(_REGIONAL_INDICATOR_BASE + ord(ch) - _LATIN_A) for ch in text)
@@ -169,17 +201,44 @@ def country_code(title: str) -> str:
     if not text:
         return ""
 
-    # Код ищем не только в начале: подписки пишут его и как «[NL]», и
-    # через дефис, и в скобках после имени.
-    for token in _tokens(text):
-        if token in ISO_COUNTRY_CODES:
+    for code, emoji in _SUBDIVISION_EMOJI.items():
+        if emoji in text:
+            return code
+    for index in range(len(text) - 1):
+        pair = text[index:index + 2]
+        if all(0x1f1e6 <= ord(char) <= 0x1f1ff for char in pair):
+            code = "".join(chr(ord(char) - 0x1f1e6 + ord("A")) for char in pair)
+            if code in SUPPORTED_FLAG_CODES:
+                return code
+
+    subdivision = re.search(r"(?<!\w)(GB-(?:ENG|SCT|WLS))(?!\w)", text, re.I)
+    if subdivision:
+        return subdivision[1].upper()
+    lowered = _normal_name(text)
+    # St. Barthélemy начинается с сокращения Saint, а не с кода ST.
+    for pattern, code in _NAME_RULES:
+        if pattern.match(lowered):
+            return code
+    prefix = re.match(r"^[\[(\s]*([^\W\d_]{2})(?![^\W\d_])", text)
+    if prefix:
+        token = _tokens(prefix[1])[0]
+        if token == "UK":
+            return "GB"
+        if token in SUPPORTED_FLAG_CODES:
             return token
 
-    lowered = text.lower()
-    for code, names in COUNTRY_NAMES.items():
-        for name in names:
-            if name in lowered:
-                return code
+    # Полное название точнее случайного двухбуквенного слова внутри него:
+    # «о-ва» в названии территории не должно превращаться в код BA.
+    for pattern, code in _NAME_RULES:
+        if pattern.search(lowered):
+            return code
+
+    # Подписки также ставят код после имени или в скобках.
+    for token in _tokens(text):
+        if token == "UK":
+            return "GB"
+        if token in SUPPORTED_FLAG_CODES:
+            return token
 
     return ""
 
@@ -264,6 +323,9 @@ def _is_regional_indicator(char: str) -> bool:
 
 def _strip_leading_flag_emoji(text: str) -> str:
     """Срезает флаг-эмодзи в начале строки, если он там есть."""
+    for emoji in _SUBDIVISION_EMOJI.values():
+        if text.startswith(emoji):
+            return text[len(emoji):].lstrip()
     index = 0
     length = len(text)
     found = 0
@@ -287,11 +349,11 @@ def _strip_leading_flag_emoji(text: str) -> str:
 def _strip_leading_code(text: str) -> str:
     """Срезает двухбуквенное сокращение страны в начале строки."""
     parts = text.split(None, 1)
-    if len(parts) != 2 or len(parts[0]) != 2 or not parts[0].isalpha():
+    if len(parts) != 2:
         return text
 
     normalized = parts[0].translate(_CYRILLIC_LOOKALIKES).upper()
-    if normalized.isascii() and normalized in ISO_COUNTRY_CODES:
+    if normalized.isascii() and normalized in SUPPORTED_FLAG_CODES:
         return parts[1]
     return text
 
@@ -348,8 +410,7 @@ def decorate(title: str) -> str:
 
 
 #: Где лежат картинки флагов. Имя файла — код страны в нижнем регистре:
-#: `nl.png`, `gb.png`. Папки может не быть вовсе — тогда работает
-#: запасной вариант из символов.
+#: `nl.png`, `gb.png`. При неизвестной стране страница рисует глобус.
 FLAGS_DIR_NAME = "flags"
 
 #: Высота значка в списке. Ширина подбирается по пропорции картинки:
@@ -358,7 +419,7 @@ FLAGS_DIR_NAME = "flags"
 #: Держится в паре с SERVER_LIST_ICON_HEIGHT в vpn/ui/page.py: там под
 #: значок отводится место в строке. Разойдутся — флаг обрежется или
 #: повиснет в пустой рамке.
-FLAG_HEIGHT = 18
+FLAG_HEIGHT = 24
 
 _ICON_CACHE: dict[str, object] = {}
 
@@ -373,7 +434,7 @@ def flags_dir():
 def flag_image_path(code: str):
     """Путь к картинке флага. Нет файла — None."""
     text = str(code or "").strip().lower()
-    if len(text) != 2 or not text.isalpha() or not text.isascii():
+    if text.upper() not in SUPPORTED_FLAG_CODES:
         return None
 
     for suffix in (".png", ".svg"):
@@ -418,13 +479,9 @@ def flag_icon(title: str):
             if pixmap.isNull():
                 _log_missing_flag(code, f"картинка не читается: {path.name}")
             else:
-                from PyQt6.QtCore import Qt
-
-                icon = QIcon(
-                    pixmap.scaledToHeight(
-                        FLAG_HEIGHT, Qt.TransformationMode.SmoothTransformation
-                    )
-                )
+                # QIcon сам подберёт разрешение под DPI; раннее уменьшение
+                # до 24 px размывало флаги на мониторах с масштабом 150–200 %.
+                icon = QIcon(str(path))
         except Exception as exc:
             _log_missing_flag(code, f"{path.name}: {exc}")
             icon = None
@@ -457,6 +514,7 @@ __all__ = [
     "COUNTRY_NAMES",
     "FLAGS_DIR_NAME",
     "FLAG_HEIGHT",
+    "SUPPORTED_FLAG_CODES",
     "clear_icon_cache",
     "country_code",
     "decorate",

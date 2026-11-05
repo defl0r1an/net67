@@ -1,0 +1,2639 @@
+{
+  "source_archive": "80deec6b9fcb5d7f.zip",
+  "archive_sha256": "17f9fcaf802dbe213febbb922ff70717be0bfce44eacc1e6592150092dd22990",
+  "country_codes": 249,
+  "extra_regions": [
+    "AC",
+    "CP",
+    "DG",
+    "EA",
+    "EU",
+    "IC",
+    "TA",
+    "UN",
+    "XK"
+  ],
+  "subdivisions": [
+    "GB-ENG",
+    "GB-SCT",
+    "GB-WLS"
+  ],
+  "total": 261,
+  "supplement_commit": "e77759c296ed37beb0dbd63908b43d8619509c6d",
+  "cldr": {
+    "repository": "unicode-org/cldr-json",
+    "commit": "7d2b9cb11cec08f4d333ad73209deb3df0711c3b"
+  },
+  "flags": {
+    "AC": {
+      "file": "ac.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ascension Island.png",
+      "original_sha256": "ebb9206e9f9f04631d78e8fcd2be96cb9c138738a443d20d8200b8d3e77671a0",
+      "sha256": "8c02effea6e96c402a4c9542856ff4fea4a43032216725591e92374650984007",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AD": {
+      "file": "ad.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Andorra.png",
+      "original_sha256": "abc4bafb53a5e72fc9bfc272e5a9d7e4b6fcf1947cd9f810fede4ef3f08796ad",
+      "sha256": "33dfc5d457492fea031a49a6f816ecd4f14ee407073e05933da16a298e27974e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AE": {
+      "file": "ae.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag United Arab Emirates.png",
+      "original_sha256": "1db5b4e6929fda74141a03943457ee262cf82b4eb3b430833831f11273ef2ee3",
+      "sha256": "092b8bf9a554dd99c259d2a806d1ed9f0f5fbd4e3be4745ae6b3f83cbebd86c7",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AF": {
+      "file": "af.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Afghanistan.png",
+      "original_sha256": "2238b0a247a86f0c256f4412b5864cb0c82ad88ec7445360d30744f8520f7dde",
+      "sha256": "d730730b4c38527a1224504589b57f9526a4c34cad4cd8db8e80db951a59d884",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AG": {
+      "file": "ag.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Antigua Barbuda.png",
+      "original_sha256": "86cac8fd4d0baab87223ccbc98b51140bdf714d11ec35a154d337e87aafbe6ed",
+      "sha256": "443f929feef566d78dd1a3f52dbbf00a7074115a0d316c788740c43381decaf3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AI": {
+      "file": "ai.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Anguilla.png",
+      "original_sha256": "ea39e0ae815edfdb803946f206701d522e96b637950dc1ba779a218021139442",
+      "sha256": "12d1e12a1a34605e0ea196b864fe0201c72963e3eb9de237770a69f312ed7283",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AL": {
+      "file": "al.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Albania.png",
+      "original_sha256": "e31fc8a50b73d57dc54a2bbb4d07bd3a8a1acf2938a47303ce2cd41e7e40e582",
+      "sha256": "3edcd2f5418973e58233130820497fc15bf979815119ba206cbdc29ad8725853",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AM": {
+      "file": "am.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Armenia.png",
+      "original_sha256": "9a1dfc48749856af2690c783acbcc5d0ec05e63da1b2ed9c7892e3602fdc8149",
+      "sha256": "38c19bbf890eb3987d9f068cea312f02a536c90407c5722489274cc663d1b2bb",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AO": {
+      "file": "ao.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Angola.png",
+      "original_sha256": "b6cec1de2cf21910278c90ce11daa863cbe36f5974000246cc1a3dea9dab147e",
+      "sha256": "456345d8e0ff2ee881b34393521bbe7b14863957215e0876bea3c72cca7404c9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AQ": {
+      "file": "aq.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Antarctica.png",
+      "original_sha256": "ef585d8134f48f93804f73254f5b047264d6bf5db95fd920141b99c682622b16",
+      "sha256": "351ef594d05a3a4111b5781bd0617f5dae04147a4b54b6bd990b00f51129a475",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AR": {
+      "file": "ar.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Argentina.png",
+      "original_sha256": "8b214b9cea17d130cb995588c52a2fc41abf14424953353c45d2ebd4fb3a60ec",
+      "sha256": "2dbdcd9ff93b43df5b4616cc5415c7e6c42c07a3ebcdc2c63d63a02ec5189f0e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AS": {
+      "file": "as.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag American Samoa.png",
+      "original_sha256": "2f7daa9107bd144459324dc5ef556d194d303346463e99970d6439dd354f98ec",
+      "sha256": "41c6dd24ab424644cff326922cf3d2b3ee4e6083ef4accbc3f7687104f43354d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AT": {
+      "file": "at.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Austria.png",
+      "original_sha256": "e9524f6141801b4fffc9d67a8435e6ce5f8d3ee1d0954a8131d5f76a01e45ed7",
+      "sha256": "fb0ab1c5071cc50510eb2233c1655cfec4f40dc664297d137a677bccb06b3dbe",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AU": {
+      "file": "au.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Australia.png",
+      "original_sha256": "3daf7e619e4b6cb9e574bdba2b8af077bfd1f80bd09596841f24bf87891727f0",
+      "sha256": "4b2b011bbb9282bb380ca21883b90cbcbbc8daddde07d40bb0f2335719221b4d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AW": {
+      "file": "aw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Aruba.png",
+      "original_sha256": "2ded42ce19e03a00b694366456f6700a114a692d2c7c2ced28dd096ac02c99a5",
+      "sha256": "98452f627458b3a10b33b3e0b950dc8cb3af9b2902fbaebebe3b777bbbaed8c9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AX": {
+      "file": "ax.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Aland Islands.png",
+      "original_sha256": "e8ae7e32e64ee41dc0d478323f1e701ec7f562c7630385273b0e38092780755e",
+      "sha256": "16c99b074d16cd1e6f2c9679d4c469c289e5f5b3cdd53be34cbd24f2e592a000",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "AZ": {
+      "file": "az.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Azerbaijan.png",
+      "original_sha256": "15b4a3384bfa139d20478d0303d057354c00e1f0875216a0c6a303bbd518c8a9",
+      "sha256": "e6b63105d0e4827d51c42d7633e43281ec62c3d2c93e48dd6c064e6160328080",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BA": {
+      "file": "ba.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bosnia Herzegovina.png",
+      "original_sha256": "d3468c88cbca84f1221d77c3bb8f180fe1fb5c33d5bea50c44019b6b4b8a9f21",
+      "sha256": "e966bfd90fadaf7986f9f97f47cd9ab46d945b2fddd3bda93246e76f88d1d5df",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BB": {
+      "file": "bb.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Barbados.png",
+      "original_sha256": "09186dfce59f018dcc4a850bd88493213bac50ac304fe47f2c95e2256f02755e",
+      "sha256": "975e121d307f2aed7af1f2cb180037535ccbd8e2dec00c96ad7adac596009f35",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BD": {
+      "file": "bd.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bangladesh.png",
+      "original_sha256": "8bd93ffd770f3e20496fc70e8ede3fa7a8afefd133f7f0d98e62e7638924ff1c",
+      "sha256": "4990febf9850c13ef8157a26e5db7bdd3934c611ac3881ea959683a0dc13a8b0",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BE": {
+      "file": "be.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Belgium.png",
+      "original_sha256": "78b484bce3b6e156766fc7200676875f1e83bed18d5d4b03732c717ace309707",
+      "sha256": "4058e8ff049f07ff271a5be8cc3cadf09ccf2a9f9950241cadf20395af51dd4b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BF": {
+      "file": "bf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Burkina Faso.png",
+      "original_sha256": "dbabb9dc8ae7925de32a61e3110e7f7ef7947b622695ef4a38cb997a56ef0256",
+      "sha256": "4983c6a7ae46303d1dd3efc6a94b7fa10441d5e26e2a27b238de55c74ffcce74",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BG": {
+      "file": "bg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bulgaria.png",
+      "original_sha256": "d784766b531fccdab8932c8002e411b69a642a0329acac73c16e2f3228194235",
+      "sha256": "48ebe278de3e1a30f2827da1950d5e2d2d9e5a6381389dddcc5cc77e7fd5c610",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BH": {
+      "file": "bh.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bahrain.png",
+      "original_sha256": "e9179ff10869047ad5164398852bb1ef7ac141894f4d42f211302579ea1c14d5",
+      "sha256": "a68f18231c37248c1aeacba93049c6cbcd32647902a4dd5b2fe6266af0aebaf0",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BI": {
+      "file": "bi.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Burundi.png",
+      "original_sha256": "234329579a3401de62e1224ffa2a86aa598e03356351469a431fbf54a5bd9c84",
+      "sha256": "85a9498d5bbe215681264931317316dd58270afc2f4bc0112b38f7a140df60c8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BJ": {
+      "file": "bj.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Benin.png",
+      "original_sha256": "828c69515b17f31eb58c0fe92de0a87de709b141871dc90d847ddde5d09d06b7",
+      "sha256": "a650818bcb86555abeaf6ea5fc5023a109b13b52aefeeb9f05a1f8622fc6974f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BL": {
+      "file": "bl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag St Barthelemy.png",
+      "original_sha256": "660ab47aeaeb1dd0916f2bed136ac3fed5019d5bf3d87abd61a91df86975e63a",
+      "sha256": "12580d348b3d4c32e13b44f799eccba18741b78cec8bcba1f75c969aa7794ab9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BM": {
+      "file": "bm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bermuda.png",
+      "original_sha256": "e5db90094dc29c6918fbcae061c816ac3af1cb46573e7800ec629afdb4ff5715",
+      "sha256": "88a9232ed4cc911998b631014dfecdf063174eb5493c7f5cdb5c7243f6048d98",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BN": {
+      "file": "bn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Brunei.png",
+      "original_sha256": "966ec6eab3141f842b56148cca2672a65baa0cd7276a7c0383dfb2aef8ba4b21",
+      "sha256": "e4a8c8144d9ea4655948353268453380a540dd8abc0bf39279f82585deae9272",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BO": {
+      "file": "bo.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bolivia.png",
+      "original_sha256": "d193ab5defb04b504401b27a0c1b5f73efefc7a178b296749c6465750acf1485",
+      "sha256": "4d378c492912b96bfff36d665e07f0eb73b70ebdaed68d6d67f30913f8434468",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BQ": {
+      "file": "bq.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Caribbean Netherlands.png",
+      "original_sha256": "7776b84a82279fc3a13dab6e39274cdbbf9b00698dab61d58e95720eb9dd11fd",
+      "sha256": "b592c46c0860b90a6d1f914adb36e9224255313fe92547a47140f351eac1d74f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BR": {
+      "file": "br.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Brazil.png",
+      "original_sha256": "8fe2e22d616c930fd070592137097584bc64cfc1b5cb7845fd5a0a5b597cfc03",
+      "sha256": "f7bdd4bb238d79c6e0d021c38b78bedad7317699972ca1c269a089cdf43ac3f9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BS": {
+      "file": "bs.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bahamas.png",
+      "original_sha256": "bca7faeb1d63131a3023ea335c510b0b4f1561aac2c190271fca197f6a808f48",
+      "sha256": "ed5b4b7adfc5ab2234945bc7f492a08accadf4ee687c49a5f566450185889d3d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BT": {
+      "file": "bt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bhutan.png",
+      "original_sha256": "ce22f4be90d1c38fba71336a6e211994303fefe6bda0c58255c6c10308ff0008",
+      "sha256": "fa81c5e7193a74e94d8394e522793d1216592748bcb7c4ca3b8cc40ec3c807c7",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BV": {
+      "file": "bv.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Bouvet Island.png",
+      "original_sha256": "45d7a150fdbc58edd49730f7ec7e12cf169a675fa22e9afebb231fbc968f2709",
+      "sha256": "e173525804c9bc78b1232558d322882f1e53f1420a9e1441954e9ddd7de25a59",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BW": {
+      "file": "bw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Botswana.png",
+      "original_sha256": "6829115ceda638786c326984a1cf0f62737a1f3d1c305355b1ce9800804202dc",
+      "sha256": "ccea73a7a6fa034cc8c32e8dd007eb6f30395fc38faeebfb403680491a70d4fe",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BY": {
+      "file": "by.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Belarus.png",
+      "original_sha256": "64ee6c842082aa03d6ecbaab157c66907d9b802516220c7e59c1e0d398c70fb3",
+      "sha256": "d30ce59e1e800543ccfbbd8b2dd79ebec570ab8bebb2030ff2601e885851ab53",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "BZ": {
+      "file": "bz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Belize.png",
+      "original_sha256": "26cfc07efc13b197fe1379a59cb07bf87ba32f0f62f7b7e6f8a1933298bb7851",
+      "sha256": "6e4d7f01ec93d8140316713a8679b9b47f0428e761e8fa0a1b43041e43b55b00",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CA": {
+      "file": "ca.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Canada.png",
+      "original_sha256": "4d02fb0e4cbd58b4ed18234d8a3f4faa3e28ddd82190dc80082c48b4ece3d202",
+      "sha256": "a7052dc0d3bf6967813065d512ab4657dea83f7e2445cb087520355bb2652fd6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CC": {
+      "file": "cc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cocos Keeling Islands.png",
+      "original_sha256": "d774c01983e51d1f59b75be882acf9f1585ef289da93990d281790cc603c05c1",
+      "sha256": "f2b93fd9379608b61927ed7f6f8d9b2b6b5ea882a7b1f2c07f9719cdda0ed466",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CD": {
+      "file": "cd.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Congo Kinshasa.png",
+      "original_sha256": "bb569934e985a8d033d00b1bdd8b172a242dde13f8e1609496a25c09b15daa08",
+      "sha256": "bd898a6c164a632a35b8ead7d78ac80a4ede9da7137c09fc1abb2e2be414ecb3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CF": {
+      "file": "cf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Central African Republic.png",
+      "original_sha256": "a8535db722058c194cddf8519d17560bb459b265ba5d1d08b0b929f9569fcb54",
+      "sha256": "c045a7526e7fac3f9a3dcda7b68cceae3a49822caa88f19542a53cbd88110855",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CG": {
+      "file": "cg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Congo Brazzaville.png",
+      "original_sha256": "0ca1eede23e4aca6f9bb0fc7e87e9410b9bcbe34e2be2e0e8381bacf5189e4f2",
+      "sha256": "81b8b64eff4092f4803e1c2cbb5ba64645c140b1b62d8ffdaaef24d9c43967f3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CH": {
+      "file": "ch.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Switzerland.png",
+      "original_sha256": "30d088f25ebbb96d172cf203467889f86697638da2ab50a0a3c54648bc6b7c6a",
+      "sha256": "86021b1c7e4bce5353e04fe15f8ea26b5c4fbbaad5f506eec39049fd8174fc72",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CI": {
+      "file": "ci.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cote Divoire.png",
+      "original_sha256": "5dda45484eae731e9cbaa0a1fbdd817cf9001926bb34857b693e69c0f0f3b425",
+      "sha256": "b42f896894c07a282c0171320f5feaf2af365089243dfa796651550e92471aae",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CK": {
+      "file": "ck.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cook Islands.png",
+      "original_sha256": "c99d374fff3eaabdd39ec520602d98a4f78f647336ae6a89b2d81d714662794d",
+      "sha256": "76b3c25280222790b5903dd85e017066bd2ac1962451f1d0682f109870874043",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CL": {
+      "file": "cl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Chile.png",
+      "original_sha256": "2660e5fb45c2fa33d8e1186e6ba7918126b1b8db88892338ec8c0426ba678ecd",
+      "sha256": "7a779b9a4ddabaf7832c4e34db34a0f6cfe14529110744b0bc4fdc461d4b4230",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CM": {
+      "file": "cm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cameroon.png",
+      "original_sha256": "110523b80cb69aa316540ef8c1b0ddc96f2d2b602e2b9d1c168a5a54e6350e51",
+      "sha256": "66d3518938d55b0fd9eb3de33a2163743968501f8fe55edd3f2af9d927d2ba56",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CN": {
+      "file": "cn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag China.png",
+      "original_sha256": "0172d1164dfff5dcad518e97e69e98493614b7dcd379e9e9aed4b0939e946241",
+      "sha256": "c1e4601e6d087bab0df47bbdc91a407c180a9ad0051a60880dd5c4c8f21d559f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CO": {
+      "file": "co.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Colombia.png",
+      "original_sha256": "d5afb892b7c0166a9270ad578a6eb9492f9f16fc737553a03c5f4946fb6fa044",
+      "sha256": "b9904864f149bc12c71859f320b565396b44f01c3a99b2dabacf676dbd1d2b52",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CP": {
+      "file": "cp.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Clipperton Island.png",
+      "original_sha256": "1b0d5fe033f9b20f0c3586c57cf2cb1708f3ab14a45f5fcfcb31ad5c502d2322",
+      "sha256": "c4e9535e4390ac8bd525741dfee5acb636c42c3cd483b740bb1b8b1875e3051e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CR": {
+      "file": "cr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Costa Rica.png",
+      "original_sha256": "9db1e5f33fa32ee5baaac1bf7495a3c8f70bd541def8f41d392159c36ec67399",
+      "sha256": "7de1abc4f4b76c04fe5be425ff727f440640cceda02e2c2c4858c963c62abd02",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CU": {
+      "file": "cu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cuba.png",
+      "original_sha256": "ca9d35b89d8b0721d91cd91a87f8316c23b9508c520efe67cbf4630128ede707",
+      "sha256": "d7013c6d7fc572c08c33bf129cb13ce596fd54353346976f01766d94944b42e9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CV": {
+      "file": "cv.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cape Verde.png",
+      "original_sha256": "29ea2bb270de25b158662ded49df392b276656c98b0e7271c3bf65eb5e48c6bc",
+      "sha256": "75c96c6e804008e11a1bd7dca87a79f52c870d3283e5987d706d599c1fb40703",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CW": {
+      "file": "cw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Curacao.png",
+      "original_sha256": "d542921542f2ad41732b2ccc6bf02f8df41e7a9347afa5d0ec60d66a26609b04",
+      "sha256": "9762da8466f645967a2ccd1bc19ff5f69c4f9e9dbff62cbc699bc792d84816bf",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CX": {
+      "file": "cx.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Christmas Island.png",
+      "original_sha256": "5eda5b0a5e6da342eb4eafa8c3529b979777432d3e1d076150aa7655677a995e",
+      "sha256": "34900a34d392fc281e3d81cb227c0cb17271561b17fa934c7816a5bb871de4ee",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CY": {
+      "file": "cy.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cyprus.png",
+      "original_sha256": "9985f85dccded80de2b558f81a907cb7dc221c41f0e12a1f21fd20bdb4698b98",
+      "sha256": "2e1d927fd24de3f959ac63659b4c1ff506b6709ef3d5d92e5ed5961e828e1465",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "CZ": {
+      "file": "cz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Czechia.png",
+      "original_sha256": "ee41a4dfbfa60146cdd0473801e3669feab96aac11874dd5a1e42220307ca7c1",
+      "sha256": "91caeb66ab932b9a9651a28b3a4266fae534a898c485b57917951b72aae91f6a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "DE": {
+      "file": "de.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Germany.png",
+      "original_sha256": "b2f39f327cb235dcedd05c693012d356dc4c9348ee02809f2ee28bb7694fb0f2",
+      "sha256": "b05853073fc541d70dafe1b17f776aeef44e424350f88de9ca3631b130a9604e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "DG": {
+      "file": "dg.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1e9-1f1ec.png",
+      "original_sha256": "4e33a73611cfe26afd186e7e7157e76326fc3443173f3d321b11b125cffb73d9",
+      "sha256": "10b4490bd2330384be7d3535d24dbdc902b68d253a325cef4deb0650012ba2b6",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "DJ": {
+      "file": "dj.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Djibouti.png",
+      "original_sha256": "2c0922b69d2c5f9ed5199c76ce4fe1b1ea26b88ee33fc94a82ed1aea81ca1548",
+      "sha256": "3074abc35b20407f2716c55ec12052b874b5f298ec33c5a397b33ae658ab533b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "DK": {
+      "file": "dk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Denmark.png",
+      "original_sha256": "36ca7f81605b01d55f4b44e22d04217e152ff130f3d4f98d0eb4ac5b5fa24f76",
+      "sha256": "745de1bcc6f172961f8b666593e6635e5be3ec9d8614c78fc45649aa639933be",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "DM": {
+      "file": "dm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Dominica.png",
+      "original_sha256": "f0bc39334eeafe27b3aa56ddd30c56041ebc8105ebe164f304008009a278c89a",
+      "sha256": "91e25a44f21baa61786158ea2786ca5d4c96dba530bb36941fdf479e43b15dfa",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "DO": {
+      "file": "do.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Dominican Republic.png",
+      "original_sha256": "4868aa1fe0b86f63cbb53b966a193643ab5a00b4d446738ad1be1e01ded57be2",
+      "sha256": "adc6e723274598bcddc91b0d69f246da770d3a1fd8f4928e355c61d8c17680f3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "DZ": {
+      "file": "dz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Algeria.png",
+      "original_sha256": "1929624d2ce6aa8616fd99be41f8ac960a78dcf56ca20f81e93aa7beaea77f7b",
+      "sha256": "1a63fd9b3d189cf8bd08bf3c7f8367ba223a93189bed078d444923848fa4225f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "EA": {
+      "file": "ea.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ceuta Melilla.png",
+      "original_sha256": "04e9e582a25df1723c0859e122b7d1b9a183f049b2731e1e01752fd2688dfe40",
+      "sha256": "25acd351f5c3f7bfbb3db3e482a2f9362165f3b524392fdb57963ae8432b2d74",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "EC": {
+      "file": "ec.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ecuador.png",
+      "original_sha256": "48e99009bdfb07447e45169928ce47347600cc7aa7ab185046c047ecab135c5d",
+      "sha256": "c8f265672624595755b6f2433f9e321fd2e2455d13a489ba2a66c90acf4b41bf",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "EE": {
+      "file": "ee.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Estonia.png",
+      "original_sha256": "ab16645e68c506bf1a1922f5bd6decf40e0d2582dafded7228912a563ef1f518",
+      "sha256": "1dad61935134fd4fdb3a1ca5b2f69bd02559a66c22b555c9c89bb412675391ed",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "EG": {
+      "file": "eg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Egypt.png",
+      "original_sha256": "e75dc841a670bac86f0c1ea099f7eb71f5e1df651d7b501131f182775f544f42",
+      "sha256": "c78ab0e23ec5fc9c3a8ae6d6b106a22cae4eed85a9deb8d849fdd2a1a6547670",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "EH": {
+      "file": "eh.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Western Sahara.png",
+      "original_sha256": "f3bd4bc60f42f5226cee454dc78a312f943a4f65157a72beff6a5223c3c1ffd5",
+      "sha256": "32c62e62249548d4b054562c4af8619182faf39a66dcd1e50c3f74935374202f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ER": {
+      "file": "er.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Eritrea.png",
+      "original_sha256": "d08086fdf9bd662beaaaad84ff541964fbda932704ffcddc631b4a4dbda37892",
+      "sha256": "174a648a9d2e257efd86aeab495198edaadd0a064d680522558dd6bc055121af",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ES": {
+      "file": "es.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1ea-1f1f8.png",
+      "original_sha256": "af278e864232e3c2c0798b1c2d34f57996391d9a25bfbae9f80b6cafd134b1d9",
+      "sha256": "5456bbd5752058d525de8ec51c53485fe1d775b4ce113d009d8e586927682bb3",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "ET": {
+      "file": "et.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ethiopia.png",
+      "original_sha256": "b09c85339f1500767606d201266746d6d5634194b23ddf4e742f42886cafc4cb",
+      "sha256": "2914f2ef28d195c96c37f27cbed2623a8f848960592e9f5bd764e910882b3a00",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "EU": {
+      "file": "eu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag European Union.png",
+      "original_sha256": "42e23a8a0491a4d0386d11eac9f2bcea4692f870a9c2432eb381485e4ff9c764",
+      "sha256": "287d79a23ad010419d15b54304dd62372814a5e8d6d1d6d2a9cd610616aa152c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "FI": {
+      "file": "fi.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Finland.png",
+      "original_sha256": "162ee8c0ae98476ed3e2b0b9e26119e65cc8f9860a3b1eef0652bb28c7a9ec78",
+      "sha256": "525bdd14f600f4584c40c144809aa18bedecc4c5f08ca1cf016eb7752e51e2b8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "FJ": {
+      "file": "fj.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Fiji.png",
+      "original_sha256": "a94ab0b6e69b2ad511af82ce54c401dbf094e2e1e9beec5968ca516aebcf0896",
+      "sha256": "a1aea001d2d2d358228e8e0105ea3e516f56dcf353582be10cb346c0580b663d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "FK": {
+      "file": "fk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Falkland Islands.png",
+      "original_sha256": "64071a41813485b8b65e921c2f434248b0af25889f5dbeba450c9dae38b02bfa",
+      "sha256": "db7f982687c3e59ec4e2c9dd8a6225501602ca8783c4c4c16294b7d78e8e89e1",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "FM": {
+      "file": "fm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Micronesia.png",
+      "original_sha256": "5b8ce76a88da7d581e15db0df03e64586b1464640da86891202a0d69e74784ae",
+      "sha256": "1d01cbff9efd582bbf45d04cfae7cac276ab5b1d4147fc313c9e448af5ac676f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "FO": {
+      "file": "fo.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Faroe Islands.png",
+      "original_sha256": "d203353612040c57439cb79be8e5355ae518bd7e0e26fa15aa204a98c1c12fe6",
+      "sha256": "f4d73348c93a5d8b375e435ab4782cbf0c623ec067cf6e9467ec1808f1cd0970",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "FR": {
+      "file": "fr.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1eb-1f1f7.png",
+      "original_sha256": "144cc9ef821144807f72c6ee84170156040a64c4d3c7d4c150e4fe70249b805d",
+      "sha256": "1ebc7884e461c2fa83f3d7506ba4b9ed1c1dd952ad7a55a9545f26e30c3e3d89",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "GA": {
+      "file": "ga.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Gabon.png",
+      "original_sha256": "71c842ac113f1d6f4c81e64689d43738b53be4ba94c8aa4eb5805649bf51fc0d",
+      "sha256": "6e0e0ed25571219c4a6254533f1412aa7f9717d68bfb6c621497b8a3ae128bd5",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GB": {
+      "file": "gb.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag United Kingdom.png",
+      "original_sha256": "6c09a9b112308a454fec0cabfb6968def00001a974115ae20c87ebd3f6e48adc",
+      "sha256": "33cc21ce7fc68567808768e6139297e2a42d5a151df5be08a35ae55f5ee9602a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GB-ENG": {
+      "file": "gb-eng.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag England.png",
+      "original_sha256": "d10b2556196162e5ad9c9346e9991a594a3b7d0dff2393669c7f0a5c70c57528",
+      "sha256": "5a319486b4d2abcb414fa1daa13f296c1847195003c01d5a461fe0f0bd98a29e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GB-SCT": {
+      "file": "gb-sct.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Scotland.png",
+      "original_sha256": "ff4785a1bf163b7bfb36858a98beacafc9dd703fd2589be632d69d56bdb5a429",
+      "sha256": "8ca85eb52ba49e7ac8824d34dec3e845cace105fa9ad6d035810f71ddc7f64f8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GB-WLS": {
+      "file": "gb-wls.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Wales.png",
+      "original_sha256": "ee49ae0ea03d3d461725b1e70792037e7c9e8b0e36df3ca7d7942b32289f5c2f",
+      "sha256": "46e8e0a8d638849bf79d2188bd754a2d1e5390a56ce2a4d92212f798db1e82f4",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GD": {
+      "file": "gd.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Grenada.png",
+      "original_sha256": "46006b03ad50fc6a7c6aa180674b455aeeb18b77ed4fc9ce8a28db0542fc7d1b",
+      "sha256": "cf422ee0635854e3bc0c0f84d562768ac561e92254d5baebce1cfb62e14d0bcb",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GE": {
+      "file": "ge.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Georgia.png",
+      "original_sha256": "3880cb72542f931ad80be2afc9fbfa5ac91499f917919c9bbb45c4e8e2b45e66",
+      "sha256": "c5a8525d4301abbfa2ca1b31a5d6145c5d352501835c13661be6a1e02df2a85e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GF": {
+      "file": "gf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag French Guiana.png",
+      "original_sha256": "3061cd6232ccf0163928b71e600e74184dad5b6f28e59b5aa2e2888a9ff49578",
+      "sha256": "bbccda3e6c88e1317080da2d5669485bc00bb4666262f8e70c940a54465ccddc",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GG": {
+      "file": "gg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guernsey.png",
+      "original_sha256": "bae31456f48bbca6bad73fa6c1e2a68694345b150fbcfa97cd243429c55c5852",
+      "sha256": "6f25967a75c17b19d7a986e0cfb7f88c8c64cda02d2fd2f93bb77dceb757a556",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GH": {
+      "file": "gh.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ghana.png",
+      "original_sha256": "2a5deb199b6f949e77471d6d679ccb5f9ceb3fb537a41278415a7c074262c0a2",
+      "sha256": "29b647a31652710d643dee2bc50a40eeb973240b1eb1465b791298c6d22e3601",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GI": {
+      "file": "gi.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Gibraltar.png",
+      "original_sha256": "9a09813a52c180e34c55978188d28ef50b6af9cc110a1fc229207662bac8e259",
+      "sha256": "d507d8b84e2da2ee03c4f5d85ffed8f2b23e1464f3f5682b519a5f49d0271aeb",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GL": {
+      "file": "gl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Greenland.png",
+      "original_sha256": "b6135cba853e3af8254fc01bc31fa32bc9c026660ea5e3191e02eeb90dd4f953",
+      "sha256": "b35f89d241523cee58a3e36f1071b0daf50b50efdcd493e638c00a605c6b11f9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GM": {
+      "file": "gm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Gambia.png",
+      "original_sha256": "3325e5624d2add56ac7feb67de83ed93996a20d3d73d46f8f3ee92603746ace5",
+      "sha256": "9fcc5a1fb8efb61575a151b53652b1fef25379d4b5e87e64cb170861b502fdac",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GN": {
+      "file": "gn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guinea.png",
+      "original_sha256": "db1c03f213b0bf11fb6c0075b5586d36ccae067014f80631afe56861f58d88e5",
+      "sha256": "347abbc3f269acc087657900ba6fe4983a18e221e93651e9973f1195d518bb40",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GP": {
+      "file": "gp.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guadeloupe.png",
+      "original_sha256": "6fc02b1217a6480aea4e0241802a189cc65dccb96f8c9a4aea09ed89e90d7a20",
+      "sha256": "9cc831539b1a859900c91e08512f3027c5e01eb5edc5fb019d7958653bc86fd8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GQ": {
+      "file": "gq.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Equatorial Guinea.png",
+      "original_sha256": "c0c7246f1d2fb7d6cfb3af8b5c6f456a281d74398863f3b5ea9caec6526a2a48",
+      "sha256": "0d36ee868a3c4f0cf5d921dab906a228c41026c80067ef62be5c9f3d632bd9e3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GR": {
+      "file": "gr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Greece.png",
+      "original_sha256": "b2625bd9e0aecfd32eb5e53a3a9402602869159790d0d8362c4dbc7c72cb8472",
+      "sha256": "032e1ed9645a7a361cf44cf43fed7084aac093197c40c7b476d920d98558d9e4",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GS": {
+      "file": "gs.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag South Georgia South Sandwich Islands.png",
+      "original_sha256": "7fc826fc8ddfa45df89c4dae5b6a45e20dda1c685b70913f969ac1f1db06d62f",
+      "sha256": "bb11f0b3d08076e0575ac9ffcad17a4416e590b258109394756bd60803fcc6a5",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GT": {
+      "file": "gt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guatemala.png",
+      "original_sha256": "d8cf175cd74a951db1e08f9816aacd86bfa27643daa4a918b31c46fe433ee4fd",
+      "sha256": "d247b9965dfa29697bca30b6e7bd45ce886889e34de82b9366f923f1405f8833",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GU": {
+      "file": "gu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guam.png",
+      "original_sha256": "263b35d53cabee23addc891e90f6803fae81f5fbc4a201180e127221f415bd67",
+      "sha256": "75497ea623fb312f6558987d881caaac640383160d2b9f3d865c1bb614b29cd9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GW": {
+      "file": "gw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guinea Bissau.png",
+      "original_sha256": "dacf2a4c108ff1fb1bc56f8552f7e94491287979104afea87a55e2c782d5c6ef",
+      "sha256": "88b561f1f2e1ade6f15ca0d9fd56766d52f719448074936c70f7a52808aad1b3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "GY": {
+      "file": "gy.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Guyana.png",
+      "original_sha256": "66bad7c03c613afc0478b2d83394bb018279071f561464fc3d072f76994d943c",
+      "sha256": "66910fc77f59ad0b3a33407f61b12bb9fa743f624b5889029c5c9302d9083336",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "HK": {
+      "file": "hk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Hong Kong Sar China.png",
+      "original_sha256": "6a9abe37f4b5317d57295ff1db3d91395b254206648cc18d99d2e6c90da6f266",
+      "sha256": "48a3649ba3cb40faba8aebe6447be9780d7768f1c0685077dacbd7dc6becc9da",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "HM": {
+      "file": "hm.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1ed-1f1f2.png",
+      "original_sha256": "42138a2a945cfeec474d85c73e9d535a7a0bf1c09524b2b059385e9cb664849b",
+      "sha256": "72f0b515f90a9a28580aeeb7c287a37f23c8f593840ff339a8614360f49ce360",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "HN": {
+      "file": "hn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Honduras.png",
+      "original_sha256": "597a106cf4538f2609b037b4b29114722694c613094e800283cfa276711e3ed3",
+      "sha256": "e6d836327ad729cb3da62c2870d77850989018301d7875b26a425bc47658ebc2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "HR": {
+      "file": "hr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Croatia.png",
+      "original_sha256": "9155888a0bdef3f7f018031e6a4aa8c8ccb6029ad5e944b9848217d902271583",
+      "sha256": "e3d32f39baf720732560f7ba552ed545b469ae0c1f83418e96f86926723d14f2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "HT": {
+      "file": "ht.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Haiti.png",
+      "original_sha256": "6ff2501c97db4c82154f1f220e4980919125b7e7a3ae336bf3d1f635eec37ecd",
+      "sha256": "045159e731b8b1fbc739d4ac8ef90aff202ebceb3af3f8b1962006db9ec35022",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "HU": {
+      "file": "hu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Hungary.png",
+      "original_sha256": "2d185f5b6279d136ea4a28154fe9562be7630e0b9a2f5e645fc4c2e6e7a2a5c3",
+      "sha256": "b48c3d5b26d963f5831494223123ed8e1c6c20b35866170f1786b3a214838f2e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IC": {
+      "file": "ic.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Canary Islands.png",
+      "original_sha256": "0e10dce4a255281880f14b1c6f11d596c17b04751a93be03ca1541a7374937fd",
+      "sha256": "8b1722c0e288cfedcaeffc34d4ff92a1e59f422ffc46809c1afb6821c610a445",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ID": {
+      "file": "id.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Indonesia.png",
+      "original_sha256": "8b69cc3b8278736534677603cfceb5d20d46e2178474d7160218475d157d64c5",
+      "sha256": "0400b5af4726fe07122d32ab9862b238d881698be38a1e536eddfbda8e6ec2a7",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IE": {
+      "file": "ie.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ireland.png",
+      "original_sha256": "5447343b562b751145712f41e20c2391e736f4601c1fe09d1ee6aae0c7093cf2",
+      "sha256": "6aa156e7f8c7e7dbe53ae0bb7adf9e04a2fa67b222fd0d519bbb5185d24f9b5e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IL": {
+      "file": "il.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Israel.png",
+      "original_sha256": "ef0d90774fcd1909c5e59d69596fd45875e000ce2ab260e1b519e580e47b4aff",
+      "sha256": "00f87673d2f8aff81b1bb8d9546d9f75f07ea9b2aec99032d9e847f3abf07480",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IM": {
+      "file": "im.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Isle Of Man.png",
+      "original_sha256": "e73428bd011da8431c2474bc635c0da29d208b3162375d171085997af7bc1544",
+      "sha256": "b897b5ebfee5e4ea68efa8442cc4e382cca5e80a7a1c98efb0378a8b68769392",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IN": {
+      "file": "in.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag India.png",
+      "original_sha256": "221094da39c960153ea490a525fe527faff639c3a69a8a100a330bd40630ac44",
+      "sha256": "fd742793da5e1160a74bd4d72e69d2ead0679981e8f84b27aa2436bfdf61d55c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IO": {
+      "file": "io.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag British Indian Ocean Territory.png",
+      "original_sha256": "e4ae5c09a56fd40f9778dff9d8e4436683fd695f443b80f5772af881a7925619",
+      "sha256": "ac1d6e0395b2639a6173494831baf249c766cb586a238c7161fb9dec162f4a97",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IQ": {
+      "file": "iq.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Iraq.png",
+      "original_sha256": "f217cbd86e9b5bec2a3b52e9abb21c5595cccfb274f052817851c058b621cae9",
+      "sha256": "b5705c4b8dd30d36b0ade58628c06ac8fe197ca478c6c16e0b53a18d85a6b37e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IR": {
+      "file": "ir.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Iran.png",
+      "original_sha256": "6cbf41882bf29d12b7c5f74c3c0d05d451f6d53a0586a682e874d21414962f30",
+      "sha256": "7d7847ac8305268d5bdc3aaf4dbdb05a7ec2a3e41edc53df3a0e301365b3935d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IS": {
+      "file": "is.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Iceland.png",
+      "original_sha256": "43502c2669e18a07279da0839b03cc4ebf90ea8c72577cf6854c86ef49bc2bd8",
+      "sha256": "f4706311ce1edf286e7132f087a0498cba174b31020dd16607772d4bd1ad09dd",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "IT": {
+      "file": "it.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Italy.png",
+      "original_sha256": "da7697791ae004a8fa0b49225829c8f5abc1fad28ca1bb468dbbc73c23292674",
+      "sha256": "c66ecc03b61128d18519caeeb08b1960706e5b0771077f25274d23cf25f4fb77",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "JE": {
+      "file": "je.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Jersey.png",
+      "original_sha256": "34141621b4447d64b0cf0e63cfee9d29e70ade4874f1e30167686dec28534a6f",
+      "sha256": "38c6ad9408ca9463a9a07c2cb61ed073023c3cecb21dc0857b7469df4e4a581b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "JM": {
+      "file": "jm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Jamaica.png",
+      "original_sha256": "b9131b544484cd2f463883b13d67e8a7b59037779856b394ba67dddb3691c597",
+      "sha256": "f9c9475ed6684e84b4e23915def0f6e1fa59bed0661efe1df5c049e01cd829c3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "JO": {
+      "file": "jo.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Jordan.png",
+      "original_sha256": "e4f1a70d0e56efadb0961f056c938e463ece178967cb3486a7bdf608715af620",
+      "sha256": "7ae6c84cf520bdec2956b1792b0da22fc7a4e0693c9d1296a084d069783c77bd",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "JP": {
+      "file": "jp.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Japan.png",
+      "original_sha256": "484a365cd345d1875fa3e5fcc531fc689f9d3c5c55443c8ad9673d84d01613ed",
+      "sha256": "8c1721cdd562d2a3ee5f8a812e0690a8d4b1482c0a1cbbdfd7b1096819736230",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KE": {
+      "file": "ke.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Kenya.png",
+      "original_sha256": "9c71473cc49895ce13d7c189cf11883fa2362e499c2f61cdb3eadc849523de8b",
+      "sha256": "6e08384052dfd2115abd152b236b003728acd75baeeb873776eb92ed84a0fa53",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KG": {
+      "file": "kg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Kyrgyzstan.png",
+      "original_sha256": "c41c3e839e135ea56f3b23ac87062104c695438176f5b4e721795f29ba6ed612",
+      "sha256": "fc640ccffeb7ddc908ad34cebffb2da2026bf736ce4339e6336ddce10a0d9793",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KH": {
+      "file": "kh.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cambodia.png",
+      "original_sha256": "b3991893eec0aab09bfcb90b112207cc56f0cc20335af5a79de531c5704d7466",
+      "sha256": "61f80ad954193c3b5525be0fad9bbafc586d0ddb4e02a1bffc1f8a2242046f03",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KI": {
+      "file": "ki.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Kiribati.png",
+      "original_sha256": "53094739e42e1f6388d05dc0e7e3d58894800b948929c3d2c47a7ddbfa414ecc",
+      "sha256": "3cbec5cf5a3c20dd8578c33d886ddee37139ff8a3405905bd42b8d6f44cc3b37",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KM": {
+      "file": "km.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Comoros.png",
+      "original_sha256": "60398d6c9ea46dc76fffcf1cec42d3490f185e271f0679a73485963b6193650e",
+      "sha256": "81937fbbc9be1f2595c59749741f5c2250685184f88ae4be44f3c86d5c25435c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KN": {
+      "file": "kn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag St Kitts Nevis.png",
+      "original_sha256": "45d993f0f23259ff7ad98eeb9ed84aec451d62af4dceab959fa82bea493596b8",
+      "sha256": "99f40f148d4e3191b37ef74be2df872d8ae7a0648bcb4467368676b808961a9a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KP": {
+      "file": "kp.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag North Korea.png",
+      "original_sha256": "39f4ef961a4f93077a7567eb1fca6839470656b02af70c06636043e707f5be24",
+      "sha256": "1477c6031f58d51fcc1bab3ef5b2d4e875ce6c61e40847f0178512fe01613f12",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KR": {
+      "file": "kr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag South Korea.png",
+      "original_sha256": "15b3ac374541664ce3931680e80f9a6ec8ece88af1f695db0e07d3bc2180e7ec",
+      "sha256": "be9fd8298b3f2872ae980698dc8423540eaa587a7f8b009ad57826da90b830fa",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KW": {
+      "file": "kw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Kuwait.png",
+      "original_sha256": "161b0f9ff9cf97d056bf426e4d7e0ed3681939820d3147e08ede2bfee69a9190",
+      "sha256": "cb91b5920b575f14c2d5cba4d7d7c9ac8763cdae4d792779cdacc2054c10159b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KY": {
+      "file": "ky.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Cayman Islands.png",
+      "original_sha256": "800d893a15fb887bb019cc02dda02005efc7c57f6520e96bb9af96c2910bf796",
+      "sha256": "1a473d1038daa3b87bb4ef676c42f214c221c5776db9aa19c231b36b0a8eb290",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "KZ": {
+      "file": "kz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Kazakhstan.png",
+      "original_sha256": "70d6bfe30a57b936c46af10d2c8201b98a5944f7930d75c3508f599a6f77cddf",
+      "sha256": "94510f66d8bb6cc00907c7ce1e9233758315e5e490536131c42081ceaa430b23",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LA": {
+      "file": "la.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Laos.png",
+      "original_sha256": "4ea55e9840475935b7d8008487e9655a673fd3166da7f3266abf8e88529e5f89",
+      "sha256": "1350adcc6fc349ddd031029a92f0d4be912f730540f92c089715fe46262bc1c0",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LB": {
+      "file": "lb.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Lebanon.png",
+      "original_sha256": "a05b859b94bc7f0e67f208b4f1923aa35dd0d90a0fa374debd55baf4b9dd438d",
+      "sha256": "6068886c3b352a5af522a9cd3454aed8b969a84ed57d048c2702a4fe3e5f4a1f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LC": {
+      "file": "lc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag St Lucia.png",
+      "original_sha256": "56051b6371b98b809dc18a1be53e9e33963f011dcdae8eb25f5260c6ea33cdb0",
+      "sha256": "24742a926192a4a11493405d8e838b0495a59d405912c51620ab363af97a6094",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LI": {
+      "file": "li.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Liechtenstein.png",
+      "original_sha256": "e402be87f9bdc23c0993ee31c31d7fdc0898ce457432b5f41f0093bcb245ecdf",
+      "sha256": "82b86f83b9b7f7db1913d3cec19d3f65784f69ba673857bbc3124a4f6dfd40f6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LK": {
+      "file": "lk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Sri Lanka.png",
+      "original_sha256": "5aaeb566ed0f42c758465a45d4348e8525790c66262815013a651faa1f543a56",
+      "sha256": "a710a31492566d2a81593dcac712baf8d6eaef698fe2a44e893fb0a670575b31",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LR": {
+      "file": "lr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Liberia.png",
+      "original_sha256": "7e7de84dab637dcf2454bfb87c1aa8cedf6d5e5fec096480a458bad24b70d263",
+      "sha256": "a0594a618a629264605139a6547e54f45b713e0ef4137105f775f890975c347b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LS": {
+      "file": "ls.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Lesotho.png",
+      "original_sha256": "a63a8ec1014a17b8e22baada0c0bfeeee2f40522a4e1886a7b6a9819a8e3c1b0",
+      "sha256": "a1d571b8ecb8621aa1fbe45c81a8336773d9784f565f17228264a208dd1f85f9",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LT": {
+      "file": "lt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Lithuania.png",
+      "original_sha256": "8480f379c14619f26b4784a3ffdfe06c927a3ef5e6d31518444290a511ab7faf",
+      "sha256": "aaf766eb1720a0d5dbf78536b35403018077a4c4b6ec0d9f5899a41c58e6c9a7",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LU": {
+      "file": "lu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Luxembourg.png",
+      "original_sha256": "9f5deae7ac8dac2da635f33b4c07bf6e1728af00227aada2a047a2654526d60b",
+      "sha256": "7c76c6ee2e40cca399b45177c1263dd1367fef84772f22049460697ebdfe3e22",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LV": {
+      "file": "lv.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Latvia.png",
+      "original_sha256": "f0ac15d66600bfb34b27fb8f8548d09f0ba8166e1baa25b06aa0f8abd0ad71a4",
+      "sha256": "a3e773d97a670aade6f55d1cfb0079ef54a194840acf8a5c47b2463617452c2a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "LY": {
+      "file": "ly.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Libya.png",
+      "original_sha256": "65d2c7d5783d9e5e909661c5077a7ab539f574cb8a196c660743787dcf052ee4",
+      "sha256": "29310c28380bf4b7a886f191fd64a6c2282e95dc763bc4cae73bdfafbf0053ef",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MA": {
+      "file": "ma.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Morocco.png",
+      "original_sha256": "d24446863d9f51c62140513a4c23b8989d8956e05b8dc92fc708362570f9544f",
+      "sha256": "0ea5d752159ecda76d7df6804dcc3f6ac5d895b18c3c751bfa17e81d0d4ac13e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MC": {
+      "file": "mc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Monaco.png",
+      "original_sha256": "48d2f3bfec7948ded5e2c8eeb5c8d393b15ad570aab544d5d8b3b8998d5a4046",
+      "sha256": "ffe76a2a1aa3a65665cf4a9b18907ea5d88104dd2494a8aaf51a275dccb6ac17",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MD": {
+      "file": "md.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Moldova.png",
+      "original_sha256": "b12be7417e6e038eac0557f2ebbe8e10adfa614481e2b1a44f125d72d3a19994",
+      "sha256": "0e93badcd9ca42bd54ef3fe7963d7f9d6f8e73429fd42b55ee36ace7fca1a05c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ME": {
+      "file": "me.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Montenegro.png",
+      "original_sha256": "f7750ca0eb2762f9c5b6afbfb047669c7d68bca110463706756083f0c9900564",
+      "sha256": "414cd0338031710da44441738ebf8353e1c3535972594e98284ba07bad7e7e79",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MF": {
+      "file": "mf.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1f2-1f1eb.png",
+      "original_sha256": "144cc9ef821144807f72c6ee84170156040a64c4d3c7d4c150e4fe70249b805d",
+      "sha256": "4dae86a78cf5471456f1dd8ff08236b80eaaa433d64e07c0f9e8a73ec5fa8f94",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "MG": {
+      "file": "mg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Madagascar.png",
+      "original_sha256": "d197f34444ef70f7191cdb2e5825e6d3d0ca9b93dce3b2cf5683bc50c69d9e8d",
+      "sha256": "716482d7482475be08c4da2155fe0b715aeeb55c378412209a71ae101eda6bc8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MH": {
+      "file": "mh.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Marshall Islands.png",
+      "original_sha256": "47cd9aa79595808fa17ca4e7bff31bda827ece5e8b49023a2c31eb88277a9d09",
+      "sha256": "ad8520bfa95d7c5e9f99d19c39f364eb6af0f3ef093ff3b5c4f4120513991332",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MK": {
+      "file": "mk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag North Macedonia.png",
+      "original_sha256": "de72fa3e70194c169a6dcb84b8020d4c1c2bba2ad17824bfe73012bbf807e8f2",
+      "sha256": "2f28a723a582c28dd232dbfd8a134eccda24c6c9379a8944d6f5609a5528b109",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ML": {
+      "file": "ml.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mali.png",
+      "original_sha256": "8f7aa45f4b9deefac2add8466a18880f5f0f9961f1cf71e961011ac434ce6e0f",
+      "sha256": "21a9a97d06bb1f4a0df02d57097229be302dd7f3a954c3eb9085dda19c3ec4d6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MM": {
+      "file": "mm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Myanmar Burma.png",
+      "original_sha256": "569ef767a83e891ea76e93dd680aebba98bbb285869527e1188b683f36bd98b5",
+      "sha256": "f29417d66c610d317e1d45567add8a3067f69ec9d2c2b5f0b4c3bc26a24bb149",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MN": {
+      "file": "mn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mongolia.png",
+      "original_sha256": "bc5f0fe30c411df6c05e1aaa31b534eaf8976cb609ee19ec86200f5dc9a690e7",
+      "sha256": "a06abed3fbdacb7455fd5ed3aa732db30f1b811d03dae9ca20c2a2ddf772614c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MO": {
+      "file": "mo.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Macao Sar China.png",
+      "original_sha256": "1f5d4efca0c7f08beae88be3e7e461d578378e99c548823cae598531e85dcd2c",
+      "sha256": "0687c36b4969906b44a56a2a7528a63bdd28bdf1bc1dcab5c81a0f2e4f50e46a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MP": {
+      "file": "mp.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Northern Mariana Islands.png",
+      "original_sha256": "c4dfe7085e36857f7032ec793dfd1e7ad15f0c599467c066989d96b99636808b",
+      "sha256": "fa7089f653cec57b224825fccb0fa831810a01ff219aec03ee2de6c18c7efe7a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MQ": {
+      "file": "mq.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Martinique.png",
+      "original_sha256": "cbb7db783699ef87ff699cfdd10940421bb0e0d54ddba2c0ffeace0bdead3be5",
+      "sha256": "de58438f10f673d045e5969dd844e96f6c9a8014038296e66589a73672d7178a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MR": {
+      "file": "mr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mauritania.png",
+      "original_sha256": "28c4adaf274d428a33359aff2f5045cf31d8aa5173f3d219cd14e2d8362c7a31",
+      "sha256": "a3b51008f4520946f87b2cb9b518691823c57d28b14b171fdbdbc83e8ec398ea",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MS": {
+      "file": "ms.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Montserrat.png",
+      "original_sha256": "45d28ec568ee18af5d92c751864bdb12a23b886b23860b9d704252e98f328d26",
+      "sha256": "a3e85fa5b65371ac17a95f40bcdc632f079eb37de9cc283989fd6fb4f35b414e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MT": {
+      "file": "mt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Malta.png",
+      "original_sha256": "0c234909ea6012dfe21d04f57a11bc4304609bd8078692e64c5a410bc5e7c479",
+      "sha256": "c47ba2170d41384c4aabb99dbb1f734ff6bb1bfe74043cc610b07860deaf3d64",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MU": {
+      "file": "mu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mauritius.png",
+      "original_sha256": "5930508c2a597b2dc260c79431cf419c1ad6dbef6782c1dad48d90f5d6d151d0",
+      "sha256": "0c0ed696ad9c6dedba74a95375e75c517cc5eca33e19c3dd5fbe83fee51e5af6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MV": {
+      "file": "mv.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Maldives.png",
+      "original_sha256": "6f624bb97df3384ef712009fb8a29ec7c3ad14f9e07cb57f2d9b8f95999d34a0",
+      "sha256": "1841efbbe7849a65837ba69e2e9c864d8eecddcddf61e137752394028559c2cf",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MW": {
+      "file": "mw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Malawi.png",
+      "original_sha256": "11249bb8a804d0e93ffa4c033e1d62670a79fa635d375e923b15d564e2d06858",
+      "sha256": "6ada58d1b8e7fc0842d007eb96eba9f6cc02226290969ba47f662a0ad46ef94a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MX": {
+      "file": "mx.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mexico.png",
+      "original_sha256": "8c844dfbd747ab105d85197edaf4f37d974e3de3bc5659acbf074a10a538e2c3",
+      "sha256": "e05c91a916836d5bf56aaf9dfc5172787a5908d58ea7f785490326b95b38b70a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MY": {
+      "file": "my.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Malaysia.png",
+      "original_sha256": "64bf1cf58920324fc0c266971d4f309ae298d3fa87a808b7efa10ea32263a877",
+      "sha256": "66673edb7dbffc3cf5ef5cd8ff4e19fcc175f1744c9e2adc32b270d85df4687c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "MZ": {
+      "file": "mz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mozambique.png",
+      "original_sha256": "40eaa965124a7fced13cc0fe77aaf90100fbba2774e1d490cb9caeda7815219c",
+      "sha256": "93e28a6b05b164eaf4e24a1f27737d3c6a07d240c57095cb65130c20e341276c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NA": {
+      "file": "na.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Namibia.png",
+      "original_sha256": "984b73c10c1e064a705fddd24018bfd258dd169eb4d864d3edecc9f75d10b0fc",
+      "sha256": "07d054efe784711e603f4cc97b588029ff885fad1560ba8d224a2d1ee83f2cd1",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NC": {
+      "file": "nc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag New Caledonia.png",
+      "original_sha256": "7a514faac5f5b05b68795c21bc31a2ce9a1d66d94ab69fcc313bbaff6934b9ba",
+      "sha256": "436d759e0a9d63868529c4568055df0ddc38d685ff023b7dc9d00b525afba1c5",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NE": {
+      "file": "ne.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Niger.png",
+      "original_sha256": "69869c0f08a10634e193e08424a77b27a604e542227a8bbbd7a88c9c11cb41d9",
+      "sha256": "ba6c9209624e8af492f1d425f29b981ccb460192d38e14497d93e246d335686c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NF": {
+      "file": "nf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Norfolk Island.png",
+      "original_sha256": "2bdaecacf41c11b68435b090c3df1e0202de4305d3dee6e9774c6421f04315d1",
+      "sha256": "b5f7e3162d11bd51f17d71124e9965e91011f3728b20aa7d7ee12b05eb6f8543",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NG": {
+      "file": "ng.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Nigeria.png",
+      "original_sha256": "a1ed9a002e3fd02302f7b071055aeb210d8878b6e026d01c869a100caa53c04a",
+      "sha256": "bd10981b77bda5f9f33ef5e3c1428c2c831fb154977040d280ec262f485fc368",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NI": {
+      "file": "ni.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Nicaragua.png",
+      "original_sha256": "6d487b7375ca50f72ae0a25789b5b9168d906ca50a6eda0ac71fed64759710bc",
+      "sha256": "94038bcdde1bd31d0ebe554f455a7c9216e7908f4dc88fa981d9a6c514ff8a0c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NL": {
+      "file": "nl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Netherlands.png",
+      "original_sha256": "7d10d6a238817cb02aa50995d03cbc8b5dc2de1ed16b06eed47aa8db22de8ca0",
+      "sha256": "8f6d8742bded8b303c40c50081c36ce1de2dbf374f2b942eb8cd8e720a3e33f0",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NO": {
+      "file": "no.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1f3-1f1f4.png",
+      "original_sha256": "d89bc2e455eeb12c0a8c102f7da04df4d77fc23f55af48f0efe9c7ed09f16666",
+      "sha256": "3e90a1d0031bf62b68a01febd2d37bbe564f515d201ecb443bea6ef1987ec893",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "NP": {
+      "file": "np.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Nepal.png",
+      "original_sha256": "533a4160d00d9ab721d20c19159fcd029e7c4ba8faaf7f8dda301fc0ca2cad7a",
+      "sha256": "dbb75a6a184baf080ffefaf710538c89fb7f8d8241caea461403132fab9ef3ab",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NR": {
+      "file": "nr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Nauru.png",
+      "original_sha256": "952126bb83a9eeaaabfc3746926cd30a75ec051a22b0bef17cfc0e03672e3f79",
+      "sha256": "bdb0f90de3eba5b9e57d1c778a1c2a6e2031b2885cef80b6adb2f9821d2b3aca",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NU": {
+      "file": "nu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Niue.png",
+      "original_sha256": "5509f6c456821916a4aa42a226b2ceaa393eaf6ae5fddfeaeb2a1fe3bc94c166",
+      "sha256": "699c05e4c2c2e09989c646dcf66f4af8d260b3f258805f8942a273b747f70ddf",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "NZ": {
+      "file": "nz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag New Zealand.png",
+      "original_sha256": "40cc0eaed23609d9694ca851913f3e99635b320b78e8883e3c7ef0b05341e87b",
+      "sha256": "62a84cd95b52d2c01fd9566c6753c79516cf41b1a8438581738b0ae4fcb182b2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "OM": {
+      "file": "om.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Oman.png",
+      "original_sha256": "2ff7a8a2277fceaf2135ce98c7d2c6c42352333458bfbf72bdad1f830ae831f5",
+      "sha256": "9d27b5df2c3524ce79a307b25a73fa4f790907d0993943e64b558e5733309b08",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PA": {
+      "file": "pa.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Panama.png",
+      "original_sha256": "bca7d4edc4c2ef5e940dba49619bc096e032adadd09667d10b466d54b11f421e",
+      "sha256": "85e6d8b3a0b29cad497fc5aef21b8f30226a14f7d99553ecf5554825ea1f04f8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PE": {
+      "file": "pe.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Peru.png",
+      "original_sha256": "a46b920c778b964ea7d873602935d1097f27cfa4b2c598336cedb9730cdf6c1e",
+      "sha256": "2db44c3321a4990b9375be9dd1180a3d0559e2015e7bc4646268d62b3300b600",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PF": {
+      "file": "pf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag French Polynesia.png",
+      "original_sha256": "531e88347684ee8ae2b78e10e322cdcb33c1e6d9ace41fd129db3a756ce7b7f0",
+      "sha256": "472a882ba86224d4ac966846695c96dab7f37cbe4498ee8b24a108a0b0193963",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PG": {
+      "file": "pg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Papua New Guinea.png",
+      "original_sha256": "65194b25fb739689c8185e123f955c27feeee50fdcd8d8eef121b28a3d394808",
+      "sha256": "0237aeda12575345503b149a18a7ab47b53ce6357cce72b62bc87b86d4f20939",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PH": {
+      "file": "ph.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Philippines.png",
+      "original_sha256": "95d3baf26322e2b059e78f79718262bea4fdae13465b8e3724250314e21f89b5",
+      "sha256": "cf6a8c2b1b9632b29721e737c0d6e45b5f62a80ece74f07d24de6fb30cf21653",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PK": {
+      "file": "pk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Pakistan.png",
+      "original_sha256": "20fdb4f89e2204cbeb54a8d6138d53085229a0180b09c35c293341e92b07a268",
+      "sha256": "2280faf1b747a1a97a0134bc12f3a314ce7b4549d9185f7587f92b68ecacd160",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PL": {
+      "file": "pl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Poland.png",
+      "original_sha256": "e9ff192d98b2029a9827741f991a58d5d14e5a50fab5350e283830120ce7938e",
+      "sha256": "0182db2c11d4363ea34a6f19bae10d9001b730309289bfc9f995d168127af16d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PM": {
+      "file": "pm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag St Pierre Miquelon.png",
+      "original_sha256": "277f03421b0056ac4406aae20267cfe94d48939017e5bf0f6559e04d593f1aeb",
+      "sha256": "91378874108620688f07409c162058b455c4accd1918939320b2f1ce8ee1f648",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PN": {
+      "file": "pn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Pitcairn Islands.png",
+      "original_sha256": "40ce8b8ceafb015f172fb07603d5c1b1234cc0ac71a519cac1ca6bb6d4655294",
+      "sha256": "426ccaf71186800f6a00eff2bef116f546ad975994ddeb1cae4260ddb6de969c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PR": {
+      "file": "pr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Puerto Rico.png",
+      "original_sha256": "871f68febcffe6f6fbaba1bff530eb89e745a1ff3ce8e60c62da0c9cd20648d9",
+      "sha256": "2e7fd36c246df5a75eee21e5fab536ae84bbcffd1f3ca826679ca32c64e0ceca",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PS": {
+      "file": "ps.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Palestinian Territories.png",
+      "original_sha256": "43f12430cee640ce8d8e438c9f38d4d08b06e98478b68b5aeed19e79760c6b90",
+      "sha256": "25eb9f9df69c4e15e00e79d1befaef3349ac504baa05e3f581b052e8a3be5cf4",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PT": {
+      "file": "pt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Portugal.png",
+      "original_sha256": "d46a0ab27edf701108d5817a086b7ddc88154fdb2770ffba2e3055f70a52c80f",
+      "sha256": "3e6f485fe14e8b704b7b26b0bc417f2d7412658a18c5ccc9f2aef1f5da315001",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PW": {
+      "file": "pw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Palau.png",
+      "original_sha256": "74587f8e4a17b4f996eb1a51f3b3fdd0997e559396d38c5fc5587da1a1de76a9",
+      "sha256": "7af052bf0779b6b3ebbe9fbcfa556f2375b3f354ec44fb4e2ad1bf8839b7e843",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "PY": {
+      "file": "py.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Paraguay.png",
+      "original_sha256": "4ce9b9df505d8350c31a8e6bdf7a9478b263020eadf17266d013628ccc41bf4d",
+      "sha256": "63768e94ded87ac68c510129868eaa408b9afb3289a7d82dbb58e2477c35bd2c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "QA": {
+      "file": "qa.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Qatar.png",
+      "original_sha256": "bcbe7e621f8c46e487afe8ac4f557af4ac46f761adbff21f8f992b9561d8bcc0",
+      "sha256": "1357f3253c5d84b6612067f0fae3a12dd0ca46c89499d9c0484f374206ce8ddf",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "RE": {
+      "file": "re.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Reunion.png",
+      "original_sha256": "c254e7e708f5f1c4c5e2efc138956bded8d832ec6500b33ea1302036a7b5e758",
+      "sha256": "f0bc9797ac9c1e90ccd7e38b05e1d0d6381134990e208f5861f50702c801941d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "RO": {
+      "file": "ro.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Romania.png",
+      "original_sha256": "3a3a0299ac6f5c54c6576b5c3d29693704eb0d174b4eb90e72e9806692fe2e34",
+      "sha256": "db4df757cfe8df08826d1a73c6fb2703b691c8f44ff604887dd9c6ad3827cde7",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "RS": {
+      "file": "rs.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Serbia.png",
+      "original_sha256": "4037d3de3edc287ceefc8911745c0c979b6716cffec9c54c26ae887e6ae86101",
+      "sha256": "ab19c034069921a1c334618d4a3efd1e5e0b42178bdbd48d143bff69d6f356b6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "RU": {
+      "file": "ru.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Russia.png",
+      "original_sha256": "6826802cf41a34367ab6e1d6f8616674b982cbe4cdc3b67630a4152c0473c683",
+      "sha256": "538c4fb2e241aacc4152c7d6670e5516a5a9df84a12975cce8daf8c760a254e6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "RW": {
+      "file": "rw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Rwanda.png",
+      "original_sha256": "c5f1776b3d73fde5488c1c046629f0655b84a8b3967d4fcc915ac2772f96a9ab",
+      "sha256": "dc0cd9f343711bef421593f8a1d263ad60f4fa51913d6e5d2cf67c914a6bdc76",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SA": {
+      "file": "sa.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Saudi Arabia.png",
+      "original_sha256": "283d45987929e08b636dfd38b5c1da5a6c87cffce23d3fc4cc5ad143ce270441",
+      "sha256": "7560a6cd166a1beb4a033dabe114d9ca189824347e7ddc39e5b4c68cccd28f54",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SB": {
+      "file": "sb.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Solomon Islands.png",
+      "original_sha256": "b3f928f2815385110b3fa4028d40d68e9a341b7843f070f74240a0d1a1c98abb",
+      "sha256": "99200f0d9a0cd8ab0422f9099746596d86df16024ea26225d156aef7dd414bc7",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SC": {
+      "file": "sc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Seychelles.png",
+      "original_sha256": "8c066f3e42527dcac822277e37b1d15e5aeb112250c1daa8acdb6837de749865",
+      "sha256": "4ddb0c3da7a09c48d8ddc702a6b3d56c2844298a8530c36aef0acea04d08d352",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SD": {
+      "file": "sd.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Sudan.png",
+      "original_sha256": "5cd1910c4b92147f5e1a788e09ad410ccf261dbc5c5b45c4a8d34bb8516a0166",
+      "sha256": "b22ec3b1b5d52a3b33459a2c6bd13e2c4cb8264d5f9d10e291b0a5360c7f35a6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SE": {
+      "file": "se.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Sweden.png",
+      "original_sha256": "f375d6503a51e1a883f453b5e7ad65c68f8aef5647e9eb65dfaca44d41796762",
+      "sha256": "6cd101e31349171100e0cd9b496f89aab174a374e41cfa2d4d7d179ff4e71bdd",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SG": {
+      "file": "sg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Singapore.png",
+      "original_sha256": "8297730e270b8fdb89501d67f02527532228c66f44d5292118ff1e4767d2e49e",
+      "sha256": "7edae2d0f0c8c73c13e6f68abf373bca3bbfba97214db7f7a934036d6b64cf83",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SH": {
+      "file": "sh.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1f8-1f1ed.png",
+      "original_sha256": "27834cca4143e3b136edd504d703e8bde9142c5c971638161848d020553f1a7e",
+      "sha256": "ce70d2b0af1fcbd00a663fc261b52453c6c7b9ef7591f6537c91c96746a98cf2",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "SI": {
+      "file": "si.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Slovenia.png",
+      "original_sha256": "9c1145612d24d3b00f0402003ea62adff00af14d5cf11ed4e12d5171aade51c6",
+      "sha256": "fe6c8f99874ed4022605ee2961b22b06934f0d38fb69a653b126df05a1747bb5",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SJ": {
+      "file": "sj.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1f8-1f1ef.png",
+      "original_sha256": "d89bc2e455eeb12c0a8c102f7da04df4d77fc23f55af48f0efe9c7ed09f16666",
+      "sha256": "ab7844f88161c6a5ac2b64000807fb948a91ba8c93265fb8f095ef8523f1b3b6",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "SK": {
+      "file": "sk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Slovakia.png",
+      "original_sha256": "5d5c20b718c2d172f5929eeddbbaea73a3708e455d88316acbf20c44cdc9c5c0",
+      "sha256": "0b66d1bee411171a72da102ff5e88b5c6dbc555fa85f46b707fb382d801aad5a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SL": {
+      "file": "sl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Sierra Leone.png",
+      "original_sha256": "9434681b4240a2c17f69c8abee4382b3e8ddc46489014761ca165a8565ee9e13",
+      "sha256": "deffbb2f22438dd0d5ea92e2db80817ff394e0ae2b18d5ffdb54a3bcf38867e2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SM": {
+      "file": "sm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag San Marino.png",
+      "original_sha256": "c40e653ebce14b8e3420f962ab0dc343f104ef4ed23999b4ee1d0bca2be88f5a",
+      "sha256": "308422fd1f9f01300351d2c8aee5f1b0ff8185eaca5607e23d1769896181fd3b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SN": {
+      "file": "sn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Senegal.png",
+      "original_sha256": "f8a42bf49f753c714612d34e860c62754ec2b058e004147da1fd094808d9b30e",
+      "sha256": "aee0b38af9a149259ee19f776a9e22570db1c69c6e000a7a1258e70872f1a7e6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SO": {
+      "file": "so.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Somalia.png",
+      "original_sha256": "bcf9cd1aeee54c5dd2a8ed2ba772758edc89fd93d1f6d598c3c4a6c450506de9",
+      "sha256": "0608649326c3af740c9e5de5d5f95fc9ea3647182187ca09e89d8b141ce2e550",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SR": {
+      "file": "sr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Suriname.png",
+      "original_sha256": "ce952312a481e6a225d50d76ca50de41a43cef5d915983e7ed7fd19ae14bbea9",
+      "sha256": "2cbf30115c962c9a7749d891908871fb6be77c24a094779eb5179b14a227fab0",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SS": {
+      "file": "ss.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag South Sudan.png",
+      "original_sha256": "4a5b45b29903428ffe4f57510bd8af7b2a8ed1736c77a07ad47a219dd6fd84d7",
+      "sha256": "5714e14343f14c840e2acb33d6406656469e3b42b61570c2322e66d2e8d7d34d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ST": {
+      "file": "st.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Sao Tome Principe.png",
+      "original_sha256": "3894ff25997fa5a99d7146c6d3b8def843cd5f1a70c3977b732dcc53f3202acc",
+      "sha256": "bfb00f88c6fb09e6238597accf87bb10321fd1cfe0ea7e08596dca832b29b775",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SV": {
+      "file": "sv.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag El Salvador.png",
+      "original_sha256": "72f4446b66ca5479518002ec50a1d4183b3387459e10e58367bd106af877c3b0",
+      "sha256": "4555f38e3231975b3c3def8bc0bfc41de3e1e0eb6b7763b3b41c2b1468964185",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SX": {
+      "file": "sx.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Sint Maarten.png",
+      "original_sha256": "e501b73bf9539221a2c31675c7d0d208e52072da8d3bd99be4a09d10a5dab3e2",
+      "sha256": "b9ef1bdbf4112d23a02836dd39e1d6501a0a219a9c2e17e1cbdd450a5479f4d3",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SY": {
+      "file": "sy.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Syria.png",
+      "original_sha256": "a54e1c6f6fd9fa3c600435f363ad3273543898af83c4d34009de2a1b3e738790",
+      "sha256": "130db1773bcc874da6157dd1c7783b12653819eb2497cd739591f15b28aad42f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "SZ": {
+      "file": "sz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Eswatini.png",
+      "original_sha256": "b1a9fedc36b88e7c7e03dc3f894e035d2f23a132d9a4a282e7efb5e4d96d4cb0",
+      "sha256": "ecd675ed05bc347f049c07dbb363ee538c6ce8db19f7013e30c2392b4edc89ca",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TA": {
+      "file": "ta.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1f9-1f1e6.png",
+      "original_sha256": "27834cca4143e3b136edd504d703e8bde9142c5c971638161848d020553f1a7e",
+      "sha256": "c41f2401cb784954ffcba5c926099ca0aa1f42cf662db7631193e87d283b350e",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "TC": {
+      "file": "tc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Turks Caicos Islands.png",
+      "original_sha256": "c70401e0be0fb608ab6c83d614f87107cc6d4e6bb8f53087d1787eee8702b0f8",
+      "sha256": "bd4c5dd7dfa999d6a526021a249e9e5415c163201cb8b751c7c0fd9679726086",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TD": {
+      "file": "td.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Chad.png",
+      "original_sha256": "40942398bec51268e337b40f7d479b07e26778c72e8539b65a62d84638bc48db",
+      "sha256": "56c9d9bafa54ed00eac223c6291c6b37872017e43d2cefd202642a4d445622a6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TF": {
+      "file": "tf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag French Southern Territories.png",
+      "original_sha256": "6d78f5f05884d3569984ee13fa0f2875cec523ad87e37cd9abab7e3ca30b7d15",
+      "sha256": "f784c3dbecfbabfe7fa600072d9bdf2856126055a98ded06fb0975692aa03a7e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TG": {
+      "file": "tg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Togo.png",
+      "original_sha256": "4f3f79557c0a4e2de5ce3dadc454ebbdae4c1c9e88520122dee5971356ad41dc",
+      "sha256": "cc7257d134367585dbbd85c7c1aacd06b3f0bd2af9d90513f892025f482a3ecd",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TH": {
+      "file": "th.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Thailand.png",
+      "original_sha256": "0d9ce8a1c7339a6b9983dc963d827d58cf14986fda24d8cc858f7f4f84934ac1",
+      "sha256": "2d992ee36d8a11f34c7821a2b8ca56a3658c0263402d0bde720275ffe1bf606c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TJ": {
+      "file": "tj.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Tajikistan.png",
+      "original_sha256": "4cd504c8bb312cddccdecfec98e8a0bd095d3e77789fdb854aaa1d0b91875db8",
+      "sha256": "4d27892a9f981c642f7ed8e41aa67c645c04faec063827548ae7e1ffefaedba2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TK": {
+      "file": "tk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Tokelau.png",
+      "original_sha256": "15775f2f3dcff9ab72dd0dbb7d9c1623584274f6024c037bfd566ffa31cab0fb",
+      "sha256": "e9079ed14bcabcf0e526f76adcd09a58def71521e3415bf5225ac344d4edff83",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TL": {
+      "file": "tl.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Timor Leste.png",
+      "original_sha256": "160a1e0776c7d1ce291867c8b5e04dd8fcdd540dd852c424f2abbfd8a5219c76",
+      "sha256": "4d9f57cd6cd2e853396ddb7e26a61b3eb7a22b73562c4611bffa9ba8091deadd",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TM": {
+      "file": "tm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Turkmenistan.png",
+      "original_sha256": "4a964dc4e9e29391f1d81b5f3d3dfdceb3fe66e89d60d83f30b0b1af335fe37d",
+      "sha256": "b206b2b8adc4638a2d8edf89958023d625034662f68f7bd25b0659ab4a206b63",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TN": {
+      "file": "tn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Tunisia.png",
+      "original_sha256": "a50e1fd349cc2ad970cee11a3cb37b24ff58b61fcd3078e2781e4651e7a56fca",
+      "sha256": "c3275945cd25bd8e48415bb131d45fc148e50faa9447c5e61a90f41e49b87969",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TO": {
+      "file": "to.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Tonga.png",
+      "original_sha256": "5b8411dd268387bfe57f73916cbf41dd4688f67d29d6c797fc427226bf9ab386",
+      "sha256": "df9d491020bb36fada7a300304f30d6d271bdbdf9763f46bae2cc07bbca8a23b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TR": {
+      "file": "tr.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Turkey.png",
+      "original_sha256": "34ccda4b0a4f3e6629d4fe6a73d17ba6ea9447452d85335af0f1f4f8a0096d36",
+      "sha256": "198aef6c26c419bd569985c5d4c89c4d7cc96dac96a3bed39098836ef9eb5c99",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TT": {
+      "file": "tt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Trinidad Tobago.png",
+      "original_sha256": "00ec779000908c26b9b67bb94016019e4fa3de4e10391f9b414f349eaec7c625",
+      "sha256": "23e4248b72d44b11ab5d76d6d28d57284c734408fb16b7e0b032725ef2cb928e",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TV": {
+      "file": "tv.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Tuvalu.png",
+      "original_sha256": "f54161be442b15b631875211f61ee8d4b4d541fc25049b83efdbc35b3b05757b",
+      "sha256": "ef777bda949b1141ba8382f20db67cbf76d3caf4f260d752603aa24a4df42a03",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TW": {
+      "file": "tw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Taiwan.png",
+      "original_sha256": "7a2ff073b403d417b9d72819d00360eadcdb8db27fb97053ad5deb6c5c4de9ba",
+      "sha256": "8eac2118e5e70a14952b9f976d5e6497a870b627862dd0a4bc5440b71740aa3c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "TZ": {
+      "file": "tz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Tanzania.png",
+      "original_sha256": "ad6384223e9d5801ddc483144a346347345cea240e6d973a2024f0f1963f6ac6",
+      "sha256": "38ec57030af6a3dc331779ad8ce2b1383f89ca9a8aa57de58530c44eea79c88c",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "UA": {
+      "file": "ua.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Ukraine.png",
+      "original_sha256": "68d02a6aea9623437f0b499043692fb1b9f0b9db188102939e3d799f7cd4f8b4",
+      "sha256": "21b834c73727526d7acc695549bed9ca430e49f5f65d379ffe68961a03016261",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "UG": {
+      "file": "ug.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Uganda.png",
+      "original_sha256": "459a0ac9b61b1593075e829f3437a9dace72811d420137e62e4bdca28cd0ca0a",
+      "sha256": "a7afe3d7cd5dc670db2082c25f565f61de73acc614585358f5c5e1bb04786db5",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "UM": {
+      "file": "um.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Us Outlying Islands.png",
+      "original_sha256": "0d6d149316fe391e0b4fffcd0793951e1db1afb48219a9f1d0ae3f30e1a9c0f1",
+      "sha256": "923c4e9188f11beff03a15135fe4954d0bdd7ba60207bc2a405c3ba50b605fe8",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "UN": {
+      "file": "un.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag United Nations.png",
+      "original_sha256": "7d9966d67910025aaf069a8e56e4be8a8cb22b19d1d4d6aebca17371ded2b7a0",
+      "sha256": "81c3db43952ced7462cb12fcf91e5a04c1c164b678163b0a5c82597838ec86f6",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "US": {
+      "file": "us.png",
+      "origin": "https://github.com/iamcal/emoji-data/blob/e77759c296ed37beb0dbd63908b43d8619509c6d/img-apple-64/1f1fa-1f1f8.png",
+      "original_sha256": "5f4c667e8db737a93450a9786781b8168514e6201ffb20f310bdb0b58d0291b3",
+      "sha256": "f335bcc6798cb5cabd5447c5a104e36b1762f92bb244786c43283a053fd6167e",
+      "pixels": [
+        64,
+        64
+      ]
+    },
+    "UY": {
+      "file": "uy.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Uruguay.png",
+      "original_sha256": "76fb3e4ecbe6ee350091e1003bac87a512e7afc2b6aa27903cf2ce8466441327",
+      "sha256": "15a5b7dccca5ee7bb3681680051e5658461ebbeac11278091e85ebf69ee6ec61",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "UZ": {
+      "file": "uz.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Uzbekistan.png",
+      "original_sha256": "aa30774603a074c2034110c20da9fbcad9da6bf5e82cffbc0f841016b4138e54",
+      "sha256": "8143aae623e956c67c25b6afd02cc098ef98f80d56938363578dd21809c4fc99",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VA": {
+      "file": "va.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Vatican City.png",
+      "original_sha256": "2647ecc6adb39b338e5779f1157866afa635971d22527cdd21a9a749792ebb36",
+      "sha256": "6ca32ffc0f499cc6e565b4f445c5606ddd726e9106d45e424cef5d70b0c863a2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VC": {
+      "file": "vc.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag St Vincent Grenadines.png",
+      "original_sha256": "ade5a33b415a8cb6327f83823d27703d589277f65af8f12943d92329c523c937",
+      "sha256": "5cd2d0c54451510d544472c7f264643f9e220273e2801feba9c197394ea1eb3a",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VE": {
+      "file": "ve.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Venezuela.png",
+      "original_sha256": "6ce50d396af2ebc32b65a538d2a2d29b9087874e74f43b3d89ceec4548ee1aba",
+      "sha256": "4ba1aa4f469382575bb196e0bd6099e2f287ec2ddfb5caf5494b7c4b176e1b45",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VG": {
+      "file": "vg.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag British Virgin Islands.png",
+      "original_sha256": "a416f87282e6b4a15a4f869680ee62249dfd5fe13c7920f501739ca245d002bb",
+      "sha256": "58c317666de8128b7d105f04587ffb958e0a6ce553bea08e73e8b9990b16896f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VI": {
+      "file": "vi.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Us Virgin Islands.png",
+      "original_sha256": "b43ae54d4f468f5015928067f94dc1fa4cfbe59db1cb6163391df2a518d4febc",
+      "sha256": "cec2205a75d22b527f711138626d85e262878d3a4594537d873e0de612d4f519",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VN": {
+      "file": "vn.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Vietnam.png",
+      "original_sha256": "076020dd4a6133378eef19239b5cbcb86cf4368fd9787c4f257b54c01a5161b3",
+      "sha256": "94ccad9e1eb6dd2b29365e639fec6ac82eafb0ae4530f2e3e898b618bfe81bd2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "VU": {
+      "file": "vu.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Vanuatu.png",
+      "original_sha256": "110d934a238427f93b0b9f97a4966123932789d1272ad1a48f85332e5ecf7d6f",
+      "sha256": "30b78ac1f7f9a31b2b6a4f1010b1a17c86c20383589664333bcc8d9c6cbd8544",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "WF": {
+      "file": "wf.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Wallis Futuna.png",
+      "original_sha256": "66c8dc1f0367fd2db13695899a4e9d0d605f9afeef8b292911dd0a1a81f86c41",
+      "sha256": "6c6de0d821c705ace89ac4dd08d6b62cb84dc2541cd6f8fb74d997a41c96594d",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "WS": {
+      "file": "ws.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Samoa.png",
+      "original_sha256": "62d204d26a33ac089d8f3fa8f121e1277a0b6b76f7ad7fd60374e3fcdc3186e3",
+      "sha256": "66746d25c39a258feb54d665963f327d5287f0ee6441f61f0687cdc7c4bf6b46",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "XK": {
+      "file": "xk.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Kosovo.png",
+      "original_sha256": "3b747a2072686711c3404698f4ff35e8f91e198c0fc80d6aef215519483efee2",
+      "sha256": "53344bad47a599aa8c865d90f2e7d9bfd551eb191f4e4e43e344b93f5bcb1f0f",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "YE": {
+      "file": "ye.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Yemen.png",
+      "original_sha256": "e6197cebbda87ee20969925f4e219eccdceff6a2d8596c01cf0aedbb2b1f87e3",
+      "sha256": "cbd1095e7b3779a93d76558810ea28036afc625982f24db31f52190c6e68c1f2",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "YT": {
+      "file": "yt.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Mayotte.png",
+      "original_sha256": "57441157c3547d1529771d447eefae79c68396d22a621ce56d887bb0a65d09cc",
+      "sha256": "badb5879be526f8b69be55598a76863c848a1a0c4b3daeddfd09f73f74afdd73",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ZA": {
+      "file": "za.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag South Africa.png",
+      "original_sha256": "0d2ac03633a971a1fd22a3c3c6b7458b8b03ca328e5345ad1274d76f1d680e51",
+      "sha256": "9d2d9ff16c218f9ca334facbc193520de218c58a0b9468d4762d0edbc4ace3f0",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ZM": {
+      "file": "zm.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Zambia.png",
+      "original_sha256": "abf0a268cd55cea3dbe84f0ca468f94816a4f9ae7ad821c8686de437514b778d",
+      "sha256": "d1411348ebb944b77008d8645ccbd7556779b32a62d63ceca878328eee118a2b",
+      "pixels": [
+        72,
+        72
+      ]
+    },
+    "ZW": {
+      "file": "zw.png",
+      "origin": "user-archive:80deec6b9fcb5d7f.zip/Emoji/Флаги/Flag Zimbabwe.png",
+      "original_sha256": "165efa99c9b96c6c5d6f15a7255f1d9973139f0aabe6fb2c2d7d9d5f0dc3ab95",
+      "sha256": "d9e74c8711681de6deca62054f339e50aacf7d6c3da6b70ae25df80d00be9ff2",
+      "pixels": [
+        72,
+        72
+      ]
+    }
+  }
+}

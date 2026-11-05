@@ -62,7 +62,7 @@ class RecognitionTests(unittest.TestCase):
         """Тот самый случай, который раньше не работал."""
         from vpn.flags import COUNTRY_NAMES, country_code
 
-        self.assertNotIn("ZW", COUNTRY_NAMES)
+        self.assertIn("ZW", COUNTRY_NAMES)
         self.assertEqual(country_code("ZW Harare"), "ZW")
         self.assertEqual(country_code("SG Node 3"), "SG")
 
