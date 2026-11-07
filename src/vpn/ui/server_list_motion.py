@@ -29,6 +29,8 @@ from PyQt6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 from ui.animation_policy import are_animations_enabled, are_live_animations_enabled
 
+GROUP_ACTION_WIDTH_ROLE = int(Qt.ItemDataRole.UserRole) + 9
+
 #: Сколько вырастает и проявляется одна строка.
 #:
 #: Короче появления блока страницы (REVEAL_MS): строк в группе бывает
@@ -200,6 +202,14 @@ class ServerListDelegate(QStyledItemDelegate):
             return base
         return QSize(base.width(), max(0, int(round(base.height() * _out_cubic(progress)))))
 
+    def updateEditorGeometry(self, editor, option, index) -> None:  # noqa: N802 (Qt override)
+        if index.data(GROUP_ACTION_WIDTH_ROLE):
+            # Виджет заголовка занимает строку целиком. В прямоугольнике
+            # текста Qt обрезает нижний край кнопки.
+            editor.setGeometry(option.rect)
+        else:
+            super().updateEditorGeometry(editor, option, index)
+
     def paint(self, painter: QPainter, option, index) -> None:
         progress = self._motion.progress(index.row())
         if progress <= 0.0:
@@ -221,6 +231,9 @@ class ServerListDelegate(QStyledItemDelegate):
                 painter.translate(0, (1.0 - progress) * ROW_RISE_PX)
             if not selected:
                 self._paint_hover(painter, option.rect, index, hovered)
+            action_width = index.data(GROUP_ACTION_WIDTH_ROLE)
+            if action_width:
+                opt.rect = opt.rect.adjusted(0, 0, -action_width, 0)
             from vpn.ui.experience import ROW_STATUS_ROLE
             status = str(index.data(ROW_STATUS_ROLE) or "")
             if status:

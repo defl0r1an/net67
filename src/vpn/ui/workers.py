@@ -30,15 +30,18 @@ _LIVE_JOBS = set()
 class VpnJob(QObject):
     """Доставляет даже лямбда-обработчики в поток окна, пока страница жива."""
 
-    def __init__(self, page, attr, call, on_done, on_failed):
+    def __init__(self, page, attr, call, on_done, on_failed, *, on_progress=None):
         super().__init__()
         self.page = weakref.ref(page)
         self.attr = attr
         self.on_done = on_done
         self.on_failed = on_failed
-        self.worker = VpnCallWorker(call)
+        self.on_progress = on_progress
+        self.worker = VpnCallWorker(call, with_progress=on_progress is not None)
         self.worker.done.connect(self.deliver)
         self.worker.failed.connect(self.fail)
+        if on_progress is not None:
+            self.worker.progress.connect(self.deliver_progress)
         self.worker.finished.connect(self.finish)
         self.worker._vpn_job = self
         _LIVE_JOBS.add(self)
@@ -60,8 +63,13 @@ class VpnJob(QObject):
         if self._page() is not None and self.on_failed is not None:
             self.on_failed(message)
 
+    @pyqtSlot(object)
+    def deliver_progress(self, result):
+        if self._page() is not None and self.on_progress is not None:
+            self.on_progress(result)
+
     def detach(self):
-        self.on_done = self.on_failed = None
+        self.on_done = self.on_failed = self.on_progress = None
         self.page = lambda: None
         self.worker.requestInterruption()
 
@@ -93,14 +101,16 @@ class VpnCallWorker(QThread):
 
     done = pyqtSignal(object)
     failed = pyqtSignal(str)
+    progress = pyqtSignal(object)
 
-    def __init__(self, call: Callable[[], object], parent=None):
+    def __init__(self, call: Callable[..., object], parent=None, *, with_progress=False):
         super().__init__(parent)
         self._call = call
+        self._with_progress = with_progress
 
     def run(self) -> None:
         try:
-            result = self._call()
+            result = self._call(self.progress.emit) if self._with_progress else self._call()
         except Exception as exc:  # noqa: BLE001 — текст уходит в UI
             self.failed.emit(str(exc))
             return

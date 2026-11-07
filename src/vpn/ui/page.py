@@ -55,6 +55,7 @@ INPUT_HEIGHT = 68
 from vpn.profiles import (
     display_name,
     load_profiles,
+    profile_id,
     remove_profile,
     save_profiles,
     upsert_profile,
@@ -141,6 +142,16 @@ def _profile_name(profile) -> str:
 #: заголовок отличается от строки сервера: у сервера роль пустая.
 _GROUP_KEY_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
+
+def _group_icon(expanded: bool):
+    import qtawesome as qta
+    from ui.theme import token_to_qcolor
+    from ui.widgets.folder_header import folder_header_icon_name
+
+    return qta.icon(folder_header_icon_name(expanded),
+                    color=token_to_qcolor(get_theme_tokens().fg_muted), scale_factor=0.5)
+
+
 #: Как часто перечитывать статистику туннеля, пока страница открыта.
 #: Запрос уходит в фоновый поток, поэтому секунда окна не тормозит.
 STATS_REFRESH_MS = 2_000
@@ -163,9 +174,9 @@ class VpnPage(BasePage):
         #: Профили активной вкладки. Хранилище общее, вкладки — только
         #: способ показа, поэтому фильтруем на лету, а не режем файл.
         self._visible_profiles = []
-        #: Свёрнутые группы — по адресу подписки. Пустая строка значит
-        #: группу «Мои серверы».
-        self._collapsed_groups: set[str] = set()
+        #: Вкладка отличает друг от друга группы «Мои серверы».
+        self._collapsed_groups: set[tuple[str, str]] = set()
+        self._group_check_buttons = {}
         #: Кто выбран, независимо от того, видно ли его сейчас.
         #:
         #: Раньше выбор жил в строке списка, и свернуть группу с текущим
@@ -211,7 +222,7 @@ class VpnPage(BasePage):
 
         from vpn.ui.experience import VpnExperience
         self._closing = False
-        self._experience = VpnExperience(self, _profiles_root())
+        self._experience = VpnExperience(self)
         self._build_ui()
         self._sync_warning_label(self._tab)
         self._sync_refresh_button()
@@ -261,11 +272,11 @@ class VpnPage(BasePage):
     # Фоновые вызовы
     # ──────────────────────────────────────────────────────────────────
 
-    def _start_worker(self, attr: str, call, on_done, on_failed=None):
+    def _start_worker(self, attr: str, call, on_done, on_failed=None, *, on_progress=None):
         from vpn.ui.workers import VpnJob
         if getattr(self, "_closing", False) or getattr(self, attr, None) is not None:
             return None
-        job = VpnJob(self, attr, call, on_done, on_failed)
+        job = VpnJob(self, attr, call, on_done, on_failed, on_progress=on_progress)
         setattr(self, attr, job.worker)
         job.worker.start()
         return job.worker
@@ -335,6 +346,7 @@ class VpnPage(BasePage):
         self.profile_combo.blockSignals(True)
         self.profile_list.blockSignals(True)
         self.profile_combo.clear()
+        self._group_check_buttons.clear()
         self.profile_list.clear()
         # В списке — с флагом вместо двухбуквенного сокращения: «GB» надо
         # вспоминать, флаг узнаётся сразу. В выпадающем оставляем как
@@ -353,15 +365,19 @@ class VpnPage(BasePage):
 
         self._row_profiles = []
         for key, header, members in self._grouped_profiles():
-            collapsed = key in self._collapsed_groups
-            if header:
-                self.profile_list.addItem(self._group_header_item(key, header, collapsed))
-                self._row_profiles.append(-1)
+            visible = [position for position in members
+                       if self._experience.accepts(self._visible_profiles[position])]
+            if not visible:
+                continue
+            collapsed = (self._tab, key) in self._collapsed_groups
+            title = header or f"Мои серверы · {len(members)}"
+            self._add_group_header(key, title, collapsed, members)
+            self._row_profiles.append(-1)
 
             if collapsed:
                 continue
 
-            for position in members:
+            for position in visible:
                 profile = self._visible_profiles[position]
                 name = display_name(profile)
                 icon = flag_icon(name)
@@ -438,7 +454,8 @@ class VpnPage(BasePage):
 
         tokens = get_theme_tokens()
 
-        item = QListWidgetItem(f"{'▸' if collapsed else '▾'}   {text}")
+        item = QListWidgetItem(text)
+        item.setIcon(_group_icon(not collapsed))
         item.setFlags(_Qt.ItemFlag.ItemIsEnabled)
         item.setData(_GROUP_KEY_ROLE, key)
 
@@ -469,14 +486,32 @@ class VpnPage(BasePage):
         # группу от предыдущей, не добавляя в список лишний элемент.
         item.setBackground(token_to_qcolor(tokens.surface_bg))
 
-        # Воздух сверху и снизу. Без него полка липнет к первой строке
-        # под собой, и разделение пропадает.
-        hint = item.sizeHint()
-        if hint.isValid():
-            item.setSizeHint(QSize(hint.width(), hint.height() + 14))
+        item.setSizeHint(QSize(0, 44))
 
-        set_fluent_item_tooltip(item, "Нажмите, чтобы свернуть или развернуть группу")
+        set_fluent_item_tooltip(item, f"{text}\nНажмите, чтобы свернуть или развернуть группу")
         return item
+
+    def _add_group_header(self, key: str, title: str, collapsed: bool, members) -> None:
+        from PyQt6.QtWidgets import QWidget
+        from qfluentwidgets import FluentIcon
+        from vpn.ui.server_list_motion import GROUP_ACTION_WIDTH_ROLE
+
+        item = self._group_header_item(key, title, collapsed)
+        holder = QWidget(self.profile_list)
+        layout = QHBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 12, 0)
+        layout.addStretch()
+        button = PushButton(FluentIcon.SPEED_HIGH, "Пинг всех", holder)
+        button.setFixedSize(140, 32)
+        button.setAccessibleDescription(title)
+        layout.addWidget(button, alignment=Qt.AlignmentFlag.AlignVCenter)
+        item.setData(GROUP_ACTION_WIDTH_ROLE, button.width() + 20)
+        group = self._tab, key
+        profiles = tuple(self._visible_profiles[position] for position in members)
+        button.clicked.connect(lambda: self._experience.check_group(group, profiles))
+        self._group_check_buttons[group] = button
+        self.profile_list.addItem(item)
+        self.profile_list.setItemWidget(item, holder)
 
     def _on_list_item_clicked(self, item) -> None:
         """Щелчок по заголовку сворачивает и разворачивает группу."""
@@ -487,14 +522,15 @@ class VpnPage(BasePage):
             return  # строка сервера, а не заголовок
 
         key = str(key)
-        collapsing = key not in self._collapsed_groups
+        group = self._tab, key
+        collapsing = group not in self._collapsed_groups
         # Состояние меняем сразу, а не в конце движения: пересоберись список
         # по другой причине посреди ухода — он соберётся уже свёрнутым.
-        self._collapsed_groups.symmetric_difference_update({key})
+        self._collapsed_groups.symmetric_difference_update({group})
         motion = getattr(self, "_list_motion", None)
         if collapsing:
             header_row = self.profile_list.row(item)
-            item.setText(item.text().replace("▾", "▸", 1))
+            item.setIcon(_group_icon(False))
             if motion is not None and motion.leave(self._group_member_rows(header_row), on_finished=self._refill_combo):
                 return
             self._refill_combo()
@@ -533,14 +569,7 @@ class VpnPage(BasePage):
             # останется одной группой, ронять из-за них страницу нельзя.
             subscriptions = []
 
-        groups = group_by_subscription(self._visible_profiles, subscriptions)
-        filtered = []
-        for key, header, members in groups:
-            accepted = [position for position in members
-                        if self._experience.accepts(self._visible_profiles[position])]
-            if accepted:
-                filtered.append((key, header, accepted))
-        return filtered
+        return group_by_subscription(self._visible_profiles, subscriptions)
 
     def _row_for_profile(self, index: int) -> int:
         """Строка списка, в которой лежит профиль с этим номером."""
@@ -609,6 +638,7 @@ class VpnPage(BasePage):
                 self.tabs.setCurrentItem(self._tab)
                 return
 
+        self._experience.cancel_group_check()
         self._tab = tab
         self.hint_label.setText("Вставьте ссылку на сервер, подписку, ключ vpn:// или текст .conf.")
         self.input_title_label.setText(TAB_INPUT_TITLES[tab])
@@ -724,6 +754,7 @@ class VpnPage(BasePage):
     def on_page_hidden(self) -> None:
         # Со скрытой страницы опрашивать нечего.
         self._sync_stats_timer(False)
+        self._experience.cancel_group_check()
 
     def on_page_activated(self) -> None:
         self._refresh_connection_state()
@@ -838,7 +869,7 @@ class VpnPage(BasePage):
         profile = self._current_profile()
         has_profile = profile is not None
 
-        for button in (self.ping_btn, self.export_btn, self.delete_btn):
+        for button in (self.export_btn, self.delete_btn):
             button.setEnabled(has_profile)
         self.connect_button.setEnabled(has_profile)
 
@@ -1191,7 +1222,6 @@ class VpnPage(BasePage):
         self._selected_key = _profile_key(self._current_profile())
         self._update_details()
         from vpn.link_runtime import is_link_profile
-        from vpn.view_state import profile_id
         experience = self._experience
         profile = self._current_profile()
         if (profile is not None and experience.active is not None and experience.connected
@@ -1293,7 +1323,6 @@ class VpnPage(BasePage):
             return
 
         from vpn.link_runtime import is_link_profile
-        from vpn.view_state import profile_id
         if is_link_profile(profile):
             from vpn.link_store import load_links, save_links
             links, errors = load_links(_profiles_root())

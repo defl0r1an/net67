@@ -113,11 +113,9 @@ class VpnPageThreadingTests(unittest.TestCase):
         for attr in ("_status_worker", "_ping_worker", "_tunnel_worker"):
             self.assertIn(attr, source)
 
-    def test_buttons_are_re_enabled_on_failure(self) -> None:
+    def test_connection_buttons_are_re_enabled_on_failure(self) -> None:
         from vpn.ui.experience import VpnExperience
         import inspect
-        source = inspect.getsource(VpnExperience.check_failed)
-        self.assertIn("ping_btn.setEnabled", source)
         self.assertIn("_release()", inspect.getsource(VpnExperience.failed))
         self.assertIn("setEnabled(True)", inspect.getsource(VpnExperience._release))
 

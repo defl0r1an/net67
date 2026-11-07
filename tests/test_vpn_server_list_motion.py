@@ -107,12 +107,13 @@ class VpnPageGroupCollapseTests(unittest.TestCase):
         view, _motion = ServerListMotionTests._list(self, animations=True)
         header = view.item(0)
         header.setData(_GROUP_KEY_ROLE, "sub")
-        header.setText("▾   Подписка")
+        header.setText("Подписка")
         rebuilt: list[int] = []
 
         from vpn.ui.page import VpnPage
 
         page.profile_list = view
+        page._tab = "links"
         page._row_profiles = [-1, 0, 1, 2]
         page._collapsed_groups = set()
         page._list_motion = _motion
@@ -122,8 +123,8 @@ class VpnPageGroupCollapseTests(unittest.TestCase):
 
         VpnPage._on_list_item_clicked(page, header)
 
-        self.assertEqual(page._collapsed_groups, {"sub"})
-        self.assertTrue(header.text().startswith("▸"))
+        self.assertEqual(page._collapsed_groups, {("links", "sub")})
+        self.assertFalse(header.icon().isNull())
         self.assertEqual(rebuilt, [])  # пересборка — после ухода строк, не сразу
         _wait(0.6)
         self.assertEqual(rebuilt, [1])

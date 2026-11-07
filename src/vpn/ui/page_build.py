@@ -2,7 +2,7 @@
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QSizePolicy, QVBoxLayout, QWidget
-from qfluentwidgets import BodyLabel, ComboBox, LineEdit, PrimaryPushButton, PushButton, SegmentedWidget, StrongBodyLabel, TextEdit
+from qfluentwidgets import BodyLabel, ComboBox, FluentIcon, LineEdit, PrimaryPushButton, PushButton, SegmentedWidget, StrongBodyLabel, TextEdit
 from ui.accessibility import set_control_accessibility
 from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips
 from vpn.flags import FLAG_HEIGHT
@@ -53,10 +53,6 @@ def build_vpn_page(page):
     page.search_edit.setClearButtonEnabled(True)
     page.search_edit.textChanged.connect(page._experience.filter_changed)
     tools.addWidget(page.search_edit, 1)
-    page.favorites_btn = PushButton("Избранные")
-    page.favorites_btn.setCheckable(True)
-    page.favorites_btn.toggled.connect(page._experience.filter_changed)
-    tools.addWidget(page.favorites_btn)
     page.refresh_subs_btn = PushButton("Обновить")
     page.refresh_subs_btn.setToolTip("Обновить подписки")
     page.refresh_subs_btn.clicked.connect(page._on_refresh_subscriptions)
@@ -85,9 +81,6 @@ def build_vpn_page(page):
     page.profile_combo.hide()
     page.profile_combo.currentIndexChanged.connect(page._on_profile_changed)
     actions = QHBoxLayout()
-    page.ping_btn = PushButton("Проверить сервер")
-    page.ping_btn.clicked.connect(page._on_check_server)
-    actions.addWidget(page.ping_btn)
     page.export_btn = PushButton("Сохранить конфигурацию")
     page.export_btn.clicked.connect(page._on_export)
     actions.addWidget(page.export_btn)
@@ -134,9 +127,10 @@ def build_vpn_page(page):
     page.scope_label.setWordWrap(True)
     page.scope_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     right.addWidget(page.scope_label)
-    page.favorite_btn = PushButton("В избранное")
-    page.favorite_btn.clicked.connect(page._experience.toggle_favorite)
-    right.addWidget(page.favorite_btn, 0, Qt.AlignmentFlag.AlignHCenter)
+    page.ping_btn = PushButton(FluentIcon.SPEED_HIGH, "Пинг", panel)
+    page.ping_btn.setToolTip("Проверить задержку сервера")
+    page.ping_btn.clicked.connect(page._on_check_server)
+    right.addWidget(page.ping_btn, 0, Qt.AlignmentFlag.AlignHCenter)
     page.selection_label = BodyLabel("")
     page.selection_label.setWordWrap(True)
     right.addWidget(page.selection_label)

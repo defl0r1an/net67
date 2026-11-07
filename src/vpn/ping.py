@@ -103,9 +103,9 @@ def _udp_probe(host: str, port: int, *, timeout: float) -> PingResult:
             latency_ms=None,
             method="udp",
             message=(
-                f"Хост принял датаграмму на UDP-порт {port} и промолчал. "
-                "Так и ведёт себя рабочий WireGuard — он отвечает только на "
-                "настоящее рукопожатие. Подключитесь, чтобы проверить наверняка."
+                f"UDP-порт {port} не ответил на пробу. "
+                "Проверьте сервер через подключение. WireGuard отвечает "
+                "на настоящее рукопожатие."
             ),
         )
     except OSError as exc:

@@ -58,16 +58,70 @@ def test_full_page_builds_and_filter_does_not_switch_or_lose_selection(vpn_page)
     assert page.profile_combo.isHidden()
 
 
-def test_favorites_persist_without_secret_links(vpn_page, tmp_path):
-    page, _app = vpn_page
+def test_ping_group_checks_hidden_members_and_keeps_selection(vpn_page, monkeypatch):
+    from dataclasses import replace
+    from vpn.http_probe import HttpProbeResult
+    from vpn.links import parse_link
+    from vpn.ui.experience import ROW_STATUS_ROLE
+
+    page, app = vpn_page
     populate(page)
-    page._experience.toggle_favorite()
-    from vpn.view_state import VpnViewState
-    assert VpnViewState(tmp_path).is_favorite(page._current_profile())
-    text = (tmp_path / "vpn-view.json").read_text(encoding="utf-8")
-    assert "vless" not in text and "cy.test" not in text
-    page.favorites_btn.setChecked(True)
+    source = "https://first.test/sub"
+    page._profiles = [replace(profile, source=source) for profile in page._profiles]
+    other = parse_link("vless://00000000-0000-0000-0000-000000000003@de.test:443#Германия")
+    page._profiles.append(replace(other, source="https://other.test/sub"))
+    page._refill_combo()
+    first = page._current_profile()
+    seen = []
+
+    def probe(profile, *, should_stop):
+        seen.append(profile.host)
+        return HttpProbeResult(True, 42, "Ответ получен")
+
+    monkeypatch.setattr("vpn.probing.check_profile", probe)
+    page.search_edit.setText("Cyprus")
     assert len([i for i in page._row_profiles if i >= 0]) == 1
+    button = page._group_check_buttons[(page._tab, source)]
+    button.click()
+    wait(app, lambda: page._ping_worker is None)
+    assert sorted(seen) == ["aq.test", "cy.test"]
+    assert page._current_profile() is first
+    assert page.profile_list.item(1).data(ROW_STATUS_ROLE) == "42 мс"
+    assert button.isEnabled() and page.ping_btn.isEnabled()
+    seen.clear()
+    page.ping_btn.click()
+    wait(app, lambda: page._ping_worker is None)
+    assert seen == ["cy.test"]
+
+
+def test_cancel_group_stops_queued_probes(vpn_page, monkeypatch):
+    from vpn.http_probe import HttpProbeResult
+    from vpn.links import parse_link
+
+    page, app = vpn_page
+    page._profiles = [parse_link(f"vless://00000000-0000-0000-0000-{i:012}@server{i}.test:443#Кипр {i}")
+                      for i in range(12)]
+    page._refill_combo()
+    started = []
+
+    def probe(profile, *, should_stop):
+        started.append(profile.host)
+        deadline = time.monotonic() + 2.5
+        while not should_stop() and time.monotonic() < deadline:
+            time.sleep(.005)
+        return HttpProbeResult(True, 42, "Ответ получен")
+
+    monkeypatch.setattr("vpn.probing.check_profile", probe)
+    button = page._group_check_buttons[(page._tab, "")]
+    button.click()
+    wait(app, lambda: len(started) >= 4)
+    assert len(started) == 4
+    assert button.isEnabled() and not page.ping_btn.isEnabled()
+    button.click()
+    wait(app, lambda: page._ping_worker is None)
+    assert len(started) == 4
+    assert not page._experience.checks
+    assert button.isEnabled() and page.ping_btn.isEnabled()
 
 
 def test_server_list_keeps_space_with_65_servers_and_compact_import(vpn_page):
@@ -81,7 +135,10 @@ def test_server_list_keeps_space_with_65_servers_and_compact_import(vpn_page):
     page.resize(1920, 930)
     page.show()
     app.processEvents()
-    assert page.profile_list.count() == 65
+    assert page.profile_list.count() == 66  # Заголовок и 65 серверов.
+    header = page.profile_list.itemWidget(page.profile_list.item(0))
+    group_button = page._group_check_buttons[(page._tab, "")]
+    assert header.rect().contains(group_button.geometry())
     assert page.profile_list.height() > page.height() * .6
     assert isinstance(page.connect_button, VpnConnectButton)
     assert page.connect_button.width() >= 96
@@ -155,7 +212,7 @@ def test_cancelled_wait_does_not_wait_for_startup_deadline():
 def test_late_probe_is_saved_for_its_row_but_does_not_replace_current_card(vpn_page):
     from vpn.http_probe import HttpProbeResult
     from vpn.operation import connection_marker
-    from vpn.view_state import profile_id
+    from vpn.profiles import profile_id
     page, _app = vpn_page
     populate(page)
     first = page._current_profile()
@@ -182,6 +239,7 @@ def test_card_names_the_server_that_disconnect_will_stop(vpn_page):
     page._visible_profiles = []
     page._row_profiles = []
     page.profile_list.blockSignals(True)
+    page._group_check_buttons.clear()
     page.profile_list.clear()
     page.profile_list.blockSignals(False)
     page._experience.sync()

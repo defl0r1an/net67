@@ -7,6 +7,7 @@ settings.json: там приватные ключи, и держать их в �
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -14,6 +15,15 @@ from pathlib import Path
 from vpn.parser import AmneziaParams, VpnProfile
 
 PROFILES_FILE_NAME = "vpn_profiles.json"
+
+
+def profile_id(profile) -> str:
+    # Один адрес может обслуживать разные профили, поэтому учитываем всю ссылку.
+    raw = str(getattr(profile, "raw", "") or "")
+    if not raw:
+        raw = "\0".join(str(getattr(profile, name, "") or "") for name in
+                        ("protocol", "endpoint", "public_key", "name"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def profiles_path(root: Path | str) -> Path:
@@ -162,6 +172,7 @@ __all__ = [
     "PROFILES_FILE_NAME",
     "display_name",
     "load_profiles",
+    "profile_id",
     "profiles_path",
     "remove_profile",
     "save_profiles",

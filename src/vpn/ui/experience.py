@@ -1,21 +1,41 @@
 """Состояние страницы VPN: выбор, проверка и отменяемое подключение."""
 
+from dataclasses import dataclass, field
 from datetime import datetime
+from threading import Event
 
 from PyQt6.QtCore import QObject, QTimer, QSize, Qt
 
 from vpn.operation import VpnOperation, connection_marker
-from vpn.view_state import VpnViewState, profile_id
+from vpn.profiles import profile_id
 
 ROW_STATUS_ROLE = int(Qt.ItemDataRole.UserRole) + 8
 
 
+def _check_caption(result, failure):
+    if not result.ok:
+        return failure
+    if result.latency_ms is not None:
+        return f"{int(result.latency_ms)} мс"
+    # Молчание UDP не доказывает, что сервер недоступен.
+    return "Без ответа" if getattr(result, "method", None) == "udp" else "Отвечает"
+
+
+@dataclass(slots=True)
+class _GroupCheck:
+    key: tuple[str, str]
+    total: int
+    completed: int = 0
+    cancelled: Event = field(default_factory=Event)
+
+
 class VpnExperience(QObject):
-    def __init__(self, page, root):
+    def __init__(self, page):
         super().__init__(page)
         self.page = page
-        self.view = VpnViewState(root)
         self.operation = None
+        self.checking = False
+        self.group_check = None
         self.checks = {}
         self.generation = 0
         self.verified_generation = -1
@@ -38,23 +58,10 @@ class VpnExperience(QObject):
         from vpn.profiles import display_name
 
         page = self.page
-        if page.favorites_btn.isChecked() and not self.view.is_favorite(profile):
-            return False
         name = display_name(profile)
         aliases = ALL_COUNTRY_NAMES.get(country_code(name), ())
         haystack = " ".join((name, str(profile.endpoint), *aliases)).casefold()
         return all(word in haystack for word in page.search_edit.text().casefold().split())
-
-    def toggle_favorite(self):
-        profile = self.summary_profile()
-        if profile is None:
-            return
-        try:
-            self.view.toggle_favorite(profile)
-        except OSError as exc:
-            self.page._error(f"Не удалось сохранить избранное: {exc}")
-            return
-        self.page._refill_combo()
 
     def summary_profile(self):
         if self.operation is not None and not self.operation.disconnecting:
@@ -73,8 +80,7 @@ class VpnExperience(QObject):
         checked = self.checks.get(profile_id(profile))
         if checked:
             result, kind, at, *_context = checked
-            value = f"{int(result.latency_ms)} мс" if result.ok and result.latency_ms is not None else "Ошибка"
-            info.append(value)
+            info.append(_check_caption(result, "Ошибка"))
         item.setData(ROW_STATUS_ROLE, " · ".join(info))
         item.setSizeHint(QSize(0, 46))
         from ui.widgets.fluent_item_tooltip import set_fluent_item_tooltip
@@ -103,11 +109,6 @@ class VpnExperience(QObject):
         if icon is None:
             icon = qta.icon("fa5s.globe", color=token_to_qcolor(get_theme_tokens().fg_muted))
         page.server_flag.setPixmap(icon.pixmap(36, 36))
-        page.favorite_btn.setEnabled(shown is not None)
-        favored = shown is not None and self.view.is_favorite(shown)
-        page.favorite_btn.setText("В избранном" if favored else "В избранное")
-        page.favorite_btn.setIcon(qta.icon("fa5s.star",
-                                           color=token_to_qcolor(get_theme_tokens().fg)))
         page.tun_mode_toggle.setVisible(shown is None or is_link_profile(shown))
         _active, scope = active_connection()
         if self.connected and self.active is not None and is_link_profile(self.active):
@@ -139,26 +140,46 @@ class VpnExperience(QObject):
                 checked = None
             if checked:
                 result, kind, at, *_context = checked
-                page.ping_label.setText(f"{int(result.latency_ms)} мс" if result.ok and result.latency_ms is not None else "Проверка не прошла")
+                page.ping_label.setText(_check_caption(result, "Проверка не прошла"))
                 page.ping_label.setToolTip(f"{kind} · {at} · {result.message}")
             else:
                 page.ping_label.setText("Канал ещё не проверен" if self.connected else "")
             page.ping_label.setVisible(bool(page.ping_label.text()))
         shown = sum(index >= 0 for index in page._row_profiles)
-        empty = ("Ничего не найдено. Измените поиск или отключите фильтр избранного."
+        empty = ("Ничего не найдено. Измените поиск."
                  if page._visible_profiles else "Добавьте ссылку, подписку или конфигурацию VPN кнопкой «Добавить».")
         has_groups = any(index < 0 for index in page._row_profiles)
         page.empty_label.setText(empty if not shown and not has_groups else "")
         page.empty_label.setVisible(not shown and not has_groups)
         page.profile_list.setVisible(bool(shown) or has_groups)
         self.refresh_marks()
+        self._sync_check_actions()
 
-    def refresh_marks(self):
+    def refresh_marks(self, key=None):
         page = self.page
         for row, index in enumerate(page._row_profiles):
             if index >= 0:
-                self.decorate_item(page.profile_list.item(row), page._visible_profiles[index])
+                profile = page._visible_profiles[index]
+                if key is None or profile_id(profile) == key:
+                    self.decorate_item(page.profile_list.item(row), profile)
         page.profile_list.viewport().update()
+
+    def _sync_check_actions(self):
+        batch = self.group_check
+        busy = self.operation is not None or self.checking or batch is not None
+        self.page.ping_btn.setEnabled(self.summary_profile() is not None and not busy)
+        self.page.ping_btn.setText("Проверяем…" if self.checking else "Пинг")
+        for key, button in self.page._group_check_buttons.items():
+            current = batch is not None and key == batch.key
+            if current:
+                cancelling = batch.cancelled.is_set()
+                button.setText("Отмена…" if cancelling else f"Стоп · {batch.completed}/{batch.total}")
+                button.setToolTip("Остановить проверку группы")
+                button.setEnabled(not cancelling and self.operation is None)
+            else:
+                button.setText("Пинг всех")
+                button.setToolTip("Проверить все серверы этой группы")
+                button.setEnabled(not busy)
 
     def sync_progress(self):
         operation = self.operation
@@ -210,6 +231,7 @@ class VpnExperience(QObject):
         if started is None:
             return
         self.operation = token
+        self.cancel_group_check()
         self.generation += 1
         self.verified_generation = -1
         self.page.ping_label.clear()
@@ -217,7 +239,6 @@ class VpnExperience(QObject):
         self.page._stats_timer.stop()
         self.page.profile_list.setEnabled(False)
         self.page.tabs.setEnabled(False)
-        self.page.ping_btn.setEnabled(False)
         self.page._sync_connect_button(busy=True, disconnecting=disconnecting)
         self.timer.start()
         self.sync()
@@ -227,7 +248,6 @@ class VpnExperience(QObject):
         self.timer.stop()
         self.page.profile_list.setEnabled(True)
         self.page.tabs.setEnabled(True)
-        self.page.ping_btn.setEnabled(self.page._current_profile() is not None)
         return token
 
     def finished(self, result):
@@ -298,28 +318,20 @@ class VpnExperience(QObject):
 
     def check(self):
         from vpn.link_runtime import is_connected, is_link_profile, local_proxy_address
+        from vpn.probing import probe_server
 
-        profile = self.page._current_profile()
-        if profile is None or self.operation is not None:
+        profile = self.summary_profile()
+        if profile is None or self.operation is not None or self.checking or self.group_check is not None:
             return
         generation = self.generation
         marker = connection_marker()
         request = self.check_request + 1
         active = self.active is not None and profile_id(self.active) == profile_id(profile)
-        kind = "HTTPS" if is_link_profile(profile) else "Сервер"
         address = local_proxy_address() if active and is_connected() and is_link_profile(profile) else None
         stats = self.page._last_stats if active else None
 
         def probe():
-            if address:
-                from vpn.http_probe import check_through_proxy
-                result = check_through_proxy(proxy_address=address)
-            elif is_link_profile(profile):
-                from vpn.probing import check_profile
-                result = check_profile(profile)
-            else:
-                from vpn.ping import check_server
-                result = check_server(profile.endpoint_host, profile.endpoint_port, stats=stats)
+            result, kind = probe_server(profile, address=address, stats=stats)
             return result, profile, kind, generation, bool(address), marker, request
 
         context = profile_id(profile), generation, marker, request
@@ -328,39 +340,88 @@ class VpnExperience(QObject):
             return
         self.check_request = request
         self.latest_requests[profile_id(profile)] = request
-        self.page.ping_btn.setEnabled(False)
-        self.page.ping_btn.setText("Проверяем…")
+        self.checking = True
+        self._sync_check_actions()
         shown = self.summary_profile()
         if shown is not None and profile_id(shown) == profile_id(profile):
             if address:
                 self.verified_generation = -1
-            self.page.ping_label.setText("Проверяем HTTPS через сервер…" if kind == "HTTPS" else "Проверяем сервер…")
+            self.page.ping_label.setText("Проверяем сервер…")
             self.page.ping_label.show()
 
+    def check_group(self, key, profiles):
+        from vpn.probing import check_group as probe_group
+
+        if self.group_check is not None:
+            if self.group_check.key == key:
+                self.cancel_group_check()
+            return
+        if not profiles or self.operation is not None or self.checking:
+            return
+
+        batch = _GroupCheck(key, len(profiles))
+        generation, marker = self.generation, connection_marker()
+        request = self.check_request + 1
+
+        def run(publish):
+            probe_group(profiles, should_stop=batch.cancelled.is_set, on_result=publish)
+
+        def progress(payload):
+            if self.group_check is not batch or batch.cancelled.is_set():
+                return
+            profile, result, kind = payload
+            batch.completed += 1
+            self._record_check((result, profile, kind, generation, False, marker, request))
+            self._sync_check_actions()
+
+        def finish(message=""):
+            if self.group_check is not batch:
+                return
+            self.group_check = None
+            self._sync_check_actions()
+            if message and not batch.cancelled.is_set():
+                self.page._error(f"Не удалось проверить группу. {message}")
+
+        if self.page._start_worker("_ping_worker", run, lambda _: finish(), finish,
+                                    on_progress=progress) is None:
+            return
+        self.group_check = batch
+        self.check_request = request
+        self.latest_requests.update((profile_id(profile), request) for profile in profiles)
+        self._sync_check_actions()
+
+    def cancel_group_check(self):
+        if self.group_check is not None:
+            self.group_check.cancelled.set()
+            self._sync_check_actions()
+
     def checked(self, payload):
+        self.checking = False
+        self._sync_check_actions()
+        self._record_check(payload)
+
+    def _record_check(self, payload):
         result, profile, kind, generation, active_probe, marker, request = payload
         at = datetime.now().strftime("%H:%M")
         key = profile_id(profile)
         previous = self.checks.get(key)
         if previous is None or request >= previous[5]:
             self.checks[key] = result, kind, at, generation, marker, request
-        self.page.ping_btn.setEnabled(self.page._current_profile() is not None)
-        self.page.ping_btn.setText("Проверить сервер")
         current = self.summary_profile()
         if (current is not None and profile_id(profile) == profile_id(current)
                 and generation == self.generation and marker == connection_marker()
                 and request == self.latest_requests.get(key, self.check_request)):
-            self.page.ping_label.setText(f"{int(result.latency_ms)} мс" if result.ok and result.latency_ms is not None else "Проверка не прошла")
+            self.page.ping_label.setText(_check_caption(result, "Проверка не прошла"))
             self.page.ping_label.setToolTip(f"{kind} · {at} · {result.message}")
             self.page.ping_label.show()
             if active_probe and self.connected:
                 self.verified_generation = generation if result.ok else -1
                 self.page.state_label.setText("Подключено · Проверено" if result.ok else "Подключено · Ошибка проверки")
-        self.refresh_marks()
+        self.refresh_marks(key)
 
     def check_failed(self, message, context=None):
-        self.page.ping_btn.setEnabled(self.page._current_profile() is not None)
-        self.page.ping_btn.setText("Проверить сервер")
+        self.checking = False
+        self._sync_check_actions()
         current = self.summary_profile()
         if context is not None:
             key, generation, marker, request = context
@@ -369,7 +430,7 @@ class VpnExperience(QObject):
             if previous is None or request >= previous[5]:
                 self.checks[key] = (HttpProbeResult(False, None, str(message)), "Проверка",
                                     datetime.now().strftime("%H:%M"), generation, marker, request)
-            self.refresh_marks()
+            self.refresh_marks(key)
         if context is not None and (current is None or context !=
                 (profile_id(current), self.generation, connection_marker(),
                  self.latest_requests.get(profile_id(current), self.check_request))):
@@ -379,5 +440,7 @@ class VpnExperience(QObject):
 
     def close(self):
         self.timer.stop()
+        if self.group_check is not None:
+            self.group_check.cancelled.set()
         if self.operation is not None and not self.operation.disconnecting:
             self.operation.cancelled.set()
