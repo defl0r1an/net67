@@ -58,6 +58,22 @@ def test_full_page_builds_and_filter_does_not_switch_or_lose_selection(vpn_page)
     assert page.profile_combo.isHidden()
 
 
+def test_search_keeps_selected_link_with_shared_name_and_address(vpn_page):
+    from vpn.links import parse_link
+
+    page, _app = vpn_page
+    first, second = [
+        parse_link(f"vless://00000000-0000-0000-0000-{i:012}@shared.test:443#Berlin")
+        for i in (1, 2)
+    ]
+    page._profiles = [first, second]
+    page._refill_combo()
+    page.profile_list.setCurrentRow(page._row_for_profile(1))
+    assert page._current_profile() is second
+    page.search_edit.setText("Berlin")
+    assert page._current_profile() is second
+
+
 def test_ping_group_checks_hidden_members_and_keeps_selection(vpn_page, monkeypatch):
     from dataclasses import replace
     from vpn.http_probe import HttpProbeResult

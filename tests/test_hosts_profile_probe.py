@@ -250,10 +250,20 @@ class ProbeServiceTests(unittest.TestCase):
             b"<title>Just a moment...</title><script src=/cdn-cgi/challenge-platform/x.js>"
         )
         self.assertEqual(classify_response(blocked), VERDICT_DENIED)
+        for status in (421, 429, 502, 503):
+            with self.subTest(status=status):
+                self.assertEqual(
+                    classify_response(f"HTTP/1.1 {status} Error\r\n\r\n".encode()),
+                    VERDICT_DENIED,
+                )
         self.assertEqual(classify_response(b"HTTP/1.1 451 Unavailable\r\n\r\n"), VERDICT_DENIED)
         self.assertEqual(classify_response(challenge), VERDICT_OK)
         self.assertEqual(classify_response(b"HTTP/1.1 200 OK\r\n\r\n<html>"), VERDICT_OK)
         self.assertEqual(classify_response(b"HTTP/1.1 307 Temporary Redirect\r\n\r\n"), VERDICT_OK)
+        self.assertEqual(
+            classify_response(b"HTTP/1.1 302 Found\r\nLocation: https://www.google.com/sorry/index\r\n\r\n"),
+            VERDICT_DENIED,
+        )
         self.assertEqual(
             classify_response(b"HTTP/1.1 302 Found\r\nLocation: /app-unavailable-in-region\r\n\r\n"),
             VERDICT_REGION,

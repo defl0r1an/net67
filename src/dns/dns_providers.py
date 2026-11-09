@@ -455,9 +455,11 @@ DNS_PROVIDERS = {
             "dot": "eu.geohide.ru",
         },
         "GeoHide US": {
-            "ipv4": ["192.255.159.240", "192.255.159.241"],
+            # На 9 ноября этот адрес имени us.geohide.ru отвечает по UDP,
+            # DoH и DoT. Остальные узлы из ответа в нашей сети не ответили.
+            "ipv4": ["107.175.76.134"],
             "ipv6": [],
-            "desc": "ChatGPT, узлы в США",
+            "desc": "ChatGPT, США",
             "icon": "fa5s.globe-americas",
             "color": "#C4B5FD",
             "doh": "https://us.geohide.ru/dns-query",

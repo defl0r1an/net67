@@ -160,6 +160,27 @@ class PresetLaunchService:
             log(message, "ERROR")
             return self._fail(message)
 
+    def _recover_replaced_preset_path(self, preset_path: str) -> str:
+        if not preset_path or os.path.exists(preset_path):
+            return preset_path
+        # Обновление могло убрать старую копию после выбора пресета.
+        # Повторный выбор допустим только для того же имени файла.
+        try:
+            snapshot = self._runtime_feature.dependencies.presets_feature.get_launch_snapshot(
+                self.launch_method, require_filters=False,
+            )
+            new_path = str(snapshot.preset_path or "").strip()
+            old_name = os.path.basename(preset_path).casefold()
+            if (str(snapshot.preset_file_name or "").strip().casefold() != old_name
+                    or os.path.basename(new_path).casefold() != old_name
+                    or not os.path.isfile(new_path)):
+                return preset_path
+        except Exception as exc:
+            log(f"Не удалось найти пресет после обновления: {exc}", "WARNING")
+            return preset_path
+        self.selected_mode = {**self.selected_mode, "preset_path": new_path}
+        return new_path
+
     def _validate_preset_before_stop(self, *, is_preset_file: bool, preset_path: str, skip_stop: bool) -> bool:
         if not is_preset_file or not preset_path or skip_stop:
             return True
@@ -247,7 +268,7 @@ class PresetLaunchService:
             self._progress("❌ Для режима профилей нужен preset файл")
             return None
 
-        preset_path = str(mode_param.get("preset_path", "") or "").strip()
+        preset_path = self._recover_replaced_preset_path(str(mode_param.get("preset_path", "") or "").strip())
         strategy_name = str(mode_param.get("name", "Пресет") or "Пресет")
 
         log(f"Запуск из preset файла: {preset_path}", "INFO")
@@ -433,6 +454,8 @@ class PresetLaunchService:
                 return deferred_result
 
             is_preset_file, preset_path = self._extract_preset_launch_input()
+            if is_preset_file:
+                preset_path = self._recover_replaced_preset_path(preset_path)
             skip_stop = False
             previous_process_running = self._has_previous_process()
 

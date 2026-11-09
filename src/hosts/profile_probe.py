@@ -71,14 +71,11 @@ VERDICT_DEAD = "dead"
 VERDICT_RESET = "reset"
 VERDICT_BADCERT = "badcert"
 VERDICT_NOHTTP = "nohttp"
-#: Сайт ответил отказом 403 или 451 — без слов о стране, но и не проверкой
-#: «вы человек?». Так закрыт от России chatgpt.com с настоящего адреса, и так
-#: же DNS-AI отвечал за Notion: его адреса оказались настоящими адресами
-#: Notion. Раньше такой ответ считался «открылось» (замер 12.10.2026, Билайн).
+#: Сервер доступен по HTTPS, но ответ не подтверждает открытие страницы.
 VERDICT_DENIED = "denied"
 
 #: Коды, которыми сайт отказывает этому соединению.
-DENIED_STATUSES = frozenset({403, 451})
+DENIED_STATUSES = frozenset({403, 421, 429, 451})
 
 #: Признаки проверки Cloudflare «Just a moment». Она тоже приходит с кодом 403,
 #: но браузер проходит её сам: через живых посредников chatgpt.com и claude.ai
@@ -263,7 +260,17 @@ def classify_response(data: bytes) -> str:
     text = data.decode("utf-8", "replace").lower()
     if any(marker in text for marker in REGION_MARKERS):
         return VERDICT_REGION
-    if _status_code(text) in DENIED_STATUSES and not any(marker in text for marker in CHALLENGE_MARKERS):
+    status = _status_code(text)
+    if status is None:
+        return VERDICT_NOHTTP
+    if 300 <= status < 400 and any(
+        line.startswith("location:") and line[9:].strip().startswith("https://www.google.com/sorry/")
+        for line in text.partition("\r\n\r\n")[0].splitlines()[1:]
+    ):
+        return VERDICT_DENIED
+    if status == 403 and any(marker in text for marker in CHALLENGE_MARKERS):
+        return VERDICT_OK
+    if status in DENIED_STATUSES or 500 <= status < 600:
         return VERDICT_DENIED
     return VERDICT_OK
 

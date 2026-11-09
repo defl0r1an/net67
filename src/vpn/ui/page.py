@@ -109,16 +109,9 @@ def _profiles_root():
     return APPLICATION_PATHS.settings_dir
 
 
-def _profile_key(profile) -> tuple[str, str]:
-    """Чем отличаем выбранный профиль от остальных.
-
-    Одного адреса мало: в подписке у нескольких серверов бывает общий
-    адрес и разные имена. Одного имени тоже мало — имена повторяются
-    между подписками.
-    """
-    if profile is None:
-        return ("", "")
-    return (str(getattr(profile, "endpoint", "") or ""), _profile_name(profile))
+def _profile_key(profile) -> str:
+    # Одинаковые имя и адрес не означают одинаковые ключи и настройки.
+    return profile_id(profile) if profile is not None else ""
 
 
 def _profile_name(profile) -> str:
@@ -183,7 +176,7 @@ class VpnPage(BasePage):
         #: сервером значило потерять выбор: строка исчезала, страница
         #: считала, что не выбрано ничего, и гасила кнопку подключения.
         #: Свернуть список — не то же самое, что передумать.
-        self._selected_key: tuple[str, str] = ("", "")
+        self._selected_key = ""
         #: Какой профиль лежит в какой строке списка.
         #:
         #: Список делится на группы по подпискам, и строки-заголовки
@@ -420,9 +413,9 @@ class VpnPage(BasePage):
         self._sync_tab_labels()
         self._update_details()
 
-    def _index_for_key(self, key: tuple[str, str]) -> int:
+    def _index_for_key(self, key: str) -> int:
         """Где сейчас лежит профиль с этим ключом. -1 — нигде."""
-        if not any(key):
+        if not key:
             return -1
         for position, profile in enumerate(self._visible_profiles):
             if _profile_key(profile) == key:

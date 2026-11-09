@@ -125,6 +125,39 @@ class PresetLaunchServiceTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(events[:2], [("prepare", str(preset_path)), "validate"])
 
+    def test_replaced_preset_is_resolved_before_validating_launch(self) -> None:
+        from winws_runtime.runtime.preset_launch_service import PresetLaunchService
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old_path = root / "user" / "ready.txt"
+            new_path = root / "ready.txt"
+            new_path.write_text("--new\n--filter-tcp=443\n", encoding="utf-8")
+            feature = SimpleNamespace(get_launch_snapshot=Mock(return_value=SimpleNamespace(
+                preset_path=str(new_path), preset_file_name=new_path.name,
+            )))
+            service = PresetLaunchService(
+                selected_mode={"is_preset_file": True, "preset_path": str(old_path)},
+                launch_method="zapret2_mode",
+                runtime_feature=SimpleNamespace(dependencies=SimpleNamespace(presets_feature=feature)),
+                runtime_api=SimpleNamespace(expected_exe_path="winws2.exe"),
+            )
+            with (
+                patch.object(service, "_check_installation", return_value=None),
+                patch.object(service, "_has_previous_process", return_value=True),
+                patch.object(service, "_validate_preset_before_stop", return_value=True) as validate,
+                patch.object(service, "_stop_previous_process_if_needed"),
+                patch.object(service, "_run_launch_method", return_value=True),
+                patch("winws_runtime.runtime.preset_launch_service.ensure_required_files_fast"),
+            ):
+                self.assertTrue(service.run().success)
+            self.assertEqual(validate.call_args.kwargs["preset_path"], str(new_path))
+            self.assertEqual(service._resolve_presets_payload()[0], str(new_path))
+            feature.get_launch_snapshot.assert_called_once()
+
+            feature.get_launch_snapshot.return_value.preset_file_name = "different.txt"
+            self.assertEqual(service._recover_replaced_preset_path(str(old_path)), str(old_path))
+
     def test_service_uses_short_stable_window_for_startup_autostart(self) -> None:
         from winws_runtime.runtime.preset_launch_service import (
             STARTUP_AUTOSTART_STABLE_WINDOW_SECONDS,

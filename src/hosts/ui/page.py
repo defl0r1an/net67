@@ -74,7 +74,7 @@ _PROBE_REASONS = {
     VERDICT_RESET: ("page.hosts.probe.reason.reset", "соединение обрывается"),
     VERDICT_BADCERT: ("page.hosts.probe.reason.badcert", "адрес отдаёт чужой сертификат"),
     VERDICT_REGION: ("page.hosts.probe.reason.region", "сайт отвечает «недоступно в вашей стране»"),
-    VERDICT_DENIED: ("page.hosts.probe.reason.denied", "сайт отказал (ответ 403) — обхода через этот профиль нет"),
+    VERDICT_DENIED: ("page.hosts.probe.reason.denied", "сервер вернул ошибку вместо страницы"),
     VERDICT_NOHTTP: ("page.hosts.probe.reason.nohttp", "сайт не ответил"),
 }
 
