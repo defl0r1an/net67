@@ -6,6 +6,7 @@ from threading import Event
 
 from PyQt6.QtCore import QObject, QTimer, QSize, Qt
 
+from ui.fluent_widgets import set_tooltip
 from vpn.operation import VpnOperation, connection_marker
 from vpn.profiles import profile_id
 
@@ -121,7 +122,7 @@ class VpnExperience(QObject):
             page.scope_label.setText("Только локальный прокси" if scope == "local" else
                                     "Сейчас: прокси приложений" if pending and scope == "proxy" else
                                     "Режим применится при переподключении" if pending else "")
-            page.scope_label.setToolTip(applied + pending)
+            set_tooltip(page.scope_label, applied + pending)
         elif shown is not None and not is_link_profile(shown):
             page.scope_label.setText("")
         else:
@@ -141,7 +142,7 @@ class VpnExperience(QObject):
             if checked:
                 result, kind, at, *_context = checked
                 page.ping_label.setText(_check_caption(result, "Проверка не прошла"))
-                page.ping_label.setToolTip(f"{kind} · {at} · {result.message}")
+                set_tooltip(page.ping_label, f"{kind} · {at} · {result.message}")
             else:
                 page.ping_label.setText("Канал ещё не проверен" if self.connected else "")
             page.ping_label.setVisible(bool(page.ping_label.text()))
@@ -174,11 +175,11 @@ class VpnExperience(QObject):
             if current:
                 cancelling = batch.cancelled.is_set()
                 button.setText("Отмена…" if cancelling else f"Стоп · {batch.completed}/{batch.total}")
-                button.setToolTip("Остановить проверку группы")
+                set_tooltip(button, "Остановить проверку группы")
                 button.setEnabled(not cancelling and self.operation is None)
             else:
                 button.setText("Пинг всех")
-                button.setToolTip("Проверить все серверы этой группы")
+                set_tooltip(button, "Проверить все серверы этой группы")
                 button.setEnabled(not busy)
 
     def sync_progress(self):
@@ -412,7 +413,7 @@ class VpnExperience(QObject):
                 and generation == self.generation and marker == connection_marker()
                 and request == self.latest_requests.get(key, self.check_request)):
             self.page.ping_label.setText(_check_caption(result, "Проверка не прошла"))
-            self.page.ping_label.setToolTip(f"{kind} · {at} · {result.message}")
+            set_tooltip(self.page.ping_label, f"{kind} · {at} · {result.message}")
             self.page.ping_label.show()
             if active_probe and self.connected:
                 self.verified_generation = generation if result.ok else -1

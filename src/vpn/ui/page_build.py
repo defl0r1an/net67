@@ -4,6 +4,7 @@ from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, ComboBox, FluentIcon, LineEdit, PrimaryPushButton, PushButton, SegmentedWidget, StrongBodyLabel, TextEdit
 from ui.accessibility import set_control_accessibility
+from ui.fluent_widgets import set_tooltip
 from ui.widgets.fluent_item_tooltip import install_fluent_item_tooltips
 from vpn.flags import FLAG_HEIGHT
 from vpn.tabs import TAB_ORDER, TAB_TITLES
@@ -54,7 +55,7 @@ def build_vpn_page(page):
     page.search_edit.textChanged.connect(page._experience.filter_changed)
     tools.addWidget(page.search_edit, 1)
     page.refresh_subs_btn = PushButton("Обновить")
-    page.refresh_subs_btn.setToolTip("Обновить подписки")
+    set_tooltip(page.refresh_subs_btn, "Обновить подписки")
     page.refresh_subs_btn.clicked.connect(page._on_refresh_subscriptions)
     tools.addWidget(page.refresh_subs_btn)
     page.add_btn = PrimaryPushButton("Добавить")
@@ -128,7 +129,7 @@ def build_vpn_page(page):
     page.scope_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     right.addWidget(page.scope_label)
     page.ping_btn = PushButton(FluentIcon.SPEED_HIGH, "Пинг", panel)
-    page.ping_btn.setToolTip("Проверить задержку сервера")
+    set_tooltip(page.ping_btn, "Проверить задержку сервера")
     page.ping_btn.clicked.connect(page._on_check_server)
     right.addWidget(page.ping_btn, 0, Qt.AlignmentFlag.AlignHCenter)
     page.selection_label = BodyLabel("")

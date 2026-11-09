@@ -1,7 +1,11 @@
 """Большая кнопка VPN и компактный выбор охвата."""
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QWidget
-from qfluentwidgets import BodyLabel, SwitchButton
+from qfluentwidgets import BodyLabel
+
+from ui.accessibility import set_control_accessibility
+from ui.fluent_widgets import set_tooltip
+from ui.widgets.aligned_switch import AlignedSwitchButton
 from vpn.ui.connect_button import VpnButtonState, VpnConnectButton
 
 
@@ -38,14 +42,15 @@ class ScopeSelector(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(BodyLabel("Весь компьютер", self))
-        self.switch = SwitchButton(self)
-        self.switch.setAccessibleName("Весь компьютер")
+        self.switch = AlignedSwitchButton(self)
         self.switch.setOnText("")
         self.switch.setOffText("")
         self.switch.checkedChanged.connect(self.toggled.emit)
         layout.addWidget(self.switch)
-        self.setToolTip("Выключено: прокси приложений Windows. Включено: туннель для всего компьютера, нужны права администратора.")
+        hint = "Выключено: прокси приложений Windows. Включено: туннель для всего компьютера, нужны права администратора."
+        set_control_accessibility(self.switch, name="Весь компьютер", description=hint)
         self.setAccessibleName("Весь компьютер")
+        set_tooltip(self, hint)
 
     def setChecked(self, enabled, block_signals=False):  # noqa: N802
         old = self.blockSignals(block_signals)
