@@ -10,8 +10,8 @@
 * «Закрываем старую версию» — пока жив процесс старой программы.
 * «Устанавливаем» — пока жив процесс установщика (его номер старая
   программа пишет в файл сразу после запуска). Кончился — смотрим журнал
-  установщика: строка «Installation process succeeded» — успех, нет её —
-  установка не удалась, окно говорит об этом и уходит.
+  установщика. Распаковка должна завершиться успешно, а после неё замена
+  рабочей версии должна пройти без ошибки CurStepChanged.
 * «Открываем новую версию» — до метки ready.txt новее запуска окна (её
   пишет новая версия, когда собрала окно) или до страховочного срока.
 
@@ -136,7 +136,8 @@ function Test-SetupSucceeded {
         if (-not (Test-Path -LiteralPath $path)) { return $false }
         $item = Get-Item -LiteralPath $path
         if ($item.LastWriteTime -lt $S.started.AddSeconds(-5)) { return $false }
-        return ([System.IO.File]::ReadAllText($path) -match 'Installation process succeeded')
+        $logText = [System.IO.File]::ReadAllText($path)
+        return ($logText.Contains('Installation process succeeded') -and -not $logText.Contains('CurStepChanged raised an exception'))
     } catch { return $false }
 }
 

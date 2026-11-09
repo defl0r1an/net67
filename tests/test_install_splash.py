@@ -35,6 +35,16 @@ class SplashScriptTests(unittest.TestCase):
         self.assertIn("[System.Text.Encoding]::UTF8", SPLASH_SCRIPT)
         self.assertIn("Installation process succeeded", SPLASH_SCRIPT)
 
+    def test_successful_unpack_is_not_success_if_the_version_did_not_switch(self) -> None:
+        from updater.install_splash import setup_log_succeeded
+        from updater.install_splash_script import SPLASH_SCRIPT
+
+        success = "Installation process succeeded.\n"
+        error = "CurStepChanged raised an exception."
+        self.assertTrue(setup_log_succeeded(success))
+        self.assertFalse(setup_log_succeeded(success + error))
+        self.assertIn(f"-and -not $logText.Contains('{error[:-1]}')", SPLASH_SCRIPT)
+
 
 class SplashSpecTests(unittest.TestCase):
     def test_texts_name_both_versions(self) -> None:

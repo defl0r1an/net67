@@ -112,10 +112,21 @@ class InstallerRuntimeSwapTests(unittest.TestCase):
         self.assertIn("Sleep(", rename)
         self.assertIn("for Attempt := 1 to", remove)
 
-    def test_swap_runs_after_unpacking_before_run_actions(self) -> None:
+    def test_automatic_launch_runs_only_after_swap(self) -> None:
         step_changed = _routine(self.iss, "CurStepChanged")
         self.assertIn("CurStep = ssPostInstall", step_changed)
-        self.assertIn("CommitRuntimeSwap(FailureReason)", step_changed)
+        swap = step_changed.index("CommitRuntimeSwap(FailureReason)")
+        launch = step_changed.index("ShellExec(")
+        self.assertLess(swap, launch)
+        self.assertIn("Exit;", step_changed[swap:launch])
+        self.assertNotIn("Check: IsAutoUpdate", _section(self.iss, "Run"))
+
+    def test_manual_launch_requires_a_successful_swap(self) -> None:
+        self.assertIn("Check: CanLaunchInstalledRuntime", _section(self.iss, "Run"))
+        check = _routine(self.iss, "CanLaunchInstalledRuntime")
+        self.assertIn("RuntimeSwapSucceeded and not IsAutoUpdate()", check)
+
+    def test_previous_version_is_recovered_before_unpacking(self) -> None:
         recovery = _routine(self.iss, "PrepareToInstall")
         self.assertIn("not DirExists(LiveDir) and DirExists(BackupDir)", recovery)
         self.assertIn("TryRenameRuntimeDirectory(BackupDir, LiveDir)", recovery)

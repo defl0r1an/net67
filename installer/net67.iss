@@ -153,16 +153,7 @@ Name: "{autodesktop}\{#AppName}";  Filename: "{app}\_internal\{#AppExeName}"; Wo
 ; обновления — этот запуск выходит». Так галочка «Запустить» с 0.13 ничего
 ; не открывала. С флагом программа дожидается конца установки.
 Filename: "{app}\_internal\{#AppExeName}"; Parameters: "--after-update"; Description: "Запустить {#AppName}"; \
-  WorkingDir: "{app}\_internal"; Flags: nowait postinstall skipifsilent shellexec
-
-; Автообновление из программы идёт с /SILENT (из 0.12 — с /VERYSILENT), и
-; строка выше с
-; skipifsilent его пропускает: после обновления net67 не открывался, со
-; стороны — «молча закрылся». Здесь он открывается сам. --after-update:
-; установщик в этот момент ещё держит свой мьютекс, и без флага запуск
-; принял бы себя за ручной посреди установки и вышел.
-Filename: "{app}\_internal\{#AppExeName}"; Parameters: "--after-update"; \
-  WorkingDir: "{app}\_internal"; Flags: nowait shellexec; Check: IsAutoUpdate
+  WorkingDir: "{app}\_internal"; Flags: nowait postinstall skipifsilent shellexec; Check: CanLaunchInstalledRuntime
 
 [UninstallRun]
 ; Порядок важен: сначала останавливаем то, что держит файлы, потом
@@ -195,6 +186,9 @@ Filename: "sc.exe"; Parameters: "stop WinDivert64";   Flags: runhidden; RunOnceI
 Filename: "sc.exe"; Parameters: "delete WinDivert64"; Flags: runhidden; RunOnceId: "DelWinDivert64"
 
 [Code]
+
+var
+  RuntimeSwapSucceeded: Boolean;
 
 { ---------------------------------------------------------------- }
 { Установка                                                        }
@@ -245,6 +239,11 @@ begin
       Result := True;
       Exit;
     end;
+end;
+
+function CanLaunchInstalledRuntime(): Boolean;
+begin
+  Result := RuntimeSwapSucceeded and not IsAutoUpdate();
 end;
 
 { При обновлении из программы окно установки видно (/SILENT): человек
@@ -366,16 +365,24 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var FailureReason: String; RuntimeSwapSucceeded: Boolean;
+var FailureReason: String; LaunchError: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
     RuntimeSwapSucceeded := CommitRuntimeSwap(FailureReason);
     if not RuntimeSwapSucceeded then
     begin
-      { Исключение прерывает завершение и запуск непроверенной версии. }
+      { Распаковка уже отмечена в журнале как успешная, но версия не сменилась. }
       RaiseException(FailureReason);
+      Exit;
     end;
+    { Обычные действия [Run] уже выполнены к этому моменту. Если открыть
+      приложение там, старая версия удержит папку и сорвёт её замену. }
+    if IsAutoUpdate() then
+      if not ShellExec('', ExpandConstant('{app}\_internal\{#AppExeName}'),
+        '--after-update', ExpandConstant('{app}\_internal'),
+        SW_SHOWNORMAL, ewNoWait, LaunchError) then
+        Log('Не удалось открыть новую версию net67. Код: ' + IntToStr(LaunchError));
   end;
 end;
 

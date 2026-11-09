@@ -50,6 +50,7 @@ SPLASH_SHOWN_TIMEOUT_SECONDS = 4.0
 READY_MARK_MAX_AGE_SECONDS = TOTAL_TIMEOUT_SECONDS
 _LOG_LEVEL = "🔁 UPDATE"
 _SUCCESS_TEXT = "Installation process succeeded"
+_FINALIZATION_ERROR_TEXT = "CurStepChanged raised an exception"
 
 
 def splash_dir() -> Path:
@@ -278,8 +279,9 @@ def mark_update_app_ready() -> bool:
 
 
 def setup_log_succeeded(text: str) -> bool:
-    """Та же проверка, что делает окно: строка успеха в журнале установщика."""
-    return _SUCCESS_TEXT in str(text or "")
+    """Распаковка может пройти, а замена рабочей версии затем завершиться ошибкой."""
+    log_text = str(text or "")
+    return _SUCCESS_TEXT in log_text and _FINALIZATION_ERROR_TEXT not in log_text
 
 
 __all__ = [
