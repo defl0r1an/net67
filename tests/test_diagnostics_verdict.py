@@ -512,11 +512,13 @@ class EngineScenarioTests(unittest.TestCase):
         self.assertIn("IPv6", discord["targets"][0]["short"])
         self.assertIn(("discord.com", v6), net.calls)
 
-    def test_ipv6_is_not_tried_when_ipv4_opens(self) -> None:
+    def test_ipv6_is_only_swept_for_video_nodes_when_ipv4_opens(self) -> None:
         net = _Net(reference_v6=("2606:4700::6810:1",))
         net.run(engine.run_blockcheck, "main", emit=lambda _line: None)
 
-        self.assertFalse(any(":" in ip for _host, ip in net.calls))
+        ipv6_hosts = {host for host, ip in net.calls if ":" in ip}
+        self.assertTrue(ipv6_hosts)
+        self.assertTrue(all(host.endswith(".googlevideo.com") for host in ipv6_hosts))
 
     def test_system_address_that_fails_is_rechecked_by_reference_address(self) -> None:
         def _https(host, ip):

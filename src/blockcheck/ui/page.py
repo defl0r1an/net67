@@ -139,6 +139,7 @@ class BlockcheckPage(BasePage):
         create_strategy_scan_worker,
         create_geo_sites_worker=None,
         open_dns_settings=None,
+        open_report_profile=None,
         ensure_bypass_for_strategy=None,
         bypass_is_running=None,
         start_bypass=None,
@@ -171,6 +172,7 @@ class BlockcheckPage(BasePage):
         self._create_strategy_scan_worker = create_strategy_scan_worker
         self._create_geo_sites_worker = create_geo_sites_worker
         self._open_dns_settings = open_dns_settings
+        self._open_report_profile = open_report_profile
         self._ensure_bypass_for_strategy = ensure_bypass_for_strategy
         self._bypass_is_running = bypass_is_running
         self._notify = notify
@@ -484,7 +486,7 @@ class BlockcheckPage(BasePage):
 
         self._results_card = SettingsCard()
         self._sites_table = ResultCardsView()
-        self._sites_table.opened.connect(lambda card: show_report_dialog(self.window(), card_plain_text(card)))
+        self._sites_table.opened.connect(self._show_card_report)
         self._results_card.add_widget(self._sites_table)
         self._add_tab_widget(self._results_card)
         # Пустая таблица с одной шапкой до первой проверки — лишний мусор.
@@ -1657,7 +1659,12 @@ class BlockcheckPage(BasePage):
     def _open_card_by_key(self, key: str) -> None:
         widget = self._sites_table.card(key)
         if widget is not None:
-            show_report_dialog(self.window(), card_plain_text(widget.card))
+            self._show_card_report(widget.card)
+
+    def _show_card_report(self, card) -> None:
+        show_report_dialog(
+            self.window(), card_plain_text(card), preset_action=card.preset_action, open_profile=self._open_report_profile,
+        )
 
     def _show_check_history(self, runs) -> None:
         self._check_history.show_history(runs)

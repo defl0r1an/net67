@@ -169,6 +169,19 @@ class Winws2StrategyRunner(StrategyRunnerBase):
         with self._state_lock:
             return self._runner_state.snapshot()
 
+    def get_running_preset(self):
+        """Отдаёт текст, с которым запустился свой winws2, без чтения диска."""
+        with self._state_lock:
+            state = self._runner_state.snapshot()
+            applied = getattr(self, "_diagnostic_preset", None)
+            process = self.running_process
+            if (
+                state.state == PresetRunnerState.RUNNING and applied is not None
+                and process is applied[0] and process.poll() is None
+            ):
+                return state, applied[1]
+            return None
+
     def _operation_guard(self):
         """Сериализует lifecycle-операции, не закрывая чтение state snapshot."""
         lock = getattr(self, "_operation_lock", None)
@@ -790,6 +803,7 @@ class Winws2StrategyRunner(StrategyRunnerBase):
             launch_args=(at_config_launch_arg(at_config_path, self.work_dir),),
             validation_ok=artifact.validation_ok,
             validation_report=artifact.validation_report,
+            source_key=artifact.cache_key,
         )
 
     def _artifact_for_dry_run_locked(self, artifact: PreparedPresetArtifact) -> PreparedPresetArtifact:
@@ -1137,13 +1151,15 @@ class Winws2StrategyRunner(StrategyRunnerBase):
                         f"{ENGINE_WINWS2} подтвердил готовность за {start_outcome.elapsed:.2f} с",
                         "DEBUG",
                     )
-                self._set_runner_state_locked(
-                    PresetRunnerState.RUNNING,
-                    preset_path=artifact.preset_path,
-                    strategy_name=strategy_name,
-                    pid=self.running_process.pid,
-                    reason="start_confirmed",
-                )
+                with self._state_lock:
+                    self._diagnostic_preset = self.running_process, artifact
+                    self._set_runner_state_locked(
+                        PresetRunnerState.RUNNING,
+                        preset_path=artifact.preset_path,
+                        strategy_name=strategy_name,
+                        pid=self.running_process.pid,
+                        reason="start_confirmed",
+                    )
                 if preset_switch:
                     log(f"Preset switch successful (PID: {self.running_process.pid})", "SUCCESS")
                 else:

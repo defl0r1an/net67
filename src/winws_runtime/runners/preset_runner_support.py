@@ -62,6 +62,9 @@ class PreparedPresetArtifact:
     launch_args: tuple[str, ...]
     validation_ok: bool
     validation_report: str
+    # При переключении временный @config не кэшируется, но редактору
+    # всё равно нужна версия файла, из которого он был собран.
+    source_key: tuple[object, ...] | None = None
 
 
 class PresetRunnerState(str, Enum):

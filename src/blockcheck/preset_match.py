@@ -25,7 +25,7 @@ import ipaddress
 import os
 from dataclasses import dataclass
 
-__all__ = ["ProfileHit", "first_profile_for"]
+__all__ = ["ProfileHit", "first_profile_for", "https_profile_matches"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,18 +71,39 @@ def _l7_ok(filter_lines, protocol: str) -> bool:
 class _Lists:
     """Файлы списков одного прохода: каждый читается один раз."""
 
-    def __init__(self, lists_dir: str) -> None:
+    def __init__(self, lists_dir: str, *, strict: bool = False) -> None:
         self._dir = lists_dir
+        self._strict = strict
+        self._texts: dict[str, str] = {}
         self._hosts: dict[str, object] = {}
         self._nets: dict[str, list] = {}
 
     def _read(self, name: str) -> str:
-        path = os.path.join(self._dir, os.path.basename(name.replace("\\", "/")))
+        if name in self._texts:
+            return self._texts[name]
+        name_path = name.replace("\\", "/")
+        if self._strict:
+            root = os.path.abspath(self._dir)
+            path = os.path.abspath(os.path.join(os.path.dirname(root), name_path))
+            try:
+                local = os.path.normcase(os.path.commonpath((root, path))) == os.path.normcase(root)
+            except ValueError:
+                local = False
+            if not local or path.lower().endswith(".gz"):
+                raise OSError("Список вне каталога программы или хранится в архиве")
+        else:
+            path = os.path.join(self._dir, os.path.basename(name_path))
         try:
             with open(path, encoding="utf-8", errors="replace") as source:
-                return source.read()
+                value = source.read(8_388_609) if self._strict else source.read()
+                if self._strict and len(value) > 8_388_608:
+                    raise OSError("Список слишком большой для проверки профиля")
         except OSError:
-            return ""
+            if self._strict:
+                raise
+            value = ""
+        self._texts[name] = value
+        return value
 
     def hosts(self, name: str):
         from lists.core.hostlist_syntax import HostlistIndex
@@ -140,6 +161,14 @@ def _check(profile, host: str, addresses, lists: _Lists, port: int, protocol: st
         if hit is None:
             return ""
         by_address = f"адрес {hit} есть в его списке адресов"
+    from lists.core.hostlist_syntax import HostlistIndex
+
+    exclude_index = HostlistIndex.from_texts(
+        ("exclude-domains", "\n".join(_values(match.hostlist_exclude_lines, "--hostlist-exclude-domains"))),
+        *((name, lists._read(name)) for name in _values(match.hostlist_exclude_lines, "--hostlist-exclude")),
+    )
+    if _host_found(exclude_index, host):
+        return ""
     if match.hostlist_auto_lines:
         return "у него автосписок доменов: такой профиль берёт любое соединение, когда имя сайта известно"
     hostlist_files = _values(match.hostlist_lines, "--hostlist")
@@ -150,20 +179,67 @@ def _check(profile, host: str, addresses, lists: _Lists, port: int, protocol: st
         if excluded:
             return f"у него нет списка сайтов — он берёт все сайты на порту {port}, кроме адресов из своих исключений"
         return f"у него нет списков сайтов и адресов — он берёт все сайты на порту {port}"
-    from lists.core.hostlist_syntax import HostlistIndex
-
-    exclude_index = HostlistIndex.from_texts(
-        ("exclude-domains", "\n".join(_values(match.hostlist_exclude_lines, "--hostlist-exclude-domains"))),
-        *((name, lists._read(name)) for name in _values(match.hostlist_exclude_lines, "--hostlist-exclude")),
-    )
-    if _host_found(exclude_index, host):
-        return ""
     if inline_domains and _host_found(HostlistIndex.from_texts(("domains", "\n".join(inline_domains))), host):
         return by_address or f"{host} записан прямо в нём"
     for name in hostlist_files:
         if _host_found(lists.hosts(name), host):
             return by_address or f"{host} есть в его списке {os.path.basename(name)}"
     return ""
+
+
+def _port_bounds(token: str) -> tuple[int, int] | None:
+    bounds = token.split("-", 1)
+    if not all(bound.isascii() and bound.isdecimal() and len(bound) <= 5 for bound in bounds):
+        return None
+    return int(bounds[0]), int(bounds[-1])
+
+
+def https_profile_matches(preset, requests, *, lists_dir: str):
+    """По одному результату на пробу; списки читаются один раз за отчёт."""
+    ports = [_port_bounds(token) for token in _values(preset.preamble_lines, "--wf-tcp-out")]
+    # При полном фильтре WinDivert списки портов уже не определяют его работу.
+    names = {line.strip().lower().partition("=")[0] for line in preset.preamble_lines}
+    if {"--wf-raw", "--wf-raw-filter"} & names or not any(
+        bounds is not None and bounds[0] <= 443 <= bounds[1] for bounds in ports
+    ):
+        return [None for _ in requests]
+    lists = _Lists(lists_dir, strict=True)
+    return [_profile_for_https(preset, host, address, lists) for host, address in requests]
+
+
+def _profile_for_https(preset, host: str, address: str, lists: _Lists):
+    """(Профиль, причина), (None, "") — нет профиля, None — отбор не удалось воспроизвести."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return None
+    for profile in preset.profiles:
+        if not profile.enabled:
+            continue
+        filters = profile.match.filter_lines
+        ports = _values(filters, "--filter-tcp")
+        if any(_port_bounds(token) is None for token in ports):
+            return None
+        if not _port_ok(filters, 443) or not _l7_ok(filters, "tls"):
+            continue
+        l3 = {item.lower() for item in _values(filters, "--filter-l3")}
+        if not l3 <= {"ipv4", "ipv6"}:
+            return None
+        if l3 and f"ipv{ip.version}" not in l3:
+            continue
+        supported = ("--filter-tcp=", "--filter-udp=", "--filter-l7=", "--filter-l3=")
+        if any(not line.lower().strip().startswith(supported) for line in filters):
+            return None
+        if profile.match.hostlist_auto_lines:
+            # Содержимое автосписка и состояние Lua меняются прямо в процессе.
+            return None
+        try:
+            reason = _check(profile, host.lower(), [ip], lists, 443, "tls")
+        except OSError:
+            return None
+        if reason:
+            return profile, reason
+    return None, ""
 
 
 def first_profile_for(preset_text: str, host: str, addresses=(), *, lists_dir: str, port: int = 443, protocol: str = "tls") -> ProfileHit | None:

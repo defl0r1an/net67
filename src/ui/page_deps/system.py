@@ -212,6 +212,8 @@ def build_blockcheck_page_kwargs(
     runtime_feature,
     show_page=None,
     notify=None,
+    presets_feature=None,
+    open_profile_setup=None,
 ) -> dict:
     _ = page_name
 
@@ -240,6 +242,15 @@ def build_blockcheck_page_kwargs(
         accepted = runtime_feature.restart() if running else runtime_feature.start()
         return ("restarting" if running else "started") if accepted is not False else "failed"
 
+    def _open_report_profile(action) -> bool:
+        from blockcheck.active_preset import open_profile
+
+        def _selected_path(method):
+            file_name = presets_feature.get_stored_source_preset_file_name(method)
+            return presets_feature.get_preset_source_path_by_file_name(method, file_name) if file_name else None
+
+        return open_profile(action, selected_path=_selected_path, navigate=open_profile_setup)
+
     return {
         "blockcheck_feature": blockcheck_feature,
         "dns_feature": dns_feature,
@@ -254,6 +265,7 @@ def build_blockcheck_page_kwargs(
         "stop_bypass": runtime_feature.stop,
         # «Поймали провайдера на подмене DNS» → кнопка ведёт на «Настройка DNS».
         "open_dns_settings": (lambda: show_page(PageName.NETWORK)) if show_page is not None else None,
+        "open_report_profile": _open_report_profile if presets_feature is not None and open_profile_setup is not None else None,
     }
 
 

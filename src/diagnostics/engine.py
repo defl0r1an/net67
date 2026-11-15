@@ -41,6 +41,8 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime
 
+from blockcheck import active_preset
+
 from diagnostics import (
     block_cause,
     block_view,
@@ -58,6 +60,7 @@ from diagnostics import (
     transfer_probe,
     video_node_check,
     video_nodes,
+    video_sweep,
     volume_probe,
 )
 from diagnostics import problems as problem_rules
@@ -189,7 +192,7 @@ def _merge_dns_answers(answers: list[DnsAnswer]) -> tuple[DnsAnswer, int]:
     return DnsAnswer(ips=tuple(ips), cnames=first.cnames, status=first.status, elapsed_ms=first.elapsed_ms), nxdomain
 
 
-def _probe_target(run: _Run, target: Target, service: str, *, full: bool, volume: bool = False) -> _Probe:
+def _probe_target(run: _Run, target: Target, service: str, *, full: bool, volume: bool = False, sweep: bool = False) -> _Probe:
     if not target.discover_googlevideo:
         return _probe_host(run, target, service, target.host, "", full=full, volume=volume)
     hosts, note = _discover_googlevideo(run)
@@ -200,6 +203,7 @@ def _probe_target(run: _Run, target: Target, service: str, *, full: bool, volume
         return unknown
     nodes = video_nodes.VideoNodes(hosts, ("",) * len(hosts), note)
     first = probe = _probe_host(run, target, service, nodes.hosts[0], nodes.note, full=full, volume=volume)
+    checked = [first]
     # Один видеосервер не ответил — плеер взял бы следующий. Проверяем так же.
     for host in nodes.hosts[1:]:
         if probe.reach_state == ReachState.OK or run.dns_cancelled():
@@ -207,6 +211,7 @@ def _probe_target(run: _Run, target: Target, service: str, *, full: bool, volume
         probe = _probe_host(
             run, target, service, host, f"{nodes.note}; первый видеосервер не ответил, проверен запасной", full=full, volume=volume
         )
+        checked.append(probe)
     best = probe if probe.reach_state == ReachState.OK else first
     if full and best.reach is not None and best.reach.ip and best.reach_state != ReachState.OK and not run.dns_cancelled():
         # Видеосервер не открылся: чей он и отдаёт ли он видео через другие адреса Google.
@@ -215,6 +220,8 @@ def _probe_target(run: _Run, target: Target, service: str, *, full: bool, volume
         _describe_node(run, nodes, best, volume=volume, target=target, service=service)
         if volume:
             video_nodes.goodput_volume(run, best)
+    if full and sweep:
+        best.video_nodes = video_sweep.collect(run, video_sweep.start(run, nodes.hosts, checked))
     return best
 
 
@@ -411,6 +418,7 @@ def _run_probes(
     on_done: Callable[[int, int], None] | None = None,
     on_probe: Callable[[str, _Probe], None] | None = None,
     ask_outside: bool = False,
+    sweep: bool = False,
 ) -> dict[str, list[_Probe]]:
     """Запускает все цели сразу и печатает их блоки по порядку.
 
@@ -418,6 +426,7 @@ def _run_probes(
     ``ask_outside`` — галочка человека: без неё ``sections.ask_outside`` не зовётся.
     """
     total = sum(len(service.targets) for service in services.values())
+    preset_at_start = active_preset.current() if full else None
     lock = threading.Lock()
     done = [0]
     # Десятки сайтов разом — это сотни запросов к эталонным DNS-серверам в одну
@@ -446,7 +455,12 @@ def _run_probes(
             # Объём по одному соединению — это десятки запросов подряд: контрольные
             # сайты ими не нагружаем, их всё равно не блокируют.
             jobs.append((key, target, full and not service.control))
-    futures = submit_in_random_order(jobs, lambda job: lane.submit(_probe, run, job[1], job[0], full=full, volume=job[2]))
+    def submit_site(job):
+        key, target, volume = job
+        options = {"sweep": True} if sweep and target.discover_googlevideo else {}
+        return lane.submit(_probe, run, target, key, full=full, volume=volume, **options)
+
+    futures = submit_in_random_order(jobs, submit_site)
     planned = [(key, target, future) for (key, target, _volume), future in zip(jobs, futures)]
 
     # Сначала дожидаемся всех, затем перепроверяем упавшие, и только потом печатаем:
@@ -463,6 +477,7 @@ def _run_probes(
         done_probes = _recheck_failed(run, services, done_probes)
         if ask_outside:
             sections.ask_outside(run, services, done_probes)
+        active_preset.annotate(preset_at_start, [probe for _key, _target, probe, _error in done_probes if probe is not None])
 
     collected: dict[str, list[_Probe]] = {key: [] for key in services}
     current_service = ""
@@ -543,7 +558,8 @@ def _recheck_failed(run: _Run, services: dict[str, Service], done_probes: list) 
         except Exception:
             continue
         if again is not None:
-            key, target, _first, error = result[index]
+            key, target, first, error = result[index]
+            again.video_nodes = first.video_nodes
             result[index] = (key, target, again, error)
     return result
 
@@ -737,7 +753,7 @@ def run_blockcheck(
         # Сервис уходит на экран, как только проверены все его адреса, а не когда кончатся все сайты.
         on_probe = sections.live_services(services, verdict_of, lambda ready: live.put(services=ready))
         on_done = functools.partial(step, STEP_SITES)
-        collected = _run_probes(run, services, full=True, emit=emit, on_done=on_done, on_probe=on_probe, ask_outside=ask_outside)
+        collected = _run_probes(run, services, full=True, emit=emit, on_done=on_done, on_probe=on_probe, ask_outside=ask_outside, sweep=True)
         verdicts = {key: verdict_of(service, collected[key]) for key, service in services.items()}
         services_report = report_text.services_report(services, verdicts, collected)
         live.put(services=services_report)
@@ -886,7 +902,7 @@ def check_site(host: str, *, should_stop: ShouldStop | None = None, emit: Emit |
     try:
         zapret_running, _line = sections.zapret_status()
         registry_wait = sections.start_registry()
-        collected = _run_probes(run, services, full=True, emit=emit or (lambda _line: None))
+        collected = _run_probes(run, services, full=True, emit=emit or (lambda _line: None), sweep=True)
         verdicts = {key: _service_verdict(item, collected[key], zapret_running=zapret_running) for key, item in services.items()}
         report = report_text.services_report(services, verdicts, collected)
         # Сайт может открываться, а поток к нему — придерживаться или обрываться по имени (так «крутит

@@ -36,7 +36,7 @@ from .folders import (
     save_profile_folder_state,
 )
 from .identity import is_profile_uid, normalize_identity_registry, resolve_profile_identities
-from .list_interpreter import build_profile_list_sources
+from .list_interpreter import ProfileListSource, build_profile_list_sources
 from .ordering import live_items_from_sources, plan_profile_move, resolve_profile_order_view
 from .key_resolution import (
     PresetProfileMoveResult,
@@ -695,7 +695,13 @@ class ProfilePresetService:
             key,
         )
         if source is None:
-            return None
+            # BlockCheck ведёт к точной записи из того же файла. В общем
+            # списке эта запись может быть объединена с другим профилем.
+            index = resolve_preset_profile_reference_index(preset, key)
+            if index is None:
+                return None
+            profile = preset.profiles[index]
+            source = ProfileListSource(profile.key, profile, True, profile.index)
         profile = source.profile
         core = self._profile_derived_cache.core_for(
             profile,

@@ -79,6 +79,8 @@ class Probe:
     cause_facts: block_cause.CauseFacts | None = None
     # Видеосервер YouTube не открылся: владелец его сети и запрос через другие адреса Google.
     video_facts: video_node_check.NodeFacts | None = None
+    video_nodes: tuple[dict, ...] = ()
+    preset_profile: dict | None = None
     # Сайт открылся, но не каждый раз или не по каждому адресу: что именно шатается. Пусто — стабилен.
     unstable: str = ""
     # Кто ответил вместо сайта, когда сертификат не прошёл проверку (``cert_owner.CertVerdict``).

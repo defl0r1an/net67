@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from diagnostics import cut_window, quic_probe, transfer_probe, volume_probe
 from diagnostics.levels import FAIL, OK, UNKNOWN, WARN
 from diagnostics.limits import DNS_ATTEMPTS
-from diagnostics.tls_probe import KIND_CANCELLED, KIND_CONNECT
+from diagnostics.tls_probe import KIND_CANCELLED, KIND_CONNECT, STAGE_CONNECT
 from diagnostics.transfer_probe import CONFIDENCE_HIGH, CONFIDENCE_LOW, CONFIDENCE_MEDIUM
 from diagnostics.verdict import DnsState, ReachState, describe_reach
 
@@ -113,13 +113,15 @@ def _tcp_step(probe) -> PathStep:
         if len(probe.tried) >= 2:
             text += f" ни по одному из {len(probe.tried)} адресов"
         return PathStep(STEP_TCP, FAIL, text, confidence)
+    if result.stage == STAGE_CONNECT:
+        return PathStep(STEP_TCP, UNKNOWN, "установление соединения не подтверждено")
     return PathStep(STEP_TCP, OK, f"соединение с {result.ip} установлено", confidence)
 
 
 def _tls_step(probe) -> PathStep:
     result = probe.reach
     state = probe.reach_state
-    if result is None or state == ReachState.NO_ADDRESS or result.kind in (KIND_CONNECT, KIND_CANCELLED):
+    if result is None or state == ReachState.NO_ADDRESS or result.kind in (KIND_CONNECT, KIND_CANCELLED) or result.stage == STAGE_CONNECT:
         return PathStep(STEP_TLS, UNKNOWN, "до шифрования не дошли")
     if probe.fingerprint:
         return PathStep(
@@ -127,10 +129,10 @@ def _tls_step(probe) -> PathStep:
             "соединение «как Chrome» рвут, а простое приветствие к тому же серверу проходит: фильтр узнаёт браузер по почерку",
             CONFIDENCE_HIGH,
         )
-    if state in (ReachState.OK, ReachState.FREEZE):
-        return PathStep(STEP_TLS, OK, "шифрование установлено", CONFIDENCE_MEDIUM if probe.attempts <= 1 else CONFIDENCE_HIGH)
     if state == ReachState.CERT:
         return PathStep(STEP_TLS, FAIL, describe_reach(result), CONFIDENCE_HIGH)
+    if result.tls_version or result.status is not None or state in (ReachState.OK, ReachState.FREEZE):
+        return PathStep(STEP_TLS, OK, "шифрование установлено", CONFIDENCE_MEDIUM if probe.attempts <= 1 else CONFIDENCE_HIGH)
     if state == ReachState.DPI:
         cause = probe.cause
         text = describe_reach(result)

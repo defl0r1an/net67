@@ -155,6 +155,7 @@ class Card:
     site: bool = False
     # Широкая карточка занимает весь ряд.
     wide: bool = False
+    preset_action: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +298,13 @@ def _site_card(service: dict) -> Card:
 
     # Подробности — из общего модуля слов (``diagnostics.service_view``): тот же набор строк и в тексте отчёта.
     detail = _sections_from_view(service_sections(service))
+    profile_action = next(
+        (
+            row for item in sorted(targets, key=lambda item: not item.get("main"))
+            if isinstance(row := item.get("preset_profile"), dict) and isinstance(row.get("action"), dict)
+        ),
+        None,
+    )
 
     return Card(
         key=f"site:{key}",
@@ -311,6 +319,7 @@ def _site_card(service: dict) -> Card:
         tags=tuple(tags),
         sections=tuple(detail),
         site=True,
+        preset_action=profile_action,
     )
 
 

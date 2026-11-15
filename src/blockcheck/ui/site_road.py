@@ -42,19 +42,27 @@ def site_road(card: Card) -> tuple[tuple[RoadStage, ...], int]:
     stages = [RoadStage("Вы", "", "ok", "fa5s.desktop")]
     stages.append(RoadStage("DNS", dns.word if dns else "—", dns.state if dns else "unknown", "fa5s.exchange-alt"))
 
-    reached = [mark for mark in card.marks if mark.label not in ("DNS", "QUIC") and mark.word not in ("нет связи", "—")]
-    if card.kind == "ip" or (card.marks and not reached and card.level == "fail"):
+    no_connection = {"нет связи", "нет соединения", "не ответил", "—"}
+    reached = any(
+        mark.label in ("TLS 1.2", "TLS 1.3", "Chrome", "Как Chrome", "HTTP")
+        and (mark.state == "ok" or mark.state == "fail" and mark.word not in no_connection)
+        for mark in card.marks
+    )
+    if card.kind == "ip":
         stages.append(RoadStage("Сервер", "адрес закрыт", "fail", "fa5s.server"))
+    elif not reached and any(mark.word in no_connection - {"—"} for mark in tls):
+        stages.append(RoadStage("Сервер", "не отвечает", "warn", "fa5s.server"))
     else:
-        stages.append(RoadStage("Сервер", "отвечает" if reached or card.level == "ok" else "—", "ok" if reached or card.level == "ok" else "unknown", "fa5s.server"))
+        stages.append(RoadStage("Сервер", "отвечает" if reached else "—", "ok" if reached else "unknown", "fa5s.server"))
 
-    failed = [mark for mark in tls if mark.state == "fail"]
-    if tls and len(failed) == len(tls):
+    failed = [mark for mark in tls if mark.state == "fail" and mark.word not in no_connection]
+    passed = [mark for mark in tls if mark.state == "ok"]
+    if failed and not passed:
         stages.append(RoadStage("TLS", failed[-1].word, "fail", "fa5s.lock"))
     elif failed:
         stages.append(RoadStage("TLS", "частично", "warn", "fa5s.lock"))
     else:
-        stages.append(RoadStage("TLS", "проходит" if tls else "—", "ok" if tls else "unknown", "fa5s.lock"))
+        stages.append(RoadStage("TLS", "проходит" if passed else "—", "ok" if passed else "unknown", "fa5s.lock"))
 
     cut = any("16" in text for text, _state in card.tags)
     if card.level == "ok":

@@ -251,6 +251,9 @@ def target_rows(item: dict) -> tuple[ViewRow, ...]:
         rows.append(ViewRow(INFO, "Вид блокировки", str(item["kind_title"])))
     if item.get("cause_text"):
         rows.append(ViewRow(FAIL, "Как блокируют", str(item["cause_text"])))
+    preset_profile = item.get("preset_profile")
+    if isinstance(preset_profile, dict) and preset_profile.get("text"):
+        rows.append(ViewRow(INFO, "Профиль пресета", str(preset_profile["text"])))
     rows.extend(video_node_rows(item.get("video_node")))
     if "registry" in item:
         rows.append(ViewRow(INFO, "Реестр РКН", _registry_text(item)))
@@ -427,7 +430,38 @@ def target_sections(item: dict) -> tuple[ViewSection, ...]:
     path = path_section(item)
     if path is not None:
         sections.append(path)
+    video = _video_nodes_section(item.get("video_nodes"))
+    if video is not None:
+        sections.append(video)
     return tuple(sections)
+
+
+def _video_nodes_section(raw: object) -> ViewSection | None:
+    if not isinstance(raw, (list, tuple)):
+        return None
+    rows: list[ViewRow] = []
+    hosts: set[str] = set()
+    responded: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("host") or item.get("version") not in (4, 6):
+            continue
+        host = str(item["host"])
+        hosts.add(host)
+        state = shown_level(item.get("state"))
+        address = str(item.get("address") or "")
+        if state == OK and item.get("status") is not None:
+            responded.add(host)
+            outcome = f"ответ HTTP {item['status']}"
+        elif state == WARN:
+            outcome = "ответ HTTP не получен"
+        else:
+            outcome = "нет результата"
+        text = f"{address} · {outcome}" if address else outcome
+        rows.append(ViewRow(state, f"{host} · IPv{item['version']}", text))
+    if not rows:
+        return None
+    note = f"Ответили {len(responded)} из {len(hosts)} найденных серверов. Это проверка ответа HTTPS, без воспроизведения видео."
+    return ViewSection("Видеосерверы YouTube", (ViewRow(INFO, "Сводка", note), *rows))
 
 
 def name_speed_sections(names: dict) -> tuple[ViewSection, ...]:
@@ -627,6 +661,13 @@ def service_status(verdict, probes) -> str:
         return _STATUS_BY_CERT.get(cert, "Чужой сертификат")
     if any(probe.hosts_stale for probe in probes):
         return "Мешает запись в hosts"
+    if verdict.level == Level.WARN and verdict.opens and any(
+        probe.target.main and probe.reach_state == ReachState.OK for probe in probes
+    ) and any(
+        not probe.target.main and probe.reach_state in (ReachState.DPI, ReachState.FREEZE, ReachState.IP_BLOCK)
+        for probe in probes
+    ):
+        return "Открывается частично"
     if verdict.kind and verdict.level in (Level.WARN, Level.FAIL) and verdict.kind in block_kind.KINDS:
         if verdict.kind != block_kind.KIND_OTHER:
             return sentence(block_kind.kind_info(verdict.kind).short)
