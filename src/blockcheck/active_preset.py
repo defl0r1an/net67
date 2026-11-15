@@ -10,12 +10,9 @@ from settings.mode import ENGINE_WINWS2, ZAPRET2_MODE
 
 
 def current():
-    from winws_runtime.runners.runner_factory import get_current_runner
+    from winws_runtime.public import get_running_preset
 
-    runner = get_current_runner()
-    if runner is not None:
-        return runner.get_running_preset()
-    return None
+    return get_running_preset()
 
 
 def _file(state) -> str:

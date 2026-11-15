@@ -163,18 +163,13 @@ class InstallerContractTests(unittest.TestCase):
         self.assertEqual(tuple(n.strip() for n in line.group(1).split(",")), SETUP_MUTEX_NAMES)
 
     def test_auto_update_reopens_the_app(self) -> None:
-        """Без этой строки после тихого обновления программа не открывалась."""
+        """Тихое обновление запускает установленный EXE с флагом ожидания установщика."""
         from startup.single_instance import AFTER_UPDATE_ARG
 
-        entries = re.findall(r"^Filename:.*Parameters: \"--after-update\".*\n.*$", self.iss, re.M)
-        auto = [text for text in entries if "Check: IsAutoUpdate" in text]
-        self.assertEqual(len(auto), 1)
-        text = auto[0]
-        self.assertIn(AFTER_UPDATE_ARG, text)
-        self.assertIn("Check: IsAutoUpdate", text)
-        self.assertNotIn("skipifsilent", text)
-        self.assertIn("shellexec", text)
-        self.assertIn("function IsAutoUpdate(): Boolean;", self.iss)
+        handler = self.iss.split("procedure CurStepChanged", 1)[1].split("procedure CurUninstallStepChanged", 1)[0]
+        self.assertRegex(handler, r"if IsAutoUpdate\(\) then\s+if not ShellExec\(")
+        self.assertIn(r"ExpandConstant('{app}\_internal\{#AppExeName}')", handler)
+        self.assertIn(f"'{AFTER_UPDATE_ARG}'", handler)
 
     def test_launch_checkbox_waits_for_setup_instead_of_exiting(self) -> None:
         """Галочка «Запустить» на последней странице открывала и тут же закрывала net67.

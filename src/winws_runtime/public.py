@@ -30,6 +30,16 @@ def at_config_launch_arg(config_path: str, work_dir: str) -> str:
     from winws_runtime.runners.preset_runner_support import at_config_launch_arg as _at_config_launch_arg
 
     return _at_config_launch_arg(config_path, work_dir)
+
+
+def get_running_preset():
+    """Снимок пресета своего запущенного процесса для диагностики."""
+    from winws_runtime.runners.runner_factory import get_current_runner
+
+    runner = get_current_runner()
+    return runner.get_running_preset() if runner is not None else None
+
+
 from winws_runtime.state import (
     LaunchRuntimeOwnershipMap,
     LaunchRuntimeService,
@@ -48,6 +58,7 @@ __all__ = [
     "cleanup_launch_threads",
     "create_preset_runtime_coordinator",
     "execute_windivert_autofix",
+    "get_running_preset",
     "handle_launch_method_changed",
     "init_core_startup",
     "init_launch_runtime",

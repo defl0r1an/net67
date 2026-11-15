@@ -145,6 +145,7 @@ class Winws2StrategyRunner(StrategyRunnerBase):
         self._state_lock = threading.RLock()
         self._operation_lock = threading.RLock()
         self._runner_state = PresetRunnerStateMachine()
+        self._diagnostic_preset = None
         self._last_spawn_exit_code: Optional[int] = None
         self._last_spawn_stderr: str = ""
         # The spawned winws2 keeps writing stdout/stderr to this file for its
@@ -173,7 +174,7 @@ class Winws2StrategyRunner(StrategyRunnerBase):
         """Отдаёт текст, с которым запустился свой winws2, без чтения диска."""
         with self._state_lock:
             state = self._runner_state.snapshot()
-            applied = getattr(self, "_diagnostic_preset", None)
+            applied = self._diagnostic_preset
             process = self.running_process
             if (
                 state.state == PresetRunnerState.RUNNING and applied is not None
@@ -202,6 +203,7 @@ class Winws2StrategyRunner(StrategyRunnerBase):
         reason: str = "",
         allow_same: bool = False,
         publish_failure: bool = True,
+        started_artifact: PreparedPresetArtifact | None = None,
     ):
         with self._state_lock:
             snapshot = self._runner_state.transition(
@@ -213,6 +215,8 @@ class Winws2StrategyRunner(StrategyRunnerBase):
                 reason=reason,
                 allow_same=allow_same,
             )
+            if started_artifact is not None:
+                self._diagnostic_preset = self.running_process, started_artifact
         log(
             f"Runner state: {snapshot.state.value} "
             f"(gen={snapshot.generation}, reason={snapshot.reason}, preset={snapshot.preset_path})",
@@ -1151,15 +1155,14 @@ class Winws2StrategyRunner(StrategyRunnerBase):
                         f"{ENGINE_WINWS2} подтвердил готовность за {start_outcome.elapsed:.2f} с",
                         "DEBUG",
                     )
-                with self._state_lock:
-                    self._diagnostic_preset = self.running_process, artifact
-                    self._set_runner_state_locked(
-                        PresetRunnerState.RUNNING,
-                        preset_path=artifact.preset_path,
-                        strategy_name=strategy_name,
-                        pid=self.running_process.pid,
-                        reason="start_confirmed",
-                    )
+                self._set_runner_state_locked(
+                    PresetRunnerState.RUNNING,
+                    preset_path=artifact.preset_path,
+                    strategy_name=strategy_name,
+                    pid=self.running_process.pid,
+                    reason="start_confirmed",
+                    started_artifact=artifact,
+                )
                 if preset_switch:
                     log(f"Preset switch successful (PID: {self.running_process.pid})", "SUCCESS")
                 else:
