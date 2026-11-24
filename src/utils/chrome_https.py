@@ -215,6 +215,7 @@ class Exchange:
     os_failure: str = ""
     # Для этого запроса libcurl открыл новое соединение: прежнее закрыли.
     reconnected: bool = False
+    connect_ms: float | None = None
 
     @property
     def received(self) -> int:
@@ -389,6 +390,10 @@ class ChromeConnection:
             exchange.error_code = int(getattr(error, "code", 0) or 0)
             exchange.message = str(error)
         progress.ended_at = time.perf_counter()
+        connect_time = float(curl.getinfo(info.CONNECT_TIME) or 0)
+        if connect_time > 0:
+            lookup_time = float(curl.getinfo(info.NAMELOOKUP_TIME) or 0)
+            exchange.connect_ms = max(0.0, connect_time - lookup_time) * 1000
         if exchange.error_code:
             # Код ошибки системы: отказ, тишина или нет дороги — текст libcurl этого не различает.
             exchange.os_failure = classify_code(int(curl.getinfo(info.OS_ERRNO) or 0))
@@ -496,6 +501,7 @@ def chrome_get(
             detail=detail,
             body=bytes(progress.body),
             server_date=progress.server_date,
+            connect_ms=exchange.connect_ms,
             **extra,
         )
 

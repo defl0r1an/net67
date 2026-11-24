@@ -7,10 +7,10 @@ from main.post_startup_threading import enqueue_subsystem_task, schedule_after
 #: Как часто спрашивать шлюз проб, не пора ли умной проверке адресов.
 #:
 #: Сам интервал проверки — раз в шесть часов, и через перезапуск тоже —
-#: решает шлюз (utils.probe_gate.HOSTS_ADDRESSES). Час здесь — только как
+#: решает шлюз (utils.probe_gate.HOSTS_ADDRESSES). Полчаса здесь — только как
 #: часто стучаться к нему: программа живёт в трее сутками, и проверка
 #: должна случаться не только при запуске.
-HOSTS_ADDRESS_CHECK_TICK_MS = 3600 * 1000
+HOSTS_ADDRESS_CHECK_TICK_MS = 1800 * 1000
 
 
 def install_hosts_applied_selection_refresh(
@@ -48,8 +48,7 @@ def install_hosts_applied_selection_refresh(
             return
         from utils.probe_gate import HOSTS_ADDRESSES, Why, try_background
 
-        # Выключатель — раньше шлюза: шлюз записывает время проверки при выдаче
-        # пропуска, и выключенная проверка не должна занимать его окно.
+        # Выключенная проверка не должна занимать даже интервал повтора попытки.
         try:
             enabled = bool(hosts_feature.smart_addresses_enabled())
         except Exception as exc:
@@ -64,6 +63,8 @@ def install_hosts_applied_selection_refresh(
                 return
             with permit:
                 result = hosts_feature.smart_check_applied(why=Why.SCHEDULE)
+                if getattr(result, "completed", False) and is_startup_host_alive(startup_host):
+                    permit.complete()
             log_startup_metric(
                 "StartupHostsAddressCheckFinished",
                 f"changed={bool(getattr(result, 'changed', False))} ({getattr(result, 'message', '') or 'без замечаний'})",

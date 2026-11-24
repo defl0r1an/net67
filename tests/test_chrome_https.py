@@ -39,6 +39,8 @@ class _Info:
     OS_ERRNO = "os_errno"
     RESPONSE_CODE = "response_code"
     NUM_CONNECTS = "num_connects"
+    CONNECT_TIME = "connect_time"
+    NAMELOOKUP_TIME = "namelookup_time"
 
 
 class _CurlError(Exception):
@@ -57,6 +59,8 @@ class _Script:
         self.os_errno = os_errno
         self.options: dict = {}
         self.impersonated = ""
+        self.connect_time = 0
+        self.lookup_time = 0
 
 
 def _api(script: _Script):
@@ -81,7 +85,11 @@ def _api(script: _Script):
                 raise _CurlError(script.error, script.message)
 
         def getinfo(self, info):
-            return script.os_errno if info == _Info.OS_ERRNO else 0
+            return {
+                _Info.OS_ERRNO: script.os_errno,
+                _Info.CONNECT_TIME: script.connect_time,
+                _Info.NAMELOOKUP_TIME: script.lookup_time,
+            }.get(info, 0)
 
         def close(self):
             pass
@@ -101,6 +109,13 @@ def _get(script: _Script, **kwargs):
 
 
 class ChromeHttpsTests(unittest.TestCase):
+    def test_tcp_time_excludes_dns_and_response_time(self) -> None:
+        script = _Script(HELLO, SECURED, REQUEST, OK_HEADER)
+        script.connect_time = 0.15
+        script.lookup_time = 0.02
+        result = _get(script)
+        self.assertAlmostEqual(result.connect_ms, 130)
+
     def test_request_is_pinned_to_the_address_and_looks_like_chrome(self) -> None:
         script = _Script(HELLO, SECURED, REQUEST, OK_HEADER, ("body", b"x" * 10))
         result = _get(script, ip="2001:db8::5", read_limit=100)

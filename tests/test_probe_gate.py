@@ -16,9 +16,9 @@ class _Clock:
         self.now = 1_000_000.0
         self.stored: dict[str, float] = {}
 
-    def ask(self) -> probe_gate.BackgroundPermit | None:
+    def ask(self, kind=KIND) -> probe_gate.BackgroundPermit | None:
         return try_background(
-            KIND,
+            kind,
             clock=lambda: self.now,
             last_run=lambda key: self.stored.get(key, 0.0),
             store_last_run=self.stored.__setitem__,
@@ -26,6 +26,34 @@ class _Clock:
 
 
 class ProbeGateTests(unittest.TestCase):
+    def test_interrupted_check_retries_before_the_full_interval(self) -> None:
+        clock = _Clock()
+        kind = probe_gate.HOSTS_ADDRESSES
+        with clock.ask(kind):
+            pass
+        self.assertNotIn(kind.key, clock.stored)
+        self.assertIsNone(clock.ask(kind))
+        clock.now += 1800
+        with clock.ask(kind) as permit:
+            clock.now += 30
+            permit.complete()
+            permit.complete()
+        self.assertEqual(clock.stored[kind.key], clock.now)
+        clock.now += 1800
+        self.assertIsNone(clock.ask(kind))
+        clock.now += kind.min_interval_s
+        with clock.ask(kind):
+            pass
+
+    def test_exception_does_not_mark_a_check_complete_or_keep_the_background_lock(self) -> None:
+        clock = _Clock()
+        with self.assertRaises(RuntimeError):
+            with clock.ask(probe_gate.HOSTS_ADDRESSES):
+                raise RuntimeError("проверка прервана")
+        self.assertNotIn(probe_gate.HOSTS_ADDRESSES.key, clock.stored)
+        with clock.ask():
+            pass
+
     def test_search_only_by_button_or_trouble(self) -> None:
         self.assertTrue(may_search(Why.USER))
         self.assertTrue(may_search(Why.SIGNAL))

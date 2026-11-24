@@ -212,6 +212,24 @@ class HostsAppliedSelectionRefreshRunTests(unittest.TestCase):
 
 
 class StartupAddressRefreshInstallTests(unittest.TestCase):
+    def test_only_a_completed_online_pass_occupies_the_full_interval(self) -> None:
+        from types import SimpleNamespace
+
+        for completed in (True, False):
+            with self.subTest(completed=completed):
+                feature = SimpleNamespace(
+                    refresh_applied_selection=lambda: SimpleNamespace(changed=False, message=""),
+                    smart_addresses_enabled=lambda: True,
+                    smart_check_applied=lambda **_kwargs: SimpleNamespace(changed=False, completed=completed),
+                )
+                permit = MagicMock()
+                with patch("utils.probe_gate.try_background", return_value=permit):
+                    self._run_install(
+                        "main.post_startup_hosts_refresh", "install_hosts_applied_selection_refresh",
+                        {"hosts_feature": feature},
+                    )
+                self.assertEqual(permit.complete.call_count, int(completed))
+
     def _run_install(self, module_name: str, install_name: str, feature_kwargs: dict) -> list[tuple[str, str]]:
         import importlib
 

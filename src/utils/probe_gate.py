@@ -62,15 +62,21 @@ class Why(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class BackgroundKind:
-    """Вид фоновой проверки. ``key`` — имя в настройках, ``min_interval_s`` — не чаще."""
+    """Вид проверки и интервалы между завершёнными проходами и оборванными попытками."""
 
     key: str
     min_interval_s: float
+    # Долгую проверку отмечаем завершённой отдельно, оборванную повторяем раньше.
+    retry_after_s: float | None = None
+
+    @property
+    def attempt_key(self) -> str:
+        return f"{self.key}.attempt"
 
 
 # Адреса включённых сервисов hosts (hosts.address_engine): программа живёт в трее
 # сутками, а адрес может перестать отвечать в любой день.
-HOSTS_ADDRESSES = BackgroundKind("hosts_addresses", 6 * 3600.0)
+HOSTS_ADDRESSES = BackgroundKind("hosts_addresses", 6 * 3600.0, retry_after_s=1800.0)
 
 def may_search(why: Why) -> bool:
     """Можно ли искать замену (DNS, запас, соседние адреса), а не только проверить текущее."""
@@ -137,10 +143,19 @@ def _store_last_run(key: str, when: float) -> None:
 class BackgroundPermit:
     """Разрешение на одну фоновую проверку. Закрывается через ``with`` или ``release()``."""
 
-    def __init__(self, kind: BackgroundKind, why: Why) -> None:
+    def __init__(self, kind: BackgroundKind, why: Why, on_complete: Callable[[], None] | None = None) -> None:
         self.kind = kind
         self.why = why
         self._released = False
+        self._on_complete = on_complete
+
+    def complete(self) -> None:
+        """Завершённый сетевой проход занимает полный интервал, оборванный — только паузу повтора."""
+        if self._released:
+            return
+        if self._on_complete is not None:
+            self._on_complete()
+            self._on_complete = None
 
     def release(self) -> None:
         if not self._released:
@@ -165,14 +180,10 @@ def try_background(
 
     Нельзя, когда идёт прогон по кнопке, когда уже идёт другая фоновая
     проверка и когда прошлая плановая была меньше ``min_interval_s`` назад.
-    Время проверки записывается сразу при выдаче разрешения: даже если она
-    оборвётся, перезапуск программы не устроит её заново.
+    Быстрые проверки отмечаются при выдаче разрешения. Долгие с ``retry_after_s``
+    отмечают попытку при выдаче, а завершение — вызовом ``complete()``.
     """
     if user_run_active():
-        return None
-    now = clock()
-    previous = last_run(kind.key)
-    if 0 < now - previous < kind.min_interval_s:
         return None
     if not _BACKGROUND.acquire(blocking=False):
         return None
@@ -180,8 +191,24 @@ def try_background(
         _BACKGROUND.release()
         return None
     try:
-        store_last_run(kind.key, now)
+        now = clock()
+        previous = last_run(kind.key)
+        if previous > 0 and now < previous + kind.min_interval_s:
+            _BACKGROUND.release()
+            return None
+        if kind.retry_after_s is not None:
+            attempt = last_run(kind.attempt_key)
+            if attempt > 0 and now < attempt + kind.retry_after_s:
+                _BACKGROUND.release()
+                return None
+            store_last_run(kind.attempt_key, now)
+        else:
+            store_last_run(kind.key, now)
     except Exception:
         _BACKGROUND.release()
         raise
-    return BackgroundPermit(kind, Why.SCHEDULE)
+
+    def completed() -> None:
+        store_last_run(kind.key, clock())
+
+    return BackgroundPermit(kind, Why.SCHEDULE, completed if kind.retry_after_s is not None else None)

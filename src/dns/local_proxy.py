@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -136,15 +137,24 @@ def _wait_answer(system, log_from: int = 0) -> bool:
     log_from — сколько символов журнала было до запуска: старые строки прошлых запусков не в счёт.
     """
     log_path = system.work_dir() / LOG_NAME
+    started = time.monotonic()
     waited = 0.0
     while waited < START_TIMEOUT_S:
         if system.answers(LISTEN_IPV4):
             return True
-        if NO_SERVERS_MARK in _read(log_path)[log_from:]:
+        text = _read(log_path)
+        if len(text) < log_from:
+            log_from = 0
+        waited = max(waited, time.monotonic() - started)
+        if NO_SERVERS_MARK in text[log_from:]:
             log(f"DNS: шифрованный DNS сообщил, что ни один сервер не годится (через {waited:.1f} с)", "WARNING")
             return False
-        system.sleep(_POLL_S)
-        waited += _POLL_S
+        # Сетевой запрос тоже тратит время: считать одни паузы означало ждать вчетверо дольше.
+        pause = min(_POLL_S, START_TIMEOUT_S - waited)
+        if pause <= 0:
+            break
+        system.sleep(pause)
+        waited += pause
     return False
 
 

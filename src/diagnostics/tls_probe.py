@@ -105,6 +105,8 @@ class ProbeResult:
     # ответа нет вовсе, "refused" — адрес сам отказал, "unreachable" — до адреса нет
     # дороги, "other" — прочая ошибка системы (например, запрет сетевого экрана).
     connect_fail: str = ""
+    # Только установление TCP-соединения, без DNS, TLS и ожидания ответа.
+    connect_ms: float | None = None
 
     @property
     def ok(self) -> bool:

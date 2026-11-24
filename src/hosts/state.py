@@ -23,6 +23,8 @@ class HostsCommandResult:
     error: str = ""
     # Переписан ли файл: обновление при запуске пишет только при нужде.
     changed: bool = False
+    # Сетевой проход закончен и его результат применён, даже если адреса прежние.
+    completed: bool = False
 
 
 @dataclass(frozen=True, slots=True)

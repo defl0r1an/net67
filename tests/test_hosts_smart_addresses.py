@@ -36,7 +36,7 @@ class SmartCheckCommandTests(unittest.TestCase):
         from hosts.state import HostsCommandResult
         from utils.probe_gate import Why
 
-        report = SimpleNamespace(changed=changed, checked=3, silent=False)
+        report = SimpleNamespace(changed=changed, checked=3, silent=False, network=True)
         check = Mock(return_value=report)
         refresh = Mock(return_value=HostsCommandResult(success=True, message="переписано", changed=True))
         with (
@@ -61,12 +61,28 @@ class SmartCheckCommandTests(unittest.TestCase):
         check.assert_called_once()
         refresh.assert_called_once()
         self.assertTrue(result.changed)
+        self.assertTrue(result.completed)
 
     def test_nothing_found_leaves_the_file_alone(self) -> None:
-        _result, check, refresh = self._run(enabled=True, changed=False)
+        result, check, refresh = self._run(enabled=True, changed=False)
 
         check.assert_called_once()
         refresh.assert_not_called()
+        self.assertTrue(result.completed)
+
+    def test_offline_pass_is_not_marked_complete(self) -> None:
+        from hosts import commands
+        from hosts.address_engine import EngineReport
+        from utils.probe_gate import Why
+
+        with (
+            patch.object(commands, "smart_addresses_enabled", return_value=True),
+            patch.object(commands, "check_addresses", return_value=EngineReport(network=False)),
+            patch.object(commands, "refresh_applied_selection") as write,
+        ):
+            result = commands.smart_check_applied(why=Why.SCHEDULE)
+        self.assertFalse(result.completed)
+        write.assert_not_called()
 
     def test_smart_addresses_are_off_by_default(self) -> None:
         from settings.normalize import normalize_settings

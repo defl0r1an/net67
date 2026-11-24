@@ -519,11 +519,17 @@ def smart_check_applied(*, why, recheck=None) -> HostsCommandResult:
     if not smart_addresses_enabled():
         return HostsCommandResult(success=True, message="умная проверка адресов выключена", changed=False)
     report = check_addresses(None, why=why, recheck=None if recheck is None else set(recheck))
+    completed = report is not None and report.network
     if report is None or not bool(getattr(report, "changed", False)):
-        return HostsCommandResult(success=True, message=describe_address_check(report) if report else "", changed=False)
+        return HostsCommandResult(
+            success=True, message=describe_address_check(report) if report else "", changed=False, completed=completed,
+        )
     result = refresh_applied_selection()
     note = describe_address_check(report)
-    return HostsCommandResult(success=bool(result.success), message=note or result.message, changed=bool(result.changed))
+    return HostsCommandResult(
+        success=bool(result.success), message=note or result.message,
+        changed=bool(result.changed), completed=completed and bool(result.success),
+    )
 
 
 def _check_addresses(selection: dict[str, str] | None, *, why, recheck, should_stop=None, commit: bool = True):

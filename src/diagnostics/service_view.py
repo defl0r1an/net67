@@ -449,13 +449,28 @@ def _video_nodes_section(raw: object) -> ViewSection | None:
         hosts.add(host)
         state = shown_level(item.get("state"))
         address = str(item.get("address") or "")
-        if state == OK and item.get("status") is not None:
+        if item.get("status") is not None:
             responded.add(host)
             outcome = f"ответ HTTP {item['status']}"
         elif state == WARN:
             outcome = "ответ HTTP не получен"
         else:
             outcome = "нет результата"
+        tries, passes = item.get("tries", 0), item.get("passes", 0)
+        if tries:
+            if 0 < passes < tries:
+                outcome += f" · отвечает через раз: {passes} из {tries}"
+            else:
+                outcome += f" · ответов {passes} из {tries}"
+        if item.get("small_window"):
+            outcome += " · начало TLS-ответа приходит с малым окном приёма"
+        if item.get("interrupted"):
+            outcome += " · серия проб прервана"
+        connect_ms = item.get("connect_ms")
+        if isinstance(connect_ms, (int, float)) and connect_ms >= 0:
+            outcome += f" · TCP {connect_ms:.0f} мс"
+            if connect_ms >= 120:
+                outcome += " · большая задержка соединения"
         text = f"{address} · {outcome}" if address else outcome
         rows.append(ViewRow(state, f"{host} · IPv{item['version']}", text))
     if not rows:

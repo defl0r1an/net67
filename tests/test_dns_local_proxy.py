@@ -3,10 +3,38 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from dns import local_proxy
 from dns import local_proxy_catalog as catalog
 from dns.local_proxy_config import build_config, read_mode
+
+
+class LocalProxyWaitTests(unittest.TestCase):
+    def test_timeout_includes_the_time_spent_asking_the_engine(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            system = FakeSystem(Path(folder))
+            clock = [0.0]
+
+            def no_answer(_address):
+                clock[0] += 1.5
+                return False
+
+            def sleep(seconds):
+                clock[0] += seconds
+
+            system.answers, system.sleep = no_answer, sleep
+            with patch.object(local_proxy.time, "monotonic", side_effect=lambda: clock[0]):
+                self.assertFalse(local_proxy._wait_answer(system))
+            self.assertLessEqual(clock[0], local_proxy.START_TIMEOUT_S + 1.5)
+
+    def test_restart_truncating_the_log_still_reports_no_reachable_server(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            system = FakeSystem(Path(folder))
+            system.work_dir().mkdir(parents=True)
+            (system.work_dir() / local_proxy.LOG_NAME).write_text(local_proxy.NO_SERVERS_MARK, encoding="utf-8")
+            self.assertFalse(local_proxy._wait_answer(system, log_from=5000))
+            self.assertEqual(system.slept, 0)
 
 
 class FakeSystem:
@@ -248,7 +276,8 @@ class LocalProxyTests(unittest.TestCase):
         self.assertIn("DNS на адаптерах не менялся", result.message)
         self.assertEqual(self.system.state, "")
         self.assertFalse(self._config().exists())
-        self.assertGreaterEqual(self.system.slept, local_proxy.START_TIMEOUT_S)
+        # Теперь в срок входят и запросы к движку, поэтому сумма пауз может быть чуть меньше.
+        self.assertAlmostEqual(self.system.slept, local_proxy.START_TIMEOUT_S, delta=local_proxy._POLL_S)
         self.assertEqual(local_proxy.active_mode(system=self.system), "")
 
     # Так dnscrypt-proxy 2.1.18 запускался с серверами GeoHide на win10 2026-11-01.
